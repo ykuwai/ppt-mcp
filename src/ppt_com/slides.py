@@ -481,6 +481,40 @@ def get_slide_notes(params: GetSlideNotesInput) -> str:
         return json.dumps({"error": str(e)})
 
 
+class GotoSlideInput(BaseModel):
+    """Input for navigating to a specific slide."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(
+        ...,
+        description="1-based index of the slide to navigate to.",
+        ge=1,
+    )
+
+
+def _goto_slide_impl(slide_index: int) -> dict:
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    if slide_index < 1 or slide_index > pres.Slides.Count:
+        raise ValueError(
+            f"Slide index {slide_index} out of range (1-{pres.Slides.Count})"
+        )
+    app.ActiveWindow.View.GotoSlide(slide_index)
+    return {
+        "success": True,
+        "active_slide_index": slide_index,
+    }
+
+
+def goto_slide(params: GotoSlideInput) -> str:
+    """Navigate the active window to display a specific slide."""
+    try:
+        result = ppt.execute(_goto_slide_impl, params.slide_index)
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
@@ -629,3 +663,21 @@ def register_tools(mcp):
         Returns the notes text. If no notes exist, returns an empty string.
         """
         return get_slide_notes(params)
+
+    @mcp.tool(
+        name="ppt_goto_slide",
+        annotations={
+            "title": "Go To Slide",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_goto_slide(params: GotoSlideInput) -> str:
+        """Navigate the active window to display a specific slide.
+
+        Changes which slide is shown in the PowerPoint editor.
+        Useful for jumping to a slide you want to view or edit.
+        """
+        return goto_slide(params)
