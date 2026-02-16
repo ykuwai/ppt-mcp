@@ -1,0 +1,1067 @@
+"""Advanced operations for PowerPoint COM automation.
+
+Handles tags, font management, picture cropping, shape export,
+slide visibility, shape selection, view control, animation copying,
+picture insertion from URL, and aspect ratio locking.
+"""
+
+import json
+import logging
+import os
+import tempfile
+import urllib.request
+from typing import Optional, Union
+
+from pydantic import BaseModel, Field, ConfigDict
+
+from utils.com_wrapper import ppt
+from ppt_com.constants import (
+    msoTrue, msoFalse,
+    SHAPE_FORMAT_MAP,
+    VIEW_TYPE_MAP, VIEW_TYPE_NAMES,
+    ppSelectionNone, ppSelectionSlides, ppSelectionShapes, ppSelectionText,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Helper: find a shape by name or index
+# ---------------------------------------------------------------------------
+def _get_shape(slide, name_or_index: Union[str, int]):
+    """Find a shape on a slide by name or 1-based index.
+
+    Args:
+        slide: Slide COM object
+        name_or_index: Shape name (str) or 1-based index (int)
+
+    Returns:
+        Shape COM object
+
+    Raises:
+        ValueError: If shape not found
+    """
+    if isinstance(name_or_index, int):
+        if name_or_index < 1 or name_or_index > slide.Shapes.Count:
+            raise ValueError(
+                f"Shape index {name_or_index} out of range "
+                f"(1-{slide.Shapes.Count})"
+            )
+        return slide.Shapes(name_or_index)
+    else:
+        for i in range(1, slide.Shapes.Count + 1):
+            if slide.Shapes(i).Name == name_or_index:
+                return slide.Shapes(i)
+        raise ValueError(f"Shape '{name_or_index}' not found on slide")
+
+
+# ===========================================================================
+# Pydantic input models
+# ===========================================================================
+
+# --- Tags ---
+class SetTagInput(BaseModel):
+    """Input for setting a tag on a shape, slide, or presentation."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: Optional[int] = Field(
+        default=None, ge=1, description="1-based slide index (required for slide/shape targets)"
+    )
+    shape_name_or_index: Optional[Union[str, int]] = Field(
+        default=None, description="Shape name (str) or 1-based index (int) for shape target"
+    )
+    tag_name: str = Field(..., description="Tag name (key)")
+    tag_value: str = Field(..., description="Tag value")
+    target_type: str = Field(
+        default="shape",
+        description="Target type: 'shape', 'slide', or 'presentation'",
+    )
+
+
+class GetTagsInput(BaseModel):
+    """Input for getting tags from a shape, slide, or presentation."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: Optional[int] = Field(
+        default=None, ge=1, description="1-based slide index (required for slide/shape targets)"
+    )
+    shape_name_or_index: Optional[Union[str, int]] = Field(
+        default=None, description="Shape name (str) or 1-based index (int) for shape target"
+    )
+    target_type: str = Field(
+        default="shape",
+        description="Target type: 'shape', 'slide', or 'presentation'",
+    )
+
+
+# --- Fonts ---
+class ReplaceFontInput(BaseModel):
+    """Input for replacing a font throughout the presentation."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    original_font: str = Field(..., description="Font name to replace")
+    replacement_font: str = Field(..., description="New font name")
+
+
+# --- Picture Crop ---
+class CropPictureInput(BaseModel):
+    """Input for cropping a picture shape."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    shape_name_or_index: Union[str, int] = Field(
+        ..., description="Shape name (str) or 1-based index (int)"
+    )
+    crop_left: Optional[float] = Field(default=None, description="Crop from left in points")
+    crop_right: Optional[float] = Field(default=None, description="Crop from right in points")
+    crop_top: Optional[float] = Field(default=None, description="Crop from top in points")
+    crop_bottom: Optional[float] = Field(default=None, description="Crop from bottom in points")
+
+
+# --- Shape Export ---
+class ExportShapeInput(BaseModel):
+    """Input for exporting a shape as an image file."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    shape_name_or_index: Union[str, int] = Field(
+        ..., description="Shape name (str) or 1-based index (int)"
+    )
+    file_path: str = Field(..., description="Output file path")
+    format: str = Field(
+        default="png",
+        description="Image format: 'png', 'jpg', 'gif', 'bmp', 'wmf', or 'emf'",
+    )
+    width: Optional[int] = Field(default=None, description="Export width in pixels")
+    height: Optional[int] = Field(default=None, description="Export height in pixels")
+
+
+# --- Slide Hidden ---
+class SetSlideHiddenInput(BaseModel):
+    """Input for setting slide visibility."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    hidden: bool = Field(..., description="True to hide, False to show")
+
+
+# --- Select Shapes ---
+class SelectShapesInput(BaseModel):
+    """Input for selecting multiple shapes on a slide."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    shape_names: list[str] = Field(
+        ..., description="List of shape names to select"
+    )
+
+
+# --- View ---
+class SetViewInput(BaseModel):
+    """Input for setting the PowerPoint view type and zoom."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    view_type: Optional[str] = Field(
+        default=None,
+        description=(
+            "View type: 'normal', 'slide_master', 'notes_page', 'handout_master', "
+            "'notes_master', 'outline', 'slide_sorter', 'title_master', 'reading'"
+        ),
+    )
+    zoom: Optional[int] = Field(
+        default=None, ge=10, le=400, description="Zoom level (10-400)"
+    )
+
+
+# --- Copy Animation ---
+class CopyAnimationInput(BaseModel):
+    """Input for copying animation from one shape to another."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    source_shape: Union[str, int] = Field(
+        ..., description="Source shape name (str) or 1-based index (int)"
+    )
+    target_shape: Union[str, int] = Field(
+        ..., description="Target shape name (str) or 1-based index (int)"
+    )
+
+
+# --- Add Picture from URL ---
+class AddPictureFromUrlInput(BaseModel):
+    """Input for adding a picture from a URL."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    url: str = Field(..., description="URL of the image to download")
+    left: float = Field(default=100, description="Left position in points")
+    top: float = Field(default=100, description="Top position in points")
+    width: Optional[float] = Field(default=None, description="Width in points (auto if not set)")
+    height: Optional[float] = Field(default=None, description="Height in points (auto if not set)")
+
+
+# --- Lock Aspect Ratio ---
+class LockAspectRatioInput(BaseModel):
+    """Input for locking/unlocking shape aspect ratio."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    shape_name_or_index: Union[str, int] = Field(
+        ..., description="Shape name (str) or 1-based index (int)"
+    )
+    locked: bool = Field(..., description="True to lock, False to unlock")
+
+
+# ===========================================================================
+# COM implementation functions (run on COM thread via ppt.execute)
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Tags
+# ---------------------------------------------------------------------------
+def _resolve_target(app, target_type, slide_index, shape_name_or_index):
+    """Resolve the target COM object based on target_type."""
+    pres = app.ActivePresentation
+    target_type_lower = target_type.strip().lower()
+
+    if target_type_lower == "presentation":
+        return pres
+    elif target_type_lower == "slide":
+        if slide_index is None:
+            raise ValueError("slide_index is required for target_type='slide'")
+        return pres.Slides(slide_index)
+    elif target_type_lower == "shape":
+        if slide_index is None:
+            raise ValueError("slide_index is required for target_type='shape'")
+        if shape_name_or_index is None:
+            raise ValueError("shape_name_or_index is required for target_type='shape'")
+        slide = pres.Slides(slide_index)
+        return _get_shape(slide, shape_name_or_index)
+    else:
+        raise ValueError(
+            f"Unknown target_type '{target_type}'. Use 'shape', 'slide', or 'presentation'."
+        )
+
+
+def _set_tag_impl(slide_index, shape_name_or_index, tag_name, tag_value, target_type):
+    app = ppt._get_app_impl()
+    target = _resolve_target(app, target_type, slide_index, shape_name_or_index)
+    target.Tags.Add(tag_name, tag_value)
+    return {
+        "success": True,
+        "target_type": target_type,
+        "tag_name": tag_name,
+        "tag_value": tag_value,
+    }
+
+
+def _get_tags_impl(slide_index, shape_name_or_index, target_type):
+    app = ppt._get_app_impl()
+    target = _resolve_target(app, target_type, slide_index, shape_name_or_index)
+    tags = {}
+    for i in range(1, target.Tags.Count + 1):
+        tags[target.Tags.Name(i)] = target.Tags.Value(i)
+    return {
+        "success": True,
+        "target_type": target_type,
+        "tags_count": target.Tags.Count,
+        "tags": tags,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Fonts
+# ---------------------------------------------------------------------------
+def _replace_font_impl(original_font, replacement_font):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    pres.Fonts.Replace(original_font, replacement_font)
+    return {
+        "success": True,
+        "original_font": original_font,
+        "replacement_font": replacement_font,
+    }
+
+
+def _list_fonts_impl():
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    fonts = []
+    for i in range(1, pres.Fonts.Count + 1):
+        fonts.append(pres.Fonts(i).Name)
+    return {
+        "success": True,
+        "fonts_count": len(fonts),
+        "fonts": fonts,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Picture Crop
+# ---------------------------------------------------------------------------
+def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, crop_top, crop_bottom):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    slide = pres.Slides(slide_index)
+    shape = _get_shape(slide, shape_name_or_index)
+
+    pic_fmt = shape.PictureFormat
+    if crop_left is not None:
+        pic_fmt.CropLeft = crop_left
+    if crop_right is not None:
+        pic_fmt.CropRight = crop_right
+    if crop_top is not None:
+        pic_fmt.CropTop = crop_top
+    if crop_bottom is not None:
+        pic_fmt.CropBottom = crop_bottom
+
+    return {
+        "success": True,
+        "shape_name": shape.Name,
+        "crop_left": round(pic_fmt.CropLeft, 2),
+        "crop_right": round(pic_fmt.CropRight, 2),
+        "crop_top": round(pic_fmt.CropTop, 2),
+        "crop_bottom": round(pic_fmt.CropBottom, 2),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Shape Export
+# ---------------------------------------------------------------------------
+def _export_shape_impl(slide_index, shape_name_or_index, file_path, format_type, width, height):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    slide = pres.Slides(slide_index)
+    shape = _get_shape(slide, shape_name_or_index)
+
+    abs_path = os.path.abspath(file_path)
+
+    # Convert string format name to integer if needed
+    if isinstance(format_type, str):
+        fmt_key = format_type.strip().lower()
+        fmt_int = SHAPE_FORMAT_MAP.get(fmt_key)
+        if fmt_int is None:
+            raise ValueError(
+                f"Unknown format '{format_type}'. "
+                f"Valid values: {list(SHAPE_FORMAT_MAP.keys())}"
+            )
+        format_type = fmt_int
+
+    # Ensure output directory exists
+    out_dir = os.path.dirname(abs_path)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+
+    if width is not None and height is not None:
+        shape.Export(abs_path, format_type, width, height)
+    elif width is not None:
+        shape.Export(abs_path, format_type, width)
+    else:
+        shape.Export(abs_path, format_type)
+
+    return {
+        "success": True,
+        "shape_name": shape.Name,
+        "file_path": abs_path,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Slide Hidden
+# ---------------------------------------------------------------------------
+def _set_slide_hidden_impl(slide_index, hidden):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    slide = pres.Slides(slide_index)
+    slide.SlideShowTransition.Hidden = msoTrue if hidden else msoFalse
+    return {
+        "success": True,
+        "slide_index": slide_index,
+        "hidden": hidden,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Select Shapes
+# ---------------------------------------------------------------------------
+def _select_shapes_impl(slide_index, shape_names):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    slide = pres.Slides(slide_index)
+
+    # Navigate to the slide first
+    app.ActiveWindow.View.GotoSlide(slide_index)
+
+    # Select first shape (replace=True is default)
+    first_shape = _get_shape(slide, shape_names[0])
+    first_shape.Select()
+
+    # Add remaining shapes to selection (msoFalse=0 means add to selection)
+    for name in shape_names[1:]:
+        shape = _get_shape(slide, name)
+        shape.Select(msoFalse)
+
+    return {
+        "success": True,
+        "slide_index": slide_index,
+        "selected_shapes": shape_names,
+        "count": len(shape_names),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Get Selection
+# ---------------------------------------------------------------------------
+def _get_selection_impl():
+    app = ppt._get_app_impl()
+    selection = app.ActiveWindow.Selection
+    sel_type = selection.Type
+
+    result = {
+        "success": True,
+        "type": sel_type,
+    }
+
+    if sel_type == ppSelectionNone:
+        result["type_name"] = "none"
+    elif sel_type == ppSelectionSlides:
+        result["type_name"] = "slides"
+        slide_indices = []
+        for i in range(1, selection.SlideRange.Count + 1):
+            slide_indices.append(selection.SlideRange(i).SlideIndex)
+        result["slide_indices"] = slide_indices
+    elif sel_type == ppSelectionShapes:
+        result["type_name"] = "shapes"
+        shape_names = []
+        for i in range(1, selection.ShapeRange.Count + 1):
+            shape_names.append(selection.ShapeRange(i).Name)
+        result["shape_names"] = shape_names
+        result["count"] = selection.ShapeRange.Count
+    elif sel_type == ppSelectionText:
+        result["type_name"] = "text"
+        result["text"] = selection.TextRange.Text
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# View
+# ---------------------------------------------------------------------------
+def _set_view_impl(view_type, zoom):
+    app = ppt._get_app_impl()
+    window = app.ActiveWindow
+
+    if view_type is not None:
+        vt_key = view_type.strip().lower().replace(" ", "_").replace("-", "_")
+        if vt_key not in VIEW_TYPE_MAP:
+            raise ValueError(
+                f"Unknown view_type '{view_type}'. "
+                f"Use one of: {', '.join(VIEW_TYPE_MAP.keys())}"
+            )
+        window.ViewType = VIEW_TYPE_MAP[vt_key]
+
+    if zoom is not None:
+        window.View.Zoom = zoom
+
+    current_view_type = window.ViewType
+    current_zoom = window.View.Zoom
+
+    return {
+        "success": True,
+        "view_type": VIEW_TYPE_NAMES.get(current_view_type, f"Unknown({current_view_type})"),
+        "view_type_id": current_view_type,
+        "zoom": current_zoom,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Copy Animation
+# ---------------------------------------------------------------------------
+def _copy_animation_impl(slide_index, source_shape, target_shape):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    slide = pres.Slides(slide_index)
+    src = _get_shape(slide, source_shape)
+    tgt = _get_shape(slide, target_shape)
+
+    src.PickupAnimation()
+    tgt.ApplyAnimation()
+
+    return {
+        "success": True,
+        "source_shape": src.Name,
+        "target_shape": tgt.Name,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Add Picture from URL
+# ---------------------------------------------------------------------------
+def _add_picture_from_url_impl(slide_index, url, left, top, width, height):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    slide = pres.Slides(slide_index)
+
+    # Download to temp file
+    suffix = os.path.splitext(url.split("?")[0])[-1] or ".png"
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    os.close(tmp_fd)
+
+    try:
+        urllib.request.urlretrieve(url, tmp_path)
+        abs_tmp = os.path.abspath(tmp_path)
+
+        w = width if width is not None else -1
+        h = height if height is not None else -1
+
+        # AddPicture(FileName, LinkToFile, SaveWithDocument, Left, Top, Width, Height)
+        pic = slide.Shapes.AddPicture(abs_tmp, msoFalse, msoTrue, left, top, w, h)
+
+        return {
+            "success": True,
+            "shape_name": pic.Name,
+            "shape_index": pic.ZOrderPosition,
+            "width": round(pic.Width, 2),
+            "height": round(pic.Height, 2),
+            "source_url": url,
+        }
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Lock Aspect Ratio
+# ---------------------------------------------------------------------------
+def _lock_aspect_ratio_impl(slide_index, shape_name_or_index, locked):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    slide = pres.Slides(slide_index)
+    shape = _get_shape(slide, shape_name_or_index)
+    shape.LockAspectRatio = msoTrue if locked else msoFalse
+    return {
+        "success": True,
+        "shape_name": shape.Name,
+        "locked": locked,
+    }
+
+
+# ===========================================================================
+# MCP tool functions (sync wrappers that delegate to COM thread)
+# ===========================================================================
+
+# --- Tags ---
+def set_tag(params: SetTagInput) -> str:
+    """Set a tag (key-value pair) on a shape, slide, or presentation.
+
+    Args:
+        params: Target identification and tag name/value.
+
+    Returns:
+        JSON confirming the tag was set.
+    """
+    try:
+        result = ppt.execute(
+            _set_tag_impl,
+            params.slide_index, params.shape_name_or_index,
+            params.tag_name, params.tag_value, params.target_type,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to set tag: {str(e)}"})
+
+
+def get_tags(params: GetTagsInput) -> str:
+    """Get all tags from a shape, slide, or presentation.
+
+    Args:
+        params: Target identification.
+
+    Returns:
+        JSON with tag count and name-value pairs.
+    """
+    try:
+        result = ppt.execute(
+            _get_tags_impl,
+            params.slide_index, params.shape_name_or_index, params.target_type,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to get tags: {str(e)}"})
+
+
+# --- Fonts ---
+def replace_font(params: ReplaceFontInput) -> str:
+    """Replace a font throughout the active presentation.
+
+    Args:
+        params: Original and replacement font names.
+
+    Returns:
+        JSON confirming the font replacement.
+    """
+    try:
+        result = ppt.execute(
+            _replace_font_impl,
+            params.original_font, params.replacement_font,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to replace font: {str(e)}"})
+
+
+def list_fonts() -> str:
+    """List all fonts used in the active presentation.
+
+    Returns:
+        JSON with font count and names.
+    """
+    try:
+        result = ppt.execute(_list_fonts_impl)
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to list fonts: {str(e)}"})
+
+
+# --- Picture Crop ---
+def crop_picture(params: CropPictureInput) -> str:
+    """Crop a picture shape.
+
+    Args:
+        params: Shape identification and crop values in points.
+
+    Returns:
+        JSON with current crop values after setting.
+    """
+    try:
+        result = ppt.execute(
+            _crop_picture_impl,
+            params.slide_index, params.shape_name_or_index,
+            params.crop_left, params.crop_right,
+            params.crop_top, params.crop_bottom,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to crop picture: {str(e)}"})
+
+
+# --- Shape Export ---
+def export_shape(params: ExportShapeInput) -> str:
+    """Export a shape as an image file.
+
+    Args:
+        params: Shape identification, file path, format, and optional dimensions.
+
+    Returns:
+        JSON with shape name and output file path.
+    """
+    try:
+        fmt_key = params.format.strip().lower()
+        if fmt_key not in SHAPE_FORMAT_MAP:
+            return json.dumps({
+                "error": f"Unknown format '{params.format}'. "
+                f"Use one of: {', '.join(SHAPE_FORMAT_MAP.keys())}"
+            })
+        result = ppt.execute(
+            _export_shape_impl,
+            params.slide_index, params.shape_name_or_index,
+            params.file_path, SHAPE_FORMAT_MAP[fmt_key],
+            params.width, params.height,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to export shape: {str(e)}"})
+
+
+# --- Slide Hidden ---
+def set_slide_hidden(params: SetSlideHiddenInput) -> str:
+    """Set a slide as hidden or visible in the slideshow.
+
+    Args:
+        params: Slide index and hidden state.
+
+    Returns:
+        JSON confirming the hidden state.
+    """
+    try:
+        result = ppt.execute(
+            _set_slide_hidden_impl,
+            params.slide_index, params.hidden,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to set slide hidden: {str(e)}"})
+
+
+# --- Select Shapes ---
+def select_shapes(params: SelectShapesInput) -> str:
+    """Select multiple shapes on a slide.
+
+    Args:
+        params: Slide index and list of shape names.
+
+    Returns:
+        JSON with selected shape names and count.
+    """
+    try:
+        if not params.shape_names:
+            return json.dumps({"error": "shape_names list must not be empty"})
+        result = ppt.execute(
+            _select_shapes_impl,
+            params.slide_index, params.shape_names,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to select shapes: {str(e)}"})
+
+
+# --- Get Selection ---
+def get_selection() -> str:
+    """Get the current selection in the active window.
+
+    Returns:
+        JSON with selection type and details.
+    """
+    try:
+        result = ppt.execute(_get_selection_impl)
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to get selection: {str(e)}"})
+
+
+# --- View ---
+def set_view(params: SetViewInput) -> str:
+    """Set the PowerPoint view type and/or zoom level.
+
+    Args:
+        params: View type and zoom level.
+
+    Returns:
+        JSON with current view type and zoom after setting.
+    """
+    try:
+        result = ppt.execute(
+            _set_view_impl,
+            params.view_type, params.zoom,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to set view: {str(e)}"})
+
+
+# --- Copy Animation ---
+def copy_animation(params: CopyAnimationInput) -> str:
+    """Copy animation from one shape to another on the same slide.
+
+    Args:
+        params: Slide index, source shape, and target shape.
+
+    Returns:
+        JSON confirming the animation was copied.
+    """
+    try:
+        result = ppt.execute(
+            _copy_animation_impl,
+            params.slide_index, params.source_shape, params.target_shape,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to copy animation: {str(e)}"})
+
+
+# --- Add Picture from URL ---
+def add_picture_from_url(params: AddPictureFromUrlInput) -> str:
+    """Add a picture to a slide by downloading from a URL.
+
+    Args:
+        params: Slide index, URL, position, and optional dimensions.
+
+    Returns:
+        JSON with shape name, dimensions, and source URL.
+    """
+    try:
+        result = ppt.execute(
+            _add_picture_from_url_impl,
+            params.slide_index, params.url,
+            params.left, params.top, params.width, params.height,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to add picture from URL: {str(e)}"})
+
+
+# --- Lock Aspect Ratio ---
+def lock_aspect_ratio(params: LockAspectRatioInput) -> str:
+    """Lock or unlock the aspect ratio of a shape.
+
+    Args:
+        params: Shape identification and lock state.
+
+    Returns:
+        JSON confirming the aspect ratio lock state.
+    """
+    try:
+        result = ppt.execute(
+            _lock_aspect_ratio_impl,
+            params.slide_index, params.shape_name_or_index, params.locked,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to lock aspect ratio: {str(e)}"})
+
+
+# ===========================================================================
+# Tool registration
+# ===========================================================================
+def register_tools(mcp):
+    """Register all advanced operations tools with the MCP server."""
+
+    # --- Tags ---
+    @mcp.tool(
+        name="ppt_set_tag",
+        annotations={
+            "title": "Set Tag",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_set_tag(params: SetTagInput) -> str:
+        """Set a tag (key-value pair) on a shape, slide, or presentation.
+
+        Tags are custom metadata stored as name-value string pairs.
+        Set target_type to 'shape' (default), 'slide', or 'presentation'.
+        For shape targets, provide slide_index and shape_name_or_index.
+        For slide targets, provide slide_index.
+        """
+        return set_tag(params)
+
+    @mcp.tool(
+        name="ppt_get_tags",
+        annotations={
+            "title": "Get Tags",
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_get_tags(params: GetTagsInput) -> str:
+        """Get all tags from a shape, slide, or presentation.
+
+        Returns a dictionary of tag name-value pairs.
+        Set target_type to 'shape' (default), 'slide', or 'presentation'.
+        """
+        return get_tags(params)
+
+    # --- Fonts ---
+    @mcp.tool(
+        name="ppt_replace_font",
+        annotations={
+            "title": "Replace Font",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_replace_font(params: ReplaceFontInput) -> str:
+        """Replace all occurrences of a font throughout the active presentation.
+
+        Replaces every instance of original_font with replacement_font
+        across all slides, shapes, and text ranges.
+        """
+        return replace_font(params)
+
+    @mcp.tool(
+        name="ppt_list_fonts",
+        annotations={
+            "title": "List Fonts",
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_list_fonts() -> str:
+        """List all fonts used in the active presentation.
+
+        Returns the names of all fonts embedded or referenced in the presentation.
+        """
+        return list_fonts()
+
+    # --- Picture Crop ---
+    @mcp.tool(
+        name="ppt_crop_picture",
+        annotations={
+            "title": "Crop Picture",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_crop_picture(params: CropPictureInput) -> str:
+        """Crop a picture shape by setting crop values in points.
+
+        Only provided crop values are updated. Returns current crop values
+        (crop_left, crop_right, crop_top, crop_bottom) after applying changes.
+        """
+        return crop_picture(params)
+
+    # --- Shape Export ---
+    @mcp.tool(
+        name="ppt_export_shape",
+        annotations={
+            "title": "Export Shape",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def tool_export_shape(params: ExportShapeInput) -> str:
+        """Export a shape as an image file.
+
+        Supports formats: 'png', 'jpg', 'gif', 'bmp', 'wmf', 'emf'.
+        Optionally specify width and height in pixels.
+        """
+        return export_shape(params)
+
+    # --- Slide Hidden ---
+    @mcp.tool(
+        name="ppt_set_slide_hidden",
+        annotations={
+            "title": "Set Slide Hidden",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_set_slide_hidden(params: SetSlideHiddenInput) -> str:
+        """Set a slide as hidden or visible in the slideshow.
+
+        Hidden slides are skipped during slideshow playback but remain
+        in the presentation. Set hidden=true to hide, hidden=false to show.
+        """
+        return set_slide_hidden(params)
+
+    # --- Select Shapes ---
+    @mcp.tool(
+        name="ppt_select_shapes",
+        annotations={
+            "title": "Select Shapes",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_select_shapes(params: SelectShapesInput) -> str:
+        """Select multiple shapes on a slide by name.
+
+        Navigates to the specified slide and selects the listed shapes.
+        The first shape replaces any existing selection; remaining shapes
+        are added to the selection.
+        """
+        return select_shapes(params)
+
+    # --- Get Selection ---
+    @mcp.tool(
+        name="ppt_get_selection",
+        annotations={
+            "title": "Get Selection",
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_get_selection() -> str:
+        """Get the current selection in the active PowerPoint window.
+
+        Returns the selection type (none, slides, shapes, text).
+        For shapes, returns the list of selected shape names.
+        For text, returns the selected text content.
+        """
+        return get_selection()
+
+    # --- View ---
+    @mcp.tool(
+        name="ppt_set_view",
+        annotations={
+            "title": "Set View",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_set_view(params: SetViewInput) -> str:
+        """Set the PowerPoint view type and/or zoom level.
+
+        View types: 'normal', 'slide_master', 'notes_page', 'handout_master',
+        'notes_master', 'outline', 'slide_sorter', 'title_master', 'reading'.
+        Zoom range: 10-400. Returns current view_type and zoom after setting.
+        """
+        return set_view(params)
+
+    # --- Copy Animation ---
+    @mcp.tool(
+        name="ppt_copy_animation",
+        annotations={
+            "title": "Copy Animation",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_copy_animation(params: CopyAnimationInput) -> str:
+        """Copy animation effects from one shape to another on the same slide.
+
+        Uses PickupAnimation/ApplyAnimation to transfer all animation
+        settings from the source shape to the target shape.
+        """
+        return copy_animation(params)
+
+    # --- Add Picture from URL ---
+    @mcp.tool(
+        name="ppt_add_picture_from_url",
+        annotations={
+            "title": "Add Picture from URL",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def tool_add_picture_from_url(params: AddPictureFromUrlInput) -> str:
+        """Add a picture to a slide by downloading from a URL.
+
+        Downloads the image to a temporary file, inserts it into the slide,
+        and cleans up the temp file. If width/height are not specified,
+        the original image dimensions are used.
+        """
+        return add_picture_from_url(params)
+
+    # --- Lock Aspect Ratio ---
+    @mcp.tool(
+        name="ppt_lock_aspect_ratio",
+        annotations={
+            "title": "Lock Aspect Ratio",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_lock_aspect_ratio(params: LockAspectRatioInput) -> str:
+        """Lock or unlock the aspect ratio of a shape.
+
+        When locked, resizing the shape maintains its proportions.
+        Set locked=true to lock, locked=false to unlock.
+        """
+        return lock_aspect_ratio(params)

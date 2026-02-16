@@ -267,6 +267,41 @@ try:
 except ImportError:
     logger.debug("smartart module not yet available")
 
+# Edit operations tools (undo, redo, clipboard, format copy)
+try:
+    from ppt_com.edit_ops import register_tools as register_edit_ops_tools
+    register_edit_ops_tools(mcp)
+except ImportError:
+    logger.debug("edit_ops module not yet available")
+
+# Layout tools (align, distribute, slide size, background, flip)
+try:
+    from ppt_com.layout import register_tools as register_layout_tools
+    register_layout_tools(mcp)
+except ImportError:
+    logger.debug("layout module not yet available")
+
+# Visual effects tools (glow, reflection, soft edge)
+try:
+    from ppt_com.effects import register_tools as register_effects_tools
+    register_effects_tools(mcp)
+except ImportError:
+    logger.debug("effects module not yet available")
+
+# Comments tools
+try:
+    from ppt_com.comments import register_tools as register_comments_tools
+    register_comments_tools(mcp)
+except ImportError:
+    logger.debug("comments module not yet available")
+
+# Advanced operations tools (tags, fonts, crop, merge, export, hidden, select, view)
+try:
+    from ppt_com.advanced_ops import register_tools as register_advanced_ops_tools
+    register_advanced_ops_tools(mcp)
+except ImportError:
+    logger.debug("advanced_ops module not yet available")
+
 
 def main():
     """Entry point for the MCP server."""

@@ -575,3 +575,129 @@ ANIMATION_TRIGGER_NAMES = {
     0: "none", 1: "on_click", 2: "with_previous",
     3: "after_previous", 4: "on_shape_click",
 }
+
+# ==============================================================================
+# Phase 4 Constants
+# ==============================================================================
+
+# MsoAlignCmd
+msoAlignLefts = 0
+msoAlignCenters = 1
+msoAlignRights = 2
+msoAlignTops = 3
+msoAlignMiddles = 4
+msoAlignBottoms = 5
+
+# MsoDistributeCmd
+msoDistributeHorizontally = 0
+msoDistributeVertically = 1
+
+# MsoFlipCmd
+msoFlipHorizontal = 0
+msoFlipVertical = 1
+
+# MsoMergeCmd
+msoMergeUnion = 1
+msoMergeCombine = 2
+msoMergeIntersect = 3
+msoMergeSubtract = 4
+msoMergeFragment = 5
+
+# PpSlideSizeType
+ppSlideSizeOnScreen = 1
+ppSlideSizeLetterPaper = 2
+ppSlideSizeA4Paper = 3
+ppSlideSize35MM = 4
+ppSlideSizeOverhead = 5
+ppSlideSizeBanner = 6
+ppSlideSizeCustom = 7
+ppSlideSizeOnScreen16x9 = 8
+ppSlideSizeOnScreen16x10 = 9
+ppSlideSizeWidescreen = 10
+
+# MsoOrientation
+msoOrientationHorizontal = 1
+msoOrientationVertical = 2
+msoOrientationMixed = -2
+
+# PpSelectionType
+ppSelectionNone = 0
+ppSelectionSlides = 1
+ppSelectionShapes = 2
+ppSelectionText = 3
+
+# PpPasteDataType
+ppPasteDefault = 0
+ppPasteBitmap = 1
+ppPasteEnhancedMetafile = 2
+ppPasteMetafilePicture = 3
+ppPasteGIF = 4
+ppPasteJPG = 5
+ppPastePNG = 6
+ppPasteText = 7
+ppPasteHTML = 8
+ppPasteRTF = 9
+ppPasteOLEObject = 10
+ppPasteShape = 11
+
+# PpShapeFormatType (for Shape.Export)
+ppShapeFormatGIF = 0
+ppShapeFormatJPG = 1
+ppShapeFormatPNG = 2
+ppShapeFormatBMP = 3
+ppShapeFormatWMF = 4
+ppShapeFormatEMF = 5
+
+# MsoGradientStyle (for backgrounds)
+msoGradientHorizontal = 1
+msoGradientVertical = 2
+msoGradientDiagonalUp = 3
+msoGradientDiagonalDown = 4
+msoGradientFromCorner = 5
+msoGradientFromTitle = 6
+msoGradientFromCenter = 7
+
+# Friendly name maps for Phase 4
+ALIGN_CMD_MAP = {
+    "left": 0, "center": 1, "right": 2,
+    "top": 3, "middle": 4, "bottom": 5,
+}
+
+DISTRIBUTE_CMD_MAP = {
+    "horizontal": 0, "vertical": 1,
+}
+
+FLIP_CMD_MAP = {
+    "horizontal": 0, "vertical": 1,
+}
+
+MERGE_CMD_MAP = {
+    "union": 1, "combine": 2, "intersect": 3,
+    "subtract": 4, "fragment": 5,
+}
+
+SLIDE_SIZE_MAP = {
+    "4:3": 1, "letter": 2, "a4": 3, "35mm": 4,
+    "overhead": 5, "banner": 6, "custom": 7,
+    "16:9": 8, "16:10": 9, "widescreen": 10,
+}
+
+GRADIENT_STYLE_MAP = {
+    "horizontal": 1, "vertical": 2,
+    "diagonal_up": 3, "diagonal_down": 4,
+    "from_corner": 5, "from_title": 6, "from_center": 7,
+}
+
+SHAPE_FORMAT_MAP = {
+    "gif": 0, "jpg": 1, "png": 2, "bmp": 3,
+    "wmf": 4, "emf": 5,
+}
+
+VIEW_TYPE_MAP = {
+    "normal": 1, "slide_master": 2, "notes_page": 3,
+    "handout_master": 4, "notes_master": 5,
+    "outline": 6, "slide_sorter": 7,
+    "title_master": 8, "reading": 10,
+}
+
+VIEW_TYPE_NAMES = {v: k for k, v in VIEW_TYPE_MAP.items()}
