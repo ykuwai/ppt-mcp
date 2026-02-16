@@ -322,6 +322,26 @@ ppSlideShowWhiteScreen = 4
 ppSlideShowDone = 5
 
 # ==============================================================================
+# PpSlideShowType
+# ==============================================================================
+ppShowTypeSpeaker = 1
+ppShowTypeWindow = 2
+ppShowTypeKiosk = 3
+
+# ==============================================================================
+# PpSlideShowAdvanceMode
+# ==============================================================================
+ppSlideShowManualAdvance = 1
+ppSlideShowUseSlideTimings = 2
+
+# ==============================================================================
+# PpSlideShowRangeType
+# ==============================================================================
+ppShowAll = 1
+ppShowSlideRange = 2
+ppShowNamedSlideShow = 3
+
+# ==============================================================================
 # PpFixedFormatType
 # ==============================================================================
 ppFixedFormatTypePDF = 2
@@ -377,4 +397,18 @@ WINDOW_STATE_NAMES = {
     1: "normal",
     2: "minimized",
     3: "maximized",
+}
+
+SLIDESHOW_STATE_NAMES = {
+    1: "running",
+    2: "paused",
+    3: "black_screen",
+    4: "white_screen",
+    5: "done",
+}
+
+SHOW_TYPE_NAMES = {
+    1: "speaker",
+    2: "window",
+    3: "kiosk",
 }

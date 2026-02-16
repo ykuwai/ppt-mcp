@@ -176,6 +176,27 @@ try:
 except ImportError:
     logger.debug("formatting module not yet available")
 
+# Table tools
+try:
+    from ppt_com.tables import register_tools as register_table_tools
+    register_table_tools(mcp)
+except ImportError:
+    logger.debug("tables module not yet available")
+
+# Export tools
+try:
+    from ppt_com.export import register_tools as register_export_tools
+    register_export_tools(mcp)
+except ImportError:
+    logger.debug("export module not yet available")
+
+# SlideShow tools
+try:
+    from ppt_com.slideshow import register_tools as register_slideshow_tools
+    register_slideshow_tools(mcp)
+except ImportError:
+    logger.debug("slideshow module not yet available")
+
 
 def main():
     """Entry point for the MCP server."""
