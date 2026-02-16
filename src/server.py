@@ -197,6 +197,76 @@ try:
 except ImportError:
     logger.debug("slideshow module not yet available")
 
+# Groups tools
+try:
+    from ppt_com.groups import register_tools as register_groups_tools
+    register_groups_tools(mcp)
+except ImportError:
+    logger.debug("groups module not yet available")
+
+# Connectors tools
+try:
+    from ppt_com.connectors import register_tools as register_connectors_tools
+    register_connectors_tools(mcp)
+except ImportError:
+    logger.debug("connectors module not yet available")
+
+# Hyperlinks tools
+try:
+    from ppt_com.hyperlinks import register_tools as register_hyperlinks_tools
+    register_hyperlinks_tools(mcp)
+except ImportError:
+    logger.debug("hyperlinks module not yet available")
+
+# Sections tools
+try:
+    from ppt_com.sections import register_tools as register_sections_tools
+    register_sections_tools(mcp)
+except ImportError:
+    logger.debug("sections module not yet available")
+
+# Properties tools
+try:
+    from ppt_com.properties import register_tools as register_properties_tools
+    register_properties_tools(mcp)
+except ImportError:
+    logger.debug("properties module not yet available")
+
+# Charts tools
+try:
+    from ppt_com.charts import register_tools as register_charts_tools
+    register_charts_tools(mcp)
+except ImportError:
+    logger.debug("charts module not yet available")
+
+# Animation tools
+try:
+    from ppt_com.animation import register_tools as register_animation_tools
+    register_animation_tools(mcp)
+except ImportError:
+    logger.debug("animation module not yet available")
+
+# Themes tools
+try:
+    from ppt_com.themes import register_tools as register_themes_tools
+    register_themes_tools(mcp)
+except ImportError:
+    logger.debug("themes module not yet available")
+
+# Media tools
+try:
+    from ppt_com.media import register_tools as register_media_tools
+    register_media_tools(mcp)
+except ImportError:
+    logger.debug("media module not yet available")
+
+# SmartArt tools
+try:
+    from ppt_com.smartart import register_tools as register_smartart_tools
+    register_smartart_tools(mcp)
+except ImportError:
+    logger.debug("smartart module not yet available")
+
 
 def main():
     """Entry point for the MCP server."""

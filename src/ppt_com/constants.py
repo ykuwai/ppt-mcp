@@ -412,3 +412,166 @@ SHOW_TYPE_NAMES = {
     2: "window",
     3: "kiosk",
 }
+
+# ==============================================================================
+# MsoConnectorType
+# ==============================================================================
+msoConnectorStraight = 1
+msoConnectorElbow = 2
+msoConnectorCurve = 3
+
+# ==============================================================================
+# PpActionType
+# ==============================================================================
+ppActionNone = 0
+ppActionNextSlide = 1
+ppActionPreviousSlide = 2
+ppActionFirstSlide = 3
+ppActionLastSlide = 4
+ppActionEndShow = 6
+ppActionHyperlink = 7
+
+# ==============================================================================
+# PpMouseActivation
+# ==============================================================================
+ppMouseClick = 1
+ppMouseOver = 2
+
+# ==============================================================================
+# XlChartType (commonly used)
+# ==============================================================================
+xlArea = 1
+xlLine = 4
+xlPie = 5
+xlBubble = 15
+xlColumnClustered = 51
+xlColumnStacked = 52
+xlColumnStacked100 = 53
+xl3DColumnClustered = 54
+xlBarClustered = 57
+xlBarStacked = 58
+xlLineStacked = 63
+xlLineMarkers = 65
+xlPieExploded = 69
+xlXYScatterLines = 74
+xlAreaStacked = 76
+xlStockHLC = 88
+xlXYScatter = -4169
+xlDoughnut = -4120
+xl3DPie = -4102
+xl3DLine = -4101
+xlRadar = -4151
+
+# ==============================================================================
+# XlAxisType
+# ==============================================================================
+xlCategory = 1
+xlValue = 2
+xlSeriesAxis = 3
+
+# ==============================================================================
+# XlLegendPosition
+# ==============================================================================
+xlLegendPositionBottom = -4107
+xlLegendPositionLeft = -4131
+xlLegendPositionRight = -4152
+xlLegendPositionTop = -4160
+xlLegendPositionCorner = 2
+
+# ==============================================================================
+# MsoAnimEffect (commonly used)
+# ==============================================================================
+msoAnimEffectAppear = 1
+msoAnimEffectFly = 2
+msoAnimEffectBlinds = 3
+msoAnimEffectBox = 4
+msoAnimEffectCheckerboard = 5
+msoAnimEffectCircle = 6
+msoAnimEffectDiamond = 8
+msoAnimEffectDissolve = 9
+msoAnimEffectFade = 10
+msoAnimEffectSplit = 16
+msoAnimEffectWipe = 22
+msoAnimEffectZoom = 23
+msoAnimEffectBounce = 26
+msoAnimEffectFloat = 56
+msoAnimEffectGrowAndTurn = 57
+msoAnimEffectSpin = 61
+msoAnimEffectTransparency = 62
+
+# ==============================================================================
+# MsoAnimTriggerType
+# ==============================================================================
+msoAnimTriggerNone = 0
+msoAnimTriggerOnPageClick = 1
+msoAnimTriggerWithPrevious = 2
+msoAnimTriggerAfterPrevious = 3
+msoAnimTriggerOnShapeClick = 4
+
+# ==============================================================================
+# PpEntryEffect (slide transitions)
+# ==============================================================================
+ppEffectNone = 0
+ppEffectCut = 257
+ppEffectFade = 3844
+ppEffectPush = 3845
+ppEffectWipe = 3846
+ppEffectSplit = 3847
+ppEffectReveal = 3848
+ppEffectRandom = 513
+ppEffectBlindsHorizontal = 769
+ppEffectBlindsVertical = 770
+ppEffectDissolve = 1537
+
+# ==============================================================================
+# PpTransitionSpeed
+# ==============================================================================
+ppTransitionSpeedFast = 1
+ppTransitionSpeedMedium = 2
+ppTransitionSpeedSlow = 3
+
+# ==============================================================================
+# PpMediaType
+# ==============================================================================
+ppMediaTypeMixed = -2
+ppMediaTypeOther = 0
+ppMediaTypeSound = 1
+ppMediaTypeMovie = 3
+
+# ==============================================================================
+# PpDateTimeFormat (for HeadersFooters)
+# ==============================================================================
+ppDateTimeMdyy = 1
+ppDateTimeddddMMMMddyyyy = 2
+ppDateTimedMMMMyyyy = 3
+ppDateTimeMMMMdyyyy = 4
+ppDateTimedMMMyy = 5
+ppDateTimeMMMMyy = 6
+ppDateTimeMMyy = 7
+ppDateTimeMddyy = 8
+ppDateTimeHmm = 9
+ppDateTimeHmmss = 10
+ppDateTimehmmAMPM = 11
+ppDateTimehmmssAMPM = 12
+
+# ==============================================================================
+# Name lookup maps for Phase 3
+# ==============================================================================
+CONNECTOR_TYPE_NAMES = {
+    1: "straight",
+    2: "elbow",
+    3: "curve",
+}
+
+ANIMATION_EFFECT_NAMES = {
+    1: "appear", 2: "fly", 3: "blinds", 4: "box",
+    5: "checkerboard", 6: "circle", 8: "diamond",
+    9: "dissolve", 10: "fade", 16: "split", 22: "wipe",
+    23: "zoom", 26: "bounce", 56: "float",
+    57: "grow_and_turn", 61: "spin", 62: "transparency",
+}
+
+ANIMATION_TRIGGER_NAMES = {
+    0: "none", 1: "on_click", 2: "with_previous",
+    3: "after_previous", 4: "on_shape_click",
+}
