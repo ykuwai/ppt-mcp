@@ -12,6 +12,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from ppt_com.constants import msoTrue, msoFalse
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 def _add_video_impl(slide_index, file_path, left, top, width, height, link_to_file):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -147,6 +149,7 @@ def _add_video_impl(slide_index, file_path, left, top, width, height, link_to_fi
 
 def _add_audio_impl(slide_index, file_path, left, top, width, height, link_to_file):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 

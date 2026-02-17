@@ -10,6 +10,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide as nav_goto_slide
 from ppt_com.constants import ppLayoutBlank
 
 logger = logging.getLogger(__name__)
@@ -317,6 +318,7 @@ def _add_slide_impl(
 
 def _delete_slide_impl(slide_index: int) -> dict:
     app = ppt._get_app_impl()
+    nav_goto_slide(app, slide_index)
     pres = _resolve_presentation(app)
 
     if slide_index < 1 or slide_index > pres.Slides.Count:
@@ -334,6 +336,7 @@ def _delete_slide_impl(slide_index: int) -> dict:
 
 def _duplicate_slide_impl(slide_index: int) -> dict:
     app = ppt._get_app_impl()
+    nav_goto_slide(app, slide_index)
     pres = _resolve_presentation(app)
 
     if slide_index < 1 or slide_index > pres.Slides.Count:
@@ -352,6 +355,7 @@ def _duplicate_slide_impl(slide_index: int) -> dict:
 
 def _move_slide_impl(slide_index: int, new_position: int) -> dict:
     app = ppt._get_app_impl()
+    nav_goto_slide(app, slide_index)
     pres = _resolve_presentation(app)
 
     count = pres.Slides.Count
@@ -473,6 +477,7 @@ def _get_slide_info_impl(slide_index: int) -> dict:
 
 def _set_slide_notes_impl(slide_index: int, notes_text: str) -> dict:
     app = ppt._get_app_impl()
+    nav_goto_slide(app, slide_index)
     pres = _resolve_presentation(app)
 
     if slide_index < 1 or slide_index > pres.Slides.Count:

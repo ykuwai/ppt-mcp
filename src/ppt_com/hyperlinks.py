@@ -11,6 +11,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from ppt_com.constants import (
     ppActionNone, ppActionHyperlink,
     ppMouseClick, ppMouseOver,
@@ -108,6 +109,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 def _add_hyperlink_impl(slide_index, shape_name_or_index, address, sub_address, screen_tip, action_on):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -162,6 +164,7 @@ def _get_hyperlinks_impl(slide_index):
 
 def _remove_hyperlink_impl(slide_index, shape_name_or_index, action_on):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)

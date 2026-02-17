@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int
+from utils.navigation import goto_slide
 from ppt_com.constants import (
     msoTrue, msoFalse,
     ppAlignLeft, ppAlignCenter, ppAlignRight,
@@ -178,6 +179,7 @@ def _get_table_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 def _add_table_impl(slide_index, rows, cols, left, top, width, height):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = slide.Shapes.AddTable(
@@ -228,6 +230,7 @@ def _set_table_cell_impl(
     fill_color, alignment,
 ):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
@@ -275,6 +278,7 @@ def _set_table_cell_impl(
 
 def _merge_table_cells_impl(slide_index, shape_name_or_index, start_row, start_col, end_row, end_col):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
@@ -292,6 +296,7 @@ def _merge_table_cells_impl(slide_index, shape_name_or_index, start_row, start_c
 
 def _add_table_row_impl(slide_index, shape_name_or_index, position):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
@@ -311,6 +316,7 @@ def _add_table_row_impl(slide_index, shape_name_or_index, position):
 
 def _delete_table_row_impl(slide_index, shape_name_or_index, position):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
@@ -329,6 +335,7 @@ def _delete_table_row_impl(slide_index, shape_name_or_index, position):
 
 def _add_table_column_impl(slide_index, shape_name_or_index, position):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
@@ -348,6 +355,7 @@ def _add_table_column_impl(slide_index, shape_name_or_index, position):
 
 def _delete_table_column_impl(slide_index, shape_name_or_index, position):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
@@ -370,6 +378,7 @@ def _set_table_style_impl(
     banding_rows, banding_cols,
 ):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)

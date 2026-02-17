@@ -7,6 +7,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from utils.color import int_to_hex
 from ppt_com.constants import (
     msoTrue, msoFalse,
@@ -266,6 +267,7 @@ def _get_placeholder_impl(slide_index, placeholder_index, placeholder_type) -> d
 
 def _set_placeholder_text_impl(slide_index, placeholder_index, placeholder_type, text) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 

@@ -11,6 +11,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from ppt_com.constants import (
     msoTrue, msoFalse,
     msoAnimEffectAppear, msoAnimEffectFade, msoAnimEffectFly,
@@ -168,6 +169,7 @@ def _set_slide_transition_impl(
     slide_index, effect, duration, advance_on_click, advance_on_time, advance_time,
 ):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -195,6 +197,7 @@ def _add_animation_impl(
     slide_index, shape_name_or_index, effect, trigger, duration, delay,
 ):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -249,6 +252,7 @@ def _list_animations_impl(slide_index):
 
 def _remove_animation_impl(slide_index, animation_index):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -268,6 +272,7 @@ def _remove_animation_impl(slide_index, animation_index):
 
 def _clear_animations_impl(slide_index, clear_transitions):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 

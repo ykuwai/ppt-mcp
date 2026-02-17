@@ -17,6 +17,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from ppt_com.constants import (
     msoTrue, msoFalse,
     SHAPE_FORMAT_MAP,
@@ -421,6 +422,7 @@ def _resolve_target(app, target_type, slide_index, shape_name_or_index):
 
 def _set_tag_impl(slide_index, shape_name_or_index, tag_name, tag_value, target_type):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     target = _resolve_target(app, target_type, slide_index, shape_name_or_index)
     target.Tags.Add(tag_name, tag_value)
     return {
@@ -477,6 +479,7 @@ def _list_fonts_impl():
 # ---------------------------------------------------------------------------
 def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, crop_top, crop_bottom):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -506,6 +509,7 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, 
 # ---------------------------------------------------------------------------
 def _export_shape_impl(slide_index, shape_name_or_index, file_path, format_type, width, height):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -547,6 +551,7 @@ def _export_shape_impl(slide_index, shape_name_or_index, file_path, format_type,
 # ---------------------------------------------------------------------------
 def _set_slide_hidden_impl(slide_index, hidden):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     slide.SlideShowTransition.Hidden = msoTrue if hidden else msoFalse
@@ -655,6 +660,7 @@ def _set_view_impl(view_type, zoom):
 # ---------------------------------------------------------------------------
 def _copy_animation_impl(slide_index, source_shape, target_shape):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     src = _get_shape(slide, source_shape)
@@ -675,6 +681,7 @@ def _copy_animation_impl(slide_index, source_shape, target_shape):
 # ---------------------------------------------------------------------------
 def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_color, fit):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -766,6 +773,7 @@ def _resolve_color(pres, color_str):
 
 def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style, filled):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -837,6 +845,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
 # ---------------------------------------------------------------------------
 def _lock_aspect_ratio_impl(slide_index, shape_name_or_index, locked):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)

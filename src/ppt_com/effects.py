@@ -10,6 +10,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from utils.color import hex_to_int
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,7 @@ class SetSoftEdgeInput(BaseModel):
 def _set_glow_impl(slide_index, shape_name_or_index, radius,
                     color, transparency) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -128,6 +130,7 @@ def _set_glow_impl(slide_index, shape_name_or_index, radius,
 def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
                           blur, offset, size, transparency) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -157,6 +160,7 @@ def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
 
 def _set_soft_edge_impl(slide_index, shape_name_or_index, radius) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)

@@ -11,6 +11,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
     msoTrue, msoFalse,
@@ -231,6 +232,7 @@ def _resolve_shape_type(shape_type: Union[int, str]) -> int:
 # ---------------------------------------------------------------------------
 def _add_shape_impl(slide_index, shape_type_int, left, top, width, height, text):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = slide.Shapes.AddShape(
@@ -248,6 +250,7 @@ def _add_shape_impl(slide_index, shape_type_int, left, top, width, height, text)
 
 def _add_textbox_impl(slide_index, left, top, width, height, text):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     textbox = slide.Shapes.AddTextbox(
@@ -265,6 +268,7 @@ def _add_textbox_impl(slide_index, left, top, width, height, text):
 
 def _add_picture_impl(slide_index, file_path, left, top, width, height):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     w = width if width is not None else -1
@@ -286,6 +290,7 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height):
 
 def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     line = slide.Shapes.AddLine(
@@ -409,6 +414,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
 
 def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height, rotation, name):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
@@ -438,6 +444,7 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
 
 def _delete_shape_impl(slide_index, shape_name, shape_index):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
@@ -448,6 +455,7 @@ def _delete_shape_impl(slide_index, shape_name, shape_index):
 
 def _duplicate_shape_impl(slide_index, shape_name, shape_index):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
@@ -464,6 +472,7 @@ def _duplicate_shape_impl(slide_index, shape_name, shape_index):
 
 def _set_zorder_impl(slide_index, shape_name, shape_index, z_order_cmd):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)

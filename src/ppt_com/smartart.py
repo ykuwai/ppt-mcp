@@ -11,6 +11,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from ppt_com.constants import msoSmartArt, SHAPE_TYPE_NAMES
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 def _add_smartart_impl(slide_index, layout_name, layout_index, left, top, width, height, node_texts):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -144,6 +146,7 @@ def _add_smartart_impl(slide_index, layout_name, layout_index, left, top, width,
 
 def _modify_smartart_impl(slide_index, shape_name_or_index, action, node_index, text):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)

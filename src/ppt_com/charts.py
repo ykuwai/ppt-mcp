@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int, int_to_hex
+from utils.navigation import goto_slide
 from ppt_com.constants import msoChart
 
 logger = logging.getLogger(__name__)
@@ -220,6 +221,7 @@ def _get_chart_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -248,6 +250,7 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
 
 def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
@@ -332,6 +335,7 @@ def _format_chart_impl(
     title, has_legend, legend_position, chart_style,
 ):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
@@ -374,6 +378,7 @@ def _set_chart_series_impl(
     series_index, color, show_data_labels, line_weight,
 ):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
@@ -399,6 +404,7 @@ def _set_chart_series_impl(
 
 def _change_chart_type_impl(slide_index, shape_name_or_index, chart_type):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)

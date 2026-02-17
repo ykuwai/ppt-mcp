@@ -11,6 +11,7 @@ from typing import Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from ppt_com.constants import msoGroup, SHAPE_TYPE_NAMES
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 def _group_shapes_impl(slide_index, shape_names):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -110,6 +112,7 @@ def _group_shapes_impl(slide_index, shape_names):
 
 def _ungroup_shapes_impl(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)

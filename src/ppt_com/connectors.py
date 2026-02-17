@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int
+from utils.navigation import goto_slide
 from ppt_com.constants import (
     msoLineSolid, msoLineRoundDot, msoLineDash,
     msoLineDashDot, msoLineLongDash,
@@ -141,6 +142,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 def _add_connector_impl(slide_index, connector_type, begin_shape, begin_site,
                          end_shape, end_site):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -176,6 +178,7 @@ def _format_connector_impl(slide_index, shape_name_or_index,
                              color, weight, dash_style,
                              begin_arrow, end_arrow):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)

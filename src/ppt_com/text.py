@@ -7,6 +7,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from utils.color import hex_to_int, int_to_hex, int_to_rgb, get_theme_color_index
 from ppt_com.constants import (
     msoTrue, msoFalse, msoTriStateMixed,
@@ -227,6 +228,7 @@ class SetTextframeMarginsInput(BaseModel):
 # ---------------------------------------------------------------------------
 def _set_text_impl(slide_index: int, shape_name_or_index, text: str) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -326,6 +328,7 @@ def _format_text_impl(slide_index, shape_name_or_index,
                        font_name, font_size, bold, italic, underline,
                        color, font_color_theme) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -349,6 +352,7 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
                               font_name, font_size, bold, italic, underline,
                               color, font_color_theme) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -373,6 +377,7 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
                                  alignment, line_spacing, space_before, space_after,
                                  indent_level, first_line_indent) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -426,6 +431,7 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
 def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
                        bullet_type, bullet_char, bullet_start_value) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -516,6 +522,7 @@ def _set_textframe_margins_impl(slide_index, shape_name_or_index,
                                   margin_left, margin_right, margin_top, margin_bottom,
                                   word_wrap, auto_size, orientation) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)

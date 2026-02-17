@@ -12,6 +12,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from utils.color import hex_to_int
 from ppt_com.constants import (
     msoTrue, msoFalse,
@@ -194,6 +195,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 def _align_shapes_impl(slide_index, shape_names, align_to, relative_to_slide):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -230,6 +232,7 @@ def _align_shapes_impl(slide_index, shape_names, align_to, relative_to_slide):
 
 def _distribute_shapes_impl(slide_index, shape_names, direction, relative_to_slide):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -357,6 +360,7 @@ def _set_slide_background_impl(slide_index, fill_type, color,
                                 gradient_color1, gradient_color2,
                                 gradient_style, image_path, transparency):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -426,6 +430,7 @@ def _set_slide_background_impl(slide_index, fill_type, color,
 
 def _flip_shape_impl(slide_index, shape_name_or_index, direction):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
@@ -454,6 +459,7 @@ def _flip_shape_impl(slide_index, shape_name_or_index, direction):
 
 def _merge_shapes_impl(slide_index, shape_names, merge_type, primary_shape):
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 

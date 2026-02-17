@@ -9,6 +9,7 @@ import logging
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ class DeleteCommentInput(BaseModel):
 def _add_comment_impl(slide_index, text, author, author_initials,
                        left, top) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
@@ -112,6 +114,7 @@ def _list_comments_impl(slide_index) -> dict:
 
 def _delete_comment_impl(slide_index, comment_index) -> dict:
     app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
