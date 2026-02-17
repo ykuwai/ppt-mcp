@@ -222,6 +222,7 @@ msoTextOrientationVerticalFarEast = 6
 # ==============================================================================
 ppAutoSizeNone = 0
 ppAutoSizeShapeToFitText = 1
+ppAutoSizeTextToFitShape = 2  # MsoAutoSize (TextFrame2 only) — shrink text on overflow
 ppAutoSizeMixed = -2
 
 # ==============================================================================

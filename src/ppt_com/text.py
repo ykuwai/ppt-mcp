@@ -12,7 +12,7 @@ from utils.color import hex_to_int, int_to_hex, int_to_rgb, get_theme_color_inde
 from ppt_com.constants import (
     msoTrue, msoFalse, msoTriStateMixed,
     ppAlignLeft, ppAlignCenter, ppAlignRight, ppAlignJustify, ppAlignDistribute,
-    ppAutoSizeNone, ppAutoSizeShapeToFitText,
+    ppAutoSizeNone, ppAutoSizeShapeToFitText, ppAutoSizeTextToFitShape,
     ppBulletNone, ppBulletUnnumbered, ppBulletNumbered,
     msoTextOrientationHorizontal, msoTextOrientationVertical,
     msoTextOrientationUpward, msoTextOrientationDownward,
@@ -73,6 +73,7 @@ ORIENTATION_MAP = {
 AUTO_SIZE_MAP = {
     "none": ppAutoSizeNone,
     "shape_to_fit": ppAutoSizeShapeToFitText,
+    "shrink_to_fit": ppAutoSizeTextToFitShape,
 }
 
 BULLET_TYPE_MAP = {
@@ -202,22 +203,30 @@ class FindReplaceTextInput(BaseModel):
     )
 
 
-class SetTextframeMarginsInput(BaseModel):
-    """Input for setting text frame margins and properties."""
+class SetTextframeInput(BaseModel):
+    """Input for configuring text frame properties (auto-fit, margins, etc.)."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
         ..., description="Shape name (string) or 1-based index (int)"
     )
+    auto_size: Optional[str] = Field(
+        default=None,
+        description=(
+            "Text auto-fit mode: "
+            "'none' (no auto-fit), "
+            "'shrink_to_fit' (shrink text to fit the shape), "
+            "'shape_to_fit' (resize shape to fit text)"
+        ),
+    )
+    word_wrap: Optional[bool] = Field(
+        default=None, description="Enable/disable word wrapping"
+    )
     margin_left: Optional[float] = Field(default=None, description="Left margin in points")
     margin_right: Optional[float] = Field(default=None, description="Right margin in points")
     margin_top: Optional[float] = Field(default=None, description="Top margin in points")
     margin_bottom: Optional[float] = Field(default=None, description="Bottom margin in points")
-    word_wrap: Optional[bool] = Field(default=None, description="Enable/disable word wrap")
-    auto_size: Optional[str] = Field(
-        default=None, description="'none' or 'shape_to_fit'"
-    )
     orientation: Optional[str] = Field(
         default=None, description="'horizontal', 'vertical', 'upward', or 'downward'"
     )
@@ -518,9 +527,10 @@ def _find_replace_text_impl(find_text, replace_text, slide_index) -> dict:
     }
 
 
-def _set_textframe_margins_impl(slide_index, shape_name_or_index,
-                                  margin_left, margin_right, margin_top, margin_bottom,
-                                  word_wrap, auto_size, orientation) -> dict:
+def _set_textframe_impl(slide_index, shape_name_or_index,
+                        auto_size, word_wrap,
+                        margin_left, margin_right, margin_top, margin_bottom,
+                        orientation) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = app.ActivePresentation
@@ -542,14 +552,6 @@ def _set_textframe_margins_impl(slide_index, shape_name_or_index,
         tf.MarginBottom = margin_bottom
     if word_wrap is not None:
         tf.WordWrap = msoTrue if word_wrap else msoFalse
-    if auto_size is not None:
-        auto_size_val = AUTO_SIZE_MAP.get(auto_size)
-        if auto_size_val is None:
-            raise ValueError(
-                f"Invalid auto_size '{auto_size}'. "
-                f"Valid values: {list(AUTO_SIZE_MAP.keys())}"
-            )
-        tf.AutoSize = auto_size_val
     if orientation is not None:
         orient_val = ORIENTATION_MAP.get(orientation)
         if orient_val is None:
@@ -558,6 +560,16 @@ def _set_textframe_margins_impl(slide_index, shape_name_or_index,
                 f"Valid values: {list(ORIENTATION_MAP.keys())}"
             )
         tf.Orientation = orient_val
+
+    # Use TextFrame2 for auto_size (supports shrink_to_fit)
+    if auto_size is not None:
+        auto_size_val = AUTO_SIZE_MAP.get(auto_size)
+        if auto_size_val is None:
+            raise ValueError(
+                f"Invalid auto_size '{auto_size}'. "
+                f"Valid values: {list(AUTO_SIZE_MAP.keys())}"
+            )
+        shape.TextFrame2.AutoSize = auto_size_val
 
     return {
         "status": "success",
@@ -658,14 +670,15 @@ def find_replace_text(params: FindReplaceTextInput) -> str:
         return json.dumps({"error": str(e)})
 
 
-def set_textframe_margins(params: SetTextframeMarginsInput) -> str:
-    """Set text frame margins and properties."""
+def set_textframe(params: SetTextframeInput) -> str:
+    """Configure text frame properties (auto-fit, word wrap, margins, orientation)."""
     try:
         result = ppt.execute(
-            _set_textframe_margins_impl,
+            _set_textframe_impl,
             params.slide_index, params.shape_name_or_index,
+            params.auto_size, params.word_wrap,
             params.margin_left, params.margin_right, params.margin_top, params.margin_bottom,
-            params.word_wrap, params.auto_size, params.orientation,
+            params.orientation,
         )
         return json.dumps(result)
     except Exception as e:
@@ -808,19 +821,23 @@ def register_tools(mcp):
         return find_replace_text(params)
 
     @mcp.tool(
-        name="ppt_set_textframe_margins",
+        name="ppt_set_textframe",
         annotations={
-            "title": "Set TextFrame Margins",
+            "title": "Set TextFrame Properties",
             "readOnlyHint": False,
             "destructiveHint": False,
             "idempotentHint": True,
             "openWorldHint": False,
         },
     )
-    async def tool_ppt_set_textframe_margins(params: SetTextframeMarginsInput) -> str:
-        """Set text frame margins and properties.
+    async def tool_ppt_set_textframe(params: SetTextframeInput) -> str:
+        """Configure text frame auto-fit, word wrap, margins, and orientation.
 
-        Configure margins (in points), word wrap, auto-size behavior,
-        and text orientation for a shape's text frame.
+        Controls how text fits within a shape:
+        - auto_size='shrink_to_fit': shrink text font to fit the shape
+        - auto_size='shape_to_fit': resize the shape to fit all text
+        - auto_size='none': no auto-fitting (text may overflow)
+        - word_wrap: enable/disable text wrapping at shape boundary
+        Also sets inner margins (points) and text orientation.
         """
-        return set_textframe_margins(params)
+        return set_textframe(params)
