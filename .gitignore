@@ -42,6 +42,7 @@ htmlcov/
 CLAUDE.md
 .claude/
 .mcp.json
+.codex/
 
 # Test output
 test_slides/
