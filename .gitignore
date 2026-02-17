@@ -37,3 +37,8 @@ htmlcov/
 # Distribution
 *.whl
 *.tar.gz
+
+# Local config
+CLAUDE.md
+.claude/
+.mcp.json
