@@ -679,7 +679,7 @@ MERGE_CMD_MAP = {
 SLIDE_SIZE_MAP = {
     "4:3": 1, "letter": 2, "a4": 3, "35mm": 4,
     "overhead": 5, "banner": 6, "custom": 7,
-    "16:9": 8, "16:10": 9, "widescreen": 10,
+    "a3": 8, "16:9": 9, "16:10": 10, "widescreen": 9,
 }
 
 GRADIENT_STYLE_MAP = {

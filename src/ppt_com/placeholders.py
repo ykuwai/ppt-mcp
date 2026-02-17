@@ -147,6 +147,16 @@ class SetPlaceholderTextInput(BaseModel):
     text: str = Field(..., description="Text content. Use \\n for paragraph breaks.")
 
 
+class ListDesignsInput(BaseModel):
+    """Input for listing all designs (slide masters) in the presentation."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    include_layouts: bool = Field(
+        default=False,
+        description="If true, include layout names for each design. Default: false (compact).",
+    )
+
+
 class ListLayoutsInput(BaseModel):
     """Input for listing slide layouts."""
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -316,6 +326,32 @@ def _list_layouts_impl(design_index) -> dict:
     }
 
 
+def _list_designs_impl(include_layouts: bool = False) -> dict:
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    designs = pres.Designs
+    result = []
+    for d in range(1, designs.Count + 1):
+        design = designs(d)
+        master = design.SlideMaster
+        entry = {
+            "design_index": d,
+            "design_name": design.Name,
+            "layout_count": master.CustomLayouts.Count,
+        }
+        if include_layouts:
+            layout_names = []
+            for i in range(1, master.CustomLayouts.Count + 1):
+                layout_names.append(master.CustomLayouts(i).Name)
+            entry["layout_names"] = layout_names
+        result.append(entry)
+    return {
+        "status": "success",
+        "design_count": designs.Count,
+        "designs": result,
+    }
+
+
 def _get_slide_master_info_impl(design_index) -> dict:
     app = ppt._get_app_impl()
     pres = app.ActivePresentation
@@ -384,6 +420,15 @@ def set_placeholder_text(params: SetPlaceholderTextInput) -> str:
             params.slide_index, params.placeholder_index,
             params.placeholder_type, params.text,
         )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def list_designs(params: ListDesignsInput) -> str:
+    """List all designs (slide masters) in the presentation."""
+    try:
+        result = ppt.execute(_list_designs_impl, params.include_layouts)
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
@@ -467,6 +512,25 @@ def register_tools(mcp):
         (e.g. 'title', 'body', 'subtitle'). Use \\n for paragraph breaks.
         """
         return set_placeholder_text(params)
+
+    @mcp.tool(
+        name="ppt_list_designs",
+        annotations={
+            "title": "List Designs",
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_ppt_list_designs(params: ListDesignsInput) -> str:
+        """List all designs (slide masters) in the presentation.
+
+        Returns each design's index, name, layout count, and layout names.
+        Use the design_index with ppt_add_slide or ppt_list_layouts
+        to work with layouts from a specific design.
+        """
+        return list_designs(params)
 
     @mcp.tool(
         name="ppt_list_layouts",

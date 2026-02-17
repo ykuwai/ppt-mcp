@@ -61,6 +61,14 @@ class AddSlideInput(BaseModel):
             "Overrides the layout parameter."
         ),
     )
+    design_index: Optional[int] = Field(
+        default=None,
+        description=(
+            "1-based design (slide master) index to search for the layout_name. "
+            "If omitted, searches the active presentation's default master first, "
+            "then all designs."
+        ),
+    )
 
 
 class DeleteSlideInput(BaseModel):
@@ -171,6 +179,7 @@ def _add_slide_impl(
     position: Optional[int],
     layout: Optional[int],
     layout_name: Optional[str],
+    design_index: Optional[int] = None,
 ) -> dict:
     app = ppt._get_app_impl()
     pres = _resolve_presentation(app)
@@ -189,20 +198,51 @@ def _add_slide_impl(
         if friendly_key in LAYOUT_NAME_MAP:
             slide = pres.Slides.Add(Index=position, Layout=LAYOUT_NAME_MAP[friendly_key])
         else:
-            # Search custom layouts by exact name
-            master = pres.SlideMaster
             custom_layout = None
-            for i in range(1, master.CustomLayouts.Count + 1):
-                if master.CustomLayouts(i).Name == layout_name:
-                    custom_layout = master.CustomLayouts(i)
-                    break
-            if custom_layout is None:
-                available = []
+
+            if design_index is not None:
+                # Search in the specified design
+                if design_index < 1 or design_index > pres.Designs.Count:
+                    raise ValueError(
+                        f"Design index {design_index} out of range "
+                        f"(1-{pres.Designs.Count})"
+                    )
+                master = pres.Designs(design_index).SlideMaster
                 for i in range(1, master.CustomLayouts.Count + 1):
-                    available.append(master.CustomLayouts(i).Name)
+                    if master.CustomLayouts(i).Name == layout_name:
+                        custom_layout = master.CustomLayouts(i)
+                        break
+            else:
+                # Search default master first, then all designs
+                master = pres.SlideMaster
+                for i in range(1, master.CustomLayouts.Count + 1):
+                    if master.CustomLayouts(i).Name == layout_name:
+                        custom_layout = master.CustomLayouts(i)
+                        break
+
+                if custom_layout is None:
+                    for d in range(1, pres.Designs.Count + 1):
+                        m = pres.Designs(d).SlideMaster
+                        for i in range(1, m.CustomLayouts.Count + 1):
+                            if m.CustomLayouts(i).Name == layout_name:
+                                custom_layout = m.CustomLayouts(i)
+                                break
+                        if custom_layout is not None:
+                            break
+
+            if custom_layout is None:
+                # Collect available layouts for error message
+                available = {}
+                for d in range(1, pres.Designs.Count + 1):
+                    design = pres.Designs(d)
+                    m = design.SlideMaster
+                    names = []
+                    for i in range(1, m.CustomLayouts.Count + 1):
+                        names.append(m.CustomLayouts(i).Name)
+                    available[design.Name] = names
                 raise ValueError(
                     f"Layout '{layout_name}' not found. "
-                    f"Available custom layouts: {available}"
+                    f"Available custom layouts by design: {available}"
                 )
             slide = pres.Slides.AddSlide(Index=position, pCustomLayout=custom_layout)
     else:
@@ -407,7 +447,8 @@ def add_slide(params: AddSlideInput) -> str:
     """Add a new slide to the active presentation."""
     try:
         result = ppt.execute(
-            _add_slide_impl, params.position, params.layout, params.layout_name
+            _add_slide_impl, params.position, params.layout,
+            params.layout_name, params.design_index,
         )
         return json.dumps(result)
     except Exception as e:
@@ -538,6 +579,7 @@ def register_tools(mcp):
         by PpSlideLayout integer constant. You can also provide a custom
         layout_name to match a layout from the slide master.
         Position is 1-based; omit to append at the end.
+        Use design_index to pick a layout from a specific slide master/design.
         """
         return add_slide(params)
 

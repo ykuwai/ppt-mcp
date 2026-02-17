@@ -298,16 +298,31 @@ def _set_slide_size_impl(width, height, preset, orientation):
     pres = app.ActivePresentation
     ps = pres.PageSetup
 
+    # Preset dimensions in points (width, height)
+    PRESET_DIMENSIONS = {
+        "16:9": (960, 540),
+        "widescreen": (960, 540),
+        "4:3": (960, 720),
+        "16:10": (960, 600),
+        "a4": (842, 595),
+        "a3": (1191, 842),
+        "letter": (792, 612),
+        "35mm": (792, 528),
+        "overhead": (720, 540),
+        "banner": (576, 72),
+    }
+
     # Set preset FIRST (may change width/height)
     if preset is not None:
         preset_key = preset.strip().lower()
-        size_val = SLIDE_SIZE_MAP.get(preset_key)
-        if size_val is None:
+        dims = PRESET_DIMENSIONS.get(preset_key)
+        if dims is None:
             raise ValueError(
                 f"Unknown preset '{preset}'. "
-                f"Valid values: {list(SLIDE_SIZE_MAP.keys())}"
+                f"Valid values: {list(PRESET_DIMENSIONS.keys())}"
             )
-        ps.SlideSize = size_val
+        ps.SlideWidth = dims[0]
+        ps.SlideHeight = dims[1]
 
     # Then set explicit width/height (overrides preset dimensions)
     if width is not None:
