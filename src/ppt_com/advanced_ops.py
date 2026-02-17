@@ -244,6 +244,10 @@ class AddSvgIconInput(BaseModel):
         default="outlined",
         description="Icon style: 'outlined', 'rounded', or 'sharp'",
     )
+    filled: bool = Field(
+        default=False,
+        description="If true, use the filled variant of the icon instead of outline.",
+    )
 
 
 # --- Lock Aspect Ratio ---
@@ -634,7 +638,7 @@ def _resolve_color(pres, color_str):
     return f"#{r:02X}{g:02X}{b:02X}"
 
 
-def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style):
+def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style, filled):
     app = ppt._get_app_impl()
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
@@ -642,9 +646,10 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
     # Resolve theme color name to hex
     hex_color = _resolve_color(pres, color)
 
-    # Build CDN URL
+    # Build CDN URL (append -fill suffix for filled variant)
     base = "https://cdn.jsdelivr.net/npm/@material-symbols/svg-400@0.31.3"
-    svg_url = f"{base}/{style}/{icon_name}.svg"
+    file_name = f"{icon_name}-fill" if filled else icon_name
+    svg_url = f"{base}/{style}/{file_name}.svg"
 
     # Download SVG
     resp = urllib.request.urlopen(svg_url)
@@ -968,7 +973,7 @@ def add_svg_icon(params: AddSvgIconInput) -> str:
             _add_svg_icon_impl,
             params.slide_index, params.icon_name,
             params.left, params.top, params.width, params.height,
-            params.color, params.style,
+            params.color, params.style, params.filled,
         )
         return json.dumps(result)
     except Exception as e:
