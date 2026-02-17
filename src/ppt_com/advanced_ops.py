@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import tempfile
+import urllib.error
 import urllib.request
 from typing import Optional, Union
 
@@ -652,7 +653,16 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
     svg_url = f"{base}/{style}/{file_name}.svg"
 
     # Download SVG
-    resp = urllib.request.urlopen(svg_url)
+    try:
+        resp = urllib.request.urlopen(svg_url)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise ValueError(
+                f"Icon '{icon_name}' not found (style='{style}', filled={filled}). "
+                f"Check the name at https://fonts.google.com/icons . "
+                f"URL: {svg_url}"
+            ) from None
+        raise
     svg_text = resp.read().decode("utf-8")
 
     # Apply color: replace currentColor and inject fill on <svg> tag
