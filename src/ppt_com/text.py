@@ -94,7 +94,15 @@ class SetTextInput(BaseModel):
     shape_name_or_index: Union[str, int] = Field(
         ..., description="Shape name (string) or 1-based index (int)"
     )
-    text: str = Field(..., description="Text content. Use \\n for paragraph breaks.")
+    text: str = Field(
+        ...,
+        description=(
+            "Text content. Use \\n for paragraph breaks (Enter) "
+            "and \\v for line breaks within the same paragraph (Shift+Enter). "
+            "Example: 'First paragraph\\nSecond paragraph' or "
+            "'Line one\\vLine two' (same paragraph, no bullet/indent change)."
+        ),
+    )
 
 
 class GetTextInput(BaseModel):
@@ -247,7 +255,8 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text: str) -> dict:
 
     tf = shape.TextFrame
     tr = tf.TextRange
-    text = text.replace('\n', '\r')
+    text = text.replace('\n', '\r')  # \n -> paragraph break (Enter)
+    # \v (vertical tab) -> line break (Shift+Enter) — passed through as-is
     tr.Text = text
 
     return {
@@ -704,8 +713,12 @@ def register_tools(mcp):
     async def tool_ppt_set_text(params: SetTextInput) -> str:
         """Set the entire text content of a shape.
 
-        Replaces all existing text. Use \\n for paragraph breaks
-        (they are converted to \\r internally for PowerPoint).
+        Replaces all existing text.
+        \\n = paragraph break (Enter) — starts a new paragraph with its own
+        bullet/numbering and indent level.
+        \\v = line break (Shift+Enter) — soft return within the same paragraph,
+        preserving bullet/indent. Use \\v for wrapping at natural word
+        boundaries within one paragraph.
         """
         return set_text(params)
 
