@@ -2,13 +2,14 @@
 
 Handles tags, font management, picture cropping, shape export,
 slide visibility, shape selection, view control, animation copying,
-picture insertion from URL, and aspect ratio locking.
+picture insertion from URL, aspect ratio locking, and icon search.
 """
 
 import json
 import logging
 import os
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from typing import Optional, Union
@@ -24,6 +25,112 @@ from ppt_com.constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Icon metadata cache (lazy-loaded on first search)
+# ---------------------------------------------------------------------------
+_icon_cache = None        # list of icon dicts
+_icon_cache_time = 0.0    # timestamp of last fetch
+_ICON_CACHE_TTL = 86400   # 24 hours
+
+_ICON_METADATA_URL = "https://fonts.google.com/metadata/icons"
+
+
+def _fetch_icon_metadata():
+    """Fetch and cache the Material Symbols icon metadata from Google Fonts.
+
+    The first line of the response is `)]}'` (XSS protection) and must be
+    stripped before parsing as JSON.  The parsed icons list is cached for
+    24 hours to avoid repeated network calls.
+    """
+    global _icon_cache, _icon_cache_time
+
+    now = time.time()
+    if _icon_cache is not None and (now - _icon_cache_time) < _ICON_CACHE_TTL:
+        return _icon_cache
+
+    resp = urllib.request.urlopen(_ICON_METADATA_URL)
+    raw = resp.read().decode("utf-8")
+
+    # Strip XSS protection prefix  )]}'
+    first_nl = raw.index("\n")
+    json_str = raw[first_nl + 1:]
+    data = json.loads(json_str)
+
+    _icon_cache = data.get("icons", [])
+    _icon_cache_time = now
+    logger.info("Fetched %d icons from Google Fonts metadata", len(_icon_cache))
+    return _icon_cache
+
+
+def _search_icons(query: str, max_results: int = 20):
+    """Search Material Symbols icons by keyword.
+
+    Scoring:
+    - Exact icon name match: +100
+    - Full query (multi-word) found in icon name: +50
+    - All query words found in icon name: +40
+    - Query word found in icon name: +30
+    - Exact tag match: +20
+    - Query word found in a tag: +10
+    - Query word found in a category: +5
+    - Popularity bonus (normalized to 0-10 range)
+
+    Returns a sorted list of dicts with name, tags, categories, score.
+    """
+    icons = _fetch_icon_metadata()
+    query_lower = query.lower().strip()
+    query_words = query_lower.split()
+
+    results = []
+    for icon in icons:
+        name = icon.get("name", "")
+        tags = [t.lower() for t in icon.get("tags", [])]
+        categories = [c.lower() for c in icon.get("categories", [])]
+        popularity = icon.get("popularity", 0)
+
+        score = 0
+
+        # Exact name match (query == name)
+        if name == query_lower:
+            score += 100
+        # Full query string in name (e.g. "arrow_forward" contains "arrow forward" as "arrow_forward")
+        elif query_lower.replace(" ", "_") == name:
+            score += 90
+        # Full query in name
+        elif query_lower in name:
+            score += 50
+
+        # Bonus: all query words found in name
+        if len(query_words) > 1 and all(w in name for w in query_words):
+            score += 40
+
+        # Per-word scoring
+        for word in query_words:
+            if word in name:
+                score += 30
+            for tag in tags:
+                if word == tag:
+                    score += 20
+                elif word in tag:
+                    score += 10
+            for cat in categories:
+                if word in cat:
+                    score += 5
+
+        if score > 0:
+            # Small popularity bonus (normalized)
+            score += min(popularity / 1000, 10)
+            results.append({
+                "name": name,
+                "categories": icon.get("categories", []),
+                "tags": icon.get("tags", [])[:8],  # limit tags for readability
+                "popularity": popularity,
+                "score": round(score, 2),
+            })
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results[:max_results]
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +368,24 @@ class LockAspectRatioInput(BaseModel):
         ..., description="Shape name (str) or 1-based index (int)"
     )
     locked: bool = Field(..., description="True to lock, False to unlock")
+
+
+# --- Search Icons ---
+class SearchIconsInput(BaseModel):
+    """Input for searching Material Symbols icons by keyword."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    query: str = Field(
+        ...,
+        description=(
+            "Search keyword(s) for finding icons. Examples: 'home', 'arrow', "
+            "'settings gear', 'chart graph'. Multiple words narrow the search."
+        ),
+    )
+    max_results: int = Field(
+        default=20, ge=1, le=100,
+        description="Maximum number of results to return (default: 20)",
+    )
 
 
 # ===========================================================================
@@ -1010,6 +1135,30 @@ def lock_aspect_ratio(params: LockAspectRatioInput) -> str:
         return json.dumps({"error": f"Failed to lock aspect ratio: {str(e)}"})
 
 
+# --- Search Icons ---
+def search_icons(params: SearchIconsInput) -> str:
+    """Search Material Symbols icons by keyword.
+
+    Fetches icon metadata from Google Fonts on first call (cached for 24h).
+
+    Args:
+        params: Search query and max results.
+
+    Returns:
+        JSON with matching icons (name, categories, tags, popularity, score).
+    """
+    try:
+        results = _search_icons(params.query, params.max_results)
+        return json.dumps({
+            "success": True,
+            "query": params.query,
+            "count": len(results),
+            "icons": results,
+        })
+    except Exception as e:
+        return json.dumps({"error": f"Failed to search icons: {str(e)}"})
+
+
 # ===========================================================================
 # Tool registration
 # ===========================================================================
@@ -1264,11 +1413,11 @@ def register_tools(mcp):
     async def tool_add_svg_icon(params: AddSvgIconInput) -> str:
         """Add a Material Symbols icon as SVG image to a slide.
 
-        Downloads the icon from the Google Material Symbols CDN,
-        replaces currentColor with the specified color, and inserts
+        Downloads the icon from the Google Material Symbols CDN and inserts
         it fitted within the given area preserving aspect ratio.
-        Icon styles: 'outlined', 'rounded', 'sharp'.
-        Browse icons at https://fonts.google.com/icons
+        Icon styles: 'outlined', 'rounded', 'sharp'. Set filled=true for
+        the filled variant. Color accepts '#RRGGBB' or theme names like
+        'accent1'. Use ppt_search_icons to find icon names by keyword.
         """
         return add_svg_icon(params)
 
@@ -1290,3 +1439,27 @@ def register_tools(mcp):
         Set locked=true to lock, locked=false to unlock.
         """
         return lock_aspect_ratio(params)
+
+    # --- Search Icons ---
+    @mcp.tool(
+        name="ppt_search_icons",
+        annotations={
+            "title": "Search Material Icons",
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    async def tool_search_icons(params: SearchIconsInput) -> str:
+        """Search Google's Material Symbols icon library by keyword.
+
+        Returns matching icon names sorted by relevance (name, tags, and
+        category matching + popularity). Each result includes the icon
+        name, categories, sample tags, and popularity score.
+        Use the returned icon name with ppt_add_svg_icon to insert it
+        into a slide. Supports multi-word queries (e.g. 'arrow forward',
+        'chart graph'). The metadata is fetched on first call and cached
+        for 24 hours.
+        """
+        return search_icons(params)
