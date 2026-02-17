@@ -198,6 +198,52 @@ class AddPictureFromUrlInput(BaseModel):
     top: float = Field(default=100, description="Top position in points")
     width: Optional[float] = Field(default=None, description="Width in points (auto if not set)")
     height: Optional[float] = Field(default=None, description="Height in points (auto if not set)")
+    svg_color: Optional[str] = Field(
+        default=None,
+        description=(
+            "Replace 'currentColor' in SVG files with this color (e.g. '#1A73E8'). "
+            "Only applies to SVG files."
+        ),
+    )
+    fit: bool = Field(
+        default=False,
+        description=(
+            "If true, fit the image within the width×height area while preserving "
+            "aspect ratio and centering. Requires both width and height."
+        ),
+    )
+
+
+# --- Add SVG Icon ---
+class AddSvgIconInput(BaseModel):
+    """Input for adding a Material Symbols icon as SVG image."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    icon_name: str = Field(
+        ...,
+        description=(
+            "Material Symbols icon name (e.g. 'bolt', 'description', 'extension', "
+            "'settings', 'home', 'search', 'favorite'). "
+            "See https://fonts.google.com/icons for available icons."
+        ),
+    )
+    left: float = Field(default=100, description="Left position in points")
+    top: float = Field(default=100, description="Top position in points")
+    width: float = Field(default=72, description="Width of the area in points")
+    height: float = Field(default=72, description="Height of the area in points")
+    color: str = Field(
+        default="accent1",
+        description=(
+            "Icon color. Use '#RRGGBB' hex string or a theme color name "
+            "(e.g. 'accent1', 'accent2', 'dark1', 'light1'). "
+            "Default: 'accent1' (the presentation's main accent color)."
+        ),
+    )
+    style: str = Field(
+        default="outlined",
+        description="Icon style: 'outlined', 'rounded', or 'sharp'",
+    )
 
 
 # --- Lock Aspect Ratio ---
@@ -497,25 +543,50 @@ def _copy_animation_impl(slide_index, source_shape, target_shape):
 # ---------------------------------------------------------------------------
 # Add Picture from URL
 # ---------------------------------------------------------------------------
-def _add_picture_from_url_impl(slide_index, url, left, top, width, height):
+def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_color, fit):
     app = ppt._get_app_impl()
     pres = app.ActivePresentation
     slide = pres.Slides(slide_index)
 
-    # Download to temp file
-    suffix = os.path.splitext(url.split("?")[0])[-1] or ".png"
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix=suffix)
-    os.close(tmp_fd)
+    # Download the image
+    resp = urllib.request.urlopen(url)
+    content_type = resp.headers.get("Content-Type", "")
+    is_svg = url.lower().endswith(".svg") or "svg" in content_type
+
+    if is_svg:
+        svg_text = resp.read().decode("utf-8")
+        if svg_color:
+            svg_text = svg_text.replace("currentColor", svg_color)
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".svg")
+        os.close(tmp_fd)
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(svg_text)
+    else:
+        data = resp.read()
+        suffix = os.path.splitext(url.split("?")[0])[-1] or ".png"
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+        os.close(tmp_fd)
+        with open(tmp_path, "wb") as f:
+            f.write(data)
 
     try:
-        urllib.request.urlretrieve(url, tmp_path)
         abs_tmp = os.path.abspath(tmp_path)
 
-        w = width if width is not None else -1
-        h = height if height is not None else -1
-
-        # AddPicture(FileName, LinkToFile, SaveWithDocument, Left, Top, Width, Height)
-        pic = slide.Shapes.AddPicture(abs_tmp, msoFalse, msoTrue, left, top, w, h)
+        if fit and width is not None and height is not None:
+            # Auto-size first, then fit to area
+            # AddPicture(FileName, LinkToFile, SaveWithDocument, Left, Top, Width, Height)
+            pic = slide.Shapes.AddPicture(abs_tmp, 0, -1, left, top, -1, -1)
+            pic.LockAspectRatio = -1  # msoTrue
+            scale = min(width / pic.Width, height / pic.Height)
+            new_w = pic.Width * scale
+            new_h = pic.Height * scale
+            pic.Width = new_w
+            pic.Left = left + (width - new_w) / 2
+            pic.Top = top + (height - new_h) / 2
+        else:
+            w = width if width is not None else -1
+            h = height if height is not None else -1
+            pic = slide.Shapes.AddPicture(abs_tmp, 0, -1, left, top, w, h)
 
         return {
             "success": True,
@@ -524,6 +595,97 @@ def _add_picture_from_url_impl(slide_index, url, left, top, width, height):
             "width": round(pic.Width, 2),
             "height": round(pic.Height, 2),
             "source_url": url,
+        }
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Add SVG Icon
+# ---------------------------------------------------------------------------
+def _resolve_color(pres, color_str):
+    """Resolve a color string to a hex '#RRGGBB' value.
+
+    Accepts '#RRGGBB' hex strings directly, or theme color names
+    like 'accent1', 'dark1', 'light2', etc.
+    """
+    if color_str.startswith("#"):
+        return color_str
+
+    # Theme color name -> resolve from presentation
+    theme_map = {
+        "dark1": 1, "light1": 2, "dark2": 3, "light2": 4,
+        "accent1": 5, "accent2": 6, "accent3": 7, "accent4": 8,
+        "accent5": 9, "accent6": 10, "hyperlink": 11,
+        "followed_hyperlink": 12,
+    }
+    idx = theme_map.get(color_str.lower())
+    if idx is None:
+        raise ValueError(
+            f"Unknown color '{color_str}'. Use '#RRGGBB' or theme name: "
+            f"{list(theme_map.keys())}"
+        )
+    # ThemeColorScheme is 1-based
+    bgr = pres.SlideMaster.Theme.ThemeColorScheme(idx).RGB
+    r = bgr & 0xFF
+    g = (bgr >> 8) & 0xFF
+    b = (bgr >> 16) & 0xFF
+    return f"#{r:02X}{g:02X}{b:02X}"
+
+
+def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+    slide = pres.Slides(slide_index)
+
+    # Resolve theme color name to hex
+    hex_color = _resolve_color(pres, color)
+
+    # Build CDN URL
+    base = "https://cdn.jsdelivr.net/npm/@material-symbols/svg-400@0.31.3"
+    svg_url = f"{base}/{style}/{icon_name}.svg"
+
+    # Download SVG
+    resp = urllib.request.urlopen(svg_url)
+    svg_text = resp.read().decode("utf-8")
+
+    # Apply color: replace currentColor and inject fill on <svg> tag
+    svg_text = svg_text.replace("currentColor", hex_color)
+    if f'fill="{hex_color}"' not in svg_text:
+        svg_text = svg_text.replace("<svg ", f'<svg fill="{hex_color}" ', 1)
+
+    # Write to temp file
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".svg")
+    os.close(tmp_fd)
+
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(svg_text)
+
+        abs_tmp = os.path.abspath(tmp_path)
+
+        # Insert with auto-size, then fit
+        # AddPicture(FileName, LinkToFile, SaveWithDocument, Left, Top, Width, Height)
+        pic = slide.Shapes.AddPicture(abs_tmp, 0, -1, left, top, -1, -1)
+
+        # Fit to area preserving aspect ratio
+        pic.LockAspectRatio = -1  # msoTrue
+        scale = min(width / pic.Width, height / pic.Height)
+        new_w = pic.Width * scale
+        new_h = pic.Height * scale
+        pic.Width = new_w
+        pic.Left = left + (width - new_w) / 2
+        pic.Top = top + (height - new_h) / 2
+
+        return {
+            "success": True,
+            "shape_name": pic.Name,
+            "shape_index": pic.ZOrderPosition,
+            "width": round(pic.Width, 2),
+            "height": round(pic.Height, 2),
+            "icon_name": icon_name,
+            "source_url": svg_url,
         }
     finally:
         if os.path.exists(tmp_path):
@@ -784,10 +946,33 @@ def add_picture_from_url(params: AddPictureFromUrlInput) -> str:
             _add_picture_from_url_impl,
             params.slide_index, params.url,
             params.left, params.top, params.width, params.height,
+            params.svg_color, params.fit,
         )
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add picture from URL: {str(e)}"})
+
+
+# --- Add SVG Icon ---
+def add_svg_icon(params: AddSvgIconInput) -> str:
+    """Add a Material Symbols icon as SVG image to a slide.
+
+    Args:
+        params: Slide index, icon name, position, dimensions, color, and style.
+
+    Returns:
+        JSON with shape name, dimensions, icon name, and source URL.
+    """
+    try:
+        result = ppt.execute(
+            _add_svg_icon_impl,
+            params.slide_index, params.icon_name,
+            params.left, params.top, params.width, params.height,
+            params.color, params.style,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to add SVG icon: {str(e)}"})
 
 
 # --- Lock Aspect Ratio ---
@@ -1042,10 +1227,35 @@ def register_tools(mcp):
         """Add a picture to a slide by downloading from a URL.
 
         Downloads the image to a temporary file, inserts it into the slide,
-        and cleans up the temp file. If width/height are not specified,
+        and cleans up the temp file. Supports SVG files with optional
+        currentColor replacement via svg_color. If fit=true with both
+        width and height, the image is fitted within the area preserving
+        aspect ratio and centered. If width/height are not specified,
         the original image dimensions are used.
         """
         return add_picture_from_url(params)
+
+    # --- Add SVG Icon ---
+    @mcp.tool(
+        name="ppt_add_svg_icon",
+        annotations={
+            "title": "Add SVG Icon",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+    )
+    async def tool_add_svg_icon(params: AddSvgIconInput) -> str:
+        """Add a Material Symbols icon as SVG image to a slide.
+
+        Downloads the icon from the Google Material Symbols CDN,
+        replaces currentColor with the specified color, and inserts
+        it fitted within the given area preserving aspect ratio.
+        Icon styles: 'outlined', 'rounded', 'sharp'.
+        Browse icons at https://fonts.google.com/icons
+        """
+        return add_svg_icon(params)
 
     # --- Lock Aspect Ratio ---
     @mcp.tool(
