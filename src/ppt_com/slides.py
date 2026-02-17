@@ -116,6 +116,13 @@ class ListSlidesInput(BaseModel):
             "If omitted, uses the active presentation."
         ),
     )
+    presentation_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "Name of the presentation (e.g. 'MySlides.pptx'). "
+            "Alternative to presentation_index. If omitted, uses the active presentation."
+        ),
+    )
 
 
 class GetSlideInfoInput(BaseModel):
@@ -155,8 +162,28 @@ class GetSlideNotesInput(BaseModel):
 # ---------------------------------------------------------------------------
 # Helper to resolve a presentation
 # ---------------------------------------------------------------------------
-def _resolve_presentation(app, presentation_index: Optional[int] = None):
-    """Return a Presentation COM object by index, or ActivePresentation if None."""
+def _resolve_presentation(
+    app,
+    presentation_index: Optional[int] = None,
+    presentation_name: Optional[str] = None,
+):
+    """Return a Presentation COM object by index, name, or ActivePresentation.
+
+    Args:
+        app: PowerPoint Application COM object.
+        presentation_index: 1-based index of the presentation.
+        presentation_name: File name of the presentation (e.g. 'MySlides.pptx').
+
+    Raises:
+        ValueError: If both parameters are provided, or if the name matches
+            zero or multiple presentations.
+        RuntimeError: If no presentations are open.
+    """
+    if presentation_index is not None and presentation_name is not None:
+        raise ValueError(
+            "Specify either presentation_index or presentation_name, not both"
+        )
+
     if presentation_index is not None:
         count = app.Presentations.Count
         if presentation_index < 1 or presentation_index > count:
@@ -164,6 +191,37 @@ def _resolve_presentation(app, presentation_index: Optional[int] = None):
                 f"Presentation index {presentation_index} out of range (1-{count})"
             )
         return app.Presentations(presentation_index)
+
+    if presentation_name is not None:
+        count = app.Presentations.Count
+        if count == 0:
+            raise RuntimeError(
+                "No presentation is open. "
+                "Use ppt_create_presentation or ppt_open_presentation first."
+            )
+        matches = []
+        available = []
+        for i in range(1, count + 1):
+            pres = app.Presentations(i)
+            name = pres.Name
+            available.append(f"  [{i}] {name}")
+            if name == presentation_name:
+                matches.append((i, pres))
+        if len(matches) == 1:
+            return matches[0][1]
+        if len(matches) > 1:
+            match_list = ", ".join(
+                f"[{idx}] {presentation_name}" for idx, _ in matches
+            )
+            raise ValueError(
+                f"Multiple presentations match name '{presentation_name}': "
+                f"{match_list}. Use presentation_index to disambiguate."
+            )
+        raise ValueError(
+            f"No presentation named '{presentation_name}'. "
+            f"Available presentations:\n" + "\n".join(available)
+        )
+
     if app.Presentations.Count == 0:
         raise RuntimeError(
             "No presentation is open. "
@@ -314,9 +372,14 @@ def _move_slide_impl(slide_index: int, new_position: int) -> dict:
     }
 
 
-def _list_slides_impl(presentation_index: Optional[int]) -> dict:
+def _list_slides_impl(
+    presentation_index: Optional[int],
+    presentation_name: Optional[str],
+) -> dict:
     app = ppt._get_app_impl()
-    pres = _resolve_presentation(app, presentation_index)
+    pres = _resolve_presentation(
+        app, presentation_index=presentation_index, presentation_name=presentation_name
+    )
 
     slides = []
     for i in range(1, pres.Slides.Count + 1):
@@ -487,7 +550,11 @@ def move_slide(params: MoveSlideInput) -> str:
 def list_slides(params: ListSlidesInput) -> str:
     """List all slides in the active presentation."""
     try:
-        result = ppt.execute(_list_slides_impl, params.presentation_index)
+        result = ppt.execute(
+            _list_slides_impl,
+            params.presentation_index,
+            params.presentation_name,
+        )
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
