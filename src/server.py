@@ -46,10 +46,12 @@ mcp = FastMCP(
 # =============================================================================
 from ppt_com.app import (
     ConnectInput,
+    SetWindowStateInput,
     connect_to_powerpoint,
     get_app_info,
     get_active_window_info,
     list_presentations,
+    set_window_state,
 )
 
 
@@ -127,6 +129,25 @@ async def tool_ppt_list_presentations() -> str:
     Returns name, path, slide count, and status for each.
     """
     return list_presentations()
+
+
+@mcp.tool(
+    name="ppt_set_window_state",
+    annotations={
+        "title": "Set PowerPoint Window State",
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": False,
+    },
+)
+async def tool_ppt_set_window_state(params: SetWindowStateInput) -> str:
+    """Set the PowerPoint application window state.
+
+    Controls whether the PowerPoint window is maximized, minimized, or
+    restored to normal size.
+    """
+    return set_window_state(params)
 
 
 # =============================================================================

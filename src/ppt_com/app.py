@@ -35,6 +35,18 @@ class ConnectInput(BaseModel):
     )
 
 
+class SetWindowStateInput(BaseModel):
+    """Input for setting PowerPoint window state."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    window_state: str = Field(
+        default="maximized",
+        description=(
+            "Window state: 'normal' (restored), 'minimized', or 'maximized'"
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
@@ -124,6 +136,29 @@ def _list_presentations_impl() -> dict:
     return {"presentations": presentations, "count": len(presentations)}
 
 
+def _set_window_state_impl(window_state: str) -> dict:
+    """Set the PowerPoint application window state."""
+    STATE_MAP = {
+        "normal": 1,    # ppWindowNormal
+        "minimized": 2, # ppWindowMinimized
+        "maximized": 3, # ppWindowMaximized
+    }
+
+    state_value = STATE_MAP.get(window_state.lower())
+    if state_value is None:
+        return {
+            "error": f"Invalid window_state: {window_state}. Use 'normal', 'minimized', or 'maximized'."
+        }
+
+    app = ppt._get_app_impl()
+    app.WindowState = state_value
+
+    return {
+        "success": True,
+        "window_state": window_state.lower(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # MCP tool functions (async wrappers that delegate to COM thread)
 # ---------------------------------------------------------------------------
@@ -196,3 +231,24 @@ def list_presentations() -> str:
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to list presentations: {str(e)}"})
+
+
+def set_window_state(params: SetWindowStateInput) -> str:
+    """Set the PowerPoint application window state.
+
+    Controls whether the PowerPoint window is maximized, minimized, or
+    restored to normal size. This affects the main PowerPoint application
+    window, not individual presentation windows.
+
+    Args:
+        params (SetWindowStateInput): Window state parameters:
+            - window_state (str): Target state - 'normal', 'minimized', or 'maximized'
+
+    Returns:
+        str: JSON with success status and the applied window state
+    """
+    try:
+        result = ppt.execute(_set_window_state_impl, params.window_state)
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to set window state: {str(e)}"})
