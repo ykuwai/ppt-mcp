@@ -581,6 +581,8 @@ def list_shapes(params: ListShapesInput) -> str:
 
     Returns an array of shapes with their name, id, type, position, size,
     and a text preview (first 50 characters) for shapes that contain text.
+    The index field reflects z-order (stacking order): index 1 is the
+    backmost shape, the highest index is the frontmost shape.
 
     Args:
         params: Slide index to list shapes from.
