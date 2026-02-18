@@ -15,6 +15,7 @@ from utils.navigation import goto_slide
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
     msoTrue, msoFalse,
+    msoGroup,
     msoTextOrientationHorizontal,
     msoBringToFront, msoSendToBack, msoBringForward, msoSendBackward,
 )
@@ -358,10 +359,29 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         "height": round(shape.Height, 2),
         "rotation": round(shape.Rotation, 2),
         "z_order": shape.ZOrderPosition,
+        "is_group": shape.Type == msoGroup,
+        "has_animation": False,
+        "aspect_ratio_locked": False,
         "text": None,
         "fill": None,
         "line": None,
     }
+
+    # Animation check
+    try:
+        seq = slide.TimeLine.MainSequence
+        for i in range(1, seq.Count + 1):
+            if seq(i).Shape.Id == shape.Id:
+                info["has_animation"] = True
+                break
+    except Exception:
+        pass
+
+    # Aspect ratio lock
+    try:
+        info["aspect_ratio_locked"] = shape.LockAspectRatio == msoTrue
+    except Exception:
+        pass
 
     # Text content
     try:
@@ -600,8 +620,10 @@ def list_shapes(params: ListShapesInput) -> str:
 def get_shape_info(params: ShapeIdentifierInput) -> str:
     """Get detailed information about a specific shape.
 
-    Returns name, id, type, position, size, rotation, full text content,
-    fill info, line info, and z-order position.
+    Returns name, id, type, position, size, rotation, z-order, full text
+    content, fill info, line info, and metadata: is_group (True if this
+    shape is a group container), has_animation (True if the shape has any
+    animation in the main sequence), aspect_ratio_locked.
 
     Args:
         params: Slide index and shape identifier (name or index).
