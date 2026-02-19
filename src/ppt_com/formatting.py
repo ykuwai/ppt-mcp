@@ -141,7 +141,7 @@ def _set_fill_impl(slide_index, shape_name_or_index, fill_type,
                     transparency) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -179,7 +179,7 @@ def _set_line_impl(slide_index, shape_name_or_index,
                     color, weight, dash_style, visible, transparency) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -216,7 +216,7 @@ def _set_shadow_impl(slide_index, shape_name_or_index,
                       visible, blur, offset_x, offset_y, color, transparency) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 

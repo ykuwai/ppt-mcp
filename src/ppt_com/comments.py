@@ -61,7 +61,7 @@ def _add_comment_impl(slide_index, text, author, author_initials,
                        left, top) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Try Add2 first (newer PowerPoint versions), fall back to Add
@@ -82,7 +82,7 @@ def _add_comment_impl(slide_index, text, author, author_initials,
 
 def _list_comments_impl(slide_index) -> dict:
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     comments_col = slide.Comments
@@ -115,7 +115,7 @@ def _list_comments_impl(slide_index) -> dict:
 def _delete_comment_impl(slide_index, comment_index) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     comments_col = slide.Comments

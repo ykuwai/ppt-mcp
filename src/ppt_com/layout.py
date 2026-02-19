@@ -196,7 +196,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 def _align_shapes_impl(slide_index, shape_names, align_to, relative_to_slide):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Validate align_to
@@ -233,7 +233,7 @@ def _align_shapes_impl(slide_index, shape_names, align_to, relative_to_slide):
 def _distribute_shapes_impl(slide_index, shape_names, direction, relative_to_slide):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Validate direction
@@ -269,7 +269,7 @@ def _distribute_shapes_impl(slide_index, shape_names, direction, relative_to_sli
 
 def _get_slide_size_impl():
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     ps = pres.PageSetup
 
     width_pt = ps.SlideWidth
@@ -298,7 +298,7 @@ def _get_slide_size_impl():
 
 def _set_slide_size_impl(width, height, preset, orientation):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     ps = pres.PageSetup
 
     # Preset dimensions in points (width, height)
@@ -361,7 +361,7 @@ def _set_slide_background_impl(slide_index, fill_type, color,
                                 gradient_style, image_path, transparency):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     fill_key = fill_type.strip().lower()
@@ -431,7 +431,7 @@ def _set_slide_background_impl(slide_index, fill_type, color,
 def _flip_shape_impl(slide_index, shape_name_or_index, direction):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -460,7 +460,7 @@ def _flip_shape_impl(slide_index, shape_name_or_index, direction):
 def _merge_shapes_impl(slide_index, shape_names, merge_type, primary_shape):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Validate merge type

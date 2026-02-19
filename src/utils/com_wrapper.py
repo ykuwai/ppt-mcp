@@ -32,6 +32,7 @@ class PowerPointCOMWrapper:
         self._com_thread: Optional[threading.Thread] = None
         self._queue: Queue = Queue()
         self._running = False
+        self._target_pres_name: Optional[str] = None  # session-level target presentation
 
     def start(self) -> None:
         """Start the COM worker thread."""
@@ -153,6 +154,87 @@ class PowerPointCOMWrapper:
             logger.warning("COM connection lost, reconnecting...")
             self._app = None
             return self._connect_impl()
+
+    def _get_pres_impl(self) -> Any:
+        """Internal: get target presentation on COM thread.
+
+        Returns the session-level target presentation if one has been set via
+        _set_target_pres_impl and the file is still open.  Falls back to
+        ActivePresentation when no target is set or when the target was closed.
+        """
+        app = self._get_app_impl()
+        if self._target_pres_name:
+            for i in range(1, app.Presentations.Count + 1):
+                try:
+                    p = app.Presentations(i)
+                    if p.Name == self._target_pres_name:
+                        return p
+                except Exception:
+                    pass
+            # Target was closed since last activation — clear and fall back
+            logger.warning(
+                "Target presentation '%s' is no longer open; "
+                "falling back to ActivePresentation",
+                self._target_pres_name,
+            )
+            self._target_pres_name = None
+        return app.ActivePresentation
+
+    def _set_target_pres_impl(self, name_or_index) -> dict:
+        """Internal: set session-level target presentation on COM thread."""
+        app = self._get_app_impl()
+        if app.Presentations.Count == 0:
+            raise RuntimeError("No presentation is open in PowerPoint.")
+
+        pres = None
+        if isinstance(name_or_index, int):
+            if name_or_index < 1 or name_or_index > app.Presentations.Count:
+                raise ValueError(
+                    f"Presentation index {name_or_index} out of range "
+                    f"(1-{app.Presentations.Count})"
+                )
+            pres = app.Presentations(name_or_index)
+        else:
+            name_lower = name_or_index.lower()
+            matches = []
+            for i in range(1, app.Presentations.Count + 1):
+                p = app.Presentations(i)
+                if p.Name.lower() == name_lower or p.FullName.lower() == name_lower:
+                    matches.append(p)
+            if len(matches) == 0:
+                open_names = [
+                    app.Presentations(i).Name
+                    for i in range(1, app.Presentations.Count + 1)
+                ]
+                raise ValueError(
+                    f"Presentation '{name_or_index}' not found. "
+                    f"Open presentations: {open_names}"
+                )
+            if len(matches) > 1:
+                raise ValueError(
+                    f"Multiple presentations match '{name_or_index}': "
+                    f"{[p.Name for p in matches]}. Use a more specific name."
+                )
+            pres = matches[0]
+
+        # Bring the presentation's window to the front so goto_slide works correctly
+        try:
+            pres.Windows(1).Activate()
+        except Exception as e:
+            logger.warning("Could not activate presentation window: %s", e)
+
+        self._target_pres_name = pres.Name
+        index = None
+        for i in range(1, app.Presentations.Count + 1):
+            if app.Presentations(i).Name == pres.Name:
+                index = i
+                break
+        return {
+            "success": True,
+            "name": pres.Name,
+            "full_name": pres.FullName,
+            "index": index,
+        }
 
     def ensure_presentation(self) -> Any:
         """Ensure at least one presentation is open, return the active one."""

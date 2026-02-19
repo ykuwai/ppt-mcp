@@ -90,7 +90,7 @@ class SetHeadersFootersInput(BaseModel):
 # ---------------------------------------------------------------------------
 def _apply_theme_impl(theme_path):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
 
     abs_path = os.path.abspath(theme_path)
     if not os.path.exists(abs_path):
@@ -106,7 +106,7 @@ def _apply_theme_impl(theme_path):
 
 def _get_theme_colors_impl():
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
 
     theme = pres.SlideMaster.Theme
     color_scheme = theme.ThemeColorScheme
@@ -131,7 +131,7 @@ def _set_headers_footers_impl(
     date_visible, date_format, date_fixed_text,
 ):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
 
     slide_count = pres.Slides.Count
     for i in range(1, slide_count + 1):

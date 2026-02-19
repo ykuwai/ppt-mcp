@@ -228,7 +228,8 @@ def _resolve_presentation(
             "No presentation is open. "
             "Use ppt_create_presentation or ppt_open_presentation first."
         )
-    return app.ActivePresentation
+    # Fall back to session-level target (or ActivePresentation if none set)
+    return ppt._get_pres_impl()
 
 
 # ---------------------------------------------------------------------------
@@ -607,7 +608,7 @@ class GotoSlideInput(BaseModel):
 
 def _goto_slide_impl(slide_index: int) -> dict:
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     if slide_index < 1 or slide_index > pres.Slides.Count:
         raise ValueError(
             f"Slide index {slide_index} out of range (1-{pres.Slides.Count})"

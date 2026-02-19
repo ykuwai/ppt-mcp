@@ -73,7 +73,7 @@ def _get_app_info_impl() -> dict:
     }
     if app.Presentations.Count > 0:
         try:
-            info["active_presentation"] = app.ActivePresentation.Name
+            info["active_presentation"] = ppt._get_pres_impl().Name
         except Exception:
             pass
     return info

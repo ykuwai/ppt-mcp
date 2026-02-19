@@ -100,7 +100,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 def _add_smartart_impl(slide_index, layout_name, layout_index, left, top, width, height, node_texts):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Resolve the SmartArt layout
@@ -147,7 +147,7 @@ def _add_smartart_impl(slide_index, layout_name, layout_index, left, top, width,
 def _modify_smartart_impl(slide_index, shape_name_or_index, action, node_index, text):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 

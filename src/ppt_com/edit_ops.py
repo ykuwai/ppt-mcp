@@ -134,7 +134,7 @@ def _redo_impl(times):
 
 def _copy_shape_to_slide_impl(src_slide_index, shape_name_or_index, dst_slide_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
 
     src_slide = pres.Slides(src_slide_index)
     shape = _get_shape(src_slide, shape_name_or_index)
@@ -154,7 +154,7 @@ def _copy_shape_to_slide_impl(src_slide_index, shape_name_or_index, dst_slide_in
 
 def _copy_formatting_impl(slide_index, source_shape, target_shapes):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     src = _get_shape(slide, source_shape)

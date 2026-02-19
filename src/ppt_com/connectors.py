@@ -143,7 +143,7 @@ def _add_connector_impl(slide_index, connector_type, begin_shape, begin_site,
                          end_shape, end_site):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Resolve connector type
@@ -179,7 +179,7 @@ def _format_connector_impl(slide_index, shape_name_or_index,
                              begin_arrow, end_arrow):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 

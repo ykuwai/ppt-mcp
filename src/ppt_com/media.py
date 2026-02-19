@@ -124,7 +124,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 def _add_video_impl(slide_index, file_path, left, top, width, height, link_to_file):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     abs_path = os.path.abspath(file_path)
@@ -150,7 +150,7 @@ def _add_video_impl(slide_index, file_path, left, top, width, height, link_to_fi
 def _add_audio_impl(slide_index, file_path, left, top, width, height, link_to_file):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     abs_path = os.path.abspath(file_path)
@@ -179,7 +179,7 @@ def _set_media_settings_impl(
     fade_in, fade_out, loop, hide_while_not_playing,
 ):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 

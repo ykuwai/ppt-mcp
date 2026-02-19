@@ -181,7 +181,7 @@ class GetSlideMasterInfoInput(BaseModel):
 # ---------------------------------------------------------------------------
 def _list_placeholders_impl(slide_index: int) -> dict:
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     phs = slide.Shapes.Placeholders
 
@@ -223,7 +223,7 @@ def _list_placeholders_impl(slide_index: int) -> dict:
 
 def _get_placeholder_impl(slide_index, placeholder_index, placeholder_type) -> dict:
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     ph = _resolve_placeholder(slide, placeholder_index, placeholder_type)
@@ -268,7 +268,7 @@ def _get_placeholder_impl(slide_index, placeholder_index, placeholder_type) -> d
 def _set_placeholder_text_impl(slide_index, placeholder_index, placeholder_type, text) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     ph = _resolve_placeholder(slide, placeholder_index, placeholder_type)
@@ -293,7 +293,7 @@ def _set_placeholder_text_impl(slide_index, placeholder_index, placeholder_type,
 
 def _list_layouts_impl(design_index) -> dict:
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     design = pres.Designs(design_index)
     master = design.SlideMaster
     layouts_col = master.CustomLayouts
@@ -330,7 +330,7 @@ def _list_layouts_impl(design_index) -> dict:
 
 def _list_designs_impl(include_layouts: bool = False) -> dict:
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     designs = pres.Designs
     result = []
     for d in range(1, designs.Count + 1):
@@ -356,7 +356,7 @@ def _list_designs_impl(include_layouts: bool = False) -> dict:
 
 def _get_slide_master_info_impl(design_index) -> dict:
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     design = pres.Designs(design_index)
     master = design.SlideMaster
 

@@ -201,6 +201,26 @@ class GetPresentationInfoInput(BaseModel):
     )
 
 
+class ActivatePresentationInput(BaseModel):
+    """Input for activating a specific presentation as the MCP target."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    presentation_index: Optional[int] = Field(
+        default=None,
+        description=(
+            "1-based index of the presentation to activate. "
+            "Use ppt_list_presentations to see available indices."
+        ),
+    )
+    presentation_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "File name of the presentation to activate (e.g. 'demo.pptx'). "
+            "Alternative to presentation_index."
+        ),
+    )
+
+
 class ListTemplatesInput(BaseModel):
     """Input for listing available PowerPoint templates."""
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -282,7 +302,8 @@ def _resolve_presentation(
             "No presentation is open. "
             "Use ppt_create_presentation or ppt_open_presentation first."
         )
-    return app.ActivePresentation
+    # Fall back to session-level target (or ActivePresentation if none set)
+    return ppt._get_pres_impl()
 
 
 # ---------------------------------------------------------------------------
@@ -512,6 +533,22 @@ def _get_default_templates_dir() -> Optional[str]:
     return None
 
 
+def _activate_presentation_impl(
+    presentation_index: Optional[int],
+    presentation_name: Optional[str],
+) -> dict:
+    if presentation_index is None and presentation_name is None:
+        raise ValueError(
+            "Specify either presentation_index or presentation_name."
+        )
+    if presentation_index is not None and presentation_name is not None:
+        raise ValueError(
+            "Specify either presentation_index or presentation_name, not both."
+        )
+    name_or_index = presentation_index if presentation_index is not None else presentation_name
+    return ppt._set_target_pres_impl(name_or_index)
+
+
 def _list_templates_impl(templates_dir: Optional[str]) -> dict:
     """List PowerPoint template files (.potx, .potm) in a directory.
 
@@ -633,6 +670,19 @@ def get_presentation_info(params: GetPresentationInfoInput) -> str:
     try:
         result = ppt.execute(
             _get_presentation_info_impl,
+            params.presentation_index,
+            params.presentation_name,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def activate_presentation(params: ActivatePresentationInput) -> str:
+    """Activate a presentation as the MCP session target."""
+    try:
+        result = ppt.execute(
+            _activate_presentation_impl,
             params.presentation_index,
             params.presentation_name,
         )
@@ -773,6 +823,31 @@ def register_tools(mcp):
         save status, and template name.
         """
         return get_presentation_info(params)
+
+    @mcp.tool(
+        name="ppt_activate_presentation",
+        annotations={
+            "title": "Activate Presentation",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_activate_presentation(params: ActivatePresentationInput) -> str:
+        """Set the target presentation for all subsequent MCP tool calls.
+
+        Once activated, every tool (ppt_add_shape, ppt_set_text, ppt_add_slide,
+        etc.) will operate on this presentation — regardless of which window is
+        currently active in PowerPoint.
+
+        Call this once at the start of a session, or whenever you need to switch
+        to a different presentation. Use ppt_list_presentations to see available
+        names and indices.
+
+        Returns the name, full path, and 1-based index of the activated presentation.
+        """
+        return activate_presentation(params)
 
     @mcp.tool(
         name="ppt_list_templates",

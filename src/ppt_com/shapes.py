@@ -234,7 +234,7 @@ def _resolve_shape_type(shape_type: Union[int, str]) -> int:
 def _add_shape_impl(slide_index, shape_type_int, left, top, width, height, text):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = slide.Shapes.AddShape(
         Type=shape_type_int, Left=left, Top=top, Width=width, Height=height
@@ -252,7 +252,7 @@ def _add_shape_impl(slide_index, shape_type_int, left, top, width, height, text)
 def _add_textbox_impl(slide_index, left, top, width, height, text):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     textbox = slide.Shapes.AddTextbox(
         Orientation=msoTextOrientationHorizontal,
@@ -270,7 +270,7 @@ def _add_textbox_impl(slide_index, left, top, width, height, text):
 def _add_picture_impl(slide_index, file_path, left, top, width, height):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     w = width if width is not None else -1
     h = height if height is not None else -1
@@ -292,7 +292,7 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height):
 def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     line = slide.Shapes.AddLine(
         BeginX=begin_x, BeginY=begin_y, EndX=end_x, EndY=end_y,
@@ -306,7 +306,7 @@ def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y):
 
 def _list_shapes_impl(slide_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shapes = []
     for i in range(1, slide.Shapes.Count + 1):
@@ -344,7 +344,7 @@ def _list_shapes_impl(slide_index):
 
 def _get_shape_info_impl(slide_index, shape_name, shape_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
 
@@ -435,7 +435,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
 def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height, rotation, name):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
 
@@ -465,7 +465,7 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
 def _delete_shape_impl(slide_index, shape_name, shape_index):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
     deleted_name = shape.Name
@@ -476,7 +476,7 @@ def _delete_shape_impl(slide_index, shape_name, shape_index):
 def _duplicate_shape_impl(slide_index, shape_name, shape_index):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
     dup = shape.Duplicate()
@@ -493,7 +493,7 @@ def _duplicate_shape_impl(slide_index, shape_name, shape_index):
 def _set_zorder_impl(slide_index, shape_name, shape_index, z_order_cmd):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
     shape.ZOrder(z_order_cmd)
