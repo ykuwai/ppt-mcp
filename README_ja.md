@@ -20,9 +20,23 @@
 
 ---
 
-PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）サーバーです。python-pptxのようなファイルベースのライブラリとは異なり、起動中のPowerPointアプリケーションと直接やり取りし、リアルタイムの視覚的フィードバックとPowerPoint APIへの完全なアクセスを提供します。
+PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）サーバーです。python-pptxのようなファイルベースのライブラリとは異なり、起動中のPowerPointアプリケーションと直接やり取りします。
 
-## ⚙️ MCPクライアント設定
+## ✨ 主な特徴
+
+- **リアルタイム制御** — 起動中のPowerPointを直接操作。変更がその場で画面に反映される
+- **25カテゴリ・131ツール** — スライド、シェイプ、テキスト、テーブル、グラフ、アニメーション、SmartArt、メディアなど
+- **AIエージェントに安全** — `ppt_activate_presentation` で操作対象ファイルを固定。誤って別のプレゼンを編集するミスを防止
+- **Material Symbolsアイコン** — 2,500以上のGoogleアイコンをキーワード検索し、テーマカラーでSVG挿入
+- **テーマカラー連携** — RGB値のハードコードではなく `accent1`、`accent2` などのテーマカラー名で指定
+
+## 📋 動作環境
+
+- Windows 10/11
+- Microsoft PowerPoint（Microsoft 365、2021、2019など）
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+## 🚀 はじめかた
 
 ### Claude Code
 
@@ -30,7 +44,7 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 claude mcp add powerpoint uvx ppt-mcp
 ```
 
-### `.mcp.json`（手動設定）
+### `.mcp.json`
 
 ```json
 {
@@ -58,7 +72,13 @@ claude mcp add powerpoint uvx ppt-mcp
 }
 ```
 
-### ソースから実行（開発用）
+### ソースから実行
+
+```bash
+git clone https://github.com/ykuwai/ppt-mcp.git
+cd ppt-mcp
+uv sync
+```
 
 ```json
 {
@@ -77,31 +97,6 @@ claude mcp add powerpoint uvx ppt-mcp
   }
 }
 ```
-
-## ✨ なぜこれが特別なのか
-
-### 🎮 ファイル操作ではなく、PowerPointの完全制御
-
-ファイルベースのライブラリは `.pptx` ファイルの読み書きしかできません。COM自動化により、PowerPointのすべての機能にアクセスできます：
-
-- スライドショーの起動・制御・ナビゲーション
-- アニメーション効果のリアルタイム追加・編集
-- ビデオ・オーディオメディアの埋め込み
-- SmartArtグラフィックの作成・編集
-- 元に戻す / やり直し操作
-- ビュー制御（標準、アウトライン、ノート、マスター表示）
-- コメント機能（共同作業）
-
-### 🤖 AIエージェントのために設計
-
-- **21カテゴリ・131ツール** — スライド操作からアニメーション、SmartArt、アイコン検索まで
-- **プレゼン操作対象の明示指定** — `ppt_activate_presentation` で対象ファイルを固定。AIエージェントが誤って別のプレゼンを編集することを防止
-- **リアルタイム視覚フィードバック** — 編集対象のスライドに自動ナビゲーション。変更がその場で見える
-- **テンプレート対応** — 個人用テンプレートフォルダを自動検出し、任意のテンプレートからプレゼンを作成
-- **Material Symbolsアイコン** — 2,500以上のGoogle Material Symbolsアイコンをキーワード検索し、テーマカラーでSVG挿入
-- **テーマカラー連携** — RGB値のハードコードではなく、`accent1` や `accent2` などテーマカラー名で指定
-- **テキスト精密制御** — `\n` で改段落（Enter）、`\v` で改行（Shift+Enter）— テキストフローを完全にコントロール
-- **STAスレッド安全性** — すべてのCOM操作を専用のSTAワーカースレッドで実行し、信頼性を確保
 
 ## 🛠️ ツール一覧
 
@@ -134,17 +129,7 @@ claude mcp add powerpoint uvx ppt-mcp
 | **高度な操作** | 16 | タグ、フォント一括設定/置換、トリミング、シェイプエクスポート、表示/非表示、選択、ビュー、アニメーションコピー、URL画像、SVGアイコン、アイコン検索、縦横比ロック |
 | | **131** | |
 
-## 📦 セットアップ
-
-**動作環境: Windows 10/11、Microsoft PowerPoint、Python 3.10以上、[uv](https://docs.astral.sh/uv/getting-started/installation/)**
-
-```bash
-git clone https://github.com/ykuwai/ppt-mcp.git
-cd ppt-mcp
-uv sync
-```
-
-## 🚀 使用例
+## 💡 使用例
 
 ```python
 # 1. 操作対象のプレゼンテーションを指定（誤編集を防止）

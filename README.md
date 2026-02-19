@@ -20,9 +20,23 @@
 
 ---
 
-An MCP (Model Context Protocol) server that gives AI agents and programs full control over a live Microsoft PowerPoint instance via COM automation. Unlike file-based libraries like python-pptx, this server interacts with a running PowerPoint application, providing real-time visual feedback and access to the complete PowerPoint API.
+An MCP (Model Context Protocol) server that gives AI agents full control over a live Microsoft PowerPoint instance via COM automation. Unlike file-based libraries like python-pptx, this server interacts directly with a running PowerPoint application.
 
-## ⚙️ MCP Client Configuration
+## ✨ Key Features
+
+- **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
+- **131 tools across 25 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, and more
+- **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
+- **Material Symbols icons** — Search 2,500+ Google icons by keyword and insert as SVG with theme colors
+- **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
+
+## 📋 Requirements
+
+- Windows 10/11
+- Microsoft PowerPoint (Microsoft 365, 2021, 2019, etc.)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+## 🚀 Getting Started
 
 ### Claude Code
 
@@ -30,7 +44,7 @@ An MCP (Model Context Protocol) server that gives AI agents and programs full co
 claude mcp add powerpoint uvx ppt-mcp
 ```
 
-### `.mcp.json` (manual)
+### `.mcp.json`
 
 ```json
 {
@@ -58,7 +72,13 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json`:
 }
 ```
 
-### From source (development)
+### From source
+
+```bash
+git clone https://github.com/ykuwai/ppt-mcp.git
+cd ppt-mcp
+uv sync
+```
 
 ```json
 {
@@ -77,31 +97,6 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json`:
   }
 }
 ```
-
-## ✨ Why This is Special
-
-### 🎮 Full PowerPoint Control — Not Just Read/Write
-
-File-based libraries can only read and write `.pptx` files. COM automation unlocks everything PowerPoint can do:
-
-- Start, control, and navigate slideshows
-- Add and edit animations in real-time
-- Embed video and audio media
-- Create and modify SmartArt graphics
-- Undo/redo operations
-- Control views (normal, outline, notes, master)
-- Manage comments for collaboration
-
-### 🤖 Designed for AI Agents
-
-- **131 Tools Across 21 Categories** — From basic slide operations to advanced animations, SmartArt, and icon search
-- **Explicit Presentation Targeting** — `ppt_activate_presentation` locks every tool to a specific file, so AI agents never accidentally edit the wrong presentation
-- **Real-Time Visual Feedback** — Automatically navigates to the slide being edited so you see changes as they happen
-- **Template Support** — Auto-detects personal templates folder, create presentations from any template
-- **Material Symbols Icons** — Search 2,500+ Google Material Symbols icons by keyword and insert them as SVG with theme colors
-- **Theme Color Awareness** — Use theme color names (`accent1`, `accent2`, etc.) instead of hardcoded RGB values
-- **Text Precision** — `\n` for paragraph breaks (Enter), `\v` for line breaks (Shift+Enter) — full control over text flow
-- **STA Thread Safety** — All COM operations run on a dedicated Single-Threaded Apartment worker thread for reliability
 
 ## 🛠️ Tool Categories
 
@@ -134,17 +129,7 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 | **Advanced** | 16 | Tags, fonts (set defaults + bulk replace), crop, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock |
 | | **131** | |
 
-## 📦 Installation
-
-**Requirements: Windows 10/11, Microsoft PowerPoint, Python 3.10+, [uv](https://docs.astral.sh/uv/getting-started/installation/)**
-
-```bash
-git clone https://github.com/ykuwai/ppt-mcp.git
-cd ppt-mcp
-uv sync
-```
-
-## 🚀 Example Workflow
+## 💡 Example Workflow
 
 ```python
 # 1. Target a specific presentation (prevents editing the wrong file)
