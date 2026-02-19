@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [
-    { name = "chuyanku" },
+    { name = "ykuwai" },
 ]
 keywords = [
     "mcp",
@@ -41,9 +41,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/chuyanku/ppt-com-mcp"
-Repository = "https://github.com/chuyanku/ppt-com-mcp"
-Issues = "https://github.com/chuyanku/ppt-com-mcp/issues"
+Homepage = "https://github.com/ykuwai/ppt-com-mcp"
+Repository = "https://github.com/ykuwai/ppt-com-mcp"
+Issues = "https://github.com/ykuwai/ppt-com-mcp/issues"
 
 [project.scripts]
 ppt-com-mcp = "src.server:main"

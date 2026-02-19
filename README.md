@@ -90,7 +90,7 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/chuyanku/ppt-com-mcp.git
+git clone https://github.com/ykuwai/ppt-com-mcp.git
 cd ppt-com-mcp
 ```
 

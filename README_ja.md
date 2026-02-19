@@ -90,7 +90,7 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 1. リポジトリのクローン：
 
 ```bash
-git clone https://github.com/chuyanku/ppt-com-mcp.git
+git clone https://github.com/ykuwai/ppt-com-mcp.git
 cd ppt-com-mcp
 ```
 
