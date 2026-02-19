@@ -325,6 +325,13 @@ try:
 except ImportError:
     logger.debug("advanced_ops module not yet available")
 
+# Batch apply formatting tools
+try:
+    from ppt_com.batch_apply import register_tools as register_batch_apply_tools
+    register_batch_apply_tools(mcp)
+except ImportError:
+    logger.debug("batch_apply module not yet available")
+
 
 # =============================================================================
 # Tools: Slide Preview (Visual Inspection)
