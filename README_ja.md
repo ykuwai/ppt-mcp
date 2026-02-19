@@ -9,13 +9,13 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <img src="https://img.shields.io/badge/MCP_Tools-131-orange.svg" alt="Tools">
+  <img src="https://img.shields.io/badge/MCP_Tools-136-orange.svg" alt="Tools">
   <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-1.0+-purple.svg" alt="MCP"></a>
   <img src="https://img.shields.io/badge/Platform-Windows-0078d4.svg" alt="Platform">
 </p>
 
 <p align="center">
-  <strong>COM自動化によるPowerPointのリアルタイム制御 —<br>AIエージェントと開発者のための131ツールを備えたMCPサーバー</strong>
+  <strong>COM自動化によるPowerPointのリアルタイム制御 —<br>AIエージェントと開発者のための136ツールを備えたMCPサーバー</strong>
 </p>
 
 ---
@@ -25,14 +25,14 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 ## ✨ 主な特徴
 
 - **リアルタイム制御** — 起動中のPowerPointを直接操作。変更がその場で画面に反映される
-- **25カテゴリ・131ツール** — スライド、シェイプ、テキスト、テーブル、グラフ、アニメーション、SmartArt、メディアなど
+- **25カテゴリ・136ツール** — スライド、シェイプ、テキスト、テーブル、グラフ、アニメーション、SmartArt、メディアなど
 - **AIエージェントに安全** — `ppt_activate_presentation` で操作対象ファイルを固定。誤って別のプレゼンを編集するミスを防止
-- **Material Symbolsアイコン** — 2,500以上のGoogleアイコンをキーワード検索し、テーマカラーでSVG挿入
+- **[Google Material Symbols](https://fonts.google.com/icons) アイコン** — 2,500以上のアイコンをキーワード検索し、テーマカラーでSVG挿入
 - **テーマカラー連携** — RGB値のハードコードではなく `accent1`、`accent2` などのテーマカラー名で指定
 
 ## 📋 動作環境
 
-- Windows 10/11
+- Windows 11
 - Microsoft PowerPoint（Microsoft 365、2021、2019など）
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
@@ -44,7 +44,15 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 claude mcp add powerpoint uvx ppt-mcp
 ```
 
-### `.mcp.json`
+### VS Code
+
+```bash
+code --add-mcp '{"name":"powerpoint","command":"uvx","args":["ppt-mcp"]}'
+```
+
+### Cursor
+
+`~/.cursor/mcp.json` に追加：
 
 ```json
 {
@@ -60,6 +68,19 @@ claude mcp add powerpoint uvx ppt-mcp
 ### Claude Desktop
 
 `%APPDATA%\Claude\claude_desktop_config.json` を編集：
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
+### `.mcp.json`
 
 ```json
 {
@@ -102,15 +123,15 @@ uv sync
 
 | カテゴリ | ツール数 | 主な機能 |
 |---------|-------:|---------|
-| **アプリケーション** | 4 | PowerPoint接続、アプリ情報、ウィンドウ状態、プレゼン一覧 |
+| **アプリケーション** | 5 | PowerPoint接続、アプリ情報、アクティブウィンドウ、ウィンドウ状態、プレゼン一覧 |
 | **プレゼンテーション** | 8 | 作成（テンプレート対応）、開く、保存、閉じる、情報取得、操作対象指定、テンプレート一覧 |
 | **スライド** | 9 | 追加、削除、複製、移動、一覧、情報取得、ノート、ナビゲーション |
 | **シェイプ** | 10 | 図形/テキストボックス/画像/線の追加、一覧、情報取得、更新、削除、Z順序 |
 | **テキスト** | 8 | テキスト設定/取得、書式設定、段落書式、箇条書き、検索置換、テキストフレーム |
-| **プレースホルダー** | 5 | 一覧、情報取得、テキスト設定 |
+| **プレースホルダー** | 6 | 一覧、情報取得、テキスト設定 |
 | **書式設定** | 3 | 塗りつぶし、線、影 |
 | **テーブル** | 9 | テーブル追加、セル取得/設定、セル結合、行/列の追加/削除、スタイル |
-| **エクスポート** | 2 | PDF、画像 |
+| **エクスポート** | 3 | PDF、画像、スライドプレビュー |
 | **スライドショー** | 6 | 開始、停止、次へ、前へ、スライド移動、状態取得 |
 | **グラフ** | 6 | グラフ追加、データ設定/取得、書式設定、系列設定、種類変更 |
 | **アニメーション** | 5 | トランジション、アニメーション追加/一覧/削除/全削除 |
@@ -126,8 +147,8 @@ uv sync
 | **レイアウト** | 7 | 整列、分散配置、スライドサイズ、背景、反転、シェイプ結合 |
 | **視覚効果** | 3 | グロー、反射、ぼかし |
 | **コメント** | 3 | 追加、一覧、削除 |
-| **高度な操作** | 16 | タグ、フォント一括設定/置換、トリミング、シェイプエクスポート、表示/非表示、選択、ビュー、アニメーションコピー、URL画像、SVGアイコン、アイコン検索、縦横比ロック |
-| | **131** | |
+| **高度な操作** | 17 | タグ、フォント一括設定/置換、トリミング、シェイプエクスポート、表示/非表示、選択、ビュー、アニメーションコピー、URL画像、SVGアイコン、アイコン検索、縦横比ロック、一括書式設定 |
+| | **136** | |
 
 ## 💡 使用例
 
@@ -147,7 +168,7 @@ ppt_set_text(slide_index=1, shape_name_or_index="Title 1", text="Hello World")
 # 4. プレゼン全体のフォントを一括設定（英語・日本語フォントを個別に指定）
 ppt_set_default_fonts(latin="Segoe UI", east_asian="Meiryo")
 
-# 5. テーマカラーでMaterial Symbolsアイコンを挿入
+# 5. テーマカラーでGoogle Material Symbolsアイコンを挿入
 ppt_add_svg_icon(slide_index=1, icon_name="rocket",
                  left=500, top=100, width=72, height=72,
                  color="accent1", style="rounded", filled=True)
@@ -173,9 +194,9 @@ ppt_activate_presentation(presentation_name="demo.pptx")
 
 個人用のPowerPointテンプレートフォルダを自動検出します（レジストリ、OneDrive、デフォルトパスを順に確認）。`ppt_list_templates` でテンプレートを一覧し、`ppt_create_presentation(template_path=...)` で任意のテンプレートから新規プレゼンテーションを作成できます。
 
-### 🎨 Material Symbolsアイコン
+### 🎨 Google Material Symbolsアイコン
 
-`ppt_search_icons(query="...")` で2,500以上のアイコンをキーワード検索し、`ppt_add_svg_icon` でSVG画像として挿入：
+`ppt_search_icons(query="...")` で2,500以上の[Google Material Symbols](https://fonts.google.com/icons)アイコンをキーワード検索し、`ppt_add_svg_icon` でSVG画像として挿入：
 - **3つのスタイル**: outlined、rounded、sharp
 - **塗りつぶしバリアント**: `filled=True` で指定
 - **テーマカラー**: `color="accent1"` でプレゼンのアクセントカラーを自動適用

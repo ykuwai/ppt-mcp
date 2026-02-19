@@ -9,13 +9,13 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <img src="https://img.shields.io/badge/MCP_Tools-131-orange.svg" alt="Tools">
+  <img src="https://img.shields.io/badge/MCP_Tools-136-orange.svg" alt="Tools">
   <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-1.0+-purple.svg" alt="MCP"></a>
   <img src="https://img.shields.io/badge/Platform-Windows-0078d4.svg" alt="Platform">
 </p>
 
 <p align="center">
-  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 131 tools for AI agents and developers.</strong>
+  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 136 tools for AI agents and developers.</strong>
 </p>
 
 ---
@@ -25,14 +25,14 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
-- **131 tools across 25 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, and more
+- **136 tools across 25 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
-- **Material Symbols icons** — Search 2,500+ Google icons by keyword and insert as SVG with theme colors
+- **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
 
 ## 📋 Requirements
 
-- Windows 10/11
+- Windows 11
 - Microsoft PowerPoint (Microsoft 365, 2021, 2019, etc.)
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
@@ -44,7 +44,15 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 claude mcp add powerpoint uvx ppt-mcp
 ```
 
-### `.mcp.json`
+### VS Code
+
+```bash
+code --add-mcp '{"name":"powerpoint","command":"uvx","args":["ppt-mcp"]}'
+```
+
+### Cursor
+
+Add to `~/.cursor/mcp.json`:
 
 ```json
 {
@@ -60,6 +68,19 @@ claude mcp add powerpoint uvx ppt-mcp
 ### Claude Desktop
 
 Edit `%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
+### `.mcp.json`
 
 ```json
 {
@@ -102,15 +123,15 @@ uv sync
 
 | Category | Tools | Description |
 |----------|------:|-------------|
-| **App** | 4 | Connect to PowerPoint, app info, window state, list presentations |
+| **App** | 5 | Connect to PowerPoint, app info, active window, window state, list presentations |
 | **Presentation** | 8 | Create (with templates), open, save, close, info, activate target, list templates |
 | **Slides** | 9 | Add, delete, duplicate, move, list, info, notes, navigation |
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines, list, info, update, delete, z-order |
 | **Text** | 8 | Set/get text, format text ranges, paragraph format, bullets, find/replace, textframe |
-| **Placeholders** | 5 | List, get, set placeholder content |
+| **Placeholders** | 6 | List, get, set placeholder content |
 | **Formatting** | 3 | Fill, line, shadow |
 | **Tables** | 9 | Add tables, get/set cells, merge cells, add/delete rows/columns, styles |
-| **Export** | 2 | PDF, images |
+| **Export** | 3 | PDF, images, slide preview |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
 | **Charts** | 6 | Add charts, set/get data, format, series, change type |
 | **Animation** | 5 | Transitions, add/list/remove/clear animations |
@@ -126,8 +147,8 @@ uv sync
 | **Layout** | 7 | Align, distribute, slide size, background, flip, merge shapes |
 | **Effects** | 3 | Glow, reflection, soft edge |
 | **Comments** | 3 | Add, list, delete |
-| **Advanced** | 16 | Tags, fonts (set defaults + bulk replace), crop, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock |
-| | **131** | |
+| **Advanced** | 17 | Tags, fonts (set defaults + bulk replace), crop, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply |
+| | **136** | |
 
 ## 💡 Example Workflow
 
@@ -147,7 +168,7 @@ ppt_set_text(slide_index=1, shape_name_or_index="Title 1", text="Hello World")
 # 4. Set presentation-wide fonts (Latin + East Asian separately)
 ppt_set_default_fonts(latin="Segoe UI", east_asian="Meiryo")
 
-# 5. Insert a Material Symbols icon with theme color
+# 5. Insert a Google Material Symbols icon with theme color
 ppt_add_svg_icon(slide_index=1, icon_name="rocket",
                  left=500, top=100, width=72, height=72,
                  color="accent1", style="rounded", filled=True)
@@ -173,9 +194,9 @@ ppt_activate_presentation(presentation_name="demo.pptx")
 
 Auto-detects your personal PowerPoint templates folder (registry, OneDrive, or default paths). Use `ppt_list_templates` to discover available templates, then `ppt_create_presentation(template_path=...)` to create a new presentation from any template.
 
-### 🎨 Material Symbols Icons
+### 🎨 Google Material Symbols Icons
 
-Search 2,500+ icons with `ppt_search_icons(query="...")` and insert them as SVG with `ppt_add_svg_icon`:
+Search 2,500+ [Google Material Symbols](https://fonts.google.com/icons) icons with `ppt_search_icons(query="...")` and insert them as SVG with `ppt_add_svg_icon`:
 - **3 styles**: outlined, rounded, sharp
 - **Filled variants**: set `filled=True`
 - **Theme colors**: `color="accent1"` uses the presentation's accent color
