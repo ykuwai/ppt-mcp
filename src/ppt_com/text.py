@@ -92,7 +92,7 @@ class SetTextInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     text: str = Field(
         ...,
@@ -111,7 +111,7 @@ class GetTextInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
 
 
@@ -121,7 +121,7 @@ class FormatTextInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     font_name: Optional[str] = Field(default=None, description="Font name (e.g. 'Arial')")
     font_size: Optional[float] = Field(default=None, description="Font size in points")
@@ -141,7 +141,7 @@ class FormatTextRangeInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     start: int = Field(..., description="1-based character start position")
     length: int = Field(..., description="Number of characters to format")
@@ -163,7 +163,7 @@ class SetParagraphFormatInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     paragraph_index: Optional[int] = Field(
         default=None, description="1-based paragraph index. Omit to format all paragraphs."
@@ -184,7 +184,7 @@ class SetBulletInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     paragraph_index: Optional[int] = Field(
         default=None, description="1-based paragraph index. Omit to set for all paragraphs."
@@ -217,7 +217,7 @@ class SetTextframeInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     auto_size: Optional[str] = Field(
         default=None,

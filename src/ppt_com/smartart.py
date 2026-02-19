@@ -49,7 +49,7 @@ class ModifySmartArtInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="SmartArt shape name (string) or 1-based index (int)"
+        ..., description="SmartArt shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     action: str = Field(
         ..., description="Action to perform: 'set_text', 'add_node', or 'delete_node'"

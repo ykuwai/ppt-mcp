@@ -149,8 +149,8 @@ class ShapeIdentifierInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
-    shape_name: Optional[str] = Field(default=None, description="Shape name")
-    shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index")
+    shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")
+    shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index (unstable — prefer shape_name)")
 
 
 class UpdateShapeInput(BaseModel):
@@ -158,8 +158,8 @@ class UpdateShapeInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
-    shape_name: Optional[str] = Field(default=None, description="Shape name")
-    shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index")
+    shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")
+    shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index (unstable — prefer shape_name)")
     left: Optional[float] = Field(default=None, description="New left position in points")
     top: Optional[float] = Field(default=None, description="New top position in points")
     width: Optional[float] = Field(default=None, description="New width in points")
@@ -173,8 +173,8 @@ class SetZOrderInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
-    shape_name: Optional[str] = Field(default=None, description="Shape name")
-    shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index")
+    shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")
+    shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index (unstable — prefer shape_name)")
     command: str = Field(
         ...,
         description="Z-order command: 'bring_to_front', 'send_to_back', 'bring_forward', 'send_backward'",

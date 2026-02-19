@@ -177,7 +177,7 @@ class SetTagInput(BaseModel):
         default=None, ge=1, description="1-based slide index (required for slide/shape targets)"
     )
     shape_name_or_index: Optional[Union[str, int]] = Field(
-        default=None, description="Shape name (str) or 1-based index (int) for shape target"
+        default=None, description="Shape name (str) or 1-based index (int) for shape target. Prefer name — indices shift when shapes are added/removed"
     )
     tag_name: str = Field(..., description="Tag name (key)")
     tag_value: str = Field(..., description="Tag value")
@@ -195,7 +195,7 @@ class GetTagsInput(BaseModel):
         default=None, ge=1, description="1-based slide index (required for slide/shape targets)"
     )
     shape_name_or_index: Optional[Union[str, int]] = Field(
-        default=None, description="Shape name (str) or 1-based index (int) for shape target"
+        default=None, description="Shape name (str) or 1-based index (int) for shape target. Prefer name — indices shift when shapes are added/removed"
     )
     target_type: str = Field(
         default="shape",
@@ -219,7 +219,7 @@ class CropPictureInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (str) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     crop_left: Optional[float] = Field(default=None, description="Crop from left in points")
     crop_right: Optional[float] = Field(default=None, description="Crop from right in points")
@@ -234,7 +234,7 @@ class ExportShapeInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (str) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     file_path: str = Field(..., description="Output file path")
     format: str = Field(
@@ -289,10 +289,10 @@ class CopyAnimationInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     source_shape: Union[str, int] = Field(
-        ..., description="Source shape name (str) or 1-based index (int)"
+        ..., description="Source shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     target_shape: Union[str, int] = Field(
-        ..., description="Target shape name (str) or 1-based index (int)"
+        ..., description="Target shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
 
 
@@ -366,7 +366,7 @@ class LockAspectRatioInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (str) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     locked: bool = Field(..., description="True to lock, False to unlock")
 

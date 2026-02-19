@@ -37,7 +37,7 @@ class UngroupShapesInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Group shape name (string) or 1-based index (int)"
+        ..., description="Group shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
 
 
@@ -47,7 +47,7 @@ class GetGroupItemsInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Group shape name (string) or 1-based index (int)"
+        ..., description="Group shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
 
 
