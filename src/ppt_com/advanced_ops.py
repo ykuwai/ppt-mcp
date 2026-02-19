@@ -212,6 +212,25 @@ class ReplaceFontInput(BaseModel):
     replacement_font: str = Field(..., description="New font name")
 
 
+# --- Set Default Fonts ---
+class SetDefaultFontsInput(BaseModel):
+    """Input for setting default fonts for the entire presentation."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    latin: Optional[str] = Field(
+        default=None,
+        description="Latin (alphabet/number) font name (e.g. 'Segoe UI', 'Calibri')",
+    )
+    east_asian: Optional[str] = Field(
+        default=None,
+        description="East Asian (Japanese/Chinese/Korean) font name (e.g. 'Meiryo', 'Yu Gothic UI')",
+    )
+    apply_to_existing: bool = Field(
+        default=True,
+        description="If true (default), also apply fonts to all existing text in the presentation. If false, only update the theme fonts for new text.",
+    )
+
+
 # --- Picture Crop ---
 class CropPictureInput(BaseModel):
     """Input for cropping a picture shape."""
@@ -472,6 +491,104 @@ def _list_fonts_impl():
         "fonts_count": len(fonts),
         "fonts": fonts,
     }
+
+
+# ---------------------------------------------------------------------------
+# Set Default Fonts
+# ---------------------------------------------------------------------------
+def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
+    app = ppt._get_app_impl()
+    pres = app.ActivePresentation
+
+    if not latin and not east_asian:
+        raise ValueError("At least one of 'latin' or 'east_asian' must be provided")
+
+    theme_updated = False
+    # Step 1: Update theme fonts for all designs/slide masters (affects new text).
+    # pres.Designs is the correct collection for multiple slide masters in COM.
+    # Fall back to pres.SlideMaster (singular) if Designs is unavailable.
+    try:
+        masters_updated = 0
+        try:
+            designs = pres.Designs
+            count = designs.Count
+        except Exception:
+            designs = None
+            count = 0
+
+        if designs and count > 0:
+            for m in range(1, count + 1):
+                try:
+                    font_scheme = designs(m).SlideMaster.Theme.ThemeFontScheme
+                    # msoThemeFontLatin = 1, msoThemeFontEastAsian = 2
+                    if latin:
+                        font_scheme.MajorFont(1).Name = latin
+                        font_scheme.MinorFont(1).Name = latin
+                    if east_asian:
+                        font_scheme.MajorFont(2).Name = east_asian
+                        font_scheme.MinorFont(2).Name = east_asian
+                    masters_updated += 1
+                except Exception as e:
+                    logger.warning("Failed to update theme fonts for design %d: %s", m, e)
+        else:
+            # Fallback: single slide master
+            font_scheme = pres.SlideMaster.Theme.ThemeFontScheme
+            if latin:
+                font_scheme.MajorFont(1).Name = latin
+                font_scheme.MinorFont(1).Name = latin
+            if east_asian:
+                font_scheme.MajorFont(2).Name = east_asian
+                font_scheme.MinorFont(2).Name = east_asian
+            masters_updated = 1
+
+        theme_updated = masters_updated > 0
+    except Exception as e:
+        logger.warning("Failed to update theme fonts: %s", e)
+
+    # Step 2: Apply to existing text (including shapes inside groups)
+    def _apply_to_shape(shape):
+        """Recursively apply fonts to a shape and any grouped children."""
+        try:
+            if shape.HasTextFrame:
+                font = shape.TextFrame.TextRange.Font
+                if latin:
+                    font.Name = latin
+                if east_asian:
+                    font.NameFarEast = east_asian
+                return 1
+        except Exception:
+            pass
+        # Recurse into group members
+        updated = 0
+        try:
+            for k in range(1, shape.GroupItems.Count + 1):
+                updated += _apply_to_shape(shape.GroupItems(k))
+        except Exception:
+            pass
+        return updated
+
+    slides_processed = 0
+    shapes_updated = 0
+    if apply_to_existing:
+        for i in range(1, pres.Slides.Count + 1):
+            slide = pres.Slides(i)
+            slides_processed += 1
+            for j in range(1, slide.Shapes.Count + 1):
+                try:
+                    shapes_updated += _apply_to_shape(slide.Shapes(j))
+                except Exception:
+                    pass
+
+    result = {"success": True, "theme_updated": theme_updated}
+    if latin:
+        result["latin"] = latin
+    if east_asian:
+        result["east_asian"] = east_asian
+    if apply_to_existing:
+        result["slides_processed"] = slides_processed
+        result["shapes_updated"] = shapes_updated
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -934,6 +1051,26 @@ def list_fonts() -> str:
         return json.dumps({"error": f"Failed to list fonts: {str(e)}"})
 
 
+# --- Set Default Fonts ---
+def set_default_fonts(params: SetDefaultFontsInput) -> str:
+    """Set default fonts for the entire presentation.
+
+    Args:
+        params: Font names and whether to apply to existing text.
+
+    Returns:
+        JSON with theme update status and number of shapes updated.
+    """
+    try:
+        result = ppt.execute(
+            _set_default_fonts_impl,
+            params.latin, params.east_asian, params.apply_to_existing,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to set default fonts: {str(e)}"})
+
+
 # --- Picture Crop ---
 def crop_picture(params: CropPictureInput) -> str:
     """Crop a picture shape.
@@ -1248,6 +1385,27 @@ def register_tools(mcp):
         Returns the names of all fonts embedded or referenced in the presentation.
         """
         return list_fonts()
+
+    @mcp.tool(
+        name="ppt_set_default_fonts",
+        annotations={
+            "title": "Set Default Fonts",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_set_default_fonts(params: SetDefaultFontsInput) -> str:
+        """Set default fonts for the entire presentation (Latin and East Asian separately).
+
+        Updates theme fonts so new text uses the specified fonts.
+        If apply_to_existing is true (default), also updates all existing text.
+        Use 'latin' for alphabet/number fonts (e.g. 'Segoe UI') and
+        'east_asian' for Japanese/Chinese/Korean fonts (e.g. 'Meiryo').
+        At least one of latin or east_asian must be provided.
+        """
+        return set_default_fonts(params)
 
     # --- Picture Crop ---
     @mcp.tool(
