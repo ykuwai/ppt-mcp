@@ -5,18 +5,48 @@ build-backend = "hatchling.build"
 [project]
 name = "ppt-com-mcp"
 version = "0.1.0"
-description = "The world's best PowerPoint MCP server - Real-time PowerPoint control via COM automation"
+description = "Real-time PowerPoint control via COM automation — an MCP server with 131 tools for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [
+    { name = "chuyanku" },
+]
+keywords = [
+    "mcp",
+    "powerpoint",
+    "com",
+    "automation",
+    "ai-agent",
+    "llm",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Office Suites",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "mcp[cli]>=1.0.0",
     "pywin32>=306",
     "pydantic>=2.0.0",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src"]
+[project.urls]
+Homepage = "https://github.com/chuyanku/ppt-com-mcp"
+Repository = "https://github.com/chuyanku/ppt-com-mcp"
+Issues = "https://github.com/chuyanku/ppt-com-mcp/issues"
 
 [project.scripts]
-ppt-com-mcp = "server:main"
+ppt-com-mcp = "src.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

@@ -1,0 +1,57 @@
+name: Publish to PyPI
+
+# Trigger: when a version tag (e.g. v1.2.3) is pushed to main
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  # ------------------------------------------------------------------ #
+  # Job 1: Build the wheel and sdist
+  # ------------------------------------------------------------------ #
+  build:
+    name: Build distribution packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ------------------------------------------------------------------ #
+  # Job 2: Publish to PyPI via Trusted Publishing (OIDC — no token needed)
+  # ------------------------------------------------------------------ #
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ppt-com-mcp
+
+    # Required for OIDC Trusted Publishing
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -7,6 +7,15 @@ import logging
 import os
 import sys
 import tempfile
+from pathlib import Path
+
+# When installed via PyPI (entry point: src.server:main), ensure the src/
+# directory is in sys.path so that internal imports like
+# `from utils.com_wrapper import ppt` resolve correctly.
+_src_dir = str(Path(__file__).parent)
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
 from contextlib import asynccontextmanager
 
 from mcp.server.fastmcp import FastMCP, Image
