@@ -22,6 +22,62 @@
 
 An MCP (Model Context Protocol) server that gives AI agents and programs full control over a live Microsoft PowerPoint instance via COM automation. Unlike file-based libraries like python-pptx, this server interacts with a running PowerPoint application, providing real-time visual feedback and access to the complete PowerPoint API.
 
+## ⚙️ MCP Client Configuration
+
+### Claude Code
+
+```bash
+claude mcp add powerpoint uvx ppt-mcp
+```
+
+### `.mcp.json` (manual)
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+Edit `%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
+### From source (development)
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:\\path\\to\\ppt-mcp",
+        "run",
+        "mcp",
+        "run",
+        "src/server.py"
+      ]
+    }
+  }
+}
+```
+
 ## ✨ Why This is Special
 
 ### 🎮 Full PowerPoint Control — Not Just Read/Write
@@ -78,77 +134,14 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 | **Advanced** | 16 | Tags, fonts (set defaults + bulk replace), crop, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock |
 | | **131** | |
 
-## 📋 Prerequisites
-
-- **Windows 10/11** — COM automation requires Windows
-- **Microsoft PowerPoint** — Microsoft 365, Office 2021, 2019, etc.
-- **Python 3.10+**
-- **uv** — Fast Python package manager ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
-
 ## 📦 Installation
 
-**Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).**
+**Requirements: Windows 10/11, Microsoft PowerPoint, Python 3.10+, [uv](https://docs.astral.sh/uv/getting-started/installation/)**
 
 ```bash
 git clone https://github.com/ykuwai/ppt-mcp.git
 cd ppt-mcp
 uv sync
-```
-
-## ⚙️ MCP Client Configuration
-
-### Claude Code
-
-```bash
-claude mcp add powerpoint uvx ppt-mcp
-```
-
-### `.mcp.json` (manual)
-
-```json
-{
-  "mcpServers": {
-    "powerpoint": {
-      "command": "uvx",
-      "args": ["ppt-mcp"]
-    }
-  }
-}
-```
-
-### Claude Desktop
-
-Edit `%APPDATA%\Claude\claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "powerpoint": {
-      "command": "uvx",
-      "args": ["ppt-mcp"]
-    }
-  }
-}
-```
-
-### From source (development)
-
-```json
-{
-  "mcpServers": {
-    "powerpoint": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "C:\\path\\to\\ppt-mcp",
-        "run",
-        "mcp",
-        "run",
-        "src/server.py"
-      ]
-    }
-  }
-}
 ```
 
 ## 🚀 Example Workflow

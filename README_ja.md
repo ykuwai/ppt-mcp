@@ -22,7 +22,63 @@
 
 PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）サーバーです。python-pptxのようなファイルベースのライブラリとは異なり、起動中のPowerPointアプリケーションと直接やり取りし、リアルタイムの視覚的フィードバックとPowerPoint APIへの完全なアクセスを提供します。
 
-## 特徴
+## ⚙️ MCPクライアント設定
+
+### Claude Code
+
+```bash
+claude mcp add powerpoint uvx ppt-mcp
+```
+
+### `.mcp.json`（手動設定）
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+`%APPDATA%\Claude\claude_desktop_config.json` を編集：
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
+### ソースから実行（開発用）
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:\\path\\to\\ppt-mcp",
+        "run",
+        "mcp",
+        "run",
+        "src/server.py"
+      ]
+    }
+  }
+}
+```
+
+## ✨ なぜこれが特別なのか
 
 ### 🎮 ファイル操作ではなく、PowerPointの完全制御
 
@@ -78,77 +134,14 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 | **高度な操作** | 16 | タグ、フォント一括設定/置換、トリミング、シェイプエクスポート、表示/非表示、選択、ビュー、アニメーションコピー、URL画像、SVGアイコン、アイコン検索、縦横比ロック |
 | | **131** | |
 
-## 📋 必要な環境
-
-- **Windows 10/11** — COM自動化にはWindowsが必要です
-- **Microsoft PowerPoint** — Microsoft 365、Office 2021、2019など
-- **Python 3.10以上**
-- **uv** — 高速Pythonパッケージマネージャー（[インストールガイド](https://docs.astral.sh/uv/getting-started/installation/)）
-
 ## 📦 セットアップ
 
-**[uv](https://docs.astral.sh/uv/getting-started/installation/) が必要です。**
+**動作環境: Windows 10/11、Microsoft PowerPoint、Python 3.10以上、[uv](https://docs.astral.sh/uv/getting-started/installation/)**
 
 ```bash
 git clone https://github.com/ykuwai/ppt-mcp.git
 cd ppt-mcp
 uv sync
-```
-
-## ⚙️ MCPクライアント設定
-
-### Claude Code
-
-```bash
-claude mcp add powerpoint uvx ppt-mcp
-```
-
-### `.mcp.json`（手動設定）
-
-```json
-{
-  "mcpServers": {
-    "powerpoint": {
-      "command": "uvx",
-      "args": ["ppt-mcp"]
-    }
-  }
-}
-```
-
-### Claude Desktop
-
-`%APPDATA%\Claude\claude_desktop_config.json` を編集：
-
-```json
-{
-  "mcpServers": {
-    "powerpoint": {
-      "command": "uvx",
-      "args": ["ppt-mcp"]
-    }
-  }
-}
-```
-
-### ソースから実行（開発用）
-
-```json
-{
-  "mcpServers": {
-    "powerpoint": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "C:\\path\\to\\ppt-mcp",
-        "run",
-        "mcp",
-        "run",
-        "src/server.py"
-      ]
-    }
-  }
-}
 ```
 
 ## 🚀 使用例
