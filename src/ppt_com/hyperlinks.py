@@ -110,7 +110,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 def _add_hyperlink_impl(slide_index, shape_name_or_index, address, sub_address, screen_tip, action_on):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -141,7 +141,7 @@ def _add_hyperlink_impl(slide_index, shape_name_or_index, address, sub_address, 
 
 def _get_hyperlinks_impl(slide_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     hyperlinks = []
@@ -165,7 +165,7 @@ def _get_hyperlinks_impl(slide_index):
 def _remove_hyperlink_impl(slide_index, shape_name_or_index, action_on):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 

@@ -87,7 +87,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
 def _group_shapes_impl(slide_index, shape_names):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Validate all shape names exist before grouping
@@ -113,7 +113,7 @@ def _group_shapes_impl(slide_index, shape_names):
 def _ungroup_shapes_impl(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -137,7 +137,7 @@ def _ungroup_shapes_impl(slide_index, shape_name_or_index):
 
 def _get_group_items_impl(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 

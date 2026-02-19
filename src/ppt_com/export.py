@@ -152,7 +152,7 @@ def _export_pdf_impl(
             "No presentation is open. "
             "Use ppt_create_presentation or ppt_open_presentation first."
         )
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
 
     # COM requires absolute Windows-style paths
     abs_path = os.path.abspath(file_path)
@@ -199,7 +199,7 @@ def _export_images_impl(
             "No presentation is open. "
             "Use ppt_create_presentation or ppt_open_presentation first."
         )
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
 
     fmt_key = format.lower().strip()
     if fmt_key not in IMAGE_FORMAT_MAP:

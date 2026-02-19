@@ -417,7 +417,7 @@ class SearchIconsInput(BaseModel):
 # ---------------------------------------------------------------------------
 def _resolve_target(app, target_type, slide_index, shape_name_or_index):
     """Resolve the target COM object based on target_type."""
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     target_type_lower = target_type.strip().lower()
 
     if target_type_lower == "presentation":
@@ -471,7 +471,7 @@ def _get_tags_impl(slide_index, shape_name_or_index, target_type):
 # ---------------------------------------------------------------------------
 def _replace_font_impl(original_font, replacement_font):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     pres.Fonts.Replace(original_font, replacement_font)
     return {
         "success": True,
@@ -482,7 +482,7 @@ def _replace_font_impl(original_font, replacement_font):
 
 def _list_fonts_impl():
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     fonts = []
     for i in range(1, pres.Fonts.Count + 1):
         fonts.append(pres.Fonts(i).Name)
@@ -498,7 +498,7 @@ def _list_fonts_impl():
 # ---------------------------------------------------------------------------
 def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
 
     if not latin and not east_asian:
         raise ValueError("At least one of 'latin' or 'east_asian' must be provided")
@@ -597,7 +597,7 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
 def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, crop_top, crop_bottom):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -627,7 +627,7 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, 
 def _export_shape_impl(slide_index, shape_name_or_index, file_path, format_type, width, height):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -669,7 +669,7 @@ def _export_shape_impl(slide_index, shape_name_or_index, file_path, format_type,
 def _set_slide_hidden_impl(slide_index, hidden):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     slide.SlideShowTransition.Hidden = msoTrue if hidden else msoFalse
     return {
@@ -684,7 +684,7 @@ def _set_slide_hidden_impl(slide_index, hidden):
 # ---------------------------------------------------------------------------
 def _select_shapes_impl(slide_index, shape_names):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Navigate to the slide first
@@ -778,7 +778,7 @@ def _set_view_impl(view_type, zoom):
 def _copy_animation_impl(slide_index, source_shape, target_shape):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     src = _get_shape(slide, source_shape)
     tgt = _get_shape(slide, target_shape)
@@ -799,7 +799,7 @@ def _copy_animation_impl(slide_index, source_shape, target_shape):
 def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_color, fit):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Download the image
@@ -891,7 +891,7 @@ def _resolve_color(pres, color_str):
 def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style, filled):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     # Resolve theme color name to hex
@@ -963,7 +963,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
 def _lock_aspect_ratio_impl(slide_index, shape_name_or_index, locked):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
     shape.LockAspectRatio = msoTrue if locked else msoFalse

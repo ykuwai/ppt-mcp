@@ -107,7 +107,7 @@ def _set_glow_impl(slide_index, shape_name_or_index, radius,
                     color, transparency) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -131,7 +131,7 @@ def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
                           blur, offset, size, transparency) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -161,7 +161,7 @@ def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
 def _set_soft_edge_impl(slide_index, shape_name_or_index, radius) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 

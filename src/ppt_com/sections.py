@@ -50,7 +50,7 @@ class ManageSectionInput(BaseModel):
 # ---------------------------------------------------------------------------
 def _add_section_impl(name, slide_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     sp = pres.SectionProperties
 
     section_index = sp.AddSection(slide_index, name)
@@ -65,7 +65,7 @@ def _add_section_impl(name, slide_index):
 
 def _list_sections_impl():
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     sp = pres.SectionProperties
 
     sections = []
@@ -86,7 +86,7 @@ def _list_sections_impl():
 
 def _manage_section_impl(section_index, action, new_name, move_to_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     sp = pres.SectionProperties
 
     action_key = action.strip().lower()

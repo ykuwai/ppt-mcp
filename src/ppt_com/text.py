@@ -246,7 +246,7 @@ class SetTextframeInput(BaseModel):
 def _set_text_impl(slide_index: int, shape_name_or_index, text: str) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -270,7 +270,7 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text: str) -> dict:
 
 def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -347,7 +347,7 @@ def _format_text_impl(slide_index, shape_name_or_index,
                        color, font_color_theme) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -371,7 +371,7 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
                               color, font_color_theme) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -396,7 +396,7 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
                                  indent_level, first_line_indent) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -450,7 +450,7 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
                        bullet_type, bullet_char, bullet_start_value) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -495,7 +495,7 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
 
 def _find_replace_text_impl(find_text, replace_text, slide_index) -> dict:
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
 
     replacements = []
 
@@ -542,7 +542,7 @@ def _set_textframe_impl(slide_index, shape_name_or_index,
                         orientation) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 

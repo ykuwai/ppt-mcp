@@ -170,7 +170,7 @@ def _set_slide_transition_impl(
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     transition = slide.SlideShowTransition
@@ -198,7 +198,7 @@ def _add_animation_impl(
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
@@ -223,7 +223,7 @@ def _add_animation_impl(
 
 def _list_animations_impl(slide_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     seq = slide.TimeLine.MainSequence
@@ -253,7 +253,7 @@ def _list_animations_impl(slide_index):
 def _remove_animation_impl(slide_index, animation_index):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     seq = slide.TimeLine.MainSequence
@@ -273,7 +273,7 @@ def _remove_animation_impl(slide_index, animation_index):
 def _clear_animations_impl(slide_index, clear_transitions):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     seq = slide.TimeLine.MainSequence

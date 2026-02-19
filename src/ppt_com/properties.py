@@ -48,7 +48,7 @@ class SetPropertiesInput(BaseModel):
 # ---------------------------------------------------------------------------
 def _set_properties_impl(title, author, subject, keywords, comments, category, company):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     props = pres.BuiltInDocumentProperties
 
     # Map field names to COM property names
@@ -79,7 +79,7 @@ def _set_properties_impl(title, author, subject, keywords, comments, category, c
 
 def _get_properties_impl():
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     props = pres.BuiltInDocumentProperties
 
     result = {}

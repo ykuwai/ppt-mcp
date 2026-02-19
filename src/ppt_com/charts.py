@@ -222,7 +222,7 @@ def _get_chart_shape(slide, name_or_index: Union[str, int]):
 def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     type_int = _resolve_chart_type(chart_type)
@@ -251,7 +251,7 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
 def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
     chart = shape.Chart
@@ -299,7 +299,7 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
 
 def _get_chart_data_impl(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
     chart = shape.Chart
@@ -336,7 +336,7 @@ def _format_chart_impl(
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
     chart = shape.Chart
@@ -379,7 +379,7 @@ def _set_chart_series_impl(
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
     chart = shape.Chart
@@ -405,7 +405,7 @@ def _set_chart_series_impl(
 def _change_chart_type_impl(slide_index, shape_name_or_index, chart_type):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
     chart = shape.Chart

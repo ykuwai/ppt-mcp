@@ -180,7 +180,7 @@ def _get_table_shape(slide, name_or_index: Union[str, int]):
 def _add_table_impl(slide_index, rows, cols, left, top, width, height):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = slide.Shapes.AddTable(
         NumRows=rows, NumColumns=cols,
@@ -198,7 +198,7 @@ def _add_table_impl(slide_index, rows, cols, left, top, width, height):
 
 def _get_table_data_impl(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.Table
@@ -231,7 +231,7 @@ def _set_table_cell_impl(
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.Table
@@ -279,7 +279,7 @@ def _set_table_cell_impl(
 def _merge_table_cells_impl(slide_index, shape_name_or_index, start_row, start_col, end_row, end_col):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.Table
@@ -297,7 +297,7 @@ def _merge_table_cells_impl(slide_index, shape_name_or_index, start_row, start_c
 def _add_table_row_impl(slide_index, shape_name_or_index, position):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.Table
@@ -317,7 +317,7 @@ def _add_table_row_impl(slide_index, shape_name_or_index, position):
 def _delete_table_row_impl(slide_index, shape_name_or_index, position):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.Table
@@ -336,7 +336,7 @@ def _delete_table_row_impl(slide_index, shape_name_or_index, position):
 def _add_table_column_impl(slide_index, shape_name_or_index, position):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.Table
@@ -356,7 +356,7 @@ def _add_table_column_impl(slide_index, shape_name_or_index, position):
 def _delete_table_column_impl(slide_index, shape_name_or_index, position):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.Table
@@ -379,7 +379,7 @@ def _set_table_style_impl(
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.Table

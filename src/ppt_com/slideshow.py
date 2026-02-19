@@ -83,7 +83,7 @@ def _slideshow_start_impl(
             "No presentation is open. "
             "Use ppt_create_presentation or ppt_open_presentation first."
         )
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
 
     if pres.Slides.Count == 0:
         raise RuntimeError("Presentation has no slides.")

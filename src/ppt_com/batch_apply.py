@@ -186,7 +186,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
 def _batch_apply_impl(slide_index, shapes, operations):
     """Apply multiple formatting operations to multiple shapes."""
     app = ppt._get_app_impl()
-    pres = app.ActivePresentation
+    pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
     results = []
