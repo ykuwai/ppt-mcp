@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/ppt-com-mcp
+      url: https://pypi.org/p/ppt-mcp
 
     # Required for OIDC Trusted Publishing
     permissions:

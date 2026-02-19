@@ -26,7 +26,7 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     stream=sys.stderr,
 )
-logger = logging.getLogger("ppt-com-mcp")
+logger = logging.getLogger("ppt-mcp")
 
 
 @asynccontextmanager

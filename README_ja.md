@@ -87,30 +87,27 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 
 ## セットアップ
 
-1. リポジトリのクローン：
+### 方法A：PyPIからインストール（推奨）
+
+```bash
+pip install ppt-mcp
+```
+
+### 方法B：ソースからクローン
 
 ```bash
 git clone https://github.com/ykuwai/ppt-com-mcp.git
 cd ppt-com-mcp
-```
-
-2. uvのインストール（未インストールの場合）：
-
-```bash
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-3. 依存関係のインストール：
-
-```bash
 uv sync
 ```
 
 ## 使い方
 
 ```bash
-# MCPサーバーとして実行
+# PyPIインストール版
+ppt-mcp
+
+# ソース版
 uv run mcp run src/server.py
 
 # 開発モード（MCP Inspector付き）
@@ -120,6 +117,21 @@ uv run mcp dev src/server.py
 ## MCPクライアント設定
 
 MCPクライアントの設定ファイルに以下を追加します。Claude Desktopの場合、`%APPDATA%\Claude\claude_desktop_config.json` を編集：
+
+**PyPIインストール版（推奨）：**
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
+**ソース版：**
 
 ```json
 {
@@ -138,8 +150,6 @@ MCPクライアントの設定ファイルに以下を追加します。Claude D
   }
 }
 ```
-
-`C:\\path\\to\\ppt-com-mcp` を実際のインストールパスに置き換えてください。設定後、MCPクライアントを再起動すると利用可能になります。
 
 ## 使用例
 

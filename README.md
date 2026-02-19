@@ -87,30 +87,27 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 
 ## Installation
 
-1. Clone the repository:
+### Option A: Install from PyPI (recommended)
+
+```bash
+pip install ppt-mcp
+```
+
+### Option B: Clone and run from source
 
 ```bash
 git clone https://github.com/ykuwai/ppt-com-mcp.git
 cd ppt-com-mcp
-```
-
-2. Install uv if you haven't already:
-
-```bash
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-3. Install dependencies:
-
-```bash
 uv sync
 ```
 
 ## Usage
 
 ```bash
-# Run as MCP server
+# PyPI install
+ppt-mcp
+
+# From source
 uv run mcp run src/server.py
 
 # Development mode (with MCP Inspector)
@@ -120,6 +117,21 @@ uv run mcp dev src/server.py
 ## MCP Client Configuration
 
 Add the following to your MCP client config. For Claude Desktop, edit `%APPDATA%\Claude\claude_desktop_config.json`:
+
+**PyPI install (recommended):**
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
+**From source:**
 
 ```json
 {
@@ -138,8 +150,6 @@ Add the following to your MCP client config. For Claude Desktop, edit `%APPDATA%
   }
 }
 ```
-
-Replace `C:\\path\\to\\ppt-com-mcp` with your actual installation path. Restart the MCP client after configuring.
 
 ## Example Workflow
 
