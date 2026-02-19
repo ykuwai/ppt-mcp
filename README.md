@@ -1,13 +1,24 @@
-# ppt-com-mcp
+<p align="center">
+  <img src="assets/ppt-mcp-logo-letter.png" alt="PowerPoint MCP" width="480">
+</p>
 
-[日本語版はこちら](README_ja.md)
+<p align="center">
+  <a href="README_ja.md">日本語版はこちら</a>
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tools](https://img.shields.io/badge/MCP_Tools-131-orange.svg)](#tool-categories)
-[![MCP](https://img.shields.io/badge/MCP-1.0+-purple.svg)](https://modelcontextprotocol.io/)
+<p align="center">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/MCP_Tools-131-orange.svg" alt="Tools">
+  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-1.0+-purple.svg" alt="MCP"></a>
+  <img src="https://img.shields.io/badge/Platform-Windows-0078d4.svg" alt="Platform">
+</p>
 
-**Real-time PowerPoint control through COM automation — an MCP server with 131 tools for AI agents and developers.**
+<p align="center">
+  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 131 tools for AI agents and developers.</strong>
+</p>
+
+---
 
 An MCP (Model Context Protocol) server that gives AI agents and programs full control over a live Microsoft PowerPoint instance via COM automation. Unlike file-based libraries like python-pptx, this server interacts with a running PowerPoint application, providing real-time visual feedback and access to the complete PowerPoint API.
 
@@ -28,6 +39,7 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 ### Designed for AI Agents
 
 - **131 Tools Across 21 Categories** — From basic slide operations to advanced animations, SmartArt, and icon search
+- **Explicit Presentation Targeting** — `ppt_activate_presentation` locks every tool to a specific file, so AI agents never accidentally edit the wrong presentation
 - **Real-Time Visual Feedback** — Automatically navigates to the slide being edited so you see changes as they happen
 - **Template Support** — Auto-detects personal templates folder, create presentations from any template
 - **Material Symbols Icons** — Search 2,500+ Google Material Symbols icons by keyword and insert them as SVG with theme colors
@@ -40,11 +52,11 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 | Category | Tools | Description |
 |----------|------:|-------------|
 | **App** | 4 | Connect to PowerPoint, app info, window state, list presentations |
-| **Presentation** | 7 | Create (with templates), open, save, close, info, list templates |
+| **Presentation** | 8 | Create (with templates), open, save, close, info, activate target, list templates |
 | **Slides** | 9 | Add, delete, duplicate, move, list, info, notes, navigation |
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines, list, info, update, delete, z-order |
 | **Text** | 8 | Set/get text, format text ranges, paragraph format, bullets, find/replace, textframe |
-| **Placeholders** | 6 | List, get, set placeholder content |
+| **Placeholders** | 5 | List, get, set placeholder content |
 | **Formatting** | 3 | Fill, line, shadow |
 | **Tables** | 9 | Add tables, get/set cells, merge cells, add/delete rows/columns, styles |
 | **Export** | 2 | PDF, images |
@@ -63,7 +75,7 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 | **Layout** | 7 | Align, distribute, slide size, background, flip, merge shapes |
 | **Effects** | 3 | Glow, reflection, soft edge |
 | **Comments** | 3 | Add, list, delete |
-| **Advanced** | 15 | Tags, fonts, crop, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock |
+| **Advanced** | 16 | Tags, fonts (set defaults + bulk replace), crop, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock |
 | | **131** | |
 
 ## Prerequisites
@@ -103,9 +115,6 @@ uv run mcp run src/server.py
 
 # Development mode (with MCP Inspector)
 uv run mcp dev src/server.py
-
-# Import check
-uv run python -c "import src.server"
 ```
 
 ## MCP Client Configuration
@@ -134,29 +143,43 @@ Replace `C:\\path\\to\\ppt-com-mcp` with your actual installation path. Restart 
 
 ## Example Workflow
 
-```
-# 1. Search for an icon
-ppt_search_icons(query="rocket launch")
+```python
+# 1. Target a specific presentation (prevents editing the wrong file)
+ppt_list_presentations()
+ppt_activate_presentation(presentation_name="demo.pptx")
 
-# 2. Create a presentation from a personal template
+# 2. Create a slide from a personal template
 ppt_list_templates()
 ppt_create_presentation(template_path="C:\\...\\MyTemplate.potx")
 
 # 3. Add a slide and set content
 ppt_add_slide(layout_index=2)
-ppt_set_text(slide_index=1, shape_name_or_index="Title 1",
-             text="Hello World")
+ppt_set_text(slide_index=1, shape_name_or_index="Title 1", text="Hello World")
 
-# 4. Insert a Material Symbols icon with theme color
+# 4. Set presentation-wide fonts (Latin + East Asian separately)
+ppt_set_default_fonts(latin="Segoe UI", east_asian="Meiryo")
+
+# 5. Insert a Material Symbols icon with theme color
 ppt_add_svg_icon(slide_index=1, icon_name="rocket",
                  left=500, top=100, width=72, height=72,
-                 color="accent1", style="rounded", filled=true)
+                 color="accent1", style="rounded", filled=True)
 
-# 5. Export to PDF
+# 6. Export to PDF
 ppt_export_pdf(file_path="C:\\output\\presentation.pdf")
 ```
 
 ## Features in Detail
+
+### Presentation Targeting
+
+`ppt_activate_presentation` sets a session-level target so every subsequent tool call operates on that specific file — regardless of which window is active in PowerPoint. Switch targets anytime by calling it again.
+
+```python
+ppt_activate_presentation(presentation_name="report.pptx")
+# All tools now operate on report.pptx
+ppt_activate_presentation(presentation_name="demo.pptx")
+# Switched — all tools now operate on demo.pptx
+```
 
 ### Template Support
 
@@ -166,7 +189,7 @@ Auto-detects your personal PowerPoint templates folder (registry, OneDrive, or d
 
 Search 2,500+ icons with `ppt_search_icons(query="...")` and insert them as SVG with `ppt_add_svg_icon`:
 - **3 styles**: outlined, rounded, sharp
-- **Filled variants**: set `filled=true`
+- **Filled variants**: set `filled=True`
 - **Theme colors**: `color="accent1"` uses the presentation's accent color
 - **Auto-fit**: preserves aspect ratio within the specified area
 

@@ -1,13 +1,24 @@
-# ppt-com-mcp
+<p align="center">
+  <img src="assets/ppt-mcp-logo-letter.png" alt="PowerPoint MCP" width="480">
+</p>
 
-[English version](README.md)
+<p align="center">
+  <a href="README.md">English version</a>
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tools](https://img.shields.io/badge/MCP_Tools-131-orange.svg)](#ツール一覧)
-[![MCP](https://img.shields.io/badge/MCP-1.0+-purple.svg)](https://modelcontextprotocol.io/)
+<p align="center">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/MCP_Tools-131-orange.svg" alt="Tools">
+  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-1.0+-purple.svg" alt="MCP"></a>
+  <img src="https://img.shields.io/badge/Platform-Windows-0078d4.svg" alt="Platform">
+</p>
 
-**COM自動化によるPowerPointのリアルタイム制御 — AIエージェントと開発者のための131ツールを備えたMCPサーバー**
+<p align="center">
+  <strong>COM自動化によるPowerPointのリアルタイム制御 —<br>AIエージェントと開発者のための131ツールを備えたMCPサーバー</strong>
+</p>
+
+---
 
 PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）サーバーです。python-pptxのようなファイルベースのライブラリとは異なり、起動中のPowerPointアプリケーションと直接やり取りし、リアルタイムの視覚的フィードバックとPowerPoint APIへの完全なアクセスを提供します。
 
@@ -28,6 +39,7 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 ### AIエージェントのために設計
 
 - **21カテゴリ・131ツール** — スライド操作からアニメーション、SmartArt、アイコン検索まで
+- **プレゼン操作対象の明示指定** — `ppt_activate_presentation` で対象ファイルを固定。AIエージェントが誤って別のプレゼンを編集することを防止
 - **リアルタイム視覚フィードバック** — 編集対象のスライドに自動ナビゲーション。変更がその場で見える
 - **テンプレート対応** — 個人用テンプレートフォルダを自動検出し、任意のテンプレートからプレゼンを作成
 - **Material Symbolsアイコン** — 2,500以上のGoogle Material Symbolsアイコンをキーワード検索し、テーマカラーでSVG挿入
@@ -40,11 +52,11 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 | カテゴリ | ツール数 | 主な機能 |
 |---------|-------:|---------|
 | **アプリケーション** | 4 | PowerPoint接続、アプリ情報、ウィンドウ状態、プレゼン一覧 |
-| **プレゼンテーション** | 7 | 作成（テンプレート対応）、開く、保存、閉じる、情報取得、テンプレート一覧 |
+| **プレゼンテーション** | 8 | 作成（テンプレート対応）、開く、保存、閉じる、情報取得、操作対象指定、テンプレート一覧 |
 | **スライド** | 9 | 追加、削除、複製、移動、一覧、情報取得、ノート、ナビゲーション |
 | **シェイプ** | 10 | 図形/テキストボックス/画像/線の追加、一覧、情報取得、更新、削除、Z順序 |
 | **テキスト** | 8 | テキスト設定/取得、書式設定、段落書式、箇条書き、検索置換、テキストフレーム |
-| **プレースホルダー** | 6 | 一覧、情報取得、テキスト設定 |
+| **プレースホルダー** | 5 | 一覧、情報取得、テキスト設定 |
 | **書式設定** | 3 | 塗りつぶし、線、影 |
 | **テーブル** | 9 | テーブル追加、セル取得/設定、セル結合、行/列の追加/削除、スタイル |
 | **エクスポート** | 2 | PDF、画像 |
@@ -63,7 +75,7 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 | **レイアウト** | 7 | 整列、分散配置、スライドサイズ、背景、反転、シェイプ結合 |
 | **視覚効果** | 3 | グロー、反射、ぼかし |
 | **コメント** | 3 | 追加、一覧、削除 |
-| **高度な操作** | 15 | タグ、フォント、トリミング、シェイプエクスポート、表示/非表示、選択、ビュー、アニメーションコピー、URL画像、SVGアイコン、アイコン検索、縦横比ロック |
+| **高度な操作** | 16 | タグ、フォント一括設定/置換、トリミング、シェイプエクスポート、表示/非表示、選択、ビュー、アニメーションコピー、URL画像、SVGアイコン、アイコン検索、縦横比ロック |
 | | **131** | |
 
 ## 必要な環境
@@ -103,9 +115,6 @@ uv run mcp run src/server.py
 
 # 開発モード（MCP Inspector付き）
 uv run mcp dev src/server.py
-
-# インポートチェック
-uv run python -c "import src.server"
 ```
 
 ## MCPクライアント設定
@@ -134,9 +143,10 @@ MCPクライアントの設定ファイルに以下を追加します。Claude D
 
 ## 使用例
 
-```
-# 1. アイコンを検索
-ppt_search_icons(query="rocket launch")
+```python
+# 1. 操作対象のプレゼンテーションを指定（誤編集を防止）
+ppt_list_presentations()
+ppt_activate_presentation(presentation_name="demo.pptx")
 
 # 2. テンプレートからプレゼンテーションを作成
 ppt_list_templates()
@@ -144,19 +154,32 @@ ppt_create_presentation(template_path="C:\\...\\MyTemplate.potx")
 
 # 3. スライド追加とコンテンツ設定
 ppt_add_slide(layout_index=2)
-ppt_set_text(slide_index=1, shape_name_or_index="Title 1",
-             text="Hello World")
+ppt_set_text(slide_index=1, shape_name_or_index="Title 1", text="Hello World")
 
-# 4. テーマカラーでMaterial Symbolsアイコンを挿入
+# 4. プレゼン全体のフォントを一括設定（英語・日本語フォントを個別に指定）
+ppt_set_default_fonts(latin="Segoe UI", east_asian="Meiryo")
+
+# 5. テーマカラーでMaterial Symbolsアイコンを挿入
 ppt_add_svg_icon(slide_index=1, icon_name="rocket",
                  left=500, top=100, width=72, height=72,
-                 color="accent1", style="rounded", filled=true)
+                 color="accent1", style="rounded", filled=True)
 
-# 5. PDFにエクスポート
+# 6. PDFにエクスポート
 ppt_export_pdf(file_path="C:\\output\\presentation.pdf")
 ```
 
 ## 機能の詳細
+
+### プレゼンテーション操作対象の指定
+
+`ppt_activate_presentation` でセッションレベルの操作対象を設定すると、以降のすべてのツールがそのファイルに対して動作します。PowerPointのウィンドウが切り替わっても影響を受けません。再度呼び出すことで対象を切り替えられます。
+
+```python
+ppt_activate_presentation(presentation_name="report.pptx")
+# 以降のツールはすべて report.pptx を操作
+ppt_activate_presentation(presentation_name="demo.pptx")
+# 切り替え — 以降は demo.pptx を操作
+```
 
 ### テンプレート対応
 
@@ -166,7 +189,7 @@ ppt_export_pdf(file_path="C:\\output\\presentation.pdf")
 
 `ppt_search_icons(query="...")` で2,500以上のアイコンをキーワード検索し、`ppt_add_svg_icon` でSVG画像として挿入：
 - **3つのスタイル**: outlined、rounded、sharp
-- **塗りつぶしバリアント**: `filled=true` で指定
+- **塗りつぶしバリアント**: `filled=True` で指定
 - **テーマカラー**: `color="accent1"` でプレゼンのアクセントカラーを自動適用
 - **自動フィット**: 指定エリア内でアスペクト比を保持
 
