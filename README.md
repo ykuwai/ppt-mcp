@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/ppt-mcp-logo-letter.png" alt="PowerPoint MCP" width="480">
+  <img src="https://raw.githubusercontent.com/ykuwai/ppt-mcp/main/assets/ppt-mcp-logo-letter.png" alt="PowerPoint MCP" width="480">
 </p>
 
 <p align="center">
