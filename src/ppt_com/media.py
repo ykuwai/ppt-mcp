@@ -59,7 +59,7 @@ class SetMediaSettingsInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Media shape name (string) or 1-based index (int)"
+        ..., description="Media shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     volume: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,

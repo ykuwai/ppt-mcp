@@ -72,7 +72,7 @@ class SetChartDataInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Chart shape name (string) or 1-based index (int)"
+        ..., description="Chart shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     categories: list[str] = Field(
         ..., description="List of category labels (e.g. ['Q1', 'Q2', 'Q3', 'Q4'])"
@@ -92,7 +92,7 @@ class GetChartDataInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Chart shape name (string) or 1-based index (int)"
+        ..., description="Chart shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
 
 
@@ -102,7 +102,7 @@ class FormatChartInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Chart shape name (string) or 1-based index (int)"
+        ..., description="Chart shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     title: Optional[str] = Field(
         default=None, description="Chart title text (sets HasTitle=True automatically)"
@@ -125,7 +125,7 @@ class SetChartSeriesInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Chart shape name (string) or 1-based index (int)"
+        ..., description="Chart shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     series_index: int = Field(..., ge=1, description="1-based series index")
     color: Optional[str] = Field(
@@ -145,7 +145,7 @@ class ChangeChartTypeInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Chart shape name (string) or 1-based index (int)"
+        ..., description="Chart shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     chart_type: Union[int, str] = Field(
         ...,

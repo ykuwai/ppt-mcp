@@ -84,7 +84,7 @@ class FormatConnectorInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Connector shape name (string) or 1-based index (int)"
+        ..., description="Connector shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     color: Optional[str] = Field(
         default=None, description="Line color as '#RRGGBB'"

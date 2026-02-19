@@ -49,7 +49,7 @@ class GetTableDataInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Table shape name (string) or 1-based index (int)"
+        ..., description="Table shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
 
 
@@ -59,7 +59,7 @@ class SetTableCellInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Table shape name (string) or 1-based index (int)"
+        ..., description="Table shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     row: int = Field(..., ge=1, description="1-based row number")
     col: int = Field(..., ge=1, description="1-based column number")
@@ -81,7 +81,7 @@ class MergeTableCellsInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Table shape name (string) or 1-based index (int)"
+        ..., description="Table shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     start_row: int = Field(..., ge=1, description="Top-left cell row (1-based)")
     start_col: int = Field(..., ge=1, description="Top-left cell column (1-based)")
@@ -95,7 +95,7 @@ class TableRowInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Table shape name (string) or 1-based index (int)"
+        ..., description="Table shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     position: Optional[int] = Field(
         default=None, ge=1,
@@ -109,7 +109,7 @@ class TableColumnInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Table shape name (string) or 1-based index (int)"
+        ..., description="Table shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     position: Optional[int] = Field(
         default=None, ge=1,
@@ -123,7 +123,7 @@ class SetTableStyleInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Table shape name (string) or 1-based index (int)"
+        ..., description="Table shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     style_id: Optional[str] = Field(
         default=None,

@@ -34,7 +34,7 @@ class AddHyperlinkInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     address: str = Field(
         ..., description="Hyperlink URL, file path, or mailto: address"
@@ -65,7 +65,7 @@ class RemoveHyperlinkInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     action_on: str = Field(
         default="click",

@@ -45,7 +45,7 @@ class SetGlowInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     radius: float = Field(
         ..., ge=0, description="Glow radius in points (0 to remove glow)"
@@ -65,7 +65,7 @@ class SetReflectionInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     reflection_type: Optional[int] = Field(
         default=None, ge=0, le=9,
@@ -93,7 +93,7 @@ class SetSoftEdgeInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     radius: float = Field(
         ..., ge=0, description="Soft edge radius in points (0 to remove)"

@@ -72,7 +72,7 @@ class SetFillInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     fill_type: str = Field(
         ..., description="'solid', 'gradient', or 'none'"
@@ -101,7 +101,7 @@ class SetLineInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     color: Optional[str] = Field(default=None, description="Line color as '#RRGGBB'")
     weight: Optional[float] = Field(default=None, description="Line weight in points")
@@ -121,7 +121,7 @@ class SetShadowInput(BaseModel):
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int)"
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     visible: bool = Field(..., description="Shadow visible on/off")
     blur: Optional[float] = Field(default=None, description="Shadow blur radius in points")

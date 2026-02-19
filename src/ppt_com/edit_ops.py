@@ -45,7 +45,7 @@ class CopyShapeToSlideInput(BaseModel):
 
     src_slide_index: int = Field(..., ge=1, description="1-based source slide index")
     shape_name_or_index: Union[str, int] = Field(
-        ..., description="Shape name (string) or 1-based index (int) on the source slide"
+        ..., description="Shape name (str) or 1-based index (int) on the source slide. Prefer name — indices shift when shapes are added/removed"
     )
     dst_slide_index: int = Field(..., ge=1, description="1-based destination slide index")
 
@@ -56,7 +56,7 @@ class CopyFormattingInput(BaseModel):
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     source_shape: Union[str, int] = Field(
-        ..., description="Source shape name (string) or 1-based index (int)"
+        ..., description="Source shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
     target_shapes: list[Union[str, int]] = Field(
         ..., min_length=1,
