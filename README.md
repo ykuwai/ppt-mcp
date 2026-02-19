@@ -87,13 +87,7 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 
 ## Installation
 
-### Option A: Install from PyPI (recommended)
-
-```bash
-pip install ppt-mcp
-```
-
-### Option B: Clone and run from source
+**Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).**
 
 ```bash
 git clone https://github.com/ykuwai/ppt-mcp.git
@@ -101,24 +95,15 @@ cd ppt-mcp
 uv sync
 ```
 
-## Usage
-
-```bash
-# PyPI install
-ppt-mcp
-
-# From source
-uv run mcp run src/server.py
-
-# Development mode (with MCP Inspector)
-uv run mcp dev src/server.py
-```
-
 ## MCP Client Configuration
 
-Add the following to your MCP client config. For Claude Desktop, edit `%APPDATA%\Claude\claude_desktop_config.json`:
+### Claude Code
 
-**PyPI install (recommended):**
+```bash
+claude mcp add powerpoint uvx ppt-mcp
+```
+
+### `.mcp.json` (manual)
 
 ```json
 {
@@ -131,7 +116,22 @@ Add the following to your MCP client config. For Claude Desktop, edit `%APPDATA%
 }
 ```
 
-**From source:**
+### Claude Desktop
+
+Edit `%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
+### From source (development)
 
 ```json
 {
