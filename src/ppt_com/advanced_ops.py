@@ -504,25 +504,46 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
         raise ValueError("At least one of 'latin' or 'east_asian' must be provided")
 
     theme_updated = False
-    # Step 1: Update theme fonts for all slide masters (affects new text)
+    # Step 1: Update theme fonts for all designs/slide masters (affects new text).
+    # pres.Designs is the correct collection for multiple slide masters in COM.
+    # Fall back to pres.SlideMaster (singular) if Designs is unavailable.
     try:
         masters_updated = 0
-        for m in range(1, pres.SlideMasters.Count + 1):
-            try:
-                font_scheme = pres.SlideMasters(m).Theme.ThemeFontScheme
-                # msoThemeFontLatin = 1, msoThemeFontEastAsian = 2
-                if latin:
-                    font_scheme.MajorFont(1).Name = latin
-                    font_scheme.MinorFont(1).Name = latin
-                if east_asian:
-                    font_scheme.MajorFont(2).Name = east_asian
-                    font_scheme.MinorFont(2).Name = east_asian
-                masters_updated += 1
-            except Exception as e:
-                logger.warning("Failed to update theme fonts for master %d: %s", m, e)
+        try:
+            designs = pres.Designs
+            count = designs.Count
+        except Exception:
+            designs = None
+            count = 0
+
+        if designs and count > 0:
+            for m in range(1, count + 1):
+                try:
+                    font_scheme = designs(m).SlideMaster.Theme.ThemeFontScheme
+                    # msoThemeFontLatin = 1, msoThemeFontEastAsian = 2
+                    if latin:
+                        font_scheme.MajorFont(1).Name = latin
+                        font_scheme.MinorFont(1).Name = latin
+                    if east_asian:
+                        font_scheme.MajorFont(2).Name = east_asian
+                        font_scheme.MinorFont(2).Name = east_asian
+                    masters_updated += 1
+                except Exception as e:
+                    logger.warning("Failed to update theme fonts for design %d: %s", m, e)
+        else:
+            # Fallback: single slide master
+            font_scheme = pres.SlideMaster.Theme.ThemeFontScheme
+            if latin:
+                font_scheme.MajorFont(1).Name = latin
+                font_scheme.MinorFont(1).Name = latin
+            if east_asian:
+                font_scheme.MajorFont(2).Name = east_asian
+                font_scheme.MinorFont(2).Name = east_asian
+            masters_updated = 1
+
         theme_updated = masters_updated > 0
     except Exception as e:
-        logger.warning("Failed to iterate slide masters: %s", e)
+        logger.warning("Failed to update theme fonts: %s", e)
 
     # Step 2: Apply to existing text (including shapes inside groups)
     def _apply_to_shape(shape):
