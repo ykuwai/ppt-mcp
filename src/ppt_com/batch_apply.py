@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any, List, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
 
@@ -58,6 +58,8 @@ def _get_shape(slide, name_or_index):
 
 class BatchOperation(BaseModel):
     """A single formatting operation to apply."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     tool: str = Field(
         ...,
         description=(
@@ -73,6 +75,8 @@ class BatchOperation(BaseModel):
 
 class BatchApplyFormattingInput(BaseModel):
     """Input for batch applying formatting to multiple shapes."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shapes: List[Union[str, int]] = Field(
         ...,
