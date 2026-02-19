@@ -504,21 +504,48 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
         raise ValueError("At least one of 'latin' or 'east_asian' must be provided")
 
     theme_updated = False
-    # Step 1: Update theme fonts (affects new text)
+    # Step 1: Update theme fonts for all slide masters (affects new text)
     try:
-        font_scheme = pres.SlideMaster.Theme.ThemeFontScheme
-        # msoThemeFontLatin = 1, msoThemeFontEastAsian = 2
-        if latin:
-            font_scheme.MajorFont(1).Name = latin
-            font_scheme.MinorFont(1).Name = latin
-        if east_asian:
-            font_scheme.MajorFont(2).Name = east_asian
-            font_scheme.MinorFont(2).Name = east_asian
-        theme_updated = True
+        masters_updated = 0
+        for m in range(1, pres.SlideMasters.Count + 1):
+            try:
+                font_scheme = pres.SlideMasters(m).Theme.ThemeFontScheme
+                # msoThemeFontLatin = 1, msoThemeFontEastAsian = 2
+                if latin:
+                    font_scheme.MajorFont(1).Name = latin
+                    font_scheme.MinorFont(1).Name = latin
+                if east_asian:
+                    font_scheme.MajorFont(2).Name = east_asian
+                    font_scheme.MinorFont(2).Name = east_asian
+                masters_updated += 1
+            except Exception as e:
+                logger.warning("Failed to update theme fonts for master %d: %s", m, e)
+        theme_updated = masters_updated > 0
     except Exception as e:
-        logger.warning("Failed to update theme fonts: %s", e)
+        logger.warning("Failed to iterate slide masters: %s", e)
 
-    # Step 2: Apply to existing text
+    # Step 2: Apply to existing text (including shapes inside groups)
+    def _apply_to_shape(shape):
+        """Recursively apply fonts to a shape and any grouped children."""
+        try:
+            if shape.HasTextFrame:
+                font = shape.TextFrame.TextRange.Font
+                if latin:
+                    font.Name = latin
+                if east_asian:
+                    font.NameFarEast = east_asian
+                return 1
+        except Exception:
+            pass
+        # Recurse into group members
+        updated = 0
+        try:
+            for k in range(1, shape.GroupItems.Count + 1):
+                updated += _apply_to_shape(shape.GroupItems(k))
+        except Exception:
+            pass
+        return updated
+
     slides_processed = 0
     shapes_updated = 0
     if apply_to_existing:
@@ -527,17 +554,9 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
             slides_processed += 1
             for j in range(1, slide.Shapes.Count + 1):
                 try:
-                    shape = slide.Shapes(j)
-                    if not shape.HasTextFrame:
-                        continue
-                    font = shape.TextFrame.TextRange.Font
-                    if latin:
-                        font.Name = latin
-                    if east_asian:
-                        font.NameFarEast = east_asian
-                    shapes_updated += 1
+                    shapes_updated += _apply_to_shape(slide.Shapes(j))
                 except Exception:
-                    pass  # Skip shapes that don't support text (groups, etc.)
+                    pass
 
     result = {"success": True, "theme_updated": theme_updated}
     if latin:
