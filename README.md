@@ -96,8 +96,8 @@ pip install ppt-mcp
 ### Option B: Clone and run from source
 
 ```bash
-git clone https://github.com/ykuwai/ppt-com-mcp.git
-cd ppt-com-mcp
+git clone https://github.com/ykuwai/ppt-mcp.git
+cd ppt-mcp
 uv sync
 ```
 
@@ -140,7 +140,7 @@ Add the following to your MCP client config. For Claude Desktop, edit `%APPDATA%
       "command": "uv",
       "args": [
         "--directory",
-        "C:\\path\\to\\ppt-com-mcp",
+        "C:\\path\\to\\ppt-mcp",
         "run",
         "mcp",
         "run",

@@ -96,8 +96,8 @@ pip install ppt-mcp
 ### 方法B：ソースからクローン
 
 ```bash
-git clone https://github.com/ykuwai/ppt-com-mcp.git
-cd ppt-com-mcp
+git clone https://github.com/ykuwai/ppt-mcp.git
+cd ppt-mcp
 uv sync
 ```
 
@@ -140,7 +140,7 @@ MCPクライアントの設定ファイルに以下を追加します。Claude D
       "command": "uv",
       "args": [
         "--directory",
-        "C:\\path\\to\\ppt-com-mcp",
+        "C:\\path\\to\\ppt-mcp",
         "run",
         "mcp",
         "run",
