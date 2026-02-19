@@ -32,7 +32,7 @@ class PowerPointCOMWrapper:
         self._com_thread: Optional[threading.Thread] = None
         self._queue: Queue = Queue()
         self._running = False
-        self._target_pres_name: Optional[str] = None  # session-level target presentation
+        self._target_pres_full_name: Optional[str] = None  # session-level target (FullName for uniqueness)
 
     def start(self) -> None:
         """Start the COM worker thread."""
@@ -159,15 +159,23 @@ class PowerPointCOMWrapper:
         """Internal: get target presentation on COM thread.
 
         Returns the session-level target presentation if one has been set via
-        _set_target_pres_impl and the file is still open.  Falls back to
-        ActivePresentation when no target is set or when the target was closed.
+        _set_target_pres_impl and the file is still open.  Also activates its
+        window so subsequent goto_slide / ActiveWindow calls use the right window.
+        Falls back to ActivePresentation when no target is set or when the
+        target was closed.
         """
         app = self._get_app_impl()
-        if self._target_pres_name:
+        if self._target_pres_full_name:
             for i in range(1, app.Presentations.Count + 1):
                 try:
                     p = app.Presentations(i)
-                    if p.Name == self._target_pres_name:
+                    if p.FullName == self._target_pres_full_name:
+                        # Ensure this presentation's window is active so
+                        # goto_slide / app.ActiveWindow operate on the right deck.
+                        try:
+                            p.Windows(1).Activate()
+                        except Exception:
+                            pass
                         return p
                 except Exception:
                     pass
@@ -175,9 +183,9 @@ class PowerPointCOMWrapper:
             logger.warning(
                 "Target presentation '%s' is no longer open; "
                 "falling back to ActivePresentation",
-                self._target_pres_name,
+                self._target_pres_full_name,
             )
-            self._target_pres_name = None
+            self._target_pres_full_name = None
         return app.ActivePresentation
 
     def _set_target_pres_impl(self, name_or_index) -> dict:
@@ -217,16 +225,18 @@ class PowerPointCOMWrapper:
                 )
             pres = matches[0]
 
-        # Bring the presentation's window to the front so goto_slide works correctly
+        # Bring the presentation's window to the front
         try:
             pres.Windows(1).Activate()
         except Exception as e:
             logger.warning("Could not activate presentation window: %s", e)
 
-        self._target_pres_name = pres.Name
+        # Store FullName (includes path) to uniquely identify the presentation
+        # even if another file with the same basename is later opened.
+        self._target_pres_full_name = pres.FullName
         index = None
         for i in range(1, app.Presentations.Count + 1):
-            if app.Presentations(i).Name == pres.Name:
+            if app.Presentations(i).FullName == pres.FullName:
                 index = i
                 break
         return {
