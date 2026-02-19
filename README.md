@@ -22,9 +22,9 @@
 
 An MCP (Model Context Protocol) server that gives AI agents and programs full control over a live Microsoft PowerPoint instance via COM automation. Unlike file-based libraries like python-pptx, this server interacts with a running PowerPoint application, providing real-time visual feedback and access to the complete PowerPoint API.
 
-## Why This is Special
+## ✨ Why This is Special
 
-### Full PowerPoint Control — Not Just Read/Write
+### 🎮 Full PowerPoint Control — Not Just Read/Write
 
 File-based libraries can only read and write `.pptx` files. COM automation unlocks everything PowerPoint can do:
 
@@ -36,7 +36,7 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 - Control views (normal, outline, notes, master)
 - Manage comments for collaboration
 
-### Designed for AI Agents
+### 🤖 Designed for AI Agents
 
 - **131 Tools Across 21 Categories** — From basic slide operations to advanced animations, SmartArt, and icon search
 - **Explicit Presentation Targeting** — `ppt_activate_presentation` locks every tool to a specific file, so AI agents never accidentally edit the wrong presentation
@@ -47,7 +47,7 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 - **Text Precision** — `\n` for paragraph breaks (Enter), `\v` for line breaks (Shift+Enter) — full control over text flow
 - **STA Thread Safety** — All COM operations run on a dedicated Single-Threaded Apartment worker thread for reliability
 
-## Tool Categories
+## 🛠️ Tool Categories
 
 | Category | Tools | Description |
 |----------|------:|-------------|
@@ -78,14 +78,14 @@ File-based libraries can only read and write `.pptx` files. COM automation unloc
 | **Advanced** | 16 | Tags, fonts (set defaults + bulk replace), crop, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock |
 | | **131** | |
 
-## Prerequisites
+## 📋 Prerequisites
 
 - **Windows 10/11** — COM automation requires Windows
 - **Microsoft PowerPoint** — Microsoft 365, Office 2021, 2019, etc.
 - **Python 3.10+**
 - **uv** — Fast Python package manager ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
 
-## Installation
+## 📦 Installation
 
 **Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).**
 
@@ -95,7 +95,7 @@ cd ppt-mcp
 uv sync
 ```
 
-## MCP Client Configuration
+## ⚙️ MCP Client Configuration
 
 ### Claude Code
 
@@ -151,7 +151,7 @@ Edit `%APPDATA%\Claude\claude_desktop_config.json`:
 }
 ```
 
-## Example Workflow
+## 🚀 Example Workflow
 
 ```python
 # 1. Target a specific presentation (prevents editing the wrong file)
@@ -178,9 +178,9 @@ ppt_add_svg_icon(slide_index=1, icon_name="rocket",
 ppt_export_pdf(file_path="C:\\output\\presentation.pdf")
 ```
 
-## Features in Detail
+## 🔍 Features in Detail
 
-### Presentation Targeting
+### 🎯 Presentation Targeting
 
 `ppt_activate_presentation` sets a session-level target so every subsequent tool call operates on that specific file — regardless of which window is active in PowerPoint. Switch targets anytime by calling it again.
 
@@ -191,11 +191,11 @@ ppt_activate_presentation(presentation_name="demo.pptx")
 # Switched — all tools now operate on demo.pptx
 ```
 
-### Template Support
+### 📁 Template Support
 
 Auto-detects your personal PowerPoint templates folder (registry, OneDrive, or default paths). Use `ppt_list_templates` to discover available templates, then `ppt_create_presentation(template_path=...)` to create a new presentation from any template.
 
-### Material Symbols Icons
+### 🎨 Material Symbols Icons
 
 Search 2,500+ icons with `ppt_search_icons(query="...")` and insert them as SVG with `ppt_add_svg_icon`:
 - **3 styles**: outlined, rounded, sharp
@@ -203,22 +203,22 @@ Search 2,500+ icons with `ppt_search_icons(query="...")` and insert them as SVG 
 - **Theme colors**: `color="accent1"` uses the presentation's accent color
 - **Auto-fit**: preserves aspect ratio within the specified area
 
-### Real-Time Navigation
+### ⚡ Real-Time Navigation
 
 Every write operation automatically navigates PowerPoint to the target slide. You see changes happening in real-time — no need to manually switch slides.
 
-### Text Formatting
+### ✍️ Text Formatting
 
 - `\n` — Paragraph break (Enter). Each paragraph gets its own bullet/indent level.
 - `\v` — Line break (Shift+Enter). Stays in the same paragraph, preserving formatting.
 - Per-character formatting with `ppt_format_text_range`
 - Auto-fit control: shrink text to fit, resize shape, or overflow
 
-## License
+## 📄 License
 
 MIT
 
-## Credits
+## 🙏 Credits
 
 - [FastMCP](https://github.com/jlowin/fastmcp) — Pythonic MCP server framework
 - [pywin32](https://github.com/mhammond/pywin32) — Windows COM automation

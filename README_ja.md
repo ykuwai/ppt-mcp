@@ -24,7 +24,7 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 
 ## 特徴
 
-### ファイル操作ではなく、PowerPointの完全制御
+### 🎮 ファイル操作ではなく、PowerPointの完全制御
 
 ファイルベースのライブラリは `.pptx` ファイルの読み書きしかできません。COM自動化により、PowerPointのすべての機能にアクセスできます：
 
@@ -36,7 +36,7 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 - ビュー制御（標準、アウトライン、ノート、マスター表示）
 - コメント機能（共同作業）
 
-### AIエージェントのために設計
+### 🤖 AIエージェントのために設計
 
 - **21カテゴリ・131ツール** — スライド操作からアニメーション、SmartArt、アイコン検索まで
 - **プレゼン操作対象の明示指定** — `ppt_activate_presentation` で対象ファイルを固定。AIエージェントが誤って別のプレゼンを編集することを防止
@@ -47,7 +47,7 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 - **テキスト精密制御** — `\n` で改段落（Enter）、`\v` で改行（Shift+Enter）— テキストフローを完全にコントロール
 - **STAスレッド安全性** — すべてのCOM操作を専用のSTAワーカースレッドで実行し、信頼性を確保
 
-## ツール一覧
+## 🛠️ ツール一覧
 
 | カテゴリ | ツール数 | 主な機能 |
 |---------|-------:|---------|
@@ -78,14 +78,14 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 | **高度な操作** | 16 | タグ、フォント一括設定/置換、トリミング、シェイプエクスポート、表示/非表示、選択、ビュー、アニメーションコピー、URL画像、SVGアイコン、アイコン検索、縦横比ロック |
 | | **131** | |
 
-## 必要な環境
+## 📋 必要な環境
 
 - **Windows 10/11** — COM自動化にはWindowsが必要です
 - **Microsoft PowerPoint** — Microsoft 365、Office 2021、2019など
 - **Python 3.10以上**
 - **uv** — 高速Pythonパッケージマネージャー（[インストールガイド](https://docs.astral.sh/uv/getting-started/installation/)）
 
-## セットアップ
+## 📦 セットアップ
 
 **[uv](https://docs.astral.sh/uv/getting-started/installation/) が必要です。**
 
@@ -95,7 +95,7 @@ cd ppt-mcp
 uv sync
 ```
 
-## MCPクライアント設定
+## ⚙️ MCPクライアント設定
 
 ### Claude Code
 
@@ -151,7 +151,7 @@ claude mcp add powerpoint uvx ppt-mcp
 }
 ```
 
-## 使用例
+## 🚀 使用例
 
 ```python
 # 1. 操作対象のプレゼンテーションを指定（誤編集を防止）
@@ -178,9 +178,9 @@ ppt_add_svg_icon(slide_index=1, icon_name="rocket",
 ppt_export_pdf(file_path="C:\\output\\presentation.pdf")
 ```
 
-## 機能の詳細
+## 🔍 機能の詳細
 
-### プレゼンテーション操作対象の指定
+### 🎯 プレゼンテーション操作対象の指定
 
 `ppt_activate_presentation` でセッションレベルの操作対象を設定すると、以降のすべてのツールがそのファイルに対して動作します。PowerPointのウィンドウが切り替わっても影響を受けません。再度呼び出すことで対象を切り替えられます。
 
@@ -191,11 +191,11 @@ ppt_activate_presentation(presentation_name="demo.pptx")
 # 切り替え — 以降は demo.pptx を操作
 ```
 
-### テンプレート対応
+### 📁 テンプレート対応
 
 個人用のPowerPointテンプレートフォルダを自動検出します（レジストリ、OneDrive、デフォルトパスを順に確認）。`ppt_list_templates` でテンプレートを一覧し、`ppt_create_presentation(template_path=...)` で任意のテンプレートから新規プレゼンテーションを作成できます。
 
-### Material Symbolsアイコン
+### 🎨 Material Symbolsアイコン
 
 `ppt_search_icons(query="...")` で2,500以上のアイコンをキーワード検索し、`ppt_add_svg_icon` でSVG画像として挿入：
 - **3つのスタイル**: outlined、rounded、sharp
@@ -203,22 +203,22 @@ ppt_activate_presentation(presentation_name="demo.pptx")
 - **テーマカラー**: `color="accent1"` でプレゼンのアクセントカラーを自動適用
 - **自動フィット**: 指定エリア内でアスペクト比を保持
 
-### リアルタイムナビゲーション
+### ⚡ リアルタイムナビゲーション
 
 書き込み操作のたびに、PowerPointの画面が自動的に対象スライドに移動します。変更がリアルタイムで目の前に表示されるため、手動でスライドを切り替える必要はありません。
 
-### テキスト制御
+### ✍️ テキスト制御
 
 - `\n` — 改段落（Enter）。段落ごとに独自の箇条書き・インデントレベルを持つ
 - `\v` — 改行（Shift+Enter）。同じ段落内に留まり、書式を維持
 - `ppt_format_text_range` で文字単位の書式設定
 - 自動調整: テキストをシェイプに収める、シェイプをリサイズ、またはオーバーフロー
 
-## ライセンス
+## 📄 ライセンス
 
 MIT
 
-## クレジット
+## 🙏 クレジット
 
 - [FastMCP](https://github.com/jlowin/fastmcp) — Python MCPサーバーフレームワーク
 - [pywin32](https://github.com/mhammond/pywin32) — Windows COM自動化
