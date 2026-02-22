@@ -1,4 +1,4 @@
-"""ppt-com-mcp: The world's best PowerPoint MCP server.
+"""ppt-mcp: The world's best PowerPoint MCP server.
 
 Real-time PowerPoint control via COM automation.
 """
@@ -62,6 +62,7 @@ mcp = FastMCP(
 
 - Use accent colors from `ppt_get_presentation_info` (or `ppt_get_theme_colors`) instead of hardcoding RGB values — theme names adapt automatically to the presentation's palette.
 - Standard 16:9 slide = 960 × 540 pt.
+- `ppt_batch_apply_formatting` applies multiple operations to multiple shapes in one call. Supported operations: `set_fill`, `set_line`, `set_shadow`, `set_glow`, `set_reflection`, `set_soft_edge`, `format_text`. Specify shapes by name or 1-based index. Use this whenever you want consistent styling across several shapes — much more efficient than calling individual tools per shape.
 """,
 )
 
