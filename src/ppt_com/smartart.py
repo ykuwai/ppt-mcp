@@ -150,6 +150,18 @@ class ListSmartArtInput(BaseModel):
         default=50, ge=1, le=200,
         description="Maximum number of entries to return.",
     )
+    category: Optional[str] = Field(
+        default=None,
+        description=(
+            "Filter layouts by category (partial match, case-insensitive). "
+            "Only applies to list_type='layouts'. "
+            "Known categories: 'リスト', '手順', '循環', '階層構造', '集合関係', 'マトリックス', 'ピラミッド', '図'."
+        ),
+    )
+    keyword: Optional[str] = Field(
+        default=None,
+        description="Filter by keyword in name or description (partial match, case-insensitive). Applies to all list_types.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -354,7 +366,7 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
     }
 
 
-def _list_smartart_options_impl(list_type, max_count):
+def _list_smartart_options_impl(list_type, max_count, category, keyword):
     app = ppt._get_app_impl()
 
     if list_type == "layouts":
@@ -370,21 +382,39 @@ def _list_smartart_options_impl(list_type, max_count):
         raise ValueError(f"Unknown list_type '{list_type}'. Use: 'layouts', 'colors', or 'styles'")
 
     total = collection.Count
-    count = min(total, max_count)
+    cat_lower = category.lower() if category else None
+    kw_lower = keyword.lower() if keyword else None
+
     items = []
-    for i in range(1, count + 1):
+    for i in range(1, total + 1):
         item = collection(i)
-        items.append({
-            "index": i,
-            "name": item.Name,
-            "description": item.Description,
-        })
+        # Category filter: layouts only (SmartArtLayout.Category property)
+        if cat_lower and list_type == "layouts":
+            try:
+                item_cat = item.Category or ""
+            except Exception:
+                item_cat = ""
+            if cat_lower not in item_cat.lower():
+                continue
+        # Keyword filter: name or description
+        if kw_lower:
+            if kw_lower not in item.Name.lower() and kw_lower not in item.Description.lower():
+                continue
+        entry = {"index": i, "name": item.Name}
+        if list_type == "layouts":
+            try:
+                entry["category"] = item.Category
+            except Exception:
+                pass
+        items.append(entry)
+        if len(items) >= max_count:
+            break
 
     return {
         "success": True,
         "list_type": list_type,
         "total_count": total,
-        "returned_count": count,
+        "filtered_count": len(items),
         key: items,
     }
 
@@ -425,7 +455,10 @@ def modify_smartart(params: ModifySmartArtInput) -> str:
 
 def list_smartart_options(params: ListSmartArtInput) -> str:
     try:
-        result = ppt.execute(_list_smartart_options_impl, params.list_type, params.max_count)
+        result = ppt.execute(
+            _list_smartart_options_impl,
+            params.list_type, params.max_count, params.category, params.keyword,
+        )
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to list SmartArt options: {str(e)}"})
@@ -514,5 +547,15 @@ def register_tools(mcp):
         - 'styles': quick style templates — use style_index with ppt_add_smartart or ppt_modify_smartart
 
         max_count: limit the number of entries returned (default 50, max 200).
+
+        category: filter layouts by category (partial match). Known categories:
+          'リスト', '手順', '循環', '階層構造', '集合関係', 'マトリックス', 'ピラミッド', '図'
+          Example: category='循環' returns only cycle diagrams.
+
+        keyword: filter by keyword in name or description (partial match).
+          Combine with category to narrow down further.
+
+        Each layout entry includes 'category' so results are self-describing.
+        Use category filter instead of fetching all 134 layouts at once.
         """
         return list_smartart_options(params)
