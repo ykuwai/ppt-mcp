@@ -390,8 +390,8 @@ async def tool_ppt_get_slide_preview(slide_index: int = 1) -> Image:
 
     def _export_slide_impl(slide_idx: int):
         app = ppt._get_app_impl()
-        goto_slide(app, slide_idx)
         pres = ppt._get_pres_impl()
+        goto_slide(app, slide_idx)
 
         # Validate slide
         if slide_idx < 1 or slide_idx > pres.Slides.Count:
