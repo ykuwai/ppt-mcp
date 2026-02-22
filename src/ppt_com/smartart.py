@@ -144,23 +144,33 @@ class ListSmartArtInput(BaseModel):
 
     list_type: str = Field(
         default="layouts",
-        description="What to list: 'layouts' (SmartArt diagram layouts), 'colors' (color schemes), or 'styles' (quick styles / templates).",
+        description=(
+            "What to list: "
+            "'layouts' (SmartArt diagram layouts), "
+            "'colors' (color schemes), "
+            "'styles' (quick style templates), "
+            "'categories' (distinct layout category names — use these values with the category filter)."
+        ),
     )
     max_count: int = Field(
-        default=50, ge=1, le=200,
+        default=200, ge=1, le=200,
         description="Maximum number of entries to return.",
     )
     category: Optional[str] = Field(
         default=None,
         description=(
-            "Filter layouts by category (partial match, case-insensitive). "
+            "Filter layouts by category (exact or partial match, case-insensitive). "
             "Only applies to list_type='layouts'. "
-            "Known categories: 'リスト', '手順', '循環', '階層構造', '集合関係', 'マトリックス', 'ピラミッド', '図'."
+            "Use list_type='categories' first to discover available category names in the current locale."
         ),
     )
     keyword: Optional[str] = Field(
         default=None,
-        description="Filter by keyword in name or description (partial match, case-insensitive). Applies to all list_types.",
+        description="Filter by keyword in name (partial match, case-insensitive). Applies to all list_types.",
+    )
+    include_description: bool = Field(
+        default=False,
+        description="Include the description field in each entry. Omitted by default to keep output compact.",
     )
 
 
@@ -366,8 +376,29 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
     }
 
 
-def _list_smartart_options_impl(list_type, max_count, category, keyword):
+def _list_smartart_options_impl(list_type, max_count, category, keyword, include_description):
     app = ppt._get_app_impl()
+
+    # --- categories: return distinct category names from SmartArtLayouts ---
+    if list_type == "categories":
+        collection = app.SmartArtLayouts
+        seen = {}
+        for i in range(1, collection.Count + 1):
+            try:
+                cat = collection(i).Category or ""
+            except Exception:
+                cat = ""
+            if cat and cat not in seen:
+                seen[cat] = 0
+            if cat:
+                seen[cat] += 1
+        categories = [{"category": k, "count": v} for k, v in seen.items()]
+        return {
+            "success": True,
+            "list_type": "categories",
+            "total_layouts": collection.Count,
+            "categories": categories,
+        }
 
     if list_type == "layouts":
         collection = app.SmartArtLayouts
@@ -379,7 +410,7 @@ def _list_smartart_options_impl(list_type, max_count, category, keyword):
         collection = app.SmartArtQuickStyles
         key = "styles"
     else:
-        raise ValueError(f"Unknown list_type '{list_type}'. Use: 'layouts', 'colors', or 'styles'")
+        raise ValueError(f"Unknown list_type '{list_type}'. Use: 'layouts', 'colors', 'styles', or 'categories'")
 
     total = collection.Count
     cat_lower = category.lower() if category else None
@@ -388,7 +419,9 @@ def _list_smartart_options_impl(list_type, max_count, category, keyword):
     items = []
     for i in range(1, total + 1):
         item = collection(i)
-        # Category filter: layouts only (SmartArtLayout.Category property)
+        item_name = item.Name
+
+        # Category filter (layouts only)
         if cat_lower and list_type == "layouts":
             try:
                 item_cat = item.Category or ""
@@ -396,16 +429,20 @@ def _list_smartart_options_impl(list_type, max_count, category, keyword):
                 item_cat = ""
             if cat_lower not in item_cat.lower():
                 continue
-        # Keyword filter: name or description
-        if kw_lower:
-            if kw_lower not in item.Name.lower() and kw_lower not in item.Description.lower():
-                continue
-        entry = {"index": i, "name": item.Name}
+
+        # Keyword filter on name only (description excluded to avoid locale expansion)
+        if kw_lower and kw_lower not in item_name.lower():
+            continue
+
+        entry = {"index": i, "name": item_name}
         if list_type == "layouts":
             try:
                 entry["category"] = item.Category
             except Exception:
                 pass
+        if include_description:
+            entry["description"] = item.Description
+
         items.append(entry)
         if len(items) >= max_count:
             break
@@ -457,7 +494,8 @@ def list_smartart_options(params: ListSmartArtInput) -> str:
     try:
         result = ppt.execute(
             _list_smartart_options_impl,
-            params.list_type, params.max_count, params.category, params.keyword,
+            params.list_type, params.max_count,
+            params.category, params.keyword, params.include_description,
         )
         return json.dumps(result)
     except Exception as e:
@@ -542,20 +580,21 @@ def register_tools(mcp):
         """List SmartArt layouts, color schemes, or quick styles.
 
         list_type:
-        - 'layouts' (default): diagram layout templates — use index/name with ppt_add_smartart
-        - 'colors': color schemes — use color_index with ppt_add_smartart or ppt_modify_smartart
-        - 'styles': quick style templates — use style_index with ppt_add_smartart or ppt_modify_smartart
+        - 'layouts' (default): all diagram layout templates
+        - 'colors': color schemes — use color_index with ppt_add/modify_smartart
+        - 'styles': quick style templates — use style_index with ppt_add/modify_smartart
+        - 'categories': distinct category names for the current locale — use these
+          values with the category filter to narrow 'layouts' results
 
-        max_count: limit the number of entries returned (default 50, max 200).
+        Recommended workflow to find layouts without locale assumptions:
+          1. list_type='categories' → see available category names
+          2. list_type='layouts', category='<name from step 1>' → filtered list
 
-        category: filter layouts by category (partial match). Known categories:
-          'リスト', '手順', '循環', '階層構造', '集合関係', 'マトリックス', 'ピラミッド', '図'
-          Example: category='循環' returns only cycle diagrams.
+        category: filter layouts by category (partial match, case-insensitive).
+        keyword: filter by keyword in name (partial match, case-insensitive).
+        include_description: set True to add verbose description text (off by default).
 
-        keyword: filter by keyword in name or description (partial match).
-          Combine with category to narrow down further.
-
-        Each layout entry includes 'category' so results are self-describing.
-        Use category filter instead of fetching all 134 layouts at once.
+        Output is compact by default (index + name + category). All 134 layouts
+        fit comfortably without description fields.
         """
         return list_smartart_options(params)
