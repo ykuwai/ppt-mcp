@@ -184,14 +184,20 @@ class PowerPointCOMWrapper:
         try:
             self._app = win32com.client.GetActiveObject("PowerPoint.Application")
             logger.info("Connected to existing PowerPoint instance")
-        except pywintypes.com_error:
+        except pywintypes.com_error as e:
+            if e.hresult in _BUSY_HRESULTS:
+                # PowerPoint is running but busy (modal dialog). Re-raise as
+                # pywintypes.com_error so _com_worker's retry loop handles it.
+                raise
             try:
                 self._app = win32com.client.Dispatch("PowerPoint.Application")
                 logger.info("Created new PowerPoint instance via Dispatch")
-            except pywintypes.com_error as e:
+            except pywintypes.com_error as e2:
+                if e2.hresult in _BUSY_HRESULTS:
+                    raise  # Let _com_worker retry loop handle it
                 raise ConnectionError(
-                    f"Failed to connect to PowerPoint. Is it installed? Error: {e.strerror}"
-                ) from e
+                    f"Failed to connect to PowerPoint. Is it installed? Error: {e2.strerror}"
+                ) from e2
 
         if visible is not None:
             self._app.Visible = visible
