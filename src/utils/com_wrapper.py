@@ -42,15 +42,21 @@ def _try_dismiss_ppt_dialog() -> None:
     - All errors are swallowed — this is best-effort only.
     """
     try:
-        import win32gui  # part of pywin32, already a project dependency
+        import win32api   # part of pywin32, already a project dependency
+        import win32con
+        import win32gui
         hwnd = win32gui.FindWindow("PPTFrameClass", None)
         if not hwnd:
             logger.debug("_try_dismiss_ppt_dialog: PPTFrameClass window not found")
             return
         win32gui.SetForegroundWindow(hwnd)
-        time.sleep(0.15)  # brief pause for focus to settle before SendKeys
-        shell = win32com.client.Dispatch("WScript.Shell")
-        shell.SendKeys("{ESCAPE}")
+        time.sleep(0.15)  # brief pause for focus to settle
+        # Use keybd_event instead of WScript.Shell.SendKeys — SendKeys resets
+        # Num Lock / Caps Lock state before sending, causing spurious Windows
+        # accessibility notifications ("Num Lock Off").  keybd_event sends
+        # only the ESC key with no side-effects on keyboard toggle state.
+        win32api.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
         logger.info("Sent ESC to PowerPoint to dismiss open dialog")
     except Exception as exc:
         logger.debug("_try_dismiss_ppt_dialog failed (ignored): %s", exc)
