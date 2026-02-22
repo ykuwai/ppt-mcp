@@ -362,7 +362,7 @@ wheels = [
 ]
 
 [[package]]
-name = "ppt-com-mcp"
+name = "ppt-mcp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

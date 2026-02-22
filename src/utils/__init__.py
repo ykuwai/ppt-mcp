@@ -1,4 +1,4 @@
-"""Utility modules for ppt-com-mcp."""
+"""Utility modules for ppt-mcp."""
 
 from .units import (
     inches_to_points,
