@@ -246,6 +246,7 @@ def _set_table_cell_impl(
 
     if font_name is not None:
         font.Name = font_name
+        font.NameFarEast = font_name
     if font_size is not None:
         font.Size = font_size
     if bold is not None:

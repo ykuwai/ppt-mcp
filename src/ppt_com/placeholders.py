@@ -253,6 +253,7 @@ def _get_placeholder_impl(slide_index, placeholder_index, placeholder_type) -> d
         info["paragraph_count"] = tr.Paragraphs().Count
         if tf.HasText:
             info["font_name"] = tr.Font.Name
+            info["font_name_far_east"] = tr.Font.NameFarEast
             try:
                 info["font_size"] = tr.Font.Size
             except Exception:
