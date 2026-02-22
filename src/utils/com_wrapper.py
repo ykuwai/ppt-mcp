@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # RPC_E_SERVERCALL_RETRYLATER (0x8001010A): server explicitly says retry later.
 # Both mean the call was never started, so retrying is always safe.
 _BUSY_HRESULTS = frozenset({-2147418111, -2147417846})
-_RETRY_MAX = 5       # maximum number of retries
+_RETRY_MAX = 5       # maximum number of retries (total attempts = _RETRY_MAX + 1)
 _RETRY_INTERVAL = 3  # seconds between retries
 
 
@@ -108,13 +108,13 @@ class PowerPointCOMWrapper:
                 if item is None:
                     break
                 func, args, kwargs, future = item
-                for attempt in range(_RETRY_MAX):
+                for attempt in range(_RETRY_MAX + 1):  # +1: initial attempt + _RETRY_MAX retries
                     try:
                         result = func(*args, **kwargs)
                         future.set_result(result)
                         break
                     except pywintypes.com_error as e:
-                        if e.hresult in _BUSY_HRESULTS and attempt < _RETRY_MAX - 1:
+                        if e.hresult in _BUSY_HRESULTS and attempt < _RETRY_MAX:
                             logger.warning(
                                 "PowerPoint is busy (modal dialog open?). "
                                 "Retrying in %ds... (%d/%d)",
