@@ -369,38 +369,29 @@ except ImportError:
         "openWorldHint": False,
     },
 )
-async def tool_ppt_get_slide_preview(presentation_index: int = 1, slide_index: int = 1) -> Image:
+async def tool_ppt_get_slide_preview(slide_index: int = 1) -> Image:
     """Get a visual preview of a PowerPoint slide as an image.
 
     This is the RECOMMENDED way to visually inspect slides for appearance, design,
     layout, colors, text readability, and overall quality. Much more efficient
     than exporting all slides to files.
 
+    Also navigates the PowerPoint editor window to the target slide so the user
+    can see which slide is being inspected.
+
     Args:
-        presentation_index: 1-based presentation index (default: 1)
         slide_index: 1-based slide index (default: 1)
 
     Returns:
         Image: PNG image of the slide for visual inspection
     """
     from utils.com_wrapper import ppt
+    from utils.navigation import goto_slide
 
-    def _export_slide_impl(pres_idx: int, slide_idx: int):
+    def _export_slide_impl(slide_idx: int):
         app = ppt._get_app_impl()
-
-        # Validate presentation
-        if app.Presentations.Count == 0:
-            raise RuntimeError(
-                "No presentation is open. "
-                "Use ppt_create_presentation or ppt_open_presentation first."
-            )
-
-        if pres_idx < 1 or pres_idx > app.Presentations.Count:
-            raise ValueError(
-                f"Presentation index {pres_idx} out of range (1-{app.Presentations.Count})"
-            )
-
-        pres = app.Presentations(pres_idx)
+        goto_slide(app, slide_idx)
+        pres = ppt._get_pres_impl()
 
         # Validate slide
         if slide_idx < 1 or slide_idx > pres.Slides.Count:
@@ -412,7 +403,7 @@ async def tool_ppt_get_slide_preview(presentation_index: int = 1, slide_index: i
 
         # Generate temp file path
         temp_dir = tempfile.gettempdir()
-        temp_file = os.path.join(temp_dir, f"ppt_slide_{pres_idx}_{slide_idx}.png")
+        temp_file = os.path.join(temp_dir, f"ppt_slide_preview_{slide_idx}.png")
 
         try:
             # Export slide as PNG
@@ -428,7 +419,7 @@ async def tool_ppt_get_slide_preview(presentation_index: int = 1, slide_index: i
             if os.path.exists(temp_file):
                 os.remove(temp_file)
 
-    image_data = ppt.execute(_export_slide_impl, presentation_index, slide_index)
+    image_data = ppt.execute(_export_slide_impl, slide_index)
     return Image(data=image_data, format="png")
 
 
