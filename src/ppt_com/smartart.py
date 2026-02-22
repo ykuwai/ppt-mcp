@@ -152,10 +152,6 @@ class ListSmartArtInput(BaseModel):
             "'categories' (distinct layout category names — use these values with the category filter)."
         ),
     )
-    max_count: int = Field(
-        default=200, ge=1, le=200,
-        description="Maximum number of entries to return.",
-    )
     category: Optional[str] = Field(
         default=None,
         description=(
@@ -376,7 +372,7 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
     }
 
 
-def _list_smartart_options_impl(list_type, max_count, category, keyword, include_description):
+def _list_smartart_options_impl(list_type, category, keyword, include_description):
     app = ppt._get_app_impl()
 
     # --- categories: return distinct category names from SmartArtLayouts ---
@@ -444,8 +440,6 @@ def _list_smartart_options_impl(list_type, max_count, category, keyword, include
             entry["description"] = item.Description
 
         items.append(entry)
-        if len(items) >= max_count:
-            break
 
     return {
         "success": True,
@@ -494,8 +488,7 @@ def list_smartart_options(params: ListSmartArtInput) -> str:
     try:
         result = ppt.execute(
             _list_smartart_options_impl,
-            params.list_type, params.max_count,
-            params.category, params.keyword, params.include_description,
+            params.list_type, params.category, params.keyword, params.include_description,
         )
         return json.dumps(result)
     except Exception as e:
