@@ -12,6 +12,7 @@
   <img src="https://img.shields.io/badge/MCP_Tools-136-orange.svg" alt="Tools">
   <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-1.0+-purple.svg" alt="MCP"></a>
   <img src="https://img.shields.io/badge/Platform-Windows-0078d4.svg" alt="Platform">
+  <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
 
 <p align="center">
