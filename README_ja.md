@@ -9,8 +9,6 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <img src="https://img.shields.io/badge/MCP_Tools-136-orange.svg" alt="Tools">
-  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-1.0+-purple.svg" alt="MCP"></a>
   <img src="https://img.shields.io/badge/Platform-Windows-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
@@ -39,6 +37,19 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 
 ## 🚀 はじめかた
 
+ほとんどの MCP クライアント（Claude Desktop、Cursor、`.mcp.json` など）で使える標準設定：
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"]
+    }
+  }
+}
+```
+
 ### Claude Code
 
 ```bash
@@ -53,46 +64,25 @@ code --add-mcp '{"name":"powerpoint","command":"uvx","args":["ppt-mcp"]}'
 
 ### Cursor
 
-`~/.cursor/mcp.json` に追加：
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=ppt-mcp&config=eyJ0eXBlIjoic3RkaW8iLCJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJwcHQtbWNwIl19)
 
-```json
-{
-  "mcpServers": {
-    "powerpoint": {
-      "command": "uvx",
-      "args": ["ppt-mcp"]
-    }
-  }
-}
-```
+または `~/.cursor/mcp.json` に上記の標準設定を追加。
 
 ### Claude Desktop
 
-`%APPDATA%\Claude\claude_desktop_config.json` を編集：
+`%APPDATA%\Claude\claude_desktop_config.json` に上記の標準設定を追加。
 
-```json
-{
-  "mcpServers": {
-    "powerpoint": {
-      "command": "uvx",
-      "args": ["ppt-mcp"]
-    }
-  }
-}
+### Codex
+
+`~/.codex/config.toml` を編集：
+
+```toml
+[mcp_servers.ppt-mcp]
+command = "uvx"
+args = ["ppt-mcp"]
 ```
 
-### `.mcp.json`
-
-```json
-{
-  "mcpServers": {
-    "powerpoint": {
-      "command": "uvx",
-      "args": ["ppt-mcp"]
-    }
-  }
-}
-```
+または上記の標準設定を `.codex/config.json` に記述しても動作します。
 
 ### ソースから実行
 
