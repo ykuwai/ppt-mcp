@@ -1,1 +1,1 @@
-"""PowerPoint COM automation modules for ppt-com-mcp."""
+"""PowerPoint COM automation modules for ppt-mcp."""
