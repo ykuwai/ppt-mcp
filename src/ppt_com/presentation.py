@@ -12,6 +12,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.color import int_to_hex
 from utils.com_wrapper import ppt
 from ppt_com.constants import (
     msoTrue,
@@ -396,7 +397,7 @@ def _open_presentation_impl(
         "name": pres.Name,
         "full_name": pres.FullName,
         "slides_count": pres.Slides.Count,
-        "read_only": bool(pres.ReadOnly),
+        "read_only": int(pres.ReadOnly) == -1,  # msoTrue=-1; bool() misidentifies msoCTrue(1)
     }
 
 
@@ -481,12 +482,58 @@ def _get_presentation_info_impl(
     except Exception:
         pass
 
+    # Fonts: title/body, Latin/East Asian from theme font scheme
+    fonts = {
+        "title_latin": None,
+        "title_east_asian": None,
+        "body_latin": None,
+        "body_east_asian": None,
+    }
+    try:
+        try:
+            font_scheme = pres.Designs(1).SlideMaster.Theme.ThemeFontScheme
+        except Exception:
+            font_scheme = pres.SlideMaster.Theme.ThemeFontScheme
+
+        def _clean_font(name):
+            if name and name.startswith("+"):
+                return None
+            return name or None
+
+        fonts["body_latin"] = _clean_font(font_scheme.MinorFont(1).Name)
+        fonts["body_east_asian"] = _clean_font(font_scheme.MinorFont(3).Name)
+        fonts["title_latin"] = _clean_font(font_scheme.MajorFont(1).Name)
+        fonts["title_east_asian"] = _clean_font(font_scheme.MajorFont(3).Name)
+    except Exception:
+        pass
+
+    # Accent colors: accent1–accent6 from theme color scheme (indices 5–10)
+    accent_colors = {
+        "accent1": None,
+        "accent2": None,
+        "accent3": None,
+        "accent4": None,
+        "accent5": None,
+        "accent6": None,
+    }
+    try:
+        color_scheme = pres.SlideMaster.Theme.ThemeColorScheme
+        accent_keys = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"]
+        for i, key in enumerate(accent_keys, start=5):
+            try:
+                rgb_int = color_scheme(i).RGB
+                accent_colors[key] = int_to_hex(int(rgb_int))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     return {
         "name": pres.Name,
         "full_name": pres.FullName,
         "path": pres.Path,
         "slides_count": pres.Slides.Count,
-        "read_only": bool(pres.ReadOnly),
+        "read_only": int(pres.ReadOnly) == -1,  # msoTrue=-1; bool() misidentifies msoCTrue(1)
         "saved": bool(pres.Saved),
         "slide_width": page.SlideWidth,
         "slide_height": page.SlideHeight,
@@ -494,6 +541,8 @@ def _get_presentation_info_impl(
         "slide_height_inches": round(page.SlideHeight / 72.0, 3),
         "first_slide_number": page.FirstSlideNumber,
         "template_name": template_name,
+        "fonts": fonts,
+        "accent_colors": accent_colors,
     }
 
 
@@ -819,8 +868,9 @@ def register_tools(mcp):
     ) -> str:
         """Get detailed information about a presentation.
 
-        Returns name, file path, slide count, dimensions, read-only status,
-        save status, and template name.
+        Returns name, file path, slide count, dimensions, save status,
+        template name, default fonts (title/body, Latin/East Asian),
+        and accent colors (accent1–accent6).
         """
         return get_presentation_info(params)
 
