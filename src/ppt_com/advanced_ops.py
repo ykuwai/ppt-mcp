@@ -520,13 +520,13 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
             for m in range(1, count + 1):
                 try:
                     font_scheme = designs(m).SlideMaster.Theme.ThemeFontScheme
-                    # msoThemeFontLatin = 1, msoThemeFontEastAsian = 2
+                    # msoThemeLatin = 1, msoThemeEastAsian = 3
                     if latin:
                         font_scheme.MajorFont(1).Name = latin
                         font_scheme.MinorFont(1).Name = latin
                     if east_asian:
-                        font_scheme.MajorFont(2).Name = east_asian
-                        font_scheme.MinorFont(2).Name = east_asian
+                        font_scheme.MajorFont(3).Name = east_asian
+                        font_scheme.MinorFont(3).Name = east_asian
                     masters_updated += 1
                 except Exception as e:
                     logger.warning("Failed to update theme fonts for design %d: %s", m, e)
@@ -537,8 +537,8 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
                 font_scheme.MajorFont(1).Name = latin
                 font_scheme.MinorFont(1).Name = latin
             if east_asian:
-                font_scheme.MajorFont(2).Name = east_asian
-                font_scheme.MinorFont(2).Name = east_asian
+                font_scheme.MajorFont(3).Name = east_asian
+                font_scheme.MinorFont(3).Name = east_asian
             masters_updated = 1
 
         theme_updated = masters_updated > 0

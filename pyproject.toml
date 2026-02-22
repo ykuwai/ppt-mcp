@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ppt-mcp"
-version = "0.1.5"
-description = "Real-time PowerPoint control via COM automation — an MCP server with 131 tools for AI agents"
+version = "0.1.7"
+description = "Real-time PowerPoint control via COM automation — an MCP server with 136 tools for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

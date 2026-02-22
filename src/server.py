@@ -49,6 +49,20 @@ async def app_lifespan(server: FastMCP):
 mcp = FastMCP(
     "powerpoint_mcp",
     lifespan=app_lifespan,
+    instructions="""
+## Getting started
+
+1. Call `ppt_activate_presentation` first — locks all tools to a specific file and prevents accidental edits to the wrong presentation.
+2. Call `ppt_get_presentation_info` to understand the presentation — slide count, dimensions, template, current default fonts, and accent colors. Use this to inform all subsequent decisions.
+3. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale Windows, the slide master default is often 游ゴシック, which renders thin and illegible when projected. Preferred fonts: BIZ UDPゴシック (Japanese) + Segoe UI (Latin).
+4. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
+5. Use `ppt_get_slide_preview` to visually inspect slides as you work.
+
+## Tips
+
+- Use accent colors from `ppt_get_presentation_info` (or `ppt_get_theme_colors`) instead of hardcoding RGB values — theme names adapt automatically to the presentation's palette.
+- Standard 16:9 slide = 960 × 540 pt.
+""",
 )
 
 

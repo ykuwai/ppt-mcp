@@ -130,7 +130,7 @@ def _list_presentations_impl() -> dict:
             "full_name": p.FullName,
             "path": p.Path,
             "slides_count": p.Slides.Count,
-            "read_only": bool(p.ReadOnly),
+            "read_only": int(p.ReadOnly) == -1,  # msoTrue=-1; bool() misidentifies msoCTrue(1)
             "saved": bool(p.Saved),
         })
     return {"presentations": presentations, "count": len(presentations)}
