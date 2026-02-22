@@ -63,6 +63,10 @@ class AddSmartArtInput(BaseModel):
         default=None,
         description="Bold on/off for all nodes.",
     )
+    font_color: Optional[str] = Field(
+        default=None,
+        description="Text color for all nodes as '#RRGGBB'. E.g. '#FFFFFF' for white.",
+    )
 
 
 class ModifySmartArtInput(BaseModel):
@@ -136,6 +140,10 @@ class ModifySmartArtInput(BaseModel):
         default=None, gt=0,
         description="Node border width in points. Used with 'format_node' and 'format_all_nodes'.",
     )
+    font_color: Optional[str] = Field(
+        default=None,
+        description="Text color as '#RRGGBB'. Used with 'format_node' and 'format_all_nodes'.",
+    )
 
 
 class ListSmartArtInput(BaseModel):
@@ -189,7 +197,7 @@ def _get_shape(slide, name_or_index: Union[str, int]):
         raise ValueError(f"Shape '{name_or_index}' not found on slide")
 
 
-def _apply_node_format(node, fill_color, line_color, line_width, font_name, font_size, bold):
+def _apply_node_format(node, fill_color, line_color, line_width, font_name, font_size, bold, font_color):
     """Apply fill/line/font formatting to a single SmartArtNode."""
     if fill_color is not None or line_color is not None or line_width is not None:
         if node.Shapes.Count > 0:
@@ -201,7 +209,7 @@ def _apply_node_format(node, fill_color, line_color, line_width, font_name, font
             if line_width is not None:
                 sh.Line.Weight = line_width
 
-    if font_name is not None or font_size is not None or bold is not None:
+    if font_name is not None or font_size is not None or bold is not None or font_color is not None:
         f = node.TextFrame2.TextRange.Font
         if font_size is not None:
             f.Size = font_size
@@ -210,13 +218,15 @@ def _apply_node_format(node, fill_color, line_color, line_width, font_name, font
             f.NameFarEast = font_name
         if bold is not None:
             f.Bold = msoTrue if bold else msoFalse
+        if font_color is not None:
+            f.Fill.ForeColor.RGB = hex_to_int(font_color)
 
 
 # ---------------------------------------------------------------------------
 # COM implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
 def _add_smartart_impl(slide_index, layout_name, layout_index, left, top, width, height,
-                       node_texts, color_index, style_index, font_name, font_size, bold):
+                       node_texts, color_index, style_index, font_name, font_size, bold, font_color):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -259,12 +269,12 @@ def _add_smartart_impl(slide_index, layout_name, layout_index, left, top, width,
         smart_art.Color = app.SmartArtColors(color_index)
 
     # Apply font to all nodes
-    if font_name is not None or font_size is not None or bold is not None:
+    if font_name is not None or font_size is not None or bold is not None or font_color is not None:
         for i in range(1, smart_art.AllNodes.Count + 1):
             _apply_node_format(
                 smart_art.AllNodes(i),
                 None, None, None,  # no fill/line at creation via these params
-                font_name, font_size, bold,
+                font_name, font_size, bold, font_color,
             )
 
     return {
@@ -279,7 +289,7 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
                           node_index, text,
                           layout_name, layout_index,
                           color_index, style_index,
-                          font_name, font_size, bold,
+                          font_name, font_size, bold, font_color,
                           fill_color, line_color, line_width):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -347,14 +357,14 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
         if node_index is None:
             raise ValueError("node_index is required for 'format_node' action")
         node = smart_art.AllNodes(node_index)
-        _apply_node_format(node, fill_color, line_color, line_width, font_name, font_size, bold)
+        _apply_node_format(node, fill_color, line_color, line_width, font_name, font_size, bold, font_color)
 
     elif action == "format_all_nodes":
         for i in range(1, smart_art.AllNodes.Count + 1):
             _apply_node_format(
                 smart_art.AllNodes(i),
                 fill_color, line_color, line_width,
-                font_name, font_size, bold,
+                font_name, font_size, bold, font_color,
             )
 
     else:
@@ -461,7 +471,7 @@ def add_smartart(params: AddSmartArtInput) -> str:
             params.left, params.top, params.width, params.height,
             params.node_texts,
             params.color_index, params.style_index,
-            params.font_name, params.font_size, params.bold,
+            params.font_name, params.font_size, params.bold, params.font_color,
         )
         return json.dumps(result)
     except Exception as e:
@@ -476,7 +486,7 @@ def modify_smartart(params: ModifySmartArtInput) -> str:
             params.action, params.node_index, params.text,
             params.layout_name, params.layout_index,
             params.color_index, params.style_index,
-            params.font_name, params.font_size, params.bold,
+            params.font_name, params.font_size, params.bold, params.font_color,
             params.fill_color, params.line_color, params.line_width,
         )
         return json.dumps(result)
@@ -521,7 +531,7 @@ def register_tools(mcp):
         - color_index: apply a color scheme (use list_type='colors' to find indices)
         - style_index: apply a quick style template (use list_type='styles')
           NOTE: style is applied before color — set both to get both effects.
-        - font_name, font_size, bold: apply to all nodes at once.
+        - font_name, font_size, bold, font_color: apply to all nodes at once.
 
         All positions and sizes are in points (72 points = 1 inch).
         """
