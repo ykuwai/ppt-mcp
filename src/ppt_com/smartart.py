@@ -79,6 +79,7 @@ class ModifySmartArtInput(BaseModel):
             "'set_text' (set node text), "
             "'add_node' (add a new node), "
             "'delete_node' (remove a node), "
+            "'change_layout' (switch to a different SmartArt layout; requires layout_index or layout_name), "
             "'change_color' (apply color scheme; requires color_index), "
             "'change_style' (apply quick style; requires style_index; optionally also applies color_index), "
             "'format_node' (set fill/line/font on one node; requires node_index), "
@@ -92,6 +93,15 @@ class ModifySmartArtInput(BaseModel):
     text: Optional[str] = Field(
         default=None,
         description="Text to set on the node. Required for 'set_text', optional for 'add_node'.",
+    )
+    # --- layout change fields ---
+    layout_name: Optional[str] = Field(
+        default=None,
+        description="Partial/full layout name for 'change_layout' (case-insensitive). Use ppt_list_smartart_layouts to find names.",
+    )
+    layout_index: Optional[int] = Field(
+        default=None, ge=1,
+        description="1-based layout index for 'change_layout'. Use ppt_list_smartart_layouts to find indices.",
     )
     # --- styling fields ---
     color_index: Optional[int] = Field(
@@ -249,6 +259,7 @@ def _add_smartart_impl(slide_index, layout_name, layout_index, left, top, width,
 
 def _modify_smartart_impl(slide_index, shape_name_or_index, action,
                           node_index, text,
+                          layout_name, layout_index,
                           color_index, style_index,
                           font_name, font_size, bold,
                           fill_color, line_color, line_width):
@@ -285,6 +296,21 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
         if node_index is None:
             raise ValueError("node_index is required for 'delete_node' action")
         smart_art.AllNodes(node_index).Delete()
+
+    elif action == "change_layout":
+        if layout_name:
+            layout = None
+            for j in range(1, app.SmartArtLayouts.Count + 1):
+                if layout_name.lower() in app.SmartArtLayouts(j).Name.lower():
+                    layout = app.SmartArtLayouts(j)
+                    break
+            if not layout:
+                raise ValueError(f"SmartArt layout '{layout_name}' not found")
+        elif layout_index:
+            layout = app.SmartArtLayouts(layout_index)
+        else:
+            raise ValueError("layout_name or layout_index is required for 'change_layout' action")
+        smart_art.Layout = layout
 
     elif action == "change_color":
         if color_index is None:
@@ -387,6 +413,7 @@ def modify_smartart(params: ModifySmartArtInput) -> str:
             _modify_smartart_impl,
             params.slide_index, params.shape_name_or_index,
             params.action, params.node_index, params.text,
+            params.layout_name, params.layout_index,
             params.color_index, params.style_index,
             params.font_name, params.font_size, params.bold,
             params.fill_color, params.line_color, params.line_width,
@@ -453,6 +480,9 @@ def register_tools(mcp):
         - 'set_text': update text of a node (requires node_index, text)
         - 'add_node': add a new node (optional node_index to insert after, optional text)
         - 'delete_node': remove a node (requires node_index)
+        - 'change_layout': switch to a different SmartArt layout (requires layout_index or
+          layout_name). Use ppt_list_smartart_layouts to find layouts. Node texts and
+          count are preserved where the new layout allows.
         - 'change_color': apply a color scheme (requires color_index)
         - 'change_style': apply a quick style (requires style_index; also applies
           color_index if provided — QuickStyle resets Color, so set both together)
