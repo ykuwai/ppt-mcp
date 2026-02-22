@@ -8,6 +8,7 @@ singleton-like access to the Application COM object.
 import gc
 import logging
 import threading
+import time
 from concurrent.futures import Future
 from queue import Queue
 from typing import Any, Callable, Optional
@@ -17,6 +18,14 @@ import pywintypes
 import win32com.client
 
 logger = logging.getLogger(__name__)
+
+# HRESULTs that indicate PowerPoint is temporarily busy (e.g. modal dialog open).
+# RPC_E_CALL_REJECTED (0x80010001): server rejected the call outright.
+# RPC_E_SERVERCALL_RETRYLATER (0x8001010A): server explicitly says retry later.
+# Both mean the call was never started, so retrying is always safe.
+_BUSY_HRESULTS = frozenset({-2147418111, -2147417846})
+_RETRY_MAX = 5       # maximum number of retries
+_RETRY_INTERVAL = 3  # seconds between retries
 
 
 class PowerPointCOMWrapper:
@@ -65,11 +74,25 @@ class PowerPointCOMWrapper:
                 if item is None:
                     break
                 func, args, kwargs, future = item
-                try:
-                    result = func(*args, **kwargs)
-                    future.set_result(result)
-                except Exception as e:
-                    future.set_exception(e)
+                for attempt in range(_RETRY_MAX):
+                    try:
+                        result = func(*args, **kwargs)
+                        future.set_result(result)
+                        break
+                    except pywintypes.com_error as e:
+                        if e.hresult in _BUSY_HRESULTS and attempt < _RETRY_MAX - 1:
+                            logger.warning(
+                                "PowerPoint is busy (modal dialog open?). "
+                                "Retrying in %ds... (%d/%d)",
+                                _RETRY_INTERVAL, attempt + 1, _RETRY_MAX - 1,
+                            )
+                            time.sleep(_RETRY_INTERVAL)
+                        else:
+                            future.set_exception(e)
+                            break
+                    except Exception as e:
+                        future.set_exception(e)
+                        break
         finally:
             self._cleanup_com()
             pythoncom.CoUninitialize()
