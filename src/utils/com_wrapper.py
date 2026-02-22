@@ -28,6 +28,34 @@ _RETRY_MAX = 5       # maximum number of retries
 _RETRY_INTERVAL = 3  # seconds between retries
 
 
+def _try_dismiss_ppt_dialog() -> None:
+    """Send ESC to the PowerPoint window to dismiss any open modal dialog.
+
+    Called once on the first RPC_E_CALL_REJECTED so the next retry can
+    succeed without waiting for the user to notice.  ESC is safe: it cancels
+    without committing, so no destructive side-effects occur.
+
+    Implementation notes:
+    - Uses win32gui (part of pywin32) to find the PowerPoint main window by
+      class name "PPTFrameClass", then SetForegroundWindow + WScript.Shell
+      SendKeys to deliver the keystroke reliably.
+    - All errors are swallowed — this is best-effort only.
+    """
+    try:
+        import win32gui  # part of pywin32, already a project dependency
+        hwnd = win32gui.FindWindow("PPTFrameClass", None)
+        if not hwnd:
+            logger.debug("_try_dismiss_ppt_dialog: PPTFrameClass window not found")
+            return
+        win32gui.SetForegroundWindow(hwnd)
+        time.sleep(0.15)  # brief pause for focus to settle before SendKeys
+        shell = win32com.client.Dispatch("WScript.Shell")
+        shell.SendKeys("{ESCAPE}")
+        logger.info("Sent ESC to PowerPoint to dismiss open dialog")
+    except Exception as exc:
+        logger.debug("_try_dismiss_ppt_dialog failed (ignored): %s", exc)
+
+
 class PowerPointCOMWrapper:
     """Manages the lifecycle of a PowerPoint COM Application object.
 
@@ -86,6 +114,11 @@ class PowerPointCOMWrapper:
                                 "Retrying in %ds... (%d/%d)",
                                 _RETRY_INTERVAL, attempt + 1, _RETRY_MAX - 1,
                             )
+                            if attempt == 0:
+                                # On the very first failure, try to dismiss the
+                                # blocking dialog automatically via ESC so the
+                                # next retry likely succeeds immediately.
+                                _try_dismiss_ppt_dialog()
                             time.sleep(_RETRY_INTERVAL)
                         else:
                             future.set_exception(e)
