@@ -531,7 +531,7 @@ def register_tools(mcp):
         - color_index: apply a color scheme (use list_type='colors' to find indices)
         - style_index: apply a quick style template (use list_type='styles')
           NOTE: style is applied before color — set both to get both effects.
-        - font_name, font_size, bold: apply to all nodes at once.
+        - font_name, font_size, bold, font_color: apply to all nodes at once.
 
         All positions and sizes are in points (72 points = 1 inch).
         """
