@@ -312,6 +312,7 @@ def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
             "start": run.Start,
             "length": run.Length,
             "font_name": font.Name,
+            "font_name_far_east": font.NameFarEast,
             "font_size": font.Size,
             "bold": font.Bold == msoTrue,
             "italic": font.Italic == msoTrue,
@@ -328,6 +329,7 @@ def _apply_font_props(font, font_name, font_size, bold, italic, underline, color
     """Apply font properties to a Font COM object."""
     if font_name is not None:
         font.Name = font_name
+        font.NameFarEast = font_name
     if font_size is not None:
         font.Size = font_size
     if bold is not None:
