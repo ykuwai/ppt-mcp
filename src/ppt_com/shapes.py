@@ -10,6 +10,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.color import hex_to_int
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from ppt_com.constants import (
@@ -18,6 +19,7 @@ from ppt_com.constants import (
     msoGroup,
     msoTextOrientationHorizontal,
     msoBringToFront, msoSendToBack, msoBringForward, msoSendBackward,
+    GRADIENT_STYLE_MAP,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,6 +102,46 @@ class AddShapeInput(BaseModel):
     width: float = Field(..., description="Width in points")
     height: float = Field(..., description="Height in points")
     text: Optional[str] = Field(default=None, description="Optional text content")
+    # --- inline fill (optional — avoids a separate ppt_set_fill call) ---
+    fill_color: Optional[str] = Field(
+        default=None,
+        description=(
+            "Solid fill color '#RRGGBB'. Implies fill_type='solid' when fill_type is omitted. "
+            "For gradient fills this is the start/fore color."
+        ),
+    )
+    fill_type: Optional[str] = Field(
+        default=None,
+        description="Fill type: 'solid', 'none', or 'gradient'. Defaults to 'solid' when fill_color is given.",
+    )
+    fill_color2: Optional[str] = Field(
+        default=None,
+        description="Gradient end/back color '#RRGGBB'. Only used when fill_type='gradient'.",
+    )
+    fill_gradient_style: Optional[str] = Field(
+        default=None,
+        description=(
+            "Gradient direction. One of: 'horizontal', 'vertical', 'diagonal_up', "
+            "'diagonal_down', 'from_corner', 'from_center'. Only used when fill_type='gradient'."
+        ),
+    )
+    fill_transparency: Optional[float] = Field(
+        default=None,
+        description="Fill transparency: 0.0 = opaque, 1.0 = fully transparent.",
+    )
+    # --- inline line/border (optional — avoids a separate ppt_set_line call) ---
+    line_visible: Optional[bool] = Field(
+        default=None,
+        description="Border visibility. Set to false to remove the default border (recommended for most card/box shapes).",
+    )
+    line_color: Optional[str] = Field(
+        default=None,
+        description="Border color '#RRGGBB'. Implies line_visible=true if line_visible is not specified.",
+    )
+    line_weight: Optional[float] = Field(
+        default=None,
+        description="Border weight in points.",
+    )
 
 
 class AddTextboxInput(BaseModel):
@@ -112,6 +154,22 @@ class AddTextboxInput(BaseModel):
     width: float = Field(..., description="Width in points")
     height: float = Field(..., description="Height in points")
     text: Optional[str] = Field(default=None, description="Optional initial text content")
+    # --- inline font (optional — avoids a separate ppt_format_text call) ---
+    font_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "Font name applied to all text. Sets both the Latin font (Name) and the East Asian "
+            "font (NameFarEast) — same behaviour as ppt_format_text."
+        ),
+    )
+    font_size: Optional[float] = Field(default=None, description="Font size in points.")
+    bold: Optional[bool] = Field(default=None, description="Bold on/off.")
+    italic: Optional[bool] = Field(default=None, description="Italic on/off.")
+    font_color: Optional[str] = Field(default=None, description="Text color '#RRGGBB'.")
+    align: Optional[str] = Field(
+        default=None,
+        description="Paragraph alignment for all text: 'left', 'center', 'right', or 'justify'.",
+    )
 
 
 class AddPictureInput(BaseModel):
@@ -231,7 +289,11 @@ def _resolve_shape_type(shape_type: Union[int, str]) -> int:
 # ---------------------------------------------------------------------------
 # COM implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
-def _add_shape_impl(slide_index, shape_type_int, left, top, width, height, text):
+def _add_shape_impl(
+    slide_index, shape_type_int, left, top, width, height, text,
+    fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
+    line_visible, line_color, line_weight,
+):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -241,6 +303,38 @@ def _add_shape_impl(slide_index, shape_type_int, left, top, width, height, text)
     )
     if text:
         shape.TextFrame.TextRange.Text = text
+
+    # Inline fill — avoids a follow-up ppt_set_fill call
+    _VALID_FILL_TYPES = {"solid", "none", "gradient"}
+    if fill_type is not None and fill_type not in _VALID_FILL_TYPES:
+        raise ValueError(f"Invalid fill_type '{fill_type}'. Must be one of: {sorted(_VALID_FILL_TYPES)}")
+    if fill_color is not None or fill_type is not None or fill_transparency is not None:
+        effective_type = fill_type or ("solid" if fill_color is not None else None)
+        fill = shape.Fill
+        if effective_type == "none":
+            fill.Background()
+        elif effective_type == "gradient":
+            gstyle = GRADIENT_STYLE_MAP.get(fill_gradient_style or "horizontal", 1)
+            fill.TwoColorGradient(Style=gstyle, Variant=1)
+            if fill_color is not None:
+                fill.ForeColor.RGB = hex_to_int(fill_color)
+            if fill_color2 is not None:
+                fill.BackColor.RGB = hex_to_int(fill_color2)
+        elif effective_type == "solid":
+            fill.Solid()
+            if fill_color is not None:
+                fill.ForeColor.RGB = hex_to_int(fill_color)
+        if fill_transparency is not None:
+            fill.Transparency = fill_transparency
+
+    # Inline line/border — avoids a follow-up ppt_set_line call
+    if line_visible is not None:
+        shape.Line.Visible = msoTrue if line_visible else msoFalse
+    if line_color is not None:
+        shape.Line.ForeColor.RGB = hex_to_int(line_color)
+    if line_weight is not None:
+        shape.Line.Weight = line_weight
+
     return {
         "success": True,
         "shape_name": shape.Name,
@@ -249,7 +343,10 @@ def _add_shape_impl(slide_index, shape_type_int, left, top, width, height, text)
     }
 
 
-def _add_textbox_impl(slide_index, left, top, width, height, text):
+def _add_textbox_impl(
+    slide_index, left, top, width, height, text,
+    font_name, font_size, bold, italic, font_color, align,
+):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -260,6 +357,30 @@ def _add_textbox_impl(slide_index, left, top, width, height, text):
     )
     if text:
         textbox.TextFrame.TextRange.Text = text
+
+    # Inline font — avoids a follow-up ppt_format_text call
+    if any(x is not None for x in [font_name, font_size, bold, italic, font_color]):
+        font = textbox.TextFrame.TextRange.Font
+        if font_name is not None:
+            font.Name = font_name
+            font.NameFarEast = font_name  # East Asian characters (e.g. Japanese)
+        if font_size is not None:
+            font.Size = font_size
+        if bold is not None:
+            font.Bold = msoTrue if bold else msoFalse
+        if italic is not None:
+            font.Italic = msoTrue if italic else msoFalse
+        if font_color is not None:
+            font.Color.RGB = hex_to_int(font_color)
+
+    # Inline alignment — avoids a follow-up ppt_set_paragraph_format call
+    if align is not None:
+        _ALIGN = {"left": 1, "center": 2, "right": 3, "justify": 4}
+        align_val = _ALIGN.get(align.lower())
+        if align_val is None:
+            raise ValueError(f"Invalid align '{align}'. Must be one of: {sorted(_ALIGN)}")
+        textbox.TextFrame.TextRange.ParagraphFormat.Alignment = align_val
+
     return {
         "success": True,
         "shape_name": textbox.Name,
@@ -522,6 +643,9 @@ def add_shape(params: AddShapeInput) -> str:
             params.slide_index, shape_type_int,
             params.left, params.top, params.width, params.height,
             params.text,
+            params.fill_color, params.fill_type, params.fill_color2,
+            params.fill_gradient_style, params.fill_transparency,
+            params.line_visible, params.line_color, params.line_weight,
         )
         return json.dumps(result)
     except Exception as e:
@@ -545,6 +669,8 @@ def add_textbox(params: AddTextboxInput) -> str:
             params.slide_index,
             params.left, params.top, params.width, params.height,
             params.text,
+            params.font_name, params.font_size, params.bold,
+            params.italic, params.font_color, params.align,
         )
         return json.dumps(result)
     except Exception as e:
@@ -755,6 +881,11 @@ def register_tools(mcp):
         Specify shape_type as a friendly name ('rectangle', 'oval', 'right_arrow',
         'star_5point', 'cloud', etc.) or an MsoAutoShapeType integer.
         All positions and sizes are in points (72 points = 1 inch).
+
+        Optionally apply fill and border in the same call via fill_color, fill_type,
+        fill_transparency, line_visible, line_color, and line_weight — avoids separate
+        ppt_set_fill / ppt_set_line calls for common cases.
+        Example: fill_color='#1E3A5F', line_visible=false creates a styled shape in one step.
         """
         return add_shape(params)
 
@@ -773,6 +904,11 @@ def register_tools(mcp):
 
         Creates a horizontal text box. Optionally set initial text content.
         All positions and sizes are in points (72 points = 1 inch).
+
+        Optionally apply font styling in the same call via font_name, font_size, bold,
+        italic, font_color, and align — avoids a separate ppt_format_text call.
+        Example: text='Title', font_name='Segoe UI', font_size=32, bold=true,
+        font_color='#FFFFFF', align='center' creates a fully styled label in one step.
         """
         return add_textbox(params)
 
