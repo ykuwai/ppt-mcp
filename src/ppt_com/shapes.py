@@ -305,8 +305,11 @@ def _add_shape_impl(
         shape.TextFrame.TextRange.Text = text
 
     # Inline fill — avoids a follow-up ppt_set_fill call
-    if fill_color is not None or fill_type is not None:
-        effective_type = fill_type or "solid"
+    _VALID_FILL_TYPES = {"solid", "none", "gradient"}
+    if fill_type is not None and fill_type not in _VALID_FILL_TYPES:
+        raise ValueError(f"Invalid fill_type '{fill_type}'. Must be one of: {sorted(_VALID_FILL_TYPES)}")
+    if fill_color is not None or fill_type is not None or fill_transparency is not None:
+        effective_type = fill_type or ("solid" if fill_color is not None else None)
         fill = shape.Fill
         if effective_type == "none":
             fill.Background()
@@ -317,7 +320,7 @@ def _add_shape_impl(
                 fill.ForeColor.RGB = hex_to_int(fill_color)
             if fill_color2 is not None:
                 fill.BackColor.RGB = hex_to_int(fill_color2)
-        else:  # solid (default)
+        elif effective_type == "solid":
             fill.Solid()
             if fill_color is not None:
                 fill.ForeColor.RGB = hex_to_int(fill_color)
@@ -374,8 +377,9 @@ def _add_textbox_impl(
     if align is not None:
         _ALIGN = {"left": 1, "center": 2, "right": 3, "justify": 4}
         align_val = _ALIGN.get(align.lower())
-        if align_val is not None:
-            textbox.TextFrame.TextRange.ParagraphFormat.Alignment = align_val
+        if align_val is None:
+            raise ValueError(f"Invalid align '{align}'. Must be one of: {sorted(_ALIGN)}")
+        textbox.TextFrame.TextRange.ParagraphFormat.Alignment = align_val
 
     return {
         "success": True,
