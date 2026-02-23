@@ -229,7 +229,13 @@ class PowerPointCOMWrapper:
         try:
             _ = self._app.Name
             return self._app
-        except (pywintypes.com_error, AttributeError):
+        except pywintypes.com_error as e:
+            if e.hresult in _BUSY_HRESULTS:
+                raise  # PowerPoint busy — let _com_worker retry loop handle it
+            logger.warning("COM connection lost, reconnecting...")
+            self._app = None
+            return self._connect_impl()
+        except AttributeError:
             logger.warning("COM connection lost, reconnecting...")
             self._app = None
             return self._connect_impl()
