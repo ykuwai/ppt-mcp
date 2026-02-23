@@ -204,6 +204,30 @@ ppt_activate_presentation(presentation_name="demo.pptx")
 - `ppt_format_text_range` で文字単位の書式設定
 - 自動調整: テキストをシェイプに収める、シェイプをリサイズ、またはオーバーフロー
 
+## ⚙️ 詳細設定
+
+### PowerPointのモーダルダイアログへの対応
+
+PowerPointのモーダルダイアログ（SmartArt レイアウト選択、保存ダイアログ、挿入ダイアログなど）が開いているとき、COMの呼び出しは `RPC_E_CALL_REJECTED` を返します。MCPサーバーは**最大15秒（5回 × 3秒）自動的にリトライ**するため、ダイアログが表示されていてもサーバー接続が安定して維持されます。
+
+**自動ESCによるダイアログ閉じ（オプトイン）：** デフォルトでは、ユーザーが手動でダイアログを閉じるのを待ちます。最初のリトライ時にESCキーを自動送信してダイアログを閉じさせるには、`PPT_AUTO_DISMISS_DIALOG=true` を設定してください：
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"],
+      "env": {
+        "PPT_AUTO_DISMISS_DIALOG": "true"
+      }
+    }
+  }
+}
+```
+
+ESCは変更を確定せずにキャンセルするため、意図しない操作は発生しません。人間が操作しない自動化ワークフローで特に有用です。
+
 ## 📄 ライセンス
 
 MIT

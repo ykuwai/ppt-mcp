@@ -29,9 +29,9 @@ _RETRY_MAX = 5       # maximum number of retries (total attempts = _RETRY_MAX + 
 _RETRY_INTERVAL = 3  # seconds between retries
 # When True, the server sends ESC to PowerPoint on the first busy rejection to
 # dismiss any blocking modal dialog automatically.
-# Configure via environment variable PPT_AUTO_DISMISS_DIALOG=false in mcp.json:
-#   "env": {"PPT_AUTO_DISMISS_DIALOG": "false"}
-AUTO_DISMISS_DIALOG: bool = os.getenv("PPT_AUTO_DISMISS_DIALOG", "true").lower() in ("true", "1", "yes")
+# Opt-in: set PPT_AUTO_DISMISS_DIALOG=true in mcp.json env to enable:
+#   "env": {"PPT_AUTO_DISMISS_DIALOG": "true"}
+AUTO_DISMISS_DIALOG: bool = os.getenv("PPT_AUTO_DISMISS_DIALOG", "false").lower() in ("true", "1", "yes")
 
 
 def _try_dismiss_ppt_dialog() -> None:

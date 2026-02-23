@@ -35,7 +35,7 @@ async def app_lifespan(server: FastMCP):
     from utils.com_wrapper import ppt
 
     from utils.com_wrapper import AUTO_DISMISS_DIALOG
-    logger.info("AUTO_DISMISS_DIALOG=%s (set PPT_AUTO_DISMISS_DIALOG=false to disable)", AUTO_DISMISS_DIALOG)
+    logger.info("AUTO_DISMISS_DIALOG=%s (set PPT_AUTO_DISMISS_DIALOG=true to enable)", AUTO_DISMISS_DIALOG)
     logger.info("Starting PowerPoint COM worker thread...")
     ppt.start()
     try:

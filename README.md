@@ -204,6 +204,30 @@ Every write operation automatically navigates PowerPoint to the target slide. Yo
 - Per-character formatting with `ppt_format_text_range`
 - Auto-fit control: shrink text to fit, resize shape, or overflow
 
+## ⚙️ Advanced Configuration
+
+### Handling PowerPoint Modal Dialogs
+
+When PowerPoint has a modal dialog open (e.g., SmartArt layout picker, Save dialog, Insert dialog), COM calls return `RPC_E_CALL_REJECTED`. The MCP server **automatically retries for up to 15 seconds** (5 retries × 3 s), so the server stays connected and responsive even when a dialog is blocking PowerPoint.
+
+**Auto-dismiss (opt-in):** By default, the server waits for you to close the dialog manually. To have the server automatically send ESC on the first retry — dismissing the dialog without user interaction — set `PPT_AUTO_DISMISS_DIALOG=true`:
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"],
+      "env": {
+        "PPT_AUTO_DISMISS_DIALOG": "true"
+      }
+    }
+  }
+}
+```
+
+ESC cancels without committing, so there are no destructive side effects. This is particularly useful in automated workflows where no human is present to close dialogs.
+
 ## 📄 License
 
 MIT
