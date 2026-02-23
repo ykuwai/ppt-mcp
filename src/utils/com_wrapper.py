@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 _BUSY_HRESULTS = frozenset({-2147418111, -2147417846})
 _RETRY_MAX = 5       # maximum number of retries (total attempts = _RETRY_MAX + 1)
 _RETRY_INTERVAL = 3  # seconds between retries
+# When True, the server sends ESC to PowerPoint on the first busy rejection to
+# dismiss any blocking modal dialog automatically.  Set to False if you prefer
+# not to have the server interfere with dialogs you intentionally have open.
+AUTO_DISMISS_DIALOG = True
 
 
 def _try_dismiss_ppt_dialog() -> None:
@@ -118,12 +122,12 @@ class PowerPointCOMWrapper:
                             logger.warning(
                                 "PowerPoint is busy (modal dialog open?). "
                                 "Retrying in %ds... (%d/%d)",
-                                _RETRY_INTERVAL, attempt + 1, _RETRY_MAX - 1,
+                                _RETRY_INTERVAL, attempt + 1, _RETRY_MAX,
                             )
-                            if attempt == 0:
-                                # On the very first failure, try to dismiss the
-                                # blocking dialog automatically via ESC so the
-                                # next retry likely succeeds immediately.
+                            if attempt == 0 and AUTO_DISMISS_DIALOG:
+                                # On the very first failure, optionally dismiss
+                                # the blocking dialog via ESC so the next retry
+                                # likely succeeds immediately.
                                 _try_dismiss_ppt_dialog()
                             time.sleep(_RETRY_INTERVAL)
                         else:
