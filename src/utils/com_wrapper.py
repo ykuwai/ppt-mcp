@@ -43,8 +43,8 @@ def _try_dismiss_ppt_dialog() -> None:
 
     Implementation notes:
     - Uses win32gui (part of pywin32) to find the PowerPoint main window by
-      class name "PPTFrameClass", then SetForegroundWindow + WScript.Shell
-      SendKeys to deliver the keystroke reliably.
+      class name "PPTFrameClass", then SetForegroundWindow + win32api.keybd_event
+      to deliver the keystroke reliably without side-effects on keyboard state.
     - All errors are swallowed — this is best-effort only.
     """
     try:
@@ -182,7 +182,12 @@ class PowerPointCOMWrapper:
                 if visible is not None:
                     self._app.Visible = visible
                 return self._app
-            except (pywintypes.com_error, AttributeError):
+            except pywintypes.com_error as e:
+                if e.hresult in _BUSY_HRESULTS:
+                    raise  # PowerPoint busy — let _com_worker retry loop handle it
+                logger.warning("Stale COM reference, reconnecting...")
+                self._app = None
+            except AttributeError:
                 logger.warning("Stale COM reference, reconnecting...")
                 self._app = None
 
