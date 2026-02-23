@@ -7,6 +7,7 @@ singleton-like access to the Application COM object.
 
 import gc
 import logging
+import os
 import threading
 import time
 from concurrent.futures import Future
@@ -27,9 +28,10 @@ _BUSY_HRESULTS = frozenset({-2147418111, -2147417846})
 _RETRY_MAX = 5       # maximum number of retries (total attempts = _RETRY_MAX + 1)
 _RETRY_INTERVAL = 3  # seconds between retries
 # When True, the server sends ESC to PowerPoint on the first busy rejection to
-# dismiss any blocking modal dialog automatically.  Set to False if you prefer
-# not to have the server interfere with dialogs you intentionally have open.
-AUTO_DISMISS_DIALOG = True
+# dismiss any blocking modal dialog automatically.
+# Configure via environment variable PPT_AUTO_DISMISS_DIALOG=false in mcp.json:
+#   "env": {"PPT_AUTO_DISMISS_DIALOG": "false"}
+AUTO_DISMISS_DIALOG: bool = os.getenv("PPT_AUTO_DISMISS_DIALOG", "true").lower() in ("true", "1", "yes")
 
 
 def _try_dismiss_ppt_dialog() -> None:
