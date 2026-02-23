@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any, List, Optional, Union
+from typing import Any, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -60,12 +60,13 @@ class BatchOperation(BaseModel):
     """A single formatting operation to apply."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    tool: str = Field(
+    tool: Literal[
+        "set_fill", "set_line", "set_shadow",
+        "set_glow", "set_reflection", "set_soft_edge",
+        "format_text",
+    ] = Field(
         ...,
-        description=(
-            "Operation name: set_fill, set_line, set_shadow, "
-            "set_glow, set_reflection, set_soft_edge, or format_text"
-        ),
+        description="Formatting operation to apply.",
     )
     params: dict = Field(
         default_factory=dict,
@@ -74,7 +75,13 @@ class BatchOperation(BaseModel):
 
 
 class BatchApplyFormattingInput(BaseModel):
-    """Input for batch applying formatting to multiple shapes."""
+    """Apply one or more formatting operations to multiple shapes in a single call.
+
+    Use this to bulk-style shapes efficiently — e.g., set fill + remove borders on
+    4 shapes with 1 call instead of 8 separate ppt_set_fill / ppt_set_line calls.
+    Supported operations: set_fill, set_line, set_shadow, set_glow, set_reflection,
+    set_soft_edge, format_text.
+    """
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
