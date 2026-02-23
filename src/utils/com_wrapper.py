@@ -7,7 +7,9 @@ singleton-like access to the Application COM object.
 
 import gc
 import logging
+import os
 import threading
+import time
 from concurrent.futures import Future
 from queue import Queue
 from typing import Any, Callable, Optional
@@ -17,6 +19,53 @@ import pywintypes
 import win32com.client
 
 logger = logging.getLogger(__name__)
+
+# HRESULTs that indicate PowerPoint is temporarily busy (e.g. modal dialog open).
+# RPC_E_CALL_REJECTED (0x80010001): server rejected the call outright.
+# RPC_E_SERVERCALL_RETRYLATER (0x8001010A): server explicitly says retry later.
+# Both mean the call was never started, so retrying is always safe.
+_BUSY_HRESULTS = frozenset({-2147418111, -2147417846})
+_RETRY_MAX = 5       # maximum number of retries (total attempts = _RETRY_MAX + 1)
+_RETRY_INTERVAL = 3  # seconds between retries
+# When True, the server sends ESC to PowerPoint on the first busy rejection to
+# dismiss any blocking modal dialog automatically.
+# Opt-in: set PPT_AUTO_DISMISS_DIALOG=true in mcp.json env to enable:
+#   "env": {"PPT_AUTO_DISMISS_DIALOG": "true"}
+AUTO_DISMISS_DIALOG: bool = os.getenv("PPT_AUTO_DISMISS_DIALOG", "false").lower() in ("true", "1", "yes")
+
+
+def _try_dismiss_ppt_dialog() -> None:
+    """Send ESC to the PowerPoint window to dismiss any open modal dialog.
+
+    Called once on the first RPC_E_CALL_REJECTED so the next retry can
+    succeed without waiting for the user to notice.  ESC is safe: it cancels
+    without committing, so no destructive side-effects occur.
+
+    Implementation notes:
+    - Uses win32gui (part of pywin32) to find the PowerPoint main window by
+      class name "PPTFrameClass", then SetForegroundWindow + win32api.keybd_event
+      to deliver the keystroke reliably without side-effects on keyboard state.
+    - All errors are swallowed — this is best-effort only.
+    """
+    try:
+        import win32api   # part of pywin32, already a project dependency
+        import win32con
+        import win32gui
+        hwnd = win32gui.FindWindow("PPTFrameClass", None)
+        if not hwnd:
+            logger.debug("_try_dismiss_ppt_dialog: PPTFrameClass window not found")
+            return
+        win32gui.SetForegroundWindow(hwnd)
+        time.sleep(0.15)  # brief pause for focus to settle
+        # Use keybd_event instead of WScript.Shell.SendKeys — SendKeys resets
+        # Num Lock / Caps Lock state before sending, causing spurious Windows
+        # accessibility notifications ("Num Lock Off").  keybd_event sends
+        # only the ESC key with no side-effects on keyboard toggle state.
+        win32api.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
+        logger.info("Sent ESC to PowerPoint to dismiss open dialog")
+    except Exception as exc:
+        logger.debug("_try_dismiss_ppt_dialog failed (ignored): %s", exc)
 
 
 class PowerPointCOMWrapper:
@@ -65,11 +114,30 @@ class PowerPointCOMWrapper:
                 if item is None:
                     break
                 func, args, kwargs, future = item
-                try:
-                    result = func(*args, **kwargs)
-                    future.set_result(result)
-                except Exception as e:
-                    future.set_exception(e)
+                for attempt in range(_RETRY_MAX + 1):  # +1: initial attempt + _RETRY_MAX retries
+                    try:
+                        result = func(*args, **kwargs)
+                        future.set_result(result)
+                        break
+                    except pywintypes.com_error as e:
+                        if e.hresult in _BUSY_HRESULTS and attempt < _RETRY_MAX:
+                            logger.warning(
+                                "PowerPoint is busy (modal dialog open?). "
+                                "Retrying in %ds... (%d/%d)",
+                                _RETRY_INTERVAL, attempt + 1, _RETRY_MAX,
+                            )
+                            if attempt == 0 and AUTO_DISMISS_DIALOG:
+                                # On the very first failure, optionally dismiss
+                                # the blocking dialog via ESC so the next retry
+                                # likely succeeds immediately.
+                                _try_dismiss_ppt_dialog()
+                            time.sleep(_RETRY_INTERVAL)
+                        else:
+                            future.set_exception(e)
+                            break
+                    except Exception as e:
+                        future.set_exception(e)
+                        break
         finally:
             self._cleanup_com()
             pythoncom.CoUninitialize()
@@ -114,7 +182,12 @@ class PowerPointCOMWrapper:
                 if visible is not None:
                     self._app.Visible = visible
                 return self._app
-            except (pywintypes.com_error, AttributeError):
+            except pywintypes.com_error as e:
+                if e.hresult in _BUSY_HRESULTS:
+                    raise  # PowerPoint busy — let _com_worker retry loop handle it
+                logger.warning("Stale COM reference, reconnecting...")
+                self._app = None
+            except AttributeError:
                 logger.warning("Stale COM reference, reconnecting...")
                 self._app = None
 
@@ -122,14 +195,20 @@ class PowerPointCOMWrapper:
         try:
             self._app = win32com.client.GetActiveObject("PowerPoint.Application")
             logger.info("Connected to existing PowerPoint instance")
-        except pywintypes.com_error:
+        except pywintypes.com_error as e:
+            if e.hresult in _BUSY_HRESULTS:
+                # PowerPoint is running but busy (modal dialog). Re-raise as
+                # pywintypes.com_error so _com_worker's retry loop handles it.
+                raise
             try:
                 self._app = win32com.client.Dispatch("PowerPoint.Application")
                 logger.info("Created new PowerPoint instance via Dispatch")
-            except pywintypes.com_error as e:
+            except pywintypes.com_error as e2:
+                if e2.hresult in _BUSY_HRESULTS:
+                    raise  # Let _com_worker retry loop handle it
                 raise ConnectionError(
-                    f"Failed to connect to PowerPoint. Is it installed? Error: {e.strerror}"
-                ) from e
+                    f"Failed to connect to PowerPoint. Is it installed? Error: {e2.strerror}"
+                ) from e2
 
         if visible is not None:
             self._app.Visible = visible
@@ -150,7 +229,13 @@ class PowerPointCOMWrapper:
         try:
             _ = self._app.Name
             return self._app
-        except (pywintypes.com_error, AttributeError):
+        except pywintypes.com_error as e:
+            if e.hresult in _BUSY_HRESULTS:
+                raise  # PowerPoint busy — let _com_worker retry loop handle it
+            logger.warning("COM connection lost, reconnecting...")
+            self._app = None
+            return self._connect_impl()
+        except AttributeError:
             logger.warning("COM connection lost, reconnecting...")
             self._app = None
             return self._connect_impl()
