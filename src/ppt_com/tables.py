@@ -8,14 +8,14 @@ import json
 import logging
 from typing import List, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from ppt_com.constants import (
     msoTrue, msoFalse,
-    ppAlignLeft, ppAlignCenter, ppAlignRight,
+    ppAlignLeft, ppAlignCenter, ppAlignRight, ppAlignJustify,
     msoAnchorTop, msoAnchorMiddle, msoAnchorBottom,
     ppBorderTop, ppBorderLeft, ppBorderBottom, ppBorderRight,
     ppBorderDiagonalDown, ppBorderDiagonalUp,
@@ -29,7 +29,7 @@ ALIGNMENT_MAP: dict[str, int] = {
     "left": ppAlignLeft,
     "center": ppAlignCenter,
     "right": ppAlignRight,
-    "justify": 4,  # ppAlignJustify — readable and settable
+    "justify": ppAlignJustify,
 }
 
 VERTICAL_ALIGNMENT_MAP: dict[str, int] = {
@@ -114,7 +114,7 @@ class SetTableCellInput(BaseModel):
     color: Optional[str] = Field(default=None, description="Font color as '#RRGGBB'")
     fill_color: Optional[str] = Field(default=None, description="Cell background color as '#RRGGBB'")
     alignment: Optional[str] = Field(
-        default=None, description="Text alignment: 'left', 'center', or 'right'"
+        default=None, description="Text alignment: 'left', 'center', 'right', or 'justify'"
     )
     vertical_alignment: Optional[str] = Field(
         default=None, description="Vertical text alignment: 'top', 'middle', or 'bottom'"
@@ -240,6 +240,14 @@ class SetTableBordersInput(BaseModel):
         default=None,
         description="Border line style: 'solid', 'round_dot', 'dot', 'dash', 'dash_dot', 'dash_dot_dot', 'long_dash', 'long_dash_dot'"
     )
+
+    @model_validator(mode="after")
+    def _require_at_least_one_property(self) -> "SetTableBordersInput":
+        if self.visible is None and self.color is None and self.weight is None and self.dash_style is None:
+            raise ValueError(
+                "At least one of visible, color, weight, or dash_style must be provided."
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
