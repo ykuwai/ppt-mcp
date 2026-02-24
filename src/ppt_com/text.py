@@ -123,7 +123,8 @@ class FormatTextInput(BaseModel):
     shape_name_or_index: Union[str, int] = Field(
         ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
-    font_name: Optional[str] = Field(default=None, description="Font name (e.g. 'Arial')")
+    font_name: Optional[str] = Field(default=None, description="Latin font name (e.g. 'Arial'). Also sets the East Asian font unless font_name_fareast is provided.")
+    font_name_fareast: Optional[str] = Field(default=None, description="East Asian (CJK) font name (e.g. 'BIZ UDPゴシック'). Overrides the Far East font independently of font_name.")
     font_size: Optional[float] = Field(default=None, description="Font size in points")
     bold: Optional[bool] = Field(default=None, description="Bold on/off")
     italic: Optional[bool] = Field(default=None, description="Italic on/off")
@@ -145,7 +146,8 @@ class FormatTextRangeInput(BaseModel):
     )
     start: int = Field(..., description="1-based character start position")
     length: int = Field(..., description="Number of characters to format")
-    font_name: Optional[str] = Field(default=None, description="Font name")
+    font_name: Optional[str] = Field(default=None, description="Latin font name. Also sets the East Asian font unless font_name_fareast is provided.")
+    font_name_fareast: Optional[str] = Field(default=None, description="East Asian (CJK) font name (e.g. 'BIZ UDPゴシック'). Overrides the Far East font independently of font_name.")
     font_size: Optional[float] = Field(default=None, description="Font size in points")
     bold: Optional[bool] = Field(default=None, description="Bold on/off")
     italic: Optional[bool] = Field(default=None, description="Italic on/off")
@@ -325,11 +327,13 @@ def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
     return result
 
 
-def _apply_font_props(font, font_name, font_size, bold, italic, underline, color, font_color_theme):
+def _apply_font_props(font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme):
     """Apply font properties to a Font COM object."""
     if font_name is not None:
         font.Name = font_name
-        font.NameFarEast = font_name
+        font.NameFarEast = font_name  # default: match Latin unless overridden
+    if font_name_fareast is not None:
+        font.NameFarEast = font_name_fareast  # override East Asian font independently
     if font_size is not None:
         font.Size = font_size
     if bold is not None:
@@ -345,7 +349,7 @@ def _apply_font_props(font, font_name, font_size, bold, italic, underline, color
 
 
 def _format_text_impl(slide_index, shape_name_or_index,
-                       font_name, font_size, bold, italic, underline,
+                       font_name, font_name_fareast, font_size, bold, italic, underline,
                        color, font_color_theme) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -357,7 +361,7 @@ def _format_text_impl(slide_index, shape_name_or_index,
         raise ValueError(f"Shape '{shape.Name}' does not have a text frame")
 
     tr = shape.TextFrame.TextRange
-    _apply_font_props(tr.Font, font_name, font_size, bold, italic, underline, color, font_color_theme)
+    _apply_font_props(tr.Font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme)
 
     return {
         "status": "success",
@@ -369,7 +373,7 @@ def _format_text_impl(slide_index, shape_name_or_index,
 
 
 def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
-                              font_name, font_size, bold, italic, underline,
+                              font_name, font_name_fareast, font_size, bold, italic, underline,
                               color, font_color_theme) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -382,7 +386,7 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
 
     tr = shape.TextFrame.TextRange
     target = tr.Characters(Start=start, Length=length)
-    _apply_font_props(target.Font, font_name, font_size, bold, italic, underline, color, font_color_theme)
+    _apply_font_props(target.Font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme)
 
     return {
         "status": "success",
@@ -619,7 +623,8 @@ def format_text(params: FormatTextInput) -> str:
         result = ppt.execute(
             _format_text_impl,
             params.slide_index, params.shape_name_or_index,
-            params.font_name, params.font_size, params.bold, params.italic,
+            params.font_name, params.font_name_fareast,
+            params.font_size, params.bold, params.italic,
             params.underline, params.color, params.font_color_theme,
         )
         return json.dumps(result)
@@ -634,7 +639,8 @@ def format_text_range(params: FormatTextRangeInput) -> str:
             _format_text_range_impl,
             params.slide_index, params.shape_name_or_index,
             params.start, params.length,
-            params.font_name, params.font_size, params.bold, params.italic,
+            params.font_name, params.font_name_fareast,
+            params.font_size, params.bold, params.italic,
             params.underline, params.color, params.font_color_theme,
         )
         return json.dumps(result)

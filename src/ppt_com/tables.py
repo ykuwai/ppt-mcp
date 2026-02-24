@@ -106,7 +106,8 @@ class SetTableCellInput(BaseModel):
     row: int = Field(..., ge=1, description="1-based row number")
     col: int = Field(..., ge=1, description="1-based column number")
     text: Optional[str] = Field(default=None, description="Cell text")
-    font_name: Optional[str] = Field(default=None, description="Font name (e.g. 'Arial')")
+    font_name: Optional[str] = Field(default=None, description="Latin font name (e.g. 'Arial'). Also sets the East Asian font unless font_name_fareast is provided.")
+    font_name_fareast: Optional[str] = Field(default=None, description="East Asian (CJK) font name (e.g. 'BIZ UDPゴシック'). Overrides the Far East font independently of font_name.")
     font_size: Optional[float] = Field(default=None, description="Font size in points")
     bold: Optional[bool] = Field(default=None, description="Bold on/off")
     italic: Optional[bool] = Field(default=None, description="Italic on/off")
@@ -387,7 +388,7 @@ def _get_table_data_impl(slide_index, shape_name_or_index, include_format):
 def _set_table_cell_impl(
     slide_index, shape_name_or_index,
     row, col, text,
-    font_name, font_size, bold, italic, color,
+    font_name, font_name_fareast, font_size, bold, italic, color,
     fill_color, alignment, vertical_alignment,
 ):
     app = ppt._get_app_impl()
@@ -407,7 +408,9 @@ def _set_table_cell_impl(
 
     if font_name is not None:
         font.Name = font_name
-        font.NameFarEast = font_name
+        font.NameFarEast = font_name  # default: match Latin unless overridden
+    if font_name_fareast is not None:
+        font.NameFarEast = font_name_fareast
     if font_size is not None:
         font.Size = font_size
     if bold is not None:
@@ -743,7 +746,8 @@ def set_table_cell(params: SetTableCellInput) -> str:
             _set_table_cell_impl,
             params.slide_index, params.shape_name_or_index,
             params.row, params.col, params.text,
-            params.font_name, params.font_size, params.bold, params.italic,
+            params.font_name, params.font_name_fareast, params.font_size,
+            params.bold, params.italic,
             params.color, params.fill_color, params.alignment,
             params.vertical_alignment,
         )
