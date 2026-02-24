@@ -29,6 +29,7 @@ ALIGNMENT_MAP: dict[str, int] = {
     "left": ppAlignLeft,
     "center": ppAlignCenter,
     "right": ppAlignRight,
+    "justify": 4,  # ppAlignJustify — readable and settable
 }
 
 VERTICAL_ALIGNMENT_MAP: dict[str, int] = {
@@ -57,8 +58,12 @@ DASH_STYLE_MAP: dict[str, int] = {
     "long_dash_dot": msoLineLongDashDot,
 }
 
-VERTICAL_ANCHOR_NAMES: dict[int, str] = {v: k for k, v in VERTICAL_ALIGNMENT_MAP.items()}
-ALIGNMENT_NAMES: dict[int, str] = {1: "left", 2: "center", 3: "right", 4: "justify"}
+VERTICAL_ANCHOR_NAMES: dict[int, str] = {
+    **{v: k for k, v in VERTICAL_ALIGNMENT_MAP.items()},
+    2: "top_baseline",    # msoAnchorTopBaseline — valid but not settable via this tool
+    5: "bottom_baseline", # msoAnchorBottomBaseLine — valid but not settable via this tool
+}
+ALIGNMENT_NAMES: dict[int, str] = {v: k for k, v in ALIGNMENT_MAP.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -75,8 +80,8 @@ class AddTableInput(BaseModel):
     top: float = Field(default=100.0, description="Top position in points")
     width: float = Field(default=600.0, description="Width in points")
     height: float = Field(default=300.0, description="Height in points")
-    row_heights: Optional[List[float]] = Field(default=None, description="Row heights in points (list length must equal rows). If shorter, remaining rows keep default height.")
-    col_widths: Optional[List[float]] = Field(default=None, description="Column widths in points (list length must equal cols). If shorter, remaining columns keep default width.")
+    row_heights: Optional[List[float]] = Field(default=None, description="Row heights in points. If shorter than the row count, remaining rows keep their default height.")
+    col_widths: Optional[List[float]] = Field(default=None, description="Column widths in points. If shorter than the column count, remaining columns keep their default width.")
 
 
 class GetTableDataInput(BaseModel):
@@ -224,7 +229,8 @@ class SetTableBordersInput(BaseModel):
     end_row: Optional[int] = Field(default=None, ge=1, description="Last row of the target range (1-based, default=last row)")
     end_col: Optional[int] = Field(default=None, ge=1, description="Last column of the target range (1-based, default=last column)")
     sides: List[str] = Field(
-        ..., description="Which borders to set: any of 'top', 'bottom', 'left', 'right', 'diagonal_down', 'diagonal_up'"
+        ..., min_length=1,
+        description="Which borders to set: any of 'top', 'bottom', 'left', 'right', 'diagonal_down', 'diagonal_up'"
     )
     visible: Optional[bool] = Field(default=None, description="Show or hide the border")
     color: Optional[str] = Field(default=None, description="Border color as '#RRGGBB'")
@@ -668,7 +674,8 @@ def _set_table_borders_impl(
                     border.Weight = weight
                 if dash_style_int is not None:
                     border.DashStyle = dash_style_int
-            cells_updated += 1
+            if side_constants:
+                cells_updated += 1
 
     return {
         "success": True,
