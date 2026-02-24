@@ -134,6 +134,14 @@ class MergeTableCellsInput(BaseModel):
     end_row: int = Field(..., ge=1, description="Bottom-right cell row (1-based)")
     end_col: int = Field(..., ge=1, description="Bottom-right cell column (1-based)")
 
+    @model_validator(mode="after")
+    def _check_range_order(self) -> "MergeTableCellsInput":
+        if self.end_row < self.start_row:
+            raise ValueError(f"end_row ({self.end_row}) must be >= start_row ({self.start_row})")
+        if self.end_col < self.start_col:
+            raise ValueError(f"end_col ({self.end_col}) must be >= start_col ({self.start_col})")
+        return self
+
 
 class TableRowInput(BaseModel):
     """Input for adding or deleting a table row."""
@@ -240,6 +248,14 @@ class SetTableBordersInput(BaseModel):
         default=None,
         description="Border line style: 'solid', 'round_dot', 'dot', 'dash', 'dash_dot', 'dash_dot_dot', 'long_dash', 'long_dash_dot'"
     )
+
+    @model_validator(mode="after")
+    def _check_range_order(self) -> "SetTableBordersInput":
+        if self.end_row is not None and self.end_row < self.start_row:
+            raise ValueError(f"end_row ({self.end_row}) must be >= start_row ({self.start_row})")
+        if self.end_col is not None and self.end_col < self.start_col:
+            raise ValueError(f"end_col ({self.end_col}) must be >= start_col ({self.start_col})")
+        return self
 
     @model_validator(mode="after")
     def _require_at_least_one_property(self) -> "SetTableBordersInput":
