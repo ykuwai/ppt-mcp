@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any, List, Literal, Optional, Union
+from typing import List, Literal, Union, get_args
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -25,11 +25,13 @@ from ppt_com.text import (
 logger = logging.getLogger(__name__)
 
 
-SUPPORTED_OPERATIONS = [
+OperationName = Literal[
     "set_fill", "set_line", "set_shadow",
     "set_glow", "set_reflection", "set_soft_edge",
     "format_text",
 ]
+
+SUPPORTED_OPERATIONS = list(get_args(OperationName))
 
 
 # ---------------------------------------------------------------------------
@@ -60,11 +62,7 @@ class BatchOperation(BaseModel):
     """A single formatting operation to apply."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    tool: Literal[
-        "set_fill", "set_line", "set_shadow",
-        "set_glow", "set_reflection", "set_soft_edge",
-        "format_text",
-    ] = Field(
+    tool: OperationName = Field(
         ...,
         description="Formatting operation to apply.",
     )
