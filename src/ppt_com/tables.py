@@ -332,6 +332,10 @@ def _get_cell_format(cell) -> dict:
     except Exception:
         result["font_name"] = None
     try:
+        result["font_name_fareast"] = font.NameFarEast
+    except Exception:
+        result["font_name_fareast"] = None
+    try:
         result["font_size"] = font.Size
     except Exception:
         result["font_size"] = None

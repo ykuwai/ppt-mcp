@@ -314,7 +314,7 @@ def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
             "start": run.Start,
             "length": run.Length,
             "font_name": font.Name,
-            "font_name_far_east": font.NameFarEast,
+            "font_name_fareast": font.NameFarEast,
             "font_size": font.Size,
             "bold": font.Bold == msoTrue,
             "italic": font.Italic == msoTrue,
