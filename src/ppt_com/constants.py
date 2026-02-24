@@ -702,3 +702,23 @@ VIEW_TYPE_MAP = {
 }
 
 VIEW_TYPE_NAMES = {v: k for k, v in VIEW_TYPE_MAP.items()}
+
+# ==============================================================================
+# PpBorderType
+# ==============================================================================
+ppBorderTop          = 1
+ppBorderLeft         = 2
+ppBorderBottom       = 3
+ppBorderRight        = 4
+ppBorderDiagonalDown = 5
+ppBorderDiagonalUp   = 6
+
+# ==============================================================================
+# MsoVerticalAnchor
+# ==============================================================================
+msoAnchorTop            = 1
+msoAnchorTopBaseline    = 2
+msoAnchorMiddle         = 3
+msoAnchorBottom         = 4
+msoAnchorBottomBaseLine = 5
+msoVerticalAnchorMixed  = -2
