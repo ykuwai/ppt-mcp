@@ -364,6 +364,8 @@ except ImportError:
 # =============================================================================
 # Tools: Slide Preview (Visual Inspection)
 # =============================================================================
+
+
 class GetSlidePreviewInput(BaseModel):
     slide_index: int = Field(1, ge=1, description="1-based slide index")
 
@@ -387,9 +389,6 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
 
     Also navigates the PowerPoint editor window to the target slide so the user
     can see which slide is being inspected.
-
-    Args:
-        slide_index: 1-based slide index (default: 1)
 
     Returns:
         Image: PNG image of the slide for visual inspection
