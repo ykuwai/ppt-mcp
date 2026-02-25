@@ -9,6 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from pydantic import BaseModel, Field
+
 # When installed via PyPI (entry point: src.server:main), ensure the src/
 # directory is in sys.path so that internal imports like
 # `from utils.com_wrapper import ppt` resolve correctly.
@@ -362,6 +364,10 @@ except ImportError:
 # =============================================================================
 # Tools: Slide Preview (Visual Inspection)
 # =============================================================================
+class GetSlidePreviewInput(BaseModel):
+    slide_index: int = Field(1, ge=1, description="1-based slide index")
+
+
 @mcp.tool(
     name="ppt_get_slide_preview",
     annotations={
@@ -372,7 +378,7 @@ except ImportError:
         "openWorldHint": False,
     },
 )
-async def tool_ppt_get_slide_preview(slide_index: int = 1) -> Image:
+async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
     """Get a visual preview of a PowerPoint slide as an image.
 
     This is the RECOMMENDED way to visually inspect slides for appearance, design,
@@ -422,7 +428,7 @@ async def tool_ppt_get_slide_preview(slide_index: int = 1) -> Image:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
 
-    image_data = ppt.execute(_export_slide_impl, slide_index)
+    image_data = ppt.execute(_export_slide_impl, params.slide_index)
     return Image(data=image_data, format="png")
 
 
