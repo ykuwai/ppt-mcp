@@ -148,7 +148,7 @@ def _set_fill_impl(slide_index, shape_name_or_index, fill_type,
     fill = shape.Fill
 
     if fill_type == "none":
-        fill.Background()
+        fill.Visible = msoFalse
     elif fill_type == "solid":
         fill.Solid()
         if color is not None:

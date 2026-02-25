@@ -312,7 +312,7 @@ def _add_shape_impl(
         effective_type = fill_type or ("solid" if fill_color is not None else None)
         fill = shape.Fill
         if effective_type == "none":
-            fill.Background()
+            fill.Visible = msoFalse
         elif effective_type == "gradient":
             gstyle = GRADIENT_STYLE_MAP.get(fill_gradient_style or "horizontal", 1)
             fill.TwoColorGradient(Style=gstyle, Variant=1)
