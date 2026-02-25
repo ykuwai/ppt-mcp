@@ -324,7 +324,7 @@ def _add_shape_impl(
             fill.Solid()
             if fill_color is not None:
                 fill.ForeColor.RGB = hex_to_int(fill_color)
-        if fill_transparency is not None:
+        if fill_transparency is not None and effective_type != "none":
             fill.Transparency = fill_transparency
 
     # Inline line/border — avoids a follow-up ppt_set_line call
