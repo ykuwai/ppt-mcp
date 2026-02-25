@@ -165,7 +165,7 @@ def _set_fill_impl(slide_index, shape_name_or_index, fill_type,
             f"Invalid fill_type '{fill_type}'. Valid values: 'solid', 'gradient', 'none'"
         )
 
-    if transparency is not None:
+    if transparency is not None and fill_type != "none":
         fill.Transparency = transparency
 
     return {
