@@ -312,7 +312,7 @@ def _add_shape_impl(
         effective_type = fill_type or ("solid" if fill_color is not None else None)
         fill = shape.Fill
         if effective_type == "none":
-            fill.Background()
+            fill.Visible = msoFalse
         elif effective_type == "gradient":
             gstyle = GRADIENT_STYLE_MAP.get(fill_gradient_style or "horizontal", 1)
             fill.TwoColorGradient(Style=gstyle, Variant=1)
@@ -324,7 +324,7 @@ def _add_shape_impl(
             fill.Solid()
             if fill_color is not None:
                 fill.ForeColor.RGB = hex_to_int(fill_color)
-        if fill_transparency is not None:
+        if fill_transparency is not None and effective_type != "none":
             fill.Transparency = fill_transparency
 
     # Inline line/border — avoids a follow-up ppt_set_line call
