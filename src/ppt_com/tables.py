@@ -47,6 +47,8 @@ BORDER_SIDE_MAP: dict[str, int] = {
     "diagonal_up": ppBorderDiagonalUp,
 }
 
+_DIAGONAL_SIDES: set[int] = {ppBorderDiagonalDown, ppBorderDiagonalUp}
+
 DASH_STYLE_MAP: dict[str, int] = {
     "solid": msoLineSolid,
     "round_dot": msoLineRoundDot,
@@ -695,7 +697,6 @@ def _set_table_borders_impl(
             )
         dash_style_int = DASH_STYLE_MAP[key]
 
-    _DIAGONAL_SIDES = {ppBorderDiagonalDown, ppBorderDiagonalUp}
     diagonal_visible_skipped = False
 
     cells_updated = 0
