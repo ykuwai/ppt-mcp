@@ -16,10 +16,12 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.color import hex_to_int
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from ppt_com.constants import (
     msoTrue, msoFalse,
+    msoShapeRectangle,
     SHAPE_FORMAT_MAP,
     VIEW_TYPE_MAP, VIEW_TYPE_NAMES,
     ppSelectionNone, ppSelectionSlides, ppSelectionShapes, ppSelectionText,
@@ -888,6 +890,89 @@ def _resolve_color(pres, color_str):
     return f"#{r:02X}{g:02X}{b:02X}"
 
 
+class SetDefaultShapeStyleInput(BaseModel):
+    """Input for setting the default shape style for new shapes."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    fill_color: Optional[str] = Field(
+        default=None,
+        description=(
+            "Fill color as '#RRGGBB' hex or theme name (e.g. 'accent1'). "
+            "Set fill_type='none' to make the fill transparent instead."
+        ),
+    )
+    fill_type: Optional[str] = Field(
+        default=None,
+        description="'solid' to apply fill_color, 'none' for no fill. Omit to leave fill unchanged.",
+    )
+    line_visible: Optional[bool] = Field(
+        default=None,
+        description="Show (true) or hide (false) the shape border.",
+    )
+    line_color: Optional[str] = Field(
+        default=None,
+        description="Border color as '#RRGGBB' hex or theme name.",
+    )
+    line_weight: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="Border weight in points.",
+    )
+    font_name: Optional[str] = Field(default=None, description="Default font name for shape text.")
+    font_size: Optional[float] = Field(default=None, gt=0, description="Default font size in points.")
+    font_bold: Optional[bool] = Field(default=None, description="Default bold setting.")
+    font_italic: Optional[bool] = Field(default=None, description="Default italic setting.")
+    font_color: Optional[str] = Field(
+        default=None,
+        description="Default font color as '#RRGGBB' hex or theme name.",
+    )
+
+
+def _set_default_shape_style_impl(
+    fill_type, fill_color_hex,
+    line_visible, line_color_hex, line_weight,
+    font_name, font_size, font_bold, font_italic, font_color_hex,
+):
+    pres = ppt._get_pres_impl()
+    if pres.Slides.Count == 0:
+        raise ValueError("Presentation has no slides. Add a slide first.")
+
+    # Create a tiny off-screen dummy shape on slide 1 to act as a template.
+    slide = pres.Slides(1)
+    shp = slide.Shapes.AddShape(msoShapeRectangle, 0, 0, 1, 1)
+    try:
+        if fill_type == "none":
+            shp.Fill.Visible = msoFalse
+        elif fill_color_hex is not None:
+            shp.Fill.Visible = msoTrue
+            shp.Fill.Solid()
+            shp.Fill.ForeColor.RGB = hex_to_int(fill_color_hex)
+
+        if line_visible is not None:
+            shp.Line.Visible = msoTrue if line_visible else msoFalse
+        if line_color_hex is not None:
+            shp.Line.ForeColor.RGB = hex_to_int(line_color_hex)
+        if line_weight is not None:
+            shp.Line.Weight = line_weight
+
+        if font_name is not None:
+            shp.TextFrame.TextRange.Font.Name = font_name
+        if font_size is not None:
+            shp.TextFrame.TextRange.Font.Size = font_size
+        if font_bold is not None:
+            shp.TextFrame.TextRange.Font.Bold = msoTrue if font_bold else msoFalse
+        if font_italic is not None:
+            shp.TextFrame.TextRange.Font.Italic = msoTrue if font_italic else msoFalse
+        if font_color_hex is not None:
+            shp.TextFrame.TextRange.Font.Color.RGB = hex_to_int(font_color_hex)
+
+        shp.SetShapesDefaultProperties()
+    finally:
+        shp.Delete()
+
+    return json.dumps({"success": True})
+
+
 def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style, filled):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -1630,3 +1715,59 @@ def register_tools(mcp):
         for 24 hours.
         """
         return search_icons(params)
+
+    # --- Default Shape Style ---
+    @mcp.tool(
+        name="ppt_set_default_shape_style",
+        annotations={
+            "title": "Set Default Shape Style",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_set_default_shape_style(params: SetDefaultShapeStyleInput) -> str:
+        """Set the default style applied to new shapes in the active presentation.
+
+        Equivalent to right-clicking a shape in PowerPoint and choosing
+        "Set as Default Shape". All subsequently inserted shapes inherit
+        the fill, border, and font settings configured here.
+
+        Provide only the properties you want to change — omitted fields
+        leave the current default unchanged. Examples:
+
+        - Transparent fill, no border:
+          fill_type='none', line_visible=false
+        - Solid accent color fill, white bold text:
+          fill_type='solid', fill_color='accent1',
+          line_visible=false, font_color='#FFFFFF', font_bold=true
+        - Thin grey border only:
+          line_visible=true, line_color='#AAAAAA', line_weight=0.75
+
+        Note: The default is scoped to the presentation, not PowerPoint
+        globally. It resets when the presentation is closed.
+        """
+        pres = ppt._get_pres_impl()
+        fill_color_hex = None
+        if params.fill_color:
+            fill_color_hex = _resolve_color(pres, params.fill_color)
+        line_color_hex = None
+        if params.line_color:
+            line_color_hex = _resolve_color(pres, params.line_color)
+        font_color_hex = None
+        if params.font_color:
+            font_color_hex = _resolve_color(pres, params.font_color)
+        return ppt.execute(
+            _set_default_shape_style_impl,
+            params.fill_type,
+            fill_color_hex,
+            params.line_visible,
+            line_color_hex,
+            params.line_weight,
+            params.font_name,
+            params.font_size,
+            params.font_bold,
+            params.font_italic,
+            font_color_hex,
+        )
