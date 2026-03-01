@@ -977,6 +977,8 @@ class SetDefaultShapeStyleInput(BaseModel):
 def _set_default_shape_style_from_shape_impl(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
+    if slide_index > pres.Slides.Count:
+        raise ValueError(f"slide_index {slide_index} out of range (1-{pres.Slides.Count})")
     goto_slide(app, slide_index)
     slide = pres.Slides(slide_index)
     shp = _get_shape(slide, shape_name_or_index)

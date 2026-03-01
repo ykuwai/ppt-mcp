@@ -3,6 +3,7 @@
 Covers all model_validator decorated methods in:
 - freeform.py: NodeSpec, BuildFreeformInput, InsertNodeInput
 - tables.py: MergeTableCellsInput, SetTableBordersInput
+- advanced_ops.py: SetDefaultShapeStyleInput
 
 These are pure Python tests — no COM or PowerPoint required.
 """
@@ -23,6 +24,7 @@ from ppt_com.tables import (
     MergeTableCellsInput,
     SetTableBordersInput,
 )
+from ppt_com.advanced_ops import SetDefaultShapeStyleInput
 
 
 # ============================================================================
@@ -514,3 +516,70 @@ class TestSetTableBordersInput:
             sides=["diagonal_down", "diagonal_up"],
         ))
         assert "diagonal_down" in inp.sides
+
+
+# ============================================================================
+# advanced_ops.py — SetDefaultShapeStyleInput
+# ============================================================================
+
+class TestSetDefaultShapeStyleInput:
+    """Tests for the validate_mode cross-field validator."""
+
+    def test_shape_based_both_fields_valid(self):
+        """Shape-based mode with both fields is valid."""
+        inp = SetDefaultShapeStyleInput(slide_index=1, shape_name_or_index="Rect 1")
+        assert inp.slide_index == 1
+        assert inp.shape_name_or_index == "Rect 1"
+
+    def test_shape_based_int_index_valid(self):
+        """shape_name_or_index accepts an integer."""
+        inp = SetDefaultShapeStyleInput(slide_index=2, shape_name_or_index=3)
+        assert inp.shape_name_or_index == 3
+
+    def test_shape_based_only_slide_index_raises(self):
+        """slide_index without shape_name_or_index raises ValidationError."""
+        with pytest.raises(ValidationError):
+            SetDefaultShapeStyleInput(slide_index=1)
+
+    def test_shape_based_only_shape_name_raises(self):
+        """shape_name_or_index without slide_index raises ValidationError."""
+        with pytest.raises(ValidationError):
+            SetDefaultShapeStyleInput(shape_name_or_index="Rect 1")
+
+    def test_mixed_mode_raises(self):
+        """Combining shape-based and property-based params raises ValidationError."""
+        with pytest.raises(ValidationError):
+            SetDefaultShapeStyleInput(
+                slide_index=1, shape_name_or_index="Rect 1",
+                fill_type="solid", fill_color="#FF0000",
+            )
+
+    def test_property_based_valid(self):
+        """Property-based mode with valid fields is accepted."""
+        inp = SetDefaultShapeStyleInput(
+            fill_type="solid", fill_color="#FF0000",
+            line_visible=False, font_bold=True,
+        )
+        assert inp.fill_type == "solid"
+        assert inp.fill_color == "#FF0000"
+
+    def test_fill_type_none_valid(self):
+        """fill_type='none' without fill_color is valid."""
+        inp = SetDefaultShapeStyleInput(fill_type="none")
+        assert inp.fill_type == "none"
+
+    def test_fill_type_solid_without_color_raises(self):
+        """fill_type='solid' without fill_color raises ValidationError."""
+        with pytest.raises(ValidationError):
+            SetDefaultShapeStyleInput(fill_type="solid")
+
+    def test_fill_type_invalid_raises(self):
+        """Unknown fill_type value raises ValidationError."""
+        with pytest.raises(ValidationError):
+            SetDefaultShapeStyleInput(fill_type="gradient")
+
+    def test_all_none_valid(self):
+        """All-None input (no-op) is valid."""
+        inp = SetDefaultShapeStyleInput()
+        assert inp.fill_type is None
+        assert inp.slide_index is None
