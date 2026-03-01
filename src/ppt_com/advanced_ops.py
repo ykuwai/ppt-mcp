@@ -910,7 +910,10 @@ class SetDefaultShapeStyleInput(BaseModel):
     def validate_fill_type(self):
         if self.fill_type is not None and self.fill_type not in ("solid", "none"):
             raise ValueError(f"fill_type must be 'solid' or 'none', got '{self.fill_type}'")
+        if self.fill_type == "solid" and self.fill_color is None:
+            raise ValueError("fill_color is required when fill_type='solid'")
         return self
+
     line_visible: Optional[bool] = Field(
         default=None,
         description="Show (true) or hide (false) the shape border.",
