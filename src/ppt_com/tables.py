@@ -47,6 +47,8 @@ BORDER_SIDE_MAP: dict[str, int] = {
     "diagonal_up": ppBorderDiagonalUp,
 }
 
+_DIAGONAL_SIDES: set[int] = {ppBorderDiagonalDown, ppBorderDiagonalUp}
+
 DASH_STYLE_MAP: dict[str, int] = {
     "solid": msoLineSolid,
     "round_dot": msoLineRoundDot,
@@ -239,7 +241,11 @@ class SetTableBordersInput(BaseModel):
     end_col: Optional[int] = Field(default=None, ge=1, description="Last column of the target range (1-based, default=last column)")
     sides: List[str] = Field(
         ..., min_length=1,
-        description="Which borders to set: any of 'top', 'bottom', 'left', 'right', 'diagonal_down', 'diagonal_up'"
+        description=(
+            "Which borders to set: any of 'top', 'bottom', 'left', 'right', 'diagonal_down', 'diagonal_up'. "
+            "NOTE: 'visible' has no effect on diagonal_down/diagonal_up due to a PowerPoint COM limitation. "
+            "To hide diagonal borders, set 'color' to match the cell background instead."
+        )
     )
     visible: Optional[bool] = Field(default=None, description="Show or hide the border")
     color: Optional[str] = Field(default=None, description="Border color as '#RRGGBB'")
@@ -691,6 +697,8 @@ def _set_table_borders_impl(
             )
         dash_style_int = DASH_STYLE_MAP[key]
 
+    diagonal_visible_skipped = False
+
     cells_updated = 0
     for r in range(start_row, actual_end_row + 1):
         for c in range(start_col, actual_end_col + 1):
@@ -698,7 +706,10 @@ def _set_table_borders_impl(
             for border_type in side_constants:
                 border = cell.Borders.Item(border_type)
                 if visible is not None:
-                    border.Visible = msoTrue if visible else msoFalse
+                    if border_type in _DIAGONAL_SIDES:
+                        diagonal_visible_skipped = True
+                    else:
+                        border.Visible = msoTrue if visible else msoFalse
                 if color_int is not None:
                     border.ForeColor.RGB = color_int
                 if weight is not None:
@@ -708,12 +719,18 @@ def _set_table_borders_impl(
             if side_constants:
                 cells_updated += 1
 
-    return {
+    result = {
         "success": True,
         "cells_updated": cells_updated,
         "rows": f"{start_row}-{actual_end_row}",
         "cols": f"{start_col}-{actual_end_col}",
     }
+    if diagonal_visible_skipped:
+        result["warnings"] = [
+            "visible has no effect on diagonal_down/diagonal_up borders (PowerPoint COM limitation). "
+            "To hide diagonal borders, set color to match the cell background instead."
+        ]
+    return result
 
 
 # ---------------------------------------------------------------------------
