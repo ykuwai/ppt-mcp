@@ -722,3 +722,31 @@ msoAnchorMiddle         = 3
 msoAnchorBottom         = 4
 msoAnchorBottomBaseLine = 5
 msoVerticalAnchorMixed  = -2
+
+# ==============================================================================
+# MsoEditingType (for FreeformBuilder / ShapeNodes)
+# ==============================================================================
+msoEditingAuto      = 0  # Auto-select type based on connected segments
+msoEditingCorner    = 1  # Sharp corner (independent control handles)
+msoEditingSmooth    = 2  # Smooth curve (collinear handles, asymmetric lengths)
+msoEditingSymmetric = 3  # Symmetric curve (collinear handles, equal lengths)
+
+# ==============================================================================
+# MsoSegmentType (for FreeformBuilder / ShapeNodes)
+# ==============================================================================
+msoSegmentLine  = 0  # Straight line segment
+msoSegmentCurve = 1  # Bézier curve segment
+
+# Lookup maps for freeform tools
+EDITING_TYPE_MAP = {
+    "auto": 0, "corner": 1, "smooth": 2, "symmetric": 3,
+}
+EDITING_TYPE_NAMES = {
+    0: "auto", 1: "corner", 2: "smooth", 3: "symmetric",
+}
+SEGMENT_TYPE_MAP = {
+    "line": 0, "curve": 1,
+}
+SEGMENT_TYPE_NAMES = {
+    0: "line", 1: "curve",
+}
