@@ -56,13 +56,19 @@ class NodeSpec(BaseModel):
         et = self.editing_type.lower()
         if seg not in SEGMENT_TYPE_MAP:
             raise ValueError(f"segment_type must be 'line' or 'curve', got '{seg}'")
-        if et not in EDITING_TYPE_MAP:
-            raise ValueError(f"editing_type must be 'auto', 'corner', 'smooth', or 'symmetric', got '{et}'")
         # Line segments must use auto
-        if seg == "line" and et != "auto":
+        if seg == "line":
             self.editing_type = "auto"
+            return self
+        # Curve: FreeformBuilder.AddNodes only supports 'auto' and 'corner'
+        # ('smooth'/'symmetric' are for editing existing nodes via SetEditingType)
+        if et not in ("auto", "corner"):
+            raise ValueError(
+                f"curve editing_type for new freeforms must be 'auto' or 'corner', got '{et}'. "
+                "Use ppt_set_node_editing_type to apply 'smooth' or 'symmetric' after creation."
+            )
         # Corner curve requires all 6 extra coordinates
-        if seg == "curve" and et == "corner":
+        if et == "corner":
             missing = [n for n, v in [("x2", self.x2), ("y2", self.y2), ("x3", self.x3), ("y3", self.y3)] if v is None]
             if missing:
                 raise ValueError(
@@ -82,6 +88,16 @@ class BuildFreeformInput(BaseModel):
         default="corner",
         description="Editing type of the first node: 'auto', 'corner', 'smooth', or 'symmetric'.",
     )
+
+    @model_validator(mode="after")
+    def validate_start_editing_type(self):
+        et = self.start_editing_type.lower()
+        if et not in EDITING_TYPE_MAP:
+            raise ValueError(
+                f"start_editing_type must be 'auto', 'corner', 'smooth', or 'symmetric', got '{et}'"
+            )
+        self.start_editing_type = et
+        return self
     nodes: list[NodeSpec] = Field(
         ...,
         min_length=1,
@@ -154,11 +170,16 @@ class InsertNodeInput(BaseModel):
         et = self.editing_type.lower()
         if seg not in SEGMENT_TYPE_MAP:
             raise ValueError(f"segment_type must be 'line' or 'curve', got '{seg}'")
-        if et not in EDITING_TYPE_MAP:
-            raise ValueError(f"editing_type must be 'auto', 'corner', 'smooth', or 'symmetric', got '{et}'")
         if seg == "line":
             self.editing_type = "auto"
-        if seg == "curve" and et == "corner":
+            return self
+        # Curve: ShapeNodes.Insert only supports 'auto' and 'corner'
+        if et not in ("auto", "corner"):
+            raise ValueError(
+                f"curve editing_type must be 'auto' or 'corner', got '{et}'. "
+                "Use ppt_set_node_editing_type to apply 'smooth' or 'symmetric' after insertion."
+            )
+        if et == "corner":
             missing = [n for n, v in [("x2", self.x2), ("y2", self.y2), ("x3", self.x3), ("y3", self.y3)] if v is None]
             if missing:
                 raise ValueError(
@@ -218,21 +239,45 @@ def _check_freeform(shape):
         )
 
 
-def _read_nodes(nodes_com) -> list[dict]:
-    """Read all nodes from a COM ShapeNodes collection into a list of dicts."""
+def _read_nodes(shape) -> list[dict]:
+    """Read all nodes from a freeform shape into a list of dicts.
+
+    Uses shape.Vertices for XY positions (node.Points is unreliable in pywin32)
+    and shape.Nodes.Item(i) for editing/segment type metadata.
+
+    Closing nodes (added when close_path=True) have position data but no
+    accessible EditingType/SegmentType metadata in COM; they are returned
+    with segment_type/editing_type = "close".
+    """
+    nodes_com = shape.Nodes
+    # shape.Vertices: 2D Variant array, 0-based in pywin32: verts[i][0]=X, verts[i][1]=Y
+    vertices = shape.Vertices
+
     result = []
     for i in range(1, nodes_com.Count + 1):
-        node = nodes_com.Item(i)
-        pts = node.Points  # COM Variant -> tuple-of-tuples: pts[0][0], pts[0][1]
-        et_int = node.EditingType
-        seg_int = node.SegmentType
-        result.append({
-            "index": i,
-            "x": round(float(pts[0][0]), 2),
-            "y": round(float(pts[0][1]), 2),
-            "editing_type": EDITING_TYPE_NAMES.get(et_int, str(et_int)),
-            "segment_type": SEGMENT_TYPE_NAMES.get(seg_int, str(seg_int)),
-        })
+        vx = round(float(vertices[i - 1][0]), 2)
+        vy = round(float(vertices[i - 1][1]), 2)
+        try:
+            node = nodes_com.Item(i)
+            et_int = node.EditingType
+            seg_int = node.SegmentType
+            result.append({
+                "index": i,
+                "x": vx,
+                "y": vy,
+                "editing_type": EDITING_TYPE_NAMES.get(et_int, str(et_int)),
+                "segment_type": SEGMENT_TYPE_NAMES.get(seg_int, str(seg_int)),
+            })
+        except Exception:
+            # Closing node: has position but COM metadata is inaccessible
+            result.append({
+                "index": i,
+                "x": vx,
+                "y": vy,
+                "editing_type": "close",
+                "segment_type": "close",
+                "note": "Closing node — path returns to start. Metadata not accessible via COM.",
+            })
     return result
 
 
@@ -286,12 +331,11 @@ def _get_shape_nodes_impl(slide_index, shape_name, shape_index):
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
     _check_freeform(shape)
 
-    nodes_com = shape.Nodes
-    nodes = _read_nodes(nodes_com)
+    nodes = _read_nodes(shape)
 
     return json.dumps({
         "shape_name": shape.Name,
-        "node_count": nodes_com.Count,
+        "node_count": len(nodes),
         "nodes": nodes,
     })
 
@@ -308,14 +352,14 @@ def _set_node_position_impl(slide_index, shape_name, shape_index, node_index, x,
 
     nodes_com.SetPosition(node_index, x, y)
 
-    # Re-read actual position (may differ due to snapping)
-    pts = nodes_com.Item(node_index).Points
+    # Re-read actual position via Vertices (node.Points is unreliable in pywin32)
+    verts = shape.Vertices
     return json.dumps({
         "success": True,
         "shape_name": shape.Name,
         "node_index": node_index,
-        "x": round(float(pts[0][0]), 2),
-        "y": round(float(pts[0][1]), 2),
+        "x": round(float(verts[node_index - 1][0]), 2),
+        "y": round(float(verts[node_index - 1][1]), 2),
     })
 
 
@@ -449,7 +493,7 @@ def register_tools(mcp):
         Set close_path=true to automatically close the path with a straight line
         back to the start point.
         """
-        start_et_int = EDITING_TYPE_MAP.get(params.start_editing_type.lower(), 1)
+        start_et_int = EDITING_TYPE_MAP[params.start_editing_type.lower()]
         nodes_data = []
         for nd in params.nodes:
             nodes_data.append({
