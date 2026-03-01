@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 from utils.com_wrapper import ppt
 from ppt_com.constants import (
     msoFreeform,
+    msoSegmentLine, msoEditingAuto,
     EDITING_TYPE_MAP, EDITING_TYPE_NAMES,
     SEGMENT_TYPE_MAP, SEGMENT_TYPE_NAMES,
 )
@@ -245,9 +246,9 @@ def _read_nodes(shape) -> list[dict]:
     Uses shape.Vertices for XY positions (node.Points is unreliable in pywin32)
     and shape.Nodes.Item(i) for editing/segment type metadata.
 
-    Closing nodes (added when close_path=True) have position data but no
-    accessible EditingType/SegmentType metadata in COM; they are returned
-    with segment_type/editing_type = "close".
+    Closing nodes (added when close_path=True) and Bézier control points
+    created with msoEditingCorner have position data but inaccessible COM
+    metadata; they are returned with segment_type/editing_type = "inaccessible".
     """
     nodes_com = shape.Nodes
     # shape.Vertices: 2D Variant array, 0-based in pywin32: verts[i][0]=X, verts[i][1]=Y
@@ -297,19 +298,19 @@ def _build_freeform_impl(slide_index, start_et_int, start_x, start_y, nodes_data
         et_int = nd["et_int"]
         x1, y1 = nd["x1"], nd["y1"]
 
-        if seg_int == 0:
-            # Line segment: EditingType must be msoEditingAuto (0), 4-arg form
-            builder.AddNodes(0, 0, x1, y1)
-        elif et_int == 0:
+        if seg_int == msoSegmentLine:
+            # Line segment: EditingType must be msoEditingAuto, 4-arg form
+            builder.AddNodes(msoSegmentLine, msoEditingAuto, x1, y1)
+        elif et_int == msoEditingAuto:
             # Curve + auto: 4-arg form
-            builder.AddNodes(seg_int, 0, x1, y1)
+            builder.AddNodes(seg_int, msoEditingAuto, x1, y1)
         else:
             # Curve + corner: 8-arg form with 2 control points + endpoint
             builder.AddNodes(seg_int, et_int, x1, y1, nd["x2"], nd["y2"], nd["x3"], nd["y3"])
 
     if close_path:
         # Close the path with a straight line back to the start
-        builder.AddNodes(0, 0, start_x, start_y)
+        builder.AddNodes(msoSegmentLine, msoEditingAuto, start_x, start_y)
 
     shape = builder.ConvertToShape()
     if shape_name:
@@ -374,12 +375,12 @@ def _insert_node_impl(slide_index, shape_name, shape_index, after_index, seg_int
     if after_index > nodes_com.Count:
         raise ValueError(f"after_index {after_index} out of range (shape has {nodes_com.Count} nodes).")
 
-    if seg_int == 0:
+    if seg_int == msoSegmentLine:
         # Line: force msoEditingAuto, 5-arg form
-        nodes_com.Insert(after_index, 0, 0, x1, y1)
-    elif et_int == 0:
+        nodes_com.Insert(after_index, msoSegmentLine, msoEditingAuto, x1, y1)
+    elif et_int == msoEditingAuto:
         # Curve + auto: 5-arg form
-        nodes_com.Insert(after_index, seg_int, 0, x1, y1)
+        nodes_com.Insert(after_index, seg_int, msoEditingAuto, x1, y1)
     else:
         # Curve + corner: 8-arg form
         nodes_com.Insert(after_index, seg_int, et_int, x1, y1, x2, y2, x3, y3)
@@ -443,18 +444,20 @@ def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg
     nodes_com.SetSegmentType(node_index, seg_int)
     new_count = shape.Nodes.Count
 
-    return json.dumps({
+    result = {
         "success": True,
         "shape_name": shape.Name,
         "node_index": node_index,
         "segment_type": SEGMENT_TYPE_NAMES.get(seg_int, str(seg_int)),
         "old_node_count": old_count,
         "new_node_count": new_count,
-        "note": (
+    }
+    if old_count != new_count:
+        result["note"] = (
             "Node count changed — switching line↔curve adds or removes control-point nodes. "
             "Re-call ppt_get_shape_nodes to see updated indices."
-        ) if old_count != new_count else None,
-    })
+        )
+    return json.dumps(result)
 
 
 # ---------------------------------------------------------------------------
@@ -592,8 +595,8 @@ def register_tools(mcp):
 
         Call ppt_get_shape_nodes first to confirm the current node layout.
         """
-        seg_int = SEGMENT_TYPE_MAP.get(params.segment_type.lower(), 0)
-        et_int = EDITING_TYPE_MAP.get(params.editing_type.lower(), 0)
+        seg_int = SEGMENT_TYPE_MAP[params.segment_type.lower()]
+        et_int = EDITING_TYPE_MAP[params.editing_type.lower()]
         return ppt.execute(
             _insert_node_impl,
             params.slide_index,
