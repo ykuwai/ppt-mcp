@@ -269,14 +269,15 @@ def _read_nodes(shape) -> list[dict]:
                 "segment_type": SEGMENT_TYPE_NAMES.get(seg_int, str(seg_int)),
             })
         except Exception:
-            # Closing node: has position but COM metadata is inaccessible
+            # Some nodes (closing nodes, Bézier control points created with
+            # msoEditingCorner) have position data but inaccessible COM metadata.
             result.append({
                 "index": i,
                 "x": vx,
                 "y": vy,
-                "editing_type": "close",
-                "segment_type": "close",
-                "note": "Closing node — path returns to start. Metadata not accessible via COM.",
+                "editing_type": "inaccessible",
+                "segment_type": "inaccessible",
+                "note": "Metadata not accessible via COM (control point or closing node).",
             })
     return result
 
