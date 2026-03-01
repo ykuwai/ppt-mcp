@@ -442,14 +442,23 @@ def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index
     try:
         new_et = nodes_com.Item(node_index).EditingType
         editing_type_str = EDITING_TYPE_NAMES.get(new_et, str(new_et))
+        result = {
+            "success": True,
+            "shape_name": shape.Name,
+            "node_index": node_index,
+            "editing_type": editing_type_str,
+        }
     except Exception:
-        editing_type_str = "inaccessible"
-    return json.dumps({
-        "success": True,
-        "shape_name": shape.Name,
-        "node_index": node_index,
-        "editing_type": editing_type_str,
-    })
+        # Control-point and closing nodes have inaccessible COM metadata,
+        # consistent with _read_nodes. The SetEditingType call itself succeeded.
+        result = {
+            "success": True,
+            "shape_name": shape.Name,
+            "node_index": node_index,
+            "editing_type": "inaccessible",
+            "note": "Metadata not accessible via COM (control point or closing node).",
+        }
+    return json.dumps(result)
 
 
 def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg_int):
