@@ -87,15 +87,20 @@ class BuildFreeformInput(BaseModel):
     start_y: float = Field(..., description="Y position of the first node in points.")
     start_editing_type: str = Field(
         default="corner",
-        description="Editing type of the first node: 'auto', 'corner', 'smooth', or 'symmetric'.",
+        description=(
+            "Editing type of the first node: 'auto' or 'corner'. "
+            "('smooth'/'symmetric' are not supported by BuildFreeform; use "
+            "ppt_set_node_editing_type after creation.)"
+        ),
     )
 
     @model_validator(mode="after")
     def validate_start_editing_type(self):
         et = self.start_editing_type.lower()
-        if et not in EDITING_TYPE_MAP:
+        if et not in ("auto", "corner"):
             raise ValueError(
-                f"start_editing_type must be 'auto', 'corner', 'smooth', or 'symmetric', got '{et}'"
+                f"start_editing_type must be 'auto' or 'corner', got '{et}'. "
+                "Use ppt_set_node_editing_type to apply 'smooth' or 'symmetric' after creation."
             )
         self.start_editing_type = et
         return self
@@ -595,8 +600,12 @@ def register_tools(mcp):
 
         Call ppt_get_shape_nodes first to confirm the current node layout.
         """
-        seg_int = SEGMENT_TYPE_MAP[params.segment_type.lower()]
-        et_int = EDITING_TYPE_MAP[params.editing_type.lower()]
+        seg_int = SEGMENT_TYPE_MAP.get(params.segment_type.lower())
+        if seg_int is None:
+            raise ValueError(f"segment_type must be 'line' or 'curve', got '{params.segment_type}'")
+        et_int = EDITING_TYPE_MAP.get(params.editing_type.lower())
+        if et_int is None:
+            raise ValueError(f"editing_type must be 'auto' or 'corner', got '{params.editing_type}'")
         return ppt.execute(
             _insert_node_impl,
             params.slide_index,
