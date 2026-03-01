@@ -360,6 +360,13 @@ try:
 except ImportError:
     logger.debug("batch_apply module not yet available")
 
+# Freeform shape tools
+try:
+    from ppt_com.freeform import register_tools as register_freeform_tools
+    register_freeform_tools(mcp)
+except ImportError:
+    logger.debug("freeform module not yet available")
+
 
 # =============================================================================
 # Tools: Slide Preview (Visual Inspection)
