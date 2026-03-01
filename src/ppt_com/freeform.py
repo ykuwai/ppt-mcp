@@ -11,6 +11,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.com_wrapper import ppt
+from utils.navigation import goto_slide
 from ppt_com.constants import (
     msoFreeform,
     msoSegmentLine, msoEditingAuto,
@@ -293,6 +294,8 @@ def _read_nodes(shape) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _build_freeform_impl(slide_index, start_et_int, start_x, start_y, nodes_data, close_path, shape_name):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
@@ -333,6 +336,8 @@ def _build_freeform_impl(slide_index, start_et_int, start_x, start_y, nodes_data
 
 
 def _get_shape_nodes_impl(slide_index, shape_name, shape_index):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
@@ -348,6 +353,8 @@ def _get_shape_nodes_impl(slide_index, shape_name, shape_index):
 
 
 def _set_node_position_impl(slide_index, shape_name, shape_index, node_index, x, y):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
@@ -371,6 +378,8 @@ def _set_node_position_impl(slide_index, shape_name, shape_index, node_index, x,
 
 
 def _insert_node_impl(slide_index, shape_name, shape_index, after_index, seg_int, et_int, x1, y1, x2, y2, x3, y3):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
@@ -398,6 +407,8 @@ def _insert_node_impl(slide_index, shape_name, shape_index, after_index, seg_int
 
 
 def _delete_node_impl(slide_index, shape_name, shape_index, node_index):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
@@ -416,6 +427,8 @@ def _delete_node_impl(slide_index, shape_name, shape_index, node_index):
 
 
 def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index, et_int):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
@@ -436,6 +449,8 @@ def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index
 
 
 def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg_int):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)

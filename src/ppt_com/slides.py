@@ -309,6 +309,7 @@ def _add_slide_impl(
         layout_val = layout if layout is not None else ppLayoutBlank
         slide = pres.Slides.Add(Index=position, Layout=layout_val)
 
+    nav_goto_slide(app, slide.SlideIndex)
     return {
         "success": True,
         "slide_index": slide.SlideIndex,
