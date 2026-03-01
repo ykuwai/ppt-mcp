@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.color import hex_to_int
 from utils.com_wrapper import ppt
@@ -905,6 +905,12 @@ class SetDefaultShapeStyleInput(BaseModel):
         default=None,
         description="'solid' to apply fill_color, 'none' for no fill. Omit to leave fill unchanged.",
     )
+
+    @model_validator(mode="after")
+    def validate_fill_type(self):
+        if self.fill_type is not None and self.fill_type not in ("solid", "none"):
+            raise ValueError(f"fill_type must be 'solid' or 'none', got '{self.fill_type}'")
+        return self
     line_visible: Optional[bool] = Field(
         default=None,
         description="Show (true) or hide (false) the shape border.",
@@ -929,17 +935,23 @@ class SetDefaultShapeStyleInput(BaseModel):
 
 
 def _set_default_shape_style_impl(
-    fill_type, fill_color_hex,
-    line_visible, line_color_hex, line_weight,
-    font_name, font_size, font_bold, font_italic, font_color_hex,
+    fill_type, fill_color,
+    line_visible, line_color, line_weight,
+    font_name, font_size, font_bold, font_italic, font_color,
 ):
     pres = ppt._get_pres_impl()
     if pres.Slides.Count == 0:
         raise ValueError("Presentation has no slides. Add a slide first.")
 
+    # Resolve theme color names to hex inside the COM thread.
+    fill_color_hex = _resolve_color(pres, fill_color) if fill_color else None
+    line_color_hex = _resolve_color(pres, line_color) if line_color else None
+    font_color_hex = _resolve_color(pres, font_color) if font_color else None
+
     # Create a tiny off-screen dummy shape on slide 1 to act as a template.
+    # Negative coordinates keep it completely off the slide canvas.
     slide = pres.Slides(1)
-    shp = slide.Shapes.AddShape(msoShapeRectangle, 0, 0, 1, 1)
+    shp = slide.Shapes.AddShape(msoShapeRectangle, -10000, -10000, 1, 1)
     try:
         if fill_type == "none":
             shp.Fill.Visible = msoFalse
@@ -1748,26 +1760,16 @@ def register_tools(mcp):
         Note: The default is scoped to the presentation, not PowerPoint
         globally. It resets when the presentation is closed.
         """
-        pres = ppt._get_pres_impl()
-        fill_color_hex = None
-        if params.fill_color:
-            fill_color_hex = _resolve_color(pres, params.fill_color)
-        line_color_hex = None
-        if params.line_color:
-            line_color_hex = _resolve_color(pres, params.line_color)
-        font_color_hex = None
-        if params.font_color:
-            font_color_hex = _resolve_color(pres, params.font_color)
         return ppt.execute(
             _set_default_shape_style_impl,
             params.fill_type,
-            fill_color_hex,
+            params.fill_color,
             params.line_visible,
-            line_color_hex,
+            params.line_color,
             params.line_weight,
             params.font_name,
             params.font_size,
             params.font_bold,
             params.font_italic,
-            font_color_hex,
+            params.font_color,
         )
