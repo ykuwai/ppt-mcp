@@ -894,6 +894,26 @@ class SetDefaultShapeStyleInput(BaseModel):
     """Input for setting the default shape style for new shapes."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
+    # --- Shape-based mode ---
+    slide_index: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "1-based slide index of the template shape. "
+            "When provided together with shape_name_or_index, that shape's full style "
+            "(fill, border, effects, font, etc.) is captured as the default. "
+            "Omit to use property-based mode instead."
+        ),
+    )
+    shape_name_or_index: Optional[Union[str, int]] = Field(
+        default=None,
+        description=(
+            "Name or 1-based index of the shape whose style to use as the default. "
+            "Must be provided together with slide_index."
+        ),
+    )
+
+    # --- Property-based mode ---
     fill_color: Optional[str] = Field(
         default=None,
         description=(
@@ -905,15 +925,6 @@ class SetDefaultShapeStyleInput(BaseModel):
         default=None,
         description="'solid' to apply fill_color, 'none' for no fill. Omit to leave fill unchanged.",
     )
-
-    @model_validator(mode="after")
-    def validate_fill_type(self):
-        if self.fill_type is not None and self.fill_type not in ("solid", "none"):
-            raise ValueError(f"fill_type must be 'solid' or 'none', got '{self.fill_type}'")
-        if self.fill_type == "solid" and self.fill_color is None:
-            raise ValueError("fill_color is required when fill_type='solid'")
-        return self
-
     line_visible: Optional[bool] = Field(
         default=None,
         description="Show (true) or hide (false) the shape border.",
@@ -935,6 +946,42 @@ class SetDefaultShapeStyleInput(BaseModel):
         default=None,
         description="Default font color as '#RRGGBB' hex or theme name.",
     )
+
+    @model_validator(mode="after")
+    def validate_mode(self):
+        shape_mode = self.slide_index is not None or self.shape_name_or_index is not None
+        prop_mode = any(
+            v is not None for v in [
+                self.fill_color, self.fill_type,
+                self.line_visible, self.line_color, self.line_weight,
+                self.font_name, self.font_size, self.font_bold, self.font_italic, self.font_color,
+            ]
+        )
+
+        if shape_mode and prop_mode:
+            raise ValueError(
+                "Cannot mix shape-based and property-based modes. "
+                "Either provide slide_index + shape_name_or_index, or fill/line/font properties."
+            )
+        if shape_mode:
+            if self.slide_index is None or self.shape_name_or_index is None:
+                raise ValueError("slide_index and shape_name_or_index must both be provided.")
+        else:
+            if self.fill_type is not None and self.fill_type not in ("solid", "none"):
+                raise ValueError(f"fill_type must be 'solid' or 'none', got '{self.fill_type}'")
+            if self.fill_type == "solid" and self.fill_color is None:
+                raise ValueError("fill_color is required when fill_type='solid'")
+        return self
+
+
+def _set_default_shape_style_from_shape_impl(slide_index, shape_name_or_index):
+    app = ppt._get_app_impl()
+    pres = ppt._get_pres_impl()
+    goto_slide(app, slide_index)
+    slide = pres.Slides(slide_index)
+    shp = _get_shape(slide, shape_name_or_index)
+    shp.SetShapesDefaultProperties()
+    return json.dumps({"success": True, "source_shape": shp.Name})
 
 
 def _set_default_shape_style_impl(
@@ -1747,22 +1794,41 @@ def register_tools(mcp):
 
         Equivalent to right-clicking a shape in PowerPoint and choosing
         "Set as Default Shape". All subsequently inserted shapes inherit
-        the fill, border, and font settings configured here.
+        the configured style.
 
-        Provide only the properties you want to change — omitted fields
-        leave the current default unchanged. Examples:
+        Two modes (mutually exclusive):
 
-        - Transparent fill, no border:
+        **Shape-based mode** — provide slide_index + shape_name_or_index:
+          Captures ALL properties of the specified shape (fill, border,
+          effects, shadows, font, etc.) exactly as PowerPoint's
+          "Set as Default Shape" UI option does. Recommended when you
+          want a fully-styled shape to serve as the template.
+
+        **Property-based mode** — provide fill/line/font parameters:
+          Sets only the specified properties via a temporary dummy shape.
+          Useful for quick adjustments without needing an existing shape.
+          Omitted fields leave the current default unchanged.
+
+        Examples:
+
+        Shape-based:
+          slide_index=1, shape_name_or_index='MyStyle'
+
+        Property-based:
           fill_type='none', line_visible=false
-        - Solid accent color fill, white bold text:
           fill_type='solid', fill_color='accent1',
-          line_visible=false, font_color='#FFFFFF', font_bold=true
-        - Thin grey border only:
+            line_visible=false, font_color='#FFFFFF', font_bold=true
           line_visible=true, line_color='#AAAAAA', line_weight=0.75
 
         Note: The default is scoped to the presentation, not PowerPoint
         globally. It resets when the presentation is closed.
         """
+        if params.slide_index is not None:
+            return ppt.execute(
+                _set_default_shape_style_from_shape_impl,
+                params.slide_index,
+                params.shape_name_or_index,
+            )
         return ppt.execute(
             _set_default_shape_style_impl,
             params.fill_type,
