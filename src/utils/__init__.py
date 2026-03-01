@@ -15,4 +15,3 @@ from .color import (
     int_to_hex,
     hex_to_rgb,
 )
-from .com_wrapper import PowerPointCOMWrapper, handle_com_error

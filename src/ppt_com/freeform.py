@@ -439,12 +439,16 @@ def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index
         raise ValueError(f"node_index {node_index} out of range (shape has {nodes_com.Count} nodes).")
 
     nodes_com.SetEditingType(node_index, et_int)
-    new_et = nodes_com.Item(node_index).EditingType
+    try:
+        new_et = nodes_com.Item(node_index).EditingType
+        editing_type_str = EDITING_TYPE_NAMES.get(new_et, str(new_et))
+    except Exception:
+        editing_type_str = "inaccessible"
     return json.dumps({
         "success": True,
         "shape_name": shape.Name,
         "node_index": node_index,
-        "editing_type": EDITING_TYPE_NAMES.get(new_et, str(new_et)),
+        "editing_type": editing_type_str,
     })
 
 
