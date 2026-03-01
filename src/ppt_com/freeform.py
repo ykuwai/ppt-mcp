@@ -516,6 +516,11 @@ def register_tools(mcp):
 
         Set close_path=true to automatically close the path with a straight line
         back to the start point.
+
+        Tip for closed shapes: With curve/auto, the start/end junction node
+        gets a one-sided tangent, which can produce a visible kink. Place the
+        start point at a visually unimportant location (e.g. the bottom inner
+        valley of a star) so any kink appears where it is least noticeable.
         """
         start_et_int = EDITING_TYPE_MAP[params.start_editing_type.lower()]
         nodes_data = []
