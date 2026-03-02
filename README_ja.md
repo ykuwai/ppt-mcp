@@ -62,12 +62,6 @@ claude mcp add powerpoint uvx ppt-mcp
 claude mcp add --scope project powerpoint uvx ppt-mcp
 ```
 
-### VS Code
-
-```bash
-code --add-mcp '{"name":"powerpoint","command":"uvx","args":["ppt-mcp"]}'
-```
-
 ### Cursor
 
 [![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=ppt-mcp&config=eyJ0eXBlIjoic3RkaW8iLCJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJwcHQtbWNwIl19)
@@ -89,6 +83,12 @@ args = ["ppt-mcp"]
 ```
 
 または上記の標準設定を `.codex/config.json` に記述しても動作します。
+
+### VS Code
+
+```bash
+code --add-mcp '{"name":"powerpoint","command":"uvx","args":["ppt-mcp"]}'
+```
 
 ### ソースから実行
 
