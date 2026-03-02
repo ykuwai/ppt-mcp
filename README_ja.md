@@ -148,32 +148,72 @@ uv sync
 | **フリーフォーム** | 7 | パス形状の作成、ノード位置の取得/移動、ノードの挿入/削除、編集タイプ変更、セグメントタイプ変更 |
 | | **147** | |
 
-## 💡 使用例
+## 💡 プロンプト例
 
-```python
-# 1. 操作対象のプレゼンテーションを指定（誤編集を防止）
-ppt_list_presentations()
-ppt_activate_presentation(presentation_name="demo.pptx")
+日本語でそのまま伝えるだけ — コードは不要です。
 
-# 2. テンプレートからプレゼンテーションを作成
-ppt_list_templates()
-ppt_create_presentation(template_path="C:\\...\\MyTemplate.potx")
+---
 
-# 3. スライド追加とコンテンツ設定
-ppt_add_slide(layout_index=2)
-ppt_set_text(slide_index=1, shape_name_or_index="Title 1", text="Hello World")
+**シンプル** — テーマだけ指定
 
-# 4. プレゼン全体のフォントを一括設定（英語・日本語フォントを個別に指定）
-ppt_set_default_fonts(latin="Segoe UI", east_asian="Meiryo")
+> *「Flowlyというアプリの紹介スライドを3枚作って。」*
 
-# 5. テーマカラーでGoogle Material Symbolsアイコンを挿入
-ppt_add_svg_icon(slide_index=1, icon_name="rocket",
-                 left=500, top=100, width=72, height=72,
-                 color="accent1", style="rounded", filled=True)
+<details>
+<summary>スライドを見る</summary>
+<br>
+<table><tr>
+<td><img src="assets/examples/example1/Slide1.png"></td>
+<td><img src="assets/examples/example1/Slide2.png"></td>
+<td><img src="assets/examples/example1/Slide3.png"></td>
+</tr></table>
+</details>
 
-# 6. PDFにエクスポート
-ppt_export_pdf(file_path="C:\\output\\presentation.pdf")
-```
+---
+
+**スタイル指定あり** — テーマ＋ビジュアルの方向性
+
+> *「非同期ワークのメリットについて4枚スライドを作って。ダークネイビースタイルで、各メリットにアイコンを入れて。」*
+
+<details>
+<summary>スライドを見る</summary>
+<br>
+<table><tr>
+<td><img src="assets/examples/example2/Slide1.png"></td>
+<td><img src="assets/examples/example2/Slide2.png"></td>
+<td><img src="assets/examples/example2/Slide3.png"></td>
+<td><img src="assets/examples/example2/Slide4.png"></td>
+</tr></table>
+</details>
+
+---
+
+**詳細指定** — テーマ＋デザインイメージ＋スライド構成
+
+> *「NoteAIというAIメモアプリの5枚ピッチを作って。白背景・ティールアクセント。スライド構成：タイトル・課題・解決策・機能（アイコン付き）・クロージング。」*
+
+<details>
+<summary>スライドを見る</summary>
+<br>
+<table><tr>
+<td><img src="assets/examples/example3/Slide1.png"></td>
+<td><img src="assets/examples/example3/Slide2.png"></td>
+<td><img src="assets/examples/example3/Slide3.png"></td>
+<td><img src="assets/examples/example3/Slide4.png"></td>
+<td><img src="assets/examples/example3/Slide5.png"></td>
+</tr></table>
+</details>
+
+---
+
+**クオリティを上げる一言：**
+
+| プロンプトに加える言葉 | 効果 |
+|---|---|
+| `「各ポイントにアイコンを入れて」` | Google Material Symbols からアイコンを自動検索・配置 |
+| `「ダークネイビー」`／`「白背景、ティールアクセント」` | カラーパレットと雰囲気を設定 |
+| `「構成：タイトル・課題・解決策・機能・CTA」` | ストーリーラインのある構成に |
+| `「モダンでミニマル」`／`「ピッチデッキ風」` | デザインのトーンを指定 |
+| `「ブランドカラーは #RRGGBB」` | 特定のアクセントカラーを全体に適用 |
 
 ## 🔍 機能の詳細
 

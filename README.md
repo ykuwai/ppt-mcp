@@ -148,32 +148,72 @@ uv sync
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
 | | **147** | |
 
-## 💡 Example Workflow
+## 💡 Example Prompts
 
-```python
-# 1. Target a specific presentation (prevents editing the wrong file)
-ppt_list_presentations()
-ppt_activate_presentation(presentation_name="demo.pptx")
+Just describe what you want in plain language — no code required.
 
-# 2. Create a slide from a personal template
-ppt_list_templates()
-ppt_create_presentation(template_path="C:\\...\\MyTemplate.potx")
+---
 
-# 3. Add a slide and set content
-ppt_add_slide(layout_index=2)
-ppt_set_text(slide_index=1, shape_name_or_index="Title 1", text="Hello World")
+**Simple** — topic only
 
-# 4. Set presentation-wide fonts (Latin + East Asian separately)
-ppt_set_default_fonts(latin="Segoe UI", east_asian="Meiryo")
+> *"Create a 3-slide intro deck for a productivity app called Flowly."*
 
-# 5. Insert a Google Material Symbols icon with theme color
-ppt_add_svg_icon(slide_index=1, icon_name="rocket",
-                 left=500, top=100, width=72, height=72,
-                 color="accent1", style="rounded", filled=True)
+<details>
+<summary>View slides</summary>
+<br>
+<table><tr>
+<td><img src="assets/examples/example1/Slide1.png"></td>
+<td><img src="assets/examples/example1/Slide2.png"></td>
+<td><img src="assets/examples/example1/Slide3.png"></td>
+</tr></table>
+</details>
 
-# 6. Export to PDF
-ppt_export_pdf(file_path="C:\\output\\presentation.pdf")
-```
+---
+
+**With style direction** — topic + visual style
+
+> *"Make a 4-slide presentation on the benefits of async work. Dark navy style, add icons for each benefit."*
+
+<details>
+<summary>View slides</summary>
+<br>
+<table><tr>
+<td><img src="assets/examples/example2/Slide1.png"></td>
+<td><img src="assets/examples/example2/Slide2.png"></td>
+<td><img src="assets/examples/example2/Slide3.png"></td>
+<td><img src="assets/examples/example2/Slide4.png"></td>
+</tr></table>
+</details>
+
+---
+
+**Detailed** — topic + design intent + slide structure
+
+> *"Build a 5-slide pitch for an AI note-taking app called NoteAI. White background, teal accent. Slides: title, problem, solution, features with icons, closing."*
+
+<details>
+<summary>View slides</summary>
+<br>
+<table><tr>
+<td><img src="assets/examples/example3/Slide1.png"></td>
+<td><img src="assets/examples/example3/Slide2.png"></td>
+<td><img src="assets/examples/example3/Slide3.png"></td>
+<td><img src="assets/examples/example3/Slide4.png"></td>
+<td><img src="assets/examples/example3/Slide5.png"></td>
+</tr></table>
+</details>
+
+---
+
+**Phrases that unlock richer results:**
+
+| Add this to your prompt | What it does |
+|---|---|
+| `"add icons for each point"` | Searches Google Material Symbols and places SVG icons automatically |
+| `"dark navy style"` / `"white background, teal accent"` | Sets the color palette and visual mood |
+| `"Slides: title, problem, solution, features, CTA"` | Structures the deck with a clear narrative |
+| `"modern minimal"` / `"pitch deck style"` | Signals the overall design tone |
+| `"use the brand color #RRGGBB"` | Applies a specific accent color throughout |
 
 ## 🔍 Features in Detail
 
