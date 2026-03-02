@@ -199,15 +199,20 @@ Just describe what you want in plain language — no code required.
 
 ---
 
-**Phrases that unlock richer results:**
+**Design keywords that elevate results:**
 
-| Add this to your prompt | What it does |
-|---|---|
-| `"add icons for each point"` | Searches Google Material Symbols and places SVG icons automatically |
-| `"dark navy style"` / `"white background, teal accent"` | Sets the color palette and visual mood |
-| `"Slides: title, problem, solution, features, CTA"` | Structures the deck with a clear narrative |
-| `"modern minimal"` / `"pitch deck style"` | Signals the overall design tone |
-| `"use the brand color #RRGGBB"` | Applies a specific accent color throughout |
+| Aspect | Keywords / Phrases | What it does |
+|---|---|---|
+| **Icons** | `add icons` · `icon for each point` · `use icons throughout` | Searches Google Material Symbols and places crisp SVG icons automatically |
+| **Color scheme** | `dark navy` · `white background` · `monochrome` · `light gray` | Sets the overall color palette and mood |
+| **Accent color** | `teal accent` · `blue accent` · `brand color #2563EB` | Applies a specific highlight color to headings, icons, and shapes |
+| **Style tone** | `modern minimal` · `bold and vibrant` · `clean and professional` · `playful` | Signals the overall visual personality |
+| **Deck type** | `pitch deck` · `investor presentation` · `workshop slides` · `status report` | Guides layout and content density toward the intended purpose |
+| **Slide structure** | `Slides: title, problem, solution, features, CTA` · `4 slides` | Defines the narrative arc and slide count up front |
+| **Layout** | `card layout` · `two-column` · `centered` · `full-bleed background` | Shapes how content is arranged on each slide |
+| **Text density** | `minimal text` · `one message per slide` · `bullet points` | Controls how much text appears and how it's formatted |
+| **Backgrounds** | `gradient background` · `solid dark background` · `soft light background` | Specifies the background treatment across slides |
+| **Emphasis** | `highlight key numbers` · `bold headings` · `accent bar on each slide` | Draws attention to the most important information |
 
 ## 🔍 Features in Detail
 
