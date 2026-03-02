@@ -161,11 +161,9 @@ Just describe what you want in plain language — no code required.
 <details>
 <summary>View slides</summary>
 <br>
-<table><tr>
-<td><img src="assets/examples/example1/Slide1.png"></td>
-<td><img src="assets/examples/example1/Slide2.png"></td>
-<td><img src="assets/examples/example1/Slide3.png"></td>
-</tr></table>
+<img src="assets/examples/example1/Slide1.png" width="640">
+<img src="assets/examples/example1/Slide2.png" width="640">
+<img src="assets/examples/example1/Slide3.png" width="640">
 </details>
 
 ---
@@ -177,12 +175,10 @@ Just describe what you want in plain language — no code required.
 <details>
 <summary>View slides</summary>
 <br>
-<table><tr>
-<td><img src="assets/examples/example2/Slide1.png"></td>
-<td><img src="assets/examples/example2/Slide2.png"></td>
-<td><img src="assets/examples/example2/Slide3.png"></td>
-<td><img src="assets/examples/example2/Slide4.png"></td>
-</tr></table>
+<img src="assets/examples/example2/Slide1.png" width="640">
+<img src="assets/examples/example2/Slide2.png" width="640">
+<img src="assets/examples/example2/Slide3.png" width="640">
+<img src="assets/examples/example2/Slide4.png" width="640">
 </details>
 
 ---
@@ -194,13 +190,11 @@ Just describe what you want in plain language — no code required.
 <details>
 <summary>View slides</summary>
 <br>
-<table><tr>
-<td><img src="assets/examples/example3/Slide1.png"></td>
-<td><img src="assets/examples/example3/Slide2.png"></td>
-<td><img src="assets/examples/example3/Slide3.png"></td>
-<td><img src="assets/examples/example3/Slide4.png"></td>
-<td><img src="assets/examples/example3/Slide5.png"></td>
-</tr></table>
+<img src="assets/examples/example3/Slide1.png" width="640">
+<img src="assets/examples/example3/Slide2.png" width="640">
+<img src="assets/examples/example3/Slide3.png" width="640">
+<img src="assets/examples/example3/Slide4.png" width="640">
+<img src="assets/examples/example3/Slide5.png" width="640">
 </details>
 
 ---
