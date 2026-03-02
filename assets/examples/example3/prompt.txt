@@ -1,0 +1,33 @@
+You are an AI agent helping a user with PowerPoint. The user gave this prompt:
+
+"Build a 5-slide pitch for an AI note-taking app called NoteAI. White background, teal accent. Slides: title, problem, solution, features with icons, closing."
+
+Use the PowerPoint MCP tools to execute this. Requirements:
+- ppt_list_presentations → ppt_activate_presentation (activate the first presentation)
+- Create a NEW presentation (ppt_create_presentation, no template)
+- 5 slides, white/light backgrounds, teal (#0D9488) as accent color
+- Icons (ppt_search_icons + ppt_add_svg_icon) — essential, especially on features slide
+- Clean, minimal, investor-pitch style
+
+Slide plan:
+1. Title: "NoteAI" large + "Your second brain, powered by AI" + a relevant icon (lightbulb or auto_awesome)
+2. Problem: "Your notes are scattered and useless" — show the problem visually (3 pain points with icons: chaos, search failing, forgotten context)
+3. Solution: "NoteAI understands what you mean" — clean visual showing how it works (capture → organize → retrieve), with icons for each step
+4. Features: "Everything you need, nothing you don't" — 3 features in cards with icons:
+   - Smart Capture (icon: mic or edit)
+   - Instant Recall (icon: search or manage_search)
+   - Auto-organize (icon: account_tree or folder_open)
+5. Closing: "Join the waitlist" — strong CTA, teal button, email/URL hint
+
+Use teal (#0D9488) for: headings on some slides, icon colors, accent shapes. Keep most backgrounds white or very light gray.
+
+Standard 16:9 slide = 960 × 540 pt. After creating the presentation, call ppt_get_presentation_info.
+
+After creating all slides, export ALL slides as images to:
+C:\Users\kuwam\Development\ppt-com-mcp\assets\examples\example3\
+Use ppt_export_images with format="png", width=1280.
+
+Also save the presentation file to:
+C:\Users\kuwam\Development\ppt-com-mcp\assets\examples\example3\noteai_pitch.pptx
+
+Report back: slide count, icons used, export confirmation.

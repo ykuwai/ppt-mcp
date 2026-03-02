@@ -1,0 +1,25 @@
+You are an AI agent helping a user with PowerPoint. The user gave this prompt:
+
+"Create a 3-slide intro deck for a productivity app called Flowly."
+
+Use the PowerPoint MCP tools to execute this. Here are the requirements:
+- Activate the first available presentation (ppt_list_presentations → ppt_activate_presentation)
+- Create a NEW presentation (ppt_create_presentation, no template)
+- Make 3 slides that look professional and modern
+- Use icons (ppt_search_icons + ppt_add_svg_icon) — this is important to showcase the MCP's icon capability
+- Use theme/accent colors rather than hardcoded RGB where possible
+- Keep designs clean and impactful
+
+Slide ideas:
+1. Title slide: "Flowly" (large, bold) + tagline "Get more done, with less effort" + a relevant icon
+2. Features slide: "Why teams love Flowly" + 3 feature blocks each with an icon + short label (e.g. Smart Tasks, Team Calendar, Real-time Sync)
+3. CTA slide: "Ready to flow?" + "Join 10,000+ teams" + a simple visual
+
+Standard 16:9 slide = 960 × 540 pt. After ppt_get_presentation_info, use the accent colors from the theme.
+
+After creating the slides, export ALL slides as images to:
+C:\Users\kuwam\Development\ppt-com-mcp\assets\examples\example1\
+
+Use ppt_export_images with format="png", width=1280.
+
+Report back: the slide count, shape names used, and confirm the export path.
