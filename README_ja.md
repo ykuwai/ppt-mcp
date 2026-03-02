@@ -53,7 +53,11 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 ### Claude Code
 
 ```bash
+# ユーザースコープ（全プロジェクトで利用可能）
 claude mcp add powerpoint uvx ppt-mcp
+
+# プロジェクトスコープ（.mcp.json に保存、チームで共有可能）
+claude mcp add --scope project powerpoint uvx ppt-mcp
 ```
 
 ### VS Code

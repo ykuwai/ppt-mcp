@@ -53,7 +53,11 @@ Standard config — works in Claude Desktop, Cursor, `.mcp.json`, and most other
 ### Claude Code
 
 ```bash
+# User-scoped (available in all projects)
 claude mcp add powerpoint uvx ppt-mcp
+
+# Project-scoped (stored in .mcp.json, shared with your team)
+claude mcp add --scope project powerpoint uvx ppt-mcp
 ```
 
 ### VS Code
