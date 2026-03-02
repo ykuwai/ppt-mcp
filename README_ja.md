@@ -32,7 +32,7 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 ## 📋 動作環境
 
 - Windows 11
-- Microsoft PowerPoint（Microsoft 365、2021、2019など）
+- Microsoft PowerPoint
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
 ## 🚀 はじめかた

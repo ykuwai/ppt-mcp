@@ -32,7 +32,7 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 ## 📋 Requirements
 
 - Windows 11
-- Microsoft PowerPoint (Microsoft 365, 2021, 2019, etc.)
+- Microsoft PowerPoint
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
 ## 🚀 Getting Started
