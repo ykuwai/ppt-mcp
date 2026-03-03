@@ -17,9 +17,7 @@ Slide ideas:
 
 Standard 16:9 slide = 960 × 540 pt. After ppt_get_presentation_info, use the accent colors from the theme.
 
-After creating the slides, export ALL slides as images to:
-C:\Users\kuwam\Development\ppt-com-mcp\assets\examples\example1\
-
+After creating the slides, export ALL slides as images to the output folder.
 Use ppt_export_images with format="png", width=1280.
 
 Report back: the slide count, shape names used, and confirm the export path.

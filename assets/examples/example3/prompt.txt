@@ -23,11 +23,8 @@ Use teal (#0D9488) for: headings on some slides, icon colors, accent shapes. Kee
 
 Standard 16:9 slide = 960 × 540 pt. After creating the presentation, call ppt_get_presentation_info.
 
-After creating all slides, export ALL slides as images to:
-C:\Users\kuwam\Development\ppt-com-mcp\assets\examples\example3\
+After creating all slides, export ALL slides as images to the output folder.
 Use ppt_export_images with format="png", width=1280.
-
-Also save the presentation file to:
-C:\Users\kuwam\Development\ppt-com-mcp\assets\examples\example3\noteai_pitch.pptx
+Also save the presentation file (ppt_save_presentation_as).
 
 Report back: slide count, icons used, export confirmation.

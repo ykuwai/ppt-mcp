@@ -22,9 +22,7 @@ Slide plan:
 
 Standard 16:9 slide = 960 × 540 pt. After creating the presentation, call ppt_get_presentation_info to get theme colors and use them.
 
-After creating the slides, export ALL slides as images to:
-C:\Users\kuwam\Development\ppt-com-mcp\assets\examples\example2\
-
+After creating the slides, export ALL slides as images to the output folder.
 Use ppt_export_images with format="png", width=1280.
 
 Report back: the slide count, icons used, and confirm export.
