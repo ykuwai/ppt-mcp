@@ -9,7 +9,7 @@ import logging
 import os
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
@@ -96,7 +96,17 @@ class SetSlideBackgroundInput(BaseModel):
     """Input for setting a slide's background."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    slide_index: Optional[int] = Field(
+        default=None, ge=1,
+        description="1-based slide index. Use this for a single slide, or use slide_indices for multiple.",
+    )
+    slide_indices: Optional[list[int]] = Field(
+        default=None,
+        description=(
+            "List of 1-based slide indices to apply the same background to. "
+            "Overrides slide_index when both are provided."
+        ),
+    )
     fill_type: str = Field(
         ...,
         description="Fill type: 'solid', 'gradient', 'picture', 'none', or 'master'",
@@ -125,6 +135,12 @@ class SetSlideBackgroundInput(BaseModel):
         default=None, ge=0.0, le=1.0,
         description="Fill transparency (0 = opaque, 1 = fully transparent)",
     )
+
+    @model_validator(mode="after")
+    def check_slide_target(self):
+        if self.slide_index is None and self.slide_indices is None:
+            raise ValueError("Either slide_index or slide_indices must be provided")
+        return self
 
 
 class FlipShapeInput(BaseModel):
@@ -356,39 +372,34 @@ def _set_slide_size_impl(width, height, preset, orientation):
     }
 
 
-def _set_slide_background_impl(slide_index, fill_type, color,
+def _set_slide_background_impl(slide_index, slide_indices, fill_type, color,
                                 gradient_color1, gradient_color2,
                                 gradient_style, image_path, transparency):
     app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
-    slide = pres.Slides(slide_index)
+
+    # Determine target slides
+    targets = slide_indices if slide_indices else [slide_index]
 
     fill_key = fill_type.strip().lower()
 
-    if fill_key == "master":
-        slide.FollowMasterBackground = msoTrue
-        return {
-            "success": True,
-            "slide_index": slide_index,
-            "fill_type": "master",
-        }
+    # Validate fill params once before the loop
+    if fill_key == "solid" and color is None:
+        raise ValueError("color is required for solid fill")
+    if fill_key == "gradient" and (gradient_color1 is None or gradient_color2 is None):
+        raise ValueError(
+            "gradient_color1 and gradient_color2 are required for gradient fill"
+        )
+    if fill_key == "picture":
+        if image_path is None:
+            raise ValueError("image_path is required for picture fill")
+        abs_path = os.path.abspath(image_path)
+        if not os.path.isfile(abs_path):
+            raise ValueError(f"Image file not found: {abs_path}")
 
-    # Detach from master background
-    slide.FollowMasterBackground = msoFalse
-    fill = slide.Background.Fill
-
-    if fill_key == "solid":
-        if color is None:
-            raise ValueError("color is required for solid fill")
-        fill.Solid()
-        fill.ForeColor.RGB = hex_to_int(color)
-
-    elif fill_key == "gradient":
-        if gradient_color1 is None or gradient_color2 is None:
-            raise ValueError(
-                "gradient_color1 and gradient_color2 are required for gradient fill"
-            )
+    # Resolve gradient style once
+    style_val = None
+    if fill_key == "gradient":
         style_key = (gradient_style or "horizontal").strip().lower()
         style_val = GRADIENT_STYLE_MAP.get(style_key)
         if style_val is None:
@@ -396,36 +407,57 @@ def _set_slide_background_impl(slide_index, fill_type, color,
                 f"Unknown gradient_style '{gradient_style}'. "
                 f"Valid values: {list(GRADIENT_STYLE_MAP.keys())}"
             )
-        fill.TwoColorGradient(style_val, 1)
-        fill.ForeColor.RGB = hex_to_int(gradient_color1)
-        fill.BackColor.RGB = hex_to_int(gradient_color2)
 
-    elif fill_key == "picture":
-        if image_path is None:
-            raise ValueError("image_path is required for picture fill")
-        abs_path = os.path.abspath(image_path)
-        if not os.path.isfile(abs_path):
-            raise ValueError(f"Image file not found: {abs_path}")
-        fill.UserPicture(abs_path)
-
-    elif fill_key == "none":
-        fill.Background()
-
-    else:
+    if fill_key not in ("solid", "gradient", "picture", "none", "master"):
         raise ValueError(
             f"Unknown fill_type '{fill_type}'. "
             f"Valid values: 'solid', 'gradient', 'picture', 'none', 'master'"
         )
 
-    # Apply transparency if specified
-    if transparency is not None and fill_key not in ("none", "master"):
-        fill.Transparency = transparency
+    applied = []
+    for idx in targets:
+        goto_slide(app, idx)
+        slide = pres.Slides(idx)
 
-    return {
+        if fill_key == "master":
+            slide.FollowMasterBackground = msoTrue
+            applied.append(idx)
+            continue
+
+        # Detach from master background
+        slide.FollowMasterBackground = msoFalse
+        fill = slide.Background.Fill
+
+        if fill_key == "solid":
+            fill.Solid()
+            fill.ForeColor.RGB = hex_to_int(color)
+
+        elif fill_key == "gradient":
+            fill.TwoColorGradient(style_val, 1)
+            fill.ForeColor.RGB = hex_to_int(gradient_color1)
+            fill.BackColor.RGB = hex_to_int(gradient_color2)
+
+        elif fill_key == "picture":
+            fill.UserPicture(abs_path)
+
+        elif fill_key == "none":
+            fill.Background()
+
+        # Apply transparency if specified
+        if transparency is not None and fill_key not in ("none", "master"):
+            fill.Transparency = transparency
+
+        applied.append(idx)
+
+    result = {
         "success": True,
-        "slide_index": slide_index,
+        "slide_indices": applied,
         "fill_type": fill_key,
     }
+    # Backward compatibility: when single slide, include flat slide_index field
+    if len(applied) == 1:
+        result["slide_index"] = applied[0]
+    return result
 
 
 def _flip_shape_impl(slide_index, shape_name_or_index, direction):
@@ -579,10 +611,10 @@ def set_slide_size(params: SetSlideSizeInput) -> str:
 
 
 def set_slide_background(params: SetSlideBackgroundInput) -> str:
-    """Set the background of a specific slide.
+    """Set the background of one or more slides.
 
     Args:
-        params: Slide index, fill type, and fill-specific options.
+        params: Slide index or indices, fill type, and fill-specific options.
 
     Returns:
         JSON confirming the background change.
@@ -590,10 +622,11 @@ def set_slide_background(params: SetSlideBackgroundInput) -> str:
     try:
         result = ppt.execute(
             _set_slide_background_impl,
-            params.slide_index, params.fill_type,
-            params.color, params.gradient_color1,
-            params.gradient_color2, params.gradient_style,
-            params.image_path, params.transparency,
+            params.slide_index, params.slide_indices,
+            params.fill_type, params.color,
+            params.gradient_color1, params.gradient_color2,
+            params.gradient_style, params.image_path,
+            params.transparency,
         )
         return json.dumps(result)
     except Exception as e:
@@ -733,12 +766,13 @@ def register_tools(mcp):
         },
     )
     async def tool_set_slide_background(params: SetSlideBackgroundInput) -> str:
-        """Set the background of a specific slide.
+        """Set the background of one or more slides.
 
         Fill types: 'solid' (requires color), 'gradient' (requires gradient_color1
         and gradient_color2), 'picture' (requires image_path), 'none' (transparent),
         or 'master' (follow master slide background).
         Colors use '#RRGGBB' format.
+        Use slide_indices to apply the same background to multiple slides at once.
         """
         return set_slide_background(params)
 

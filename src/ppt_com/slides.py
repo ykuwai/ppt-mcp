@@ -70,6 +70,14 @@ class AddSlideInput(BaseModel):
             "then all designs."
         ),
     )
+    count: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Number of slides to add. All slides use the same layout. "
+            "When count > 1, returns a list of created slide indices."
+        ),
+    )
 
 
 class DeleteSlideInput(BaseModel):
@@ -240,6 +248,7 @@ def _add_slide_impl(
     layout: Optional[int],
     layout_name: Optional[str],
     design_index: Optional[int] = None,
+    count: int = 1,
 ) -> dict:
     app = ppt._get_app_impl()
     pres = _resolve_presentation(app)
@@ -252,14 +261,17 @@ def _add_slide_impl(
             f"Position {position} out of range (1-{pres.Slides.Count + 1})"
         )
 
+    # --- Resolve layout (once, before the loop) ---
+    use_custom = False
+    custom_layout = None
+    layout_val = None
+
     if layout_name:
         # Check friendly name map first
         friendly_key = layout_name.lower().strip().replace(" ", "_")
         if friendly_key in LAYOUT_NAME_MAP:
-            slide = pres.Slides.Add(Index=position, Layout=LAYOUT_NAME_MAP[friendly_key])
+            layout_val = LAYOUT_NAME_MAP[friendly_key]
         else:
-            custom_layout = None
-
             if design_index is not None:
                 # Search in the specified design
                 if design_index < 1 or design_index > pres.Designs.Count:
@@ -304,18 +316,38 @@ def _add_slide_impl(
                     f"Layout '{layout_name}' not found. "
                     f"Available custom layouts by design: {available}"
                 )
-            slide = pres.Slides.AddSlide(Index=position, pCustomLayout=custom_layout)
+            use_custom = True
     else:
         layout_val = layout if layout is not None else ppLayoutBlank
-        slide = pres.Slides.Add(Index=position, Layout=layout_val)
 
-    nav_goto_slide(app, slide.SlideIndex)
-    return {
+    # --- Add slides ---
+    created = []
+    for i in range(count):
+        insert_pos = position + i
+        if use_custom:
+            slide = pres.Slides.AddSlide(Index=insert_pos, pCustomLayout=custom_layout)
+        else:
+            slide = pres.Slides.Add(Index=insert_pos, Layout=layout_val)
+        created.append({
+            "slide_index": slide.SlideIndex,
+            "slide_id": slide.SlideID,
+        })
+
+    # Navigate to the last added slide
+    nav_goto_slide(app, created[-1]["slide_index"])
+
+    result = {
         "success": True,
-        "slide_index": slide.SlideIndex,
-        "slide_id": slide.SlideID,
-        "layout": slide.Layout,
+        "slides_created": len(created),
+        "slides": created,
+        "layout": layout_val if not use_custom else created[0]["slide_index"],
     }
+    # Backward compatibility: when count=1, include flat fields
+    if count == 1:
+        result["slide_index"] = created[0]["slide_index"]
+        result["slide_id"] = created[0]["slide_id"]
+        result["layout"] = pres.Slides(created[0]["slide_index"]).Layout
+    return result
 
 
 def _delete_slide_impl(slide_index: int) -> dict:
@@ -518,7 +550,7 @@ def add_slide(params: AddSlideInput) -> str:
     try:
         result = ppt.execute(
             _add_slide_impl, params.position, params.layout,
-            params.layout_name, params.design_index,
+            params.layout_name, params.design_index, params.count,
         )
         return json.dumps(result)
     except Exception as e:
@@ -654,6 +686,7 @@ def register_tools(mcp):
         layout_name to match a layout from the slide master.
         Position is 1-based; omit to append at the end.
         Use design_index to pick a layout from a specific slide master/design.
+        Set count > 1 to add multiple slides with the same layout in one call.
         """
         return add_slide(params)
 
