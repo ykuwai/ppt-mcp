@@ -240,6 +240,10 @@ class SetTextframeInput(BaseModel):
     orientation: Optional[str] = Field(
         default=None, description="'horizontal', 'vertical', 'upward', or 'downward'"
     )
+    vertical_anchor: Optional[str] = Field(
+        default=None,
+        description="Vertical text anchor: 'top', 'middle', or 'bottom'.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +549,7 @@ def _find_replace_text_impl(find_text, replace_text, slide_index) -> dict:
 def _set_textframe_impl(slide_index, shape_name_or_index,
                         auto_size, word_wrap,
                         margin_left, margin_right, margin_top, margin_bottom,
-                        orientation) -> dict:
+                        orientation, vertical_anchor) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -585,6 +589,20 @@ def _set_textframe_impl(slide_index, shape_name_or_index,
                 f"Valid values: {list(AUTO_SIZE_MAP.keys())}"
             )
         shape.TextFrame2.AutoSize = auto_size_val
+
+    if vertical_anchor is not None:
+        VERTICAL_ANCHOR_MAP = {
+            "top": 1,       # msoAnchorTop
+            "middle": 3,    # msoAnchorMiddle
+            "bottom": 4,    # msoAnchorBottom
+        }
+        anchor_val = VERTICAL_ANCHOR_MAP.get(vertical_anchor.lower())
+        if anchor_val is None:
+            raise ValueError(
+                f"Invalid vertical_anchor '{vertical_anchor}'. "
+                f"Must be one of: {sorted(VERTICAL_ANCHOR_MAP)}"
+            )
+        tf.VerticalAnchor = anchor_val
 
     return {
         "status": "success",
@@ -695,7 +713,7 @@ def set_textframe(params: SetTextframeInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.auto_size, params.word_wrap,
             params.margin_left, params.margin_right, params.margin_top, params.margin_bottom,
-            params.orientation,
+            params.orientation, params.vertical_anchor,
         )
         return json.dumps(result)
     except Exception as e:
@@ -852,13 +870,14 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_set_textframe(params: SetTextframeInput) -> str:
-        """Configure text frame auto-fit, word wrap, margins, and orientation.
+        """Configure text frame auto-fit, word wrap, margins, orientation, and vertical anchor.
 
         Controls how text fits within a shape:
         - auto_size='shrink_to_fit': shrink text font to fit the shape
         - auto_size='shape_to_fit': resize the shape to fit all text
         - auto_size='none': no auto-fitting (text may overflow)
         - word_wrap: enable/disable text wrapping at shape boundary
+        - vertical_anchor: 'top', 'middle', or 'bottom' — controls vertical text alignment
         Also sets inner margins (points) and text orientation.
         """
         return set_textframe(params)
