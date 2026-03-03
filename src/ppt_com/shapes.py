@@ -144,6 +144,8 @@ class AddShapeInput(BaseModel):
     )
     corner_radius: Optional[float] = Field(
         default=None,
+        ge=0.0,
+        le=1.0,
         description="Corner radius for rounded_rectangle shapes. "
         "Value range: 0.0 (square corners) to 1.0 (maximum rounding). "
         "Ignored for other shape types.",
