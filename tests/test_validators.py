@@ -645,6 +645,49 @@ class TestAddShapeCornerRadius:
                 left=0, top=0, width=100, height=50, corner_radius=-0.1,
             )
 
+    def test_corner_radius_pt_valid(self):
+        """corner_radius_pt with a positive value is accepted."""
+        inp = AddShapeInput(
+            slide_index=1, shape_type="rounded_rectangle",
+            left=0, top=0, width=200, height=100, corner_radius_pt=10,
+        )
+        assert inp.corner_radius_pt == 10
+        assert inp.corner_radius is None
+
+    def test_corner_radius_pt_zero_rejected(self):
+        """corner_radius_pt=0 is rejected (gt=0.0)."""
+        with pytest.raises(ValidationError):
+            AddShapeInput(
+                slide_index=1, shape_type="rounded_rectangle",
+                left=0, top=0, width=200, height=100, corner_radius_pt=0,
+            )
+
+    def test_corner_radius_pt_negative_rejected(self):
+        """corner_radius_pt < 0 is rejected."""
+        with pytest.raises(ValidationError):
+            AddShapeInput(
+                slide_index=1, shape_type="rounded_rectangle",
+                left=0, top=0, width=200, height=100, corner_radius_pt=-5,
+            )
+
+    def test_both_corner_radius_and_pt_rejected(self):
+        """Setting both corner_radius and corner_radius_pt raises."""
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            AddShapeInput(
+                slide_index=1, shape_type="rounded_rectangle",
+                left=0, top=0, width=200, height=100,
+                corner_radius=0.5, corner_radius_pt=10,
+            )
+
+    def test_neither_corner_radius_valid(self):
+        """Neither corner_radius nor corner_radius_pt is fine (both default None)."""
+        inp = AddShapeInput(
+            slide_index=1, shape_type="rounded_rectangle",
+            left=0, top=0, width=200, height=100,
+        )
+        assert inp.corner_radius is None
+        assert inp.corner_radius_pt is None
+
 
 # ============================================================================
 # layout.py — SetSlideBackgroundInput

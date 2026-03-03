@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.color import hex_to_int
 from utils.com_wrapper import ppt
@@ -171,10 +171,27 @@ class AddShapeInput(BaseModel):
         default=None,
         ge=0.0,
         le=1.0,
-        description="Corner radius for rounded_rectangle shapes. "
+        description="Corner radius for rounded_rectangle shapes as a ratio. "
         "Value range: 0.0 (square corners) to 1.0 (maximum rounding). "
-        "Ignored for other shape types.",
+        "Mutually exclusive with corner_radius_pt. Ignored for other shape types.",
     )
+    corner_radius_pt: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Corner radius in points for rounded_rectangle shapes. "
+        "Clamped to half the shorter side of the shape. "
+        "Mutually exclusive with corner_radius. Ignored for other shape types.",
+    )
+
+    @model_validator(mode="after")
+    def validate_corner_radius(self):
+        """Ensure corner_radius and corner_radius_pt are mutually exclusive."""
+        if self.corner_radius is not None and self.corner_radius_pt is not None:
+            raise ValueError(
+                "corner_radius and corner_radius_pt are mutually exclusive — "
+                "set one or the other, not both"
+            )
+        return self
 
 
 class AddTextboxInput(BaseModel):
@@ -331,7 +348,7 @@ def _add_shape_impl(
     font_name, font_size, bold, italic, font_color, align,
     fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
     line_visible, line_color, line_weight,
-    corner_radius,
+    corner_radius, corner_radius_pt,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -400,11 +417,17 @@ def _add_shape_impl(
         shape.Line.Weight = line_weight
 
     # Corner radius for rounded rectangles
-    if corner_radius is not None:
+    if corner_radius is not None or corner_radius_pt is not None:
         try:
             if shape.AutoShapeType == SHAPE_NAME_MAP["rounded_rectangle"]:
-                # Map user-facing 0.0–1.0 to COM's 0.0–0.5 range
-                shape.Adjustments[1] = corner_radius * 0.5
+                if corner_radius_pt is not None:
+                    # Absolute: convert points to COM ratio, clamp to 0.5
+                    short_side = min(width, height)
+                    adj_value = min(0.5, corner_radius_pt / short_side)
+                else:
+                    # Ratio: map user-facing 0.0–1.0 to COM's 0.0–0.5
+                    adj_value = corner_radius * 0.5
+                shape.Adjustments[1] = adj_value
         except Exception:
             logger.warning("Failed to set corner_radius on shape '%s'", shape.Name)
 
@@ -737,7 +760,7 @@ def add_shape(params: AddShapeInput) -> str:
             params.fill_color, params.fill_type, params.fill_color2,
             params.fill_gradient_style, params.fill_transparency,
             params.line_visible, params.line_color, params.line_weight,
-            params.corner_radius,
+            params.corner_radius, params.corner_radius_pt,
         )
         return json.dumps(result)
     except Exception as e:
@@ -982,9 +1005,10 @@ def register_tools(mcp):
         fill_transparency, line_visible, line_color, and line_weight — avoids separate
         ppt_set_fill / ppt_set_line calls for common cases.
 
-        For rounded_rectangle shapes, use corner_radius (0.0–1.0) to control the
-        corner rounding. 0.0 = square corners, 1.0 = maximum rounding. Ignored for
-        other shape types.
+        For rounded_rectangle shapes, control corner rounding with either:
+        - corner_radius (0.0–1.0): ratio-based, 0.0 = square, 1.0 = max rounding
+        - corner_radius_pt (points): absolute size, e.g. 10 = 10pt radius
+        These are mutually exclusive. Ignored for other shape types.
 
         Example: text='Label', font_size=14, bold=true, fill_color='#1E3A5F',
         line_visible=false creates a fully styled shape in one step.
