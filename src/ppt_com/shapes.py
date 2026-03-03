@@ -142,6 +142,12 @@ class AddShapeInput(BaseModel):
         default=None,
         description="Border weight in points.",
     )
+    corner_radius: Optional[float] = Field(
+        default=None,
+        description="Corner radius for rounded_rectangle shapes. "
+        "Value range: 0.0 (square corners) to 1.0 (maximum rounding). "
+        "Ignored for other shape types.",
+    )
 
 
 class AddTextboxInput(BaseModel):
@@ -292,7 +298,7 @@ def _resolve_shape_type(shape_type: Union[int, str]) -> int:
 def _add_shape_impl(
     slide_index, shape_type_int, left, top, width, height, text,
     fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
-    line_visible, line_color, line_weight,
+    line_visible, line_color, line_weight, corner_radius,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -303,6 +309,15 @@ def _add_shape_impl(
     )
     if text:
         shape.TextFrame.TextRange.Text = text
+
+    # Corner radius for rounded rectangles (msoShapeRoundedRectangle = 5)
+    if corner_radius is not None:
+        try:
+            if shape.AutoShapeType == 5:
+                adj = shape.Adjustments
+                adj(1, corner_radius)
+        except Exception:
+            pass  # silently ignore if Adjustments not accessible
 
     # Inline fill — avoids a follow-up ppt_set_fill call
     _VALID_FILL_TYPES = {"solid", "none", "gradient"}
@@ -646,6 +661,7 @@ def add_shape(params: AddShapeInput) -> str:
             params.fill_color, params.fill_type, params.fill_color2,
             params.fill_gradient_style, params.fill_transparency,
             params.line_visible, params.line_color, params.line_weight,
+            params.corner_radius,
         )
         return json.dumps(result)
     except Exception as e:
@@ -886,6 +902,9 @@ def register_tools(mcp):
         fill_transparency, line_visible, line_color, and line_weight — avoids separate
         ppt_set_fill / ppt_set_line calls for common cases.
         Example: fill_color='#1E3A5F', line_visible=false creates a styled shape in one step.
+
+        For rounded_rectangle shapes, use corner_radius (0.0–1.0) to control corner rounding.
+        0.0 = square corners, 1.0 = maximum rounding. Ignored for other shape types.
         """
         return add_shape(params)
 
