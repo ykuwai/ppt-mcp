@@ -167,6 +167,14 @@ class AddShapeInput(BaseModel):
         default=None,
         description="Border weight in points.",
     )
+    corner_radius: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Corner radius for rounded_rectangle shapes. "
+        "Value range: 0.0 (square corners) to 1.0 (maximum rounding). "
+        "Ignored for other shape types.",
+    )
 
 
 class AddTextboxInput(BaseModel):
@@ -323,6 +331,7 @@ def _add_shape_impl(
     font_name, font_size, bold, italic, font_color, align,
     fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
     line_visible, line_color, line_weight,
+    corner_radius,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -389,6 +398,15 @@ def _add_shape_impl(
         shape.Line.ForeColor.RGB = hex_to_int(line_color)
     if line_weight is not None:
         shape.Line.Weight = line_weight
+
+    # Corner radius for rounded rectangles
+    if corner_radius is not None:
+        try:
+            if shape.AutoShapeType == SHAPE_NAME_MAP["rounded_rectangle"]:
+                # Map user-facing 0.0–1.0 to COM's 0.0–0.5 range
+                shape.Adjustments[1] = corner_radius * 0.5
+        except Exception:
+            logger.warning("Failed to set corner_radius on shape '%s'", shape.Name)
 
     return {
         "success": True,
@@ -719,6 +737,7 @@ def add_shape(params: AddShapeInput) -> str:
             params.fill_color, params.fill_type, params.fill_color2,
             params.fill_gradient_style, params.fill_transparency,
             params.line_visible, params.line_color, params.line_weight,
+            params.corner_radius,
         )
         return json.dumps(result)
     except Exception as e:
@@ -962,6 +981,11 @@ def register_tools(mcp):
         Optionally apply fill and border in the same call via fill_color, fill_type,
         fill_transparency, line_visible, line_color, and line_weight — avoids separate
         ppt_set_fill / ppt_set_line calls for common cases.
+
+        For rounded_rectangle shapes, use corner_radius (0.0–1.0) to control the
+        corner rounding. 0.0 = square corners, 1.0 = maximum rounding. Ignored for
+        other shape types.
+
         Example: text='Label', font_size=14, bold=true, fill_color='#1E3A5F',
         line_visible=false creates a fully styled shape in one step.
         """

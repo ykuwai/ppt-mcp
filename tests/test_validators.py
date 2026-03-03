@@ -583,3 +583,61 @@ class TestSetDefaultShapeStyleInput:
         inp = SetDefaultShapeStyleInput()
         assert inp.fill_type is None
         assert inp.slide_index is None
+
+
+# ============================================================================
+# shapes.py — AddShapeInput corner_radius validation
+# ============================================================================
+from ppt_com.shapes import AddShapeInput
+
+
+class TestAddShapeCornerRadius:
+    """Tests for AddShapeInput.corner_radius Pydantic field validation."""
+
+    def test_corner_radius_valid_zero(self):
+        """corner_radius=0.0 (square corners) is accepted."""
+        inp = AddShapeInput(
+            slide_index=1, shape_type="rounded_rectangle",
+            left=0, top=0, width=100, height=50, corner_radius=0.0,
+        )
+        assert inp.corner_radius == 0.0
+
+    def test_corner_radius_valid_one(self):
+        """corner_radius=1.0 (maximum rounding) is accepted."""
+        inp = AddShapeInput(
+            slide_index=1, shape_type="rounded_rectangle",
+            left=0, top=0, width=100, height=50, corner_radius=1.0,
+        )
+        assert inp.corner_radius == 1.0
+
+    def test_corner_radius_valid_mid(self):
+        """corner_radius=0.5 is accepted."""
+        inp = AddShapeInput(
+            slide_index=1, shape_type="rounded_rectangle",
+            left=0, top=0, width=100, height=50, corner_radius=0.5,
+        )
+        assert inp.corner_radius == 0.5
+
+    def test_corner_radius_none_by_default(self):
+        """corner_radius defaults to None."""
+        inp = AddShapeInput(
+            slide_index=1, shape_type="rectangle",
+            left=0, top=0, width=100, height=50,
+        )
+        assert inp.corner_radius is None
+
+    def test_corner_radius_too_high(self):
+        """corner_radius > 1.0 is rejected."""
+        with pytest.raises(ValidationError):
+            AddShapeInput(
+                slide_index=1, shape_type="rounded_rectangle",
+                left=0, top=0, width=100, height=50, corner_radius=1.1,
+            )
+
+    def test_corner_radius_negative(self):
+        """corner_radius < 0.0 is rejected."""
+        with pytest.raises(ValidationError):
+            AddShapeInput(
+                slide_index=1, shape_type="rounded_rectangle",
+                left=0, top=0, width=100, height=50, corner_radius=-0.1,
+            )
