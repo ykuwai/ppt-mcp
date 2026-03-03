@@ -68,6 +68,8 @@ mcp = FastMCP(
 - Standard 16:9 slide = 960 × 540 pt.
 - `ppt_batch_apply_formatting` applies multiple operations to multiple shapes in one call. Supported operations: `set_fill`, `set_line`, `set_shadow`, `set_glow`, `set_reflection`, `set_soft_edge`, `format_text`. Specify shapes by name or 1-based index. Use this whenever you want consistent styling across several shapes — much more efficient than calling individual tools per shape.
 - For consistent shape styling, call `ppt_set_default_shape_style` before inserting shapes. Shape-based mode (`slide_index` + `shape_name_or_index`) captures all properties of a template shape including gradients and effects. Property-based mode sets fill/border/font directly without needing a pre-existing shape.
+- `ppt_add_shape` supports inline text styling (`font_name`, `font_size`, `bold`, `font_color`, `align`) — style text in the same call instead of a separate `ppt_format_text`.
+- `ppt_add_slide` accepts `count` to create multiple slides at once. `ppt_set_slide_background` accepts `slide_indices` to apply a background to multiple slides in one call.
 
 ## Design thinking
 
@@ -79,7 +81,7 @@ Before placing any shapes, take a moment to plan:
 
 **Default to light backgrounds** (white, light gray, soft pastels) unless the user specifies otherwise. Dark backgrounds and full-color fills are equally valid and can look stunning — use them when the content or style calls for it. Always ensure sufficient contrast between text and background. Use `ppt_set_slide_background` to set slide backgrounds — solid colors and gradients are both supported.
 
-**Consistency across slides:** use the same heading size, card style, and spacing throughout. `ppt_set_default_shape_style` and `ppt_batch_apply_formatting` are your tools for this.
+**Consistency across slides:** use the same heading size, card style, and spacing throughout. `ppt_set_default_shape_style` and `ppt_batch_apply_formatting` are your tools for this. For rounded rectangles, use `corner_radius_pt` (e.g. `10`) to keep the same corner radius in points across shapes of different sizes.
 
 **Font sizes** — minimum sizes for projected readability:
 - Slide title: 40–48 pt
