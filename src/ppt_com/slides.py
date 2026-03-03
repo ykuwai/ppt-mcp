@@ -70,6 +70,12 @@ class AddSlideInput(BaseModel):
             "then all designs."
         ),
     )
+    count: int = Field(
+        default=1,
+        ge=1,
+        description="Number of slides to add. All slides use the same layout. "
+        "When count > 1, returns a list of created slide indices.",
+    )
 
 
 class DeleteSlideInput(BaseModel):
@@ -240,6 +246,7 @@ def _add_slide_impl(
     layout: Optional[int],
     layout_name: Optional[str],
     design_index: Optional[int] = None,
+    count: int = 1,
 ) -> dict:
     app = ppt._get_app_impl()
     pres = _resolve_presentation(app)
@@ -252,14 +259,19 @@ def _add_slide_impl(
             f"Position {position} out of range (1-{pres.Slides.Count + 1})"
         )
 
+    # Resolve layout once before the loop
+    use_custom_layout = False
+    custom_layout = None
+    friendly_layout = None
+    layout_val = None
+    resolved_layout_name = None
+
     if layout_name:
         # Check friendly name map first
         friendly_key = layout_name.lower().strip().replace(" ", "_")
         if friendly_key in LAYOUT_NAME_MAP:
-            slide = pres.Slides.Add(Index=position, Layout=LAYOUT_NAME_MAP[friendly_key])
+            friendly_layout = LAYOUT_NAME_MAP[friendly_key]
         else:
-            custom_layout = None
-
             if design_index is not None:
                 # Search in the specified design
                 if design_index < 1 or design_index > pres.Designs.Count:
@@ -304,18 +316,52 @@ def _add_slide_impl(
                     f"Layout '{layout_name}' not found. "
                     f"Available custom layouts by design: {available}"
                 )
-            slide = pres.Slides.AddSlide(Index=position, pCustomLayout=custom_layout)
+            use_custom_layout = True
+            resolved_layout_name = custom_layout.Name
     else:
         layout_val = layout if layout is not None else ppLayoutBlank
-        slide = pres.Slides.Add(Index=position, Layout=layout_val)
 
-    nav_goto_slide(app, slide.SlideIndex)
-    return {
+    # Add slides in a loop
+    created_slides = []
+    for i in range(count):
+        insert_pos = position + i
+        if use_custom_layout:
+            slide = pres.Slides.AddSlide(Index=insert_pos, pCustomLayout=custom_layout)
+        elif friendly_layout is not None:
+            slide = pres.Slides.Add(Index=insert_pos, Layout=friendly_layout)
+        else:
+            slide = pres.Slides.Add(Index=insert_pos, Layout=layout_val)
+        created_slides.append({
+            "slide_index": slide.SlideIndex,
+            "slide_id": slide.SlideID,
+        })
+
+    # Navigate to the last created slide
+    nav_goto_slide(app, created_slides[-1]["slide_index"])
+
+    # Determine layout value for response
+    resp_layout = (
+        resolved_layout_name
+        if resolved_layout_name is not None
+        else created_slides[0].get("layout", friendly_layout or layout_val)
+    )
+    # Read actual layout from the first created slide
+    first_slide = pres.Slides(created_slides[0]["slide_index"])
+    resp_layout = resolved_layout_name if resolved_layout_name else first_slide.Layout
+
+    result = {
         "success": True,
-        "slide_index": slide.SlideIndex,
-        "slide_id": slide.SlideID,
-        "layout": slide.Layout,
+        "slides_created": len(created_slides),
+        "slides": created_slides,
+        "layout": resp_layout,
     }
+
+    # Backward compatibility: include top-level slide_index/slide_id for count=1
+    if count == 1:
+        result["slide_index"] = created_slides[0]["slide_index"]
+        result["slide_id"] = created_slides[0]["slide_id"]
+
+    return result
 
 
 def _delete_slide_impl(slide_index: int) -> dict:
@@ -518,7 +564,7 @@ def add_slide(params: AddSlideInput) -> str:
     try:
         result = ppt.execute(
             _add_slide_impl, params.position, params.layout,
-            params.layout_name, params.design_index,
+            params.layout_name, params.design_index, params.count,
         )
         return json.dumps(result)
     except Exception as e:
