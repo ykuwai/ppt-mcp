@@ -457,11 +457,15 @@ def _set_slide_background_impl(slide_index, fill_type, color,
 
         applied.append(idx)
 
-    return {
+    result = {
         "success": True,
         "slide_indices": applied,
         "fill_type": fill_key,
     }
+    # Backward compatibility: include slide_index when called with single target
+    if slide_indices is None:
+        result["slide_index"] = applied[0]
+    return result
 
 
 def _flip_shape_impl(slide_index, shape_name_or_index, direction):

@@ -4,6 +4,7 @@ Covers all model_validator decorated methods in:
 - freeform.py: NodeSpec, BuildFreeformInput, InsertNodeInput
 - tables.py: MergeTableCellsInput, SetTableBordersInput
 - advanced_ops.py: SetDefaultShapeStyleInput
+- shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
 
 These are pure Python tests — no COM or PowerPoint required.
@@ -26,6 +27,7 @@ from ppt_com.tables import (
     SetTableBordersInput,
 )
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput
+from ppt_com.shapes import AddShapeInput
 from ppt_com.layout import SetSlideBackgroundInput
 
 
@@ -590,7 +592,6 @@ class TestSetDefaultShapeStyleInput:
 # ============================================================================
 # shapes.py — AddShapeInput corner_radius validation
 # ============================================================================
-from ppt_com.shapes import AddShapeInput
 
 
 class TestAddShapeCornerRadius:
