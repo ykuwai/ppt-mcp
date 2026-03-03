@@ -81,11 +81,11 @@ Before placing any shapes, take a moment to plan:
 
 **Consistency across slides:** use the same heading size, card style, and spacing throughout. `ppt_set_default_shape_style` and `ppt_batch_apply_formatting` are your tools for this.
 
-**Font sizes** — never go smaller than these minimums:
-- Slide title: ~40 pt
-- Section heading / subheading: 24–28 pt
-- Body text: 20 pt
-- Caption / annotation: 16 pt
+**Font sizes** — use these ranges as a guide:
+- Slide title: 40–48 pt
+- Section heading / subheading: 24–32 pt
+- Body text: 20–28 pt
+- Caption / annotation: 16–20 pt
 """,
 )
 
