@@ -138,8 +138,14 @@ class SetSlideBackgroundInput(BaseModel):
 
     @model_validator(mode="after")
     def check_slide_target(self):
-        if self.slide_index is None and self.slide_indices is None:
+        if self.slide_index is None and not self.slide_indices:
             raise ValueError("Either slide_index or slide_indices must be provided")
+        if self.slide_indices:
+            for idx in self.slide_indices:
+                if idx < 1:
+                    raise ValueError(
+                        f"slide_indices must contain positive integers, got {idx}"
+                    )
         return self
 
 

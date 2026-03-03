@@ -340,7 +340,7 @@ def _add_slide_impl(
         "success": True,
         "slides_created": len(created),
         "slides": created,
-        "layout": layout_val if not use_custom else created[0]["slide_index"],
+        "layout": custom_layout.Name if use_custom else layout_val,
     }
     # Backward compatibility: when count=1, include flat fields
     if count == 1:
