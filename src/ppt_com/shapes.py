@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.color import hex_to_int
 from utils.com_wrapper import ppt
@@ -102,6 +102,31 @@ class AddShapeInput(BaseModel):
     width: float = Field(..., description="Width in points")
     height: float = Field(..., description="Height in points")
     text: Optional[str] = Field(default=None, description="Optional text content")
+    # --- inline text formatting (optional — avoids a separate ppt_format_text call) ---
+    font_name: Optional[str] = Field(
+        default=None,
+        description="Font name applied to shape text. Sets both the Latin font (Name) and the East Asian font (NameFarEast) — same behaviour as ppt_add_textbox.",
+    )
+    font_size: Optional[float] = Field(
+        default=None,
+        description="Font size in points.",
+    )
+    bold: Optional[bool] = Field(
+        default=None,
+        description="Bold on/off.",
+    )
+    italic: Optional[bool] = Field(
+        default=None,
+        description="Italic on/off.",
+    )
+    font_color: Optional[str] = Field(
+        default=None,
+        description="Text color '#RRGGBB'.",
+    )
+    align: Optional[str] = Field(
+        default=None,
+        description="Paragraph alignment for shape text: 'left', 'center', 'right', or 'justify'.",
+    )
     # --- inline fill (optional — avoids a separate ppt_set_fill call) ---
     fill_color: Optional[str] = Field(
         default=None,
@@ -142,6 +167,31 @@ class AddShapeInput(BaseModel):
         default=None,
         description="Border weight in points.",
     )
+    corner_radius: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Corner radius for rounded_rectangle shapes as a ratio. "
+        "Value range: 0.0 (square corners) to 1.0 (maximum rounding). "
+        "Mutually exclusive with corner_radius_pt. Ignored for other shape types.",
+    )
+    corner_radius_pt: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Corner radius in points for rounded_rectangle shapes. "
+        "Clamped to half the shorter side of the shape. "
+        "Mutually exclusive with corner_radius. Ignored for other shape types.",
+    )
+
+    @model_validator(mode="after")
+    def check_corner_radius_exclusivity(self):
+        """Ensure corner_radius and corner_radius_pt are mutually exclusive."""
+        if self.corner_radius is not None and self.corner_radius_pt is not None:
+            raise ValueError(
+                "corner_radius and corner_radius_pt are mutually exclusive — "
+                "set one or the other, not both"
+            )
+        return self
 
 
 class AddTextboxInput(BaseModel):
@@ -169,6 +219,10 @@ class AddTextboxInput(BaseModel):
     align: Optional[str] = Field(
         default=None,
         description="Paragraph alignment for all text: 'left', 'center', 'right', or 'justify'.",
+    )
+    vertical_anchor: Optional[str] = Field(
+        default=None,
+        description="Vertical text anchor: 'top', 'middle', or 'bottom'.",
     )
 
 
@@ -291,8 +345,10 @@ def _resolve_shape_type(shape_type: Union[int, str]) -> int:
 # ---------------------------------------------------------------------------
 def _add_shape_impl(
     slide_index, shape_type_int, left, top, width, height, text,
+    font_name, font_size, bold, italic, font_color, align,
     fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
     line_visible, line_color, line_weight,
+    corner_radius, corner_radius_pt,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -303,6 +359,31 @@ def _add_shape_impl(
     )
     if text:
         shape.TextFrame.TextRange.Text = text
+
+        # Inline text formatting (same pattern as _add_textbox_impl)
+        if font_name is not None or font_size is not None or bold is not None \
+                or italic is not None or font_color is not None:
+            font = shape.TextFrame.TextRange.Font
+            if font_name is not None:
+                font.Name = font_name
+                font.NameFarEast = font_name
+            if font_size is not None:
+                font.Size = font_size
+            if bold is not None:
+                font.Bold = msoTrue if bold else msoFalse
+            if italic is not None:
+                font.Italic = msoTrue if italic else msoFalse
+            if font_color is not None:
+                font.Color.RGB = hex_to_int(font_color)
+
+        if align is not None:
+            _ALIGN = {"left": 1, "center": 2, "right": 3, "justify": 4}
+            align_val = _ALIGN.get(align.lower())
+            if align_val is None:
+                raise ValueError(
+                    f"Invalid align '{align}'. Must be one of: {sorted(_ALIGN)}"
+                )
+            shape.TextFrame.TextRange.ParagraphFormat.Alignment = align_val
 
     # Inline fill — avoids a follow-up ppt_set_fill call
     _VALID_FILL_TYPES = {"solid", "none", "gradient"}
@@ -335,6 +416,21 @@ def _add_shape_impl(
     if line_weight is not None:
         shape.Line.Weight = line_weight
 
+    # Corner radius for rounded rectangles
+    if corner_radius is not None or corner_radius_pt is not None:
+        try:
+            if shape.AutoShapeType == SHAPE_NAME_MAP["rounded_rectangle"]:
+                if corner_radius_pt is not None:
+                    # Absolute: convert points to COM ratio, clamp to 0.5
+                    short_side = min(width, height)
+                    adj_value = min(0.5, corner_radius_pt / short_side)
+                else:
+                    # Ratio: map user-facing 0.0–1.0 to COM's 0.0–0.5
+                    adj_value = corner_radius * 0.5
+                shape.Adjustments[1] = adj_value
+        except Exception:
+            logger.warning("Failed to set corner_radius on shape '%s'", shape.Name)
+
     return {
         "success": True,
         "shape_name": shape.Name,
@@ -346,6 +442,7 @@ def _add_shape_impl(
 def _add_textbox_impl(
     slide_index, left, top, width, height, text,
     font_name, font_size, bold, italic, font_color, align,
+    vertical_anchor,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -380,6 +477,21 @@ def _add_textbox_impl(
         if align_val is None:
             raise ValueError(f"Invalid align '{align}'. Must be one of: {sorted(_ALIGN)}")
         textbox.TextFrame.TextRange.ParagraphFormat.Alignment = align_val
+
+    # Inline vertical anchor — avoids a follow-up ppt_set_textframe call
+    if vertical_anchor is not None:
+        VERTICAL_ANCHOR_MAP = {
+            "top": 1,       # msoAnchorTop
+            "middle": 3,    # msoAnchorMiddle
+            "bottom": 4,    # msoAnchorBottom
+        }
+        anchor_val = VERTICAL_ANCHOR_MAP.get(vertical_anchor.lower())
+        if anchor_val is None:
+            raise ValueError(
+                f"Invalid vertical_anchor '{vertical_anchor}'. "
+                f"Must be one of: {sorted(VERTICAL_ANCHOR_MAP)}"
+            )
+        textbox.TextFrame.VerticalAnchor = anchor_val
 
     return {
         "success": True,
@@ -643,9 +755,12 @@ def add_shape(params: AddShapeInput) -> str:
             params.slide_index, shape_type_int,
             params.left, params.top, params.width, params.height,
             params.text,
+            params.font_name, params.font_size, params.bold,
+            params.italic, params.font_color, params.align,
             params.fill_color, params.fill_type, params.fill_color2,
             params.fill_gradient_style, params.fill_transparency,
             params.line_visible, params.line_color, params.line_weight,
+            params.corner_radius, params.corner_radius_pt,
         )
         return json.dumps(result)
     except Exception as e:
@@ -671,6 +786,7 @@ def add_textbox(params: AddTextboxInput) -> str:
             params.text,
             params.font_name, params.font_size, params.bold,
             params.italic, params.font_color, params.align,
+            params.vertical_anchor,
         )
         return json.dumps(result)
     except Exception as e:
@@ -882,10 +998,20 @@ def register_tools(mcp):
         'star_5point', 'cloud', etc.) or an MsoAutoShapeType integer.
         All positions and sizes are in points (72 points = 1 inch).
 
+        Optionally apply text styling in the same call via font_name, font_size, bold,
+        italic, font_color, and align — avoids a separate ppt_format_text call.
+
         Optionally apply fill and border in the same call via fill_color, fill_type,
         fill_transparency, line_visible, line_color, and line_weight — avoids separate
         ppt_set_fill / ppt_set_line calls for common cases.
-        Example: fill_color='#1E3A5F', line_visible=false creates a styled shape in one step.
+
+        For rounded_rectangle shapes, control corner rounding with either:
+        - corner_radius (0.0–1.0): ratio-based, 0.0 = square, 1.0 = max rounding
+        - corner_radius_pt (points): absolute size, e.g. 10 = 10pt radius
+        These are mutually exclusive. Ignored for other shape types.
+
+        Example: text='Label', font_size=14, bold=true, fill_color='#1E3A5F',
+        line_visible=false creates a fully styled shape in one step.
         """
         return add_shape(params)
 
@@ -907,8 +1033,11 @@ def register_tools(mcp):
 
         Optionally apply font styling in the same call via font_name, font_size, bold,
         italic, font_color, and align — avoids a separate ppt_format_text call.
+        Use vertical_anchor ('top', 'middle', 'bottom') to control vertical text
+        alignment — avoids a separate ppt_set_textframe call.
         Example: text='Title', font_name='Segoe UI', font_size=32, bold=true,
-        font_color='#FFFFFF', align='center' creates a fully styled label in one step.
+        font_color='#FFFFFF', align='center', vertical_anchor='middle' creates a
+        fully styled, vertically centered label in one step.
         """
         return add_textbox(params)
 
