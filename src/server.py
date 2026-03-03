@@ -68,6 +68,18 @@ mcp = FastMCP(
 - Standard 16:9 slide = 960 × 540 pt.
 - `ppt_batch_apply_formatting` applies multiple operations to multiple shapes in one call. Supported operations: `set_fill`, `set_line`, `set_shadow`, `set_glow`, `set_reflection`, `set_soft_edge`, `format_text`. Specify shapes by name or 1-based index. Use this whenever you want consistent styling across several shapes — much more efficient than calling individual tools per shape.
 - For consistent shape styling, call `ppt_set_default_shape_style` before inserting shapes. Shape-based mode (`slide_index` + `shape_name_or_index`) captures all properties of a template shape including gradients and effects. Property-based mode sets fill/border/font directly without needing a pre-existing shape.
+
+## Design thinking
+
+Before placing any shapes, take a moment to plan:
+- **Slide structure**: decide the narrative arc and number of slides upfront
+- **Color system**: pick one accent color and use it consistently for icons, headings, and highlights
+- **Icons**: whenever content has distinct points, steps, or features, add an icon for each — use `ppt_search_icons` + `ppt_add_svg_icon`
+- **One message per slide**: decide what this slide communicates, then place only what supports that message
+
+**Default to light backgrounds** (white, light gray, soft pastels) unless the user specifies otherwise. Dark backgrounds and full-color fills are equally valid and can look stunning — use them when the content or style calls for it. Always ensure sufficient contrast between text and background.
+
+**Consistency across slides:** use the same heading size, card style, and spacing throughout. `ppt_set_default_shape_style` and `ppt_batch_apply_formatting` are your tools for this.
 """,
 )
 
