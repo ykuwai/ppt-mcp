@@ -102,6 +102,31 @@ class AddShapeInput(BaseModel):
     width: float = Field(..., description="Width in points")
     height: float = Field(..., description="Height in points")
     text: Optional[str] = Field(default=None, description="Optional text content")
+    # --- inline text formatting (optional — avoids a separate ppt_format_text call) ---
+    font_name: Optional[str] = Field(
+        default=None,
+        description="Font name applied to shape text. Sets both the Latin font (Name) and the East Asian font (NameFarEast) — same behaviour as ppt_add_textbox.",
+    )
+    font_size: Optional[float] = Field(
+        default=None,
+        description="Font size in points.",
+    )
+    bold: Optional[bool] = Field(
+        default=None,
+        description="Bold on/off.",
+    )
+    italic: Optional[bool] = Field(
+        default=None,
+        description="Italic on/off.",
+    )
+    font_color: Optional[str] = Field(
+        default=None,
+        description="Text color '#RRGGBB'.",
+    )
+    align: Optional[str] = Field(
+        default=None,
+        description="Paragraph alignment for shape text: 'left', 'center', 'right', or 'justify'.",
+    )
     # --- inline fill (optional — avoids a separate ppt_set_fill call) ---
     fill_color: Optional[str] = Field(
         default=None,
@@ -291,6 +316,7 @@ def _resolve_shape_type(shape_type: Union[int, str]) -> int:
 # ---------------------------------------------------------------------------
 def _add_shape_impl(
     slide_index, shape_type_int, left, top, width, height, text,
+    font_name, font_size, bold, italic, font_color, align,
     fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
     line_visible, line_color, line_weight,
 ):
@@ -303,6 +329,28 @@ def _add_shape_impl(
     )
     if text:
         shape.TextFrame.TextRange.Text = text
+
+        # Inline text formatting (same pattern as _add_textbox_impl)
+        if font_name is not None or font_size is not None or bold is not None \
+                or italic is not None or font_color is not None:
+            font = shape.TextFrame.TextRange.Font
+            if font_name is not None:
+                font.Name = font_name
+                font.NameFarEast = font_name
+            if font_size is not None:
+                font.Size = font_size
+            if bold is not None:
+                font.Bold = msoTrue if bold else msoFalse
+            if italic is not None:
+                font.Italic = msoTrue if italic else msoFalse
+            if font_color is not None:
+                font.Color.RGB = hex_to_int(font_color)
+
+        if align is not None:
+            _ALIGN = {"left": 1, "center": 2, "right": 3, "justify": 4}
+            align_val = _ALIGN.get(align.lower())
+            if align_val is not None:
+                shape.TextFrame.TextRange.ParagraphFormat.Alignment = align_val
 
     # Inline fill — avoids a follow-up ppt_set_fill call
     _VALID_FILL_TYPES = {"solid", "none", "gradient"}
@@ -643,6 +691,8 @@ def add_shape(params: AddShapeInput) -> str:
             params.slide_index, shape_type_int,
             params.left, params.top, params.width, params.height,
             params.text,
+            params.font_name, params.font_size, params.bold,
+            params.italic, params.font_color, params.align,
             params.fill_color, params.fill_type, params.fill_color2,
             params.fill_gradient_style, params.fill_transparency,
             params.line_visible, params.line_color, params.line_weight,
@@ -882,10 +932,14 @@ def register_tools(mcp):
         'star_5point', 'cloud', etc.) or an MsoAutoShapeType integer.
         All positions and sizes are in points (72 points = 1 inch).
 
+        Optionally apply text styling in the same call via font_name, font_size, bold,
+        italic, font_color, and align — avoids a separate ppt_format_text call.
+
         Optionally apply fill and border in the same call via fill_color, fill_type,
         fill_transparency, line_visible, line_color, and line_weight — avoids separate
         ppt_set_fill / ppt_set_line calls for common cases.
-        Example: fill_color='#1E3A5F', line_visible=false creates a styled shape in one step.
+        Example: text='Label', font_size=14, bold=true, fill_color='#1E3A5F',
+        line_visible=false creates a fully styled shape in one step.
         """
         return add_shape(params)
 
