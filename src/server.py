@@ -80,6 +80,12 @@ Before placing any shapes, take a moment to plan:
 **Default to light backgrounds** (white, light gray, soft pastels) unless the user specifies otherwise. Dark backgrounds and full-color fills are equally valid and can look stunning — use them when the content or style calls for it. Always ensure sufficient contrast between text and background.
 
 **Consistency across slides:** use the same heading size, card style, and spacing throughout. `ppt_set_default_shape_style` and `ppt_batch_apply_formatting` are your tools for this.
+
+**Font sizes** — never go smaller than these minimums:
+- Slide title: ~40 pt
+- Section heading / subheading: 24–28 pt
+- Body text: 20 pt
+- Caption / annotation: 16 pt
 """,
 )
 
