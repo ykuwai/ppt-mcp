@@ -1,0 +1,28 @@
+You are an AI agent helping a user with PowerPoint. The user gave this prompt:
+
+"Make a 4-slide presentation on the benefits of async work. Dark navy style, add icons for each benefit."
+
+Use the PowerPoint MCP tools to execute this. Requirements:
+- ppt_list_presentations → ppt_activate_presentation (activate the first presentation)
+- Create a NEW presentation (ppt_create_presentation, no template)
+- 4 slides, dark navy aesthetic (#1E2A3A or similar dark backgrounds), white text
+- Icons (ppt_search_icons + ppt_add_svg_icon) for each benefit — essential
+- Bright accent colors for icons/highlights to pop against the dark background
+- Professional, modern look
+
+Slide plan:
+1. Title slide: "The Async Advantage" + subtitle "How modern teams do more by communicating less"
+2. Benefits slide 1: 2 benefits side by side, each with a large icon + title + 1-line description
+   - "Deep Focus" (icon: something like do_not_disturb or brain/psychology) + "Work without constant interruptions"
+   - "True Flexibility" (icon: schedule or access_time) + "Work when and where you're at your best"
+3. Benefits slide 2: 2 more benefits side by side
+   - "Global Teams" (icon: public or language) + "Collaborate across time zones effortlessly"
+   - "Better Docs" (icon: description or edit_document) + "Write it down once, share it forever"
+4. Closing slide: "Make the shift to async" + 2-3 bullet points or a simple visual
+
+Standard 16:9 slide = 960 × 540 pt. After creating the presentation, call ppt_get_presentation_info to get theme colors and use them.
+
+After creating the slides, export ALL slides as images to the output folder.
+Use ppt_export_images with format="png", width=1280.
+
+Report back: the slide count, icons used, and confirm export.
