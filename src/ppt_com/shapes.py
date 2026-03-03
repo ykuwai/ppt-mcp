@@ -184,7 +184,7 @@ class AddShapeInput(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_corner_radius(self):
+    def check_corner_radius_exclusivity(self):
         """Ensure corner_radius and corner_radius_pt are mutually exclusive."""
         if self.corner_radius is not None and self.corner_radius_pt is not None:
             raise ValueError(
