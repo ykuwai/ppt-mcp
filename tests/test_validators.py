@@ -684,9 +684,16 @@ class TestSetSlideBackgroundInput:
 
     def test_empty_slide_indices_raises(self):
         """Empty slide_indices list raises ValidationError."""
-        with pytest.raises(ValidationError, match="Either slide_index or slide_indices"):
+        with pytest.raises(ValidationError, match="slide_indices must not be empty"):
             SetSlideBackgroundInput(
                 slide_indices=[], fill_type="solid", color="#FF0000",
+            )
+
+    def test_empty_slide_indices_with_slide_index_raises(self):
+        """Empty slide_indices=[] with valid slide_index still raises."""
+        with pytest.raises(ValidationError, match="slide_indices must not be empty"):
+            SetSlideBackgroundInput(
+                slide_index=1, slide_indices=[], fill_type="solid", color="#FF0000",
             )
 
     def test_slide_indices_with_zero_raises(self):

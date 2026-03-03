@@ -339,12 +339,6 @@ def _add_slide_impl(
     # Navigate to the last created slide
     nav_goto_slide(app, created_slides[-1]["slide_index"])
 
-    # Determine layout value for response
-    resp_layout = (
-        resolved_layout_name
-        if resolved_layout_name is not None
-        else created_slides[0].get("layout", friendly_layout or layout_val)
-    )
     # Read actual layout from the first created slide
     first_slide = pres.Slides(created_slides[0]["slide_index"])
     resp_layout = resolved_layout_name if resolved_layout_name else first_slide.Layout
@@ -700,6 +694,8 @@ def register_tools(mcp):
         layout_name to match a layout from the slide master.
         Position is 1-based; omit to append at the end.
         Use design_index to pick a layout from a specific slide master/design.
+        Use count to create multiple slides at once; when count > 1, returns
+        a slides list instead of a single slide_index.
         """
         return add_slide(params)
 

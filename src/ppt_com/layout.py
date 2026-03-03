@@ -137,6 +137,8 @@ class SetSlideBackgroundInput(BaseModel):
     @model_validator(mode="after")
     def validate_slide_target(self):
         """Ensure at least one slide target is provided and indices are valid."""
+        if self.slide_indices is not None and len(self.slide_indices) == 0:
+            raise ValueError("slide_indices must not be empty")
         if self.slide_index is None and not self.slide_indices:
             raise ValueError(
                 "Either slide_index or slide_indices must be provided"
