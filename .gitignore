@@ -49,3 +49,5 @@ test_slides/
 
 # Internal docs (outdated)
 docs/
+assets/examples/**/*.pptx~*
+assets/examples/**/~$*

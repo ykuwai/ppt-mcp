@@ -148,32 +148,71 @@ uv sync
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
 | | **147** | |
 
-## 💡 Example Workflow
+## 💡 Example Prompts
 
-```python
-# 1. Target a specific presentation (prevents editing the wrong file)
-ppt_list_presentations()
-ppt_activate_presentation(presentation_name="demo.pptx")
+Just describe what you want in plain language — no code required.
 
-# 2. Create a slide from a personal template
-ppt_list_templates()
-ppt_create_presentation(template_path="C:\\...\\MyTemplate.potx")
+---
 
-# 3. Add a slide and set content
-ppt_add_slide(layout_index=2)
-ppt_set_text(slide_index=1, shape_name_or_index="Title 1", text="Hello World")
+**Simple** — topic only
 
-# 4. Set presentation-wide fonts (Latin + East Asian separately)
-ppt_set_default_fonts(latin="Segoe UI", east_asian="Meiryo")
+> *"Create a 3-slide intro deck for a productivity app called Flowly."*
 
-# 5. Insert a Google Material Symbols icon with theme color
-ppt_add_svg_icon(slide_index=1, icon_name="rocket",
-                 left=500, top=100, width=72, height=72,
-                 color="accent1", style="rounded", filled=True)
+<details>
+<summary>View slides</summary>
+<br>
+<img src="assets/examples/example1/Slide1.png" width="640">
+<img src="assets/examples/example1/Slide2.png" width="640">
+<img src="assets/examples/example1/Slide3.png" width="640">
+</details>
 
-# 6. Export to PDF
-ppt_export_pdf(file_path="C:\\output\\presentation.pdf")
-```
+---
+
+**With style direction** — topic + visual style
+
+> *"Make a 4-slide presentation on the benefits of async work. Dark navy style, add icons for each benefit."*
+
+<details>
+<summary>View slides</summary>
+<br>
+<img src="assets/examples/example2/Slide1.png" width="640">
+<img src="assets/examples/example2/Slide2.png" width="640">
+<img src="assets/examples/example2/Slide3.png" width="640">
+<img src="assets/examples/example2/Slide4.png" width="640">
+</details>
+
+---
+
+**Detailed** — topic + design intent + slide structure
+
+> *"Build a 5-slide pitch for an AI note-taking app called NoteAI. White background, teal accent. Slides: title, problem, solution, features with icons, closing."*
+
+<details>
+<summary>View slides</summary>
+<br>
+<img src="assets/examples/example3/Slide1.png" width="640">
+<img src="assets/examples/example3/Slide2.png" width="640">
+<img src="assets/examples/example3/Slide3.png" width="640">
+<img src="assets/examples/example3/Slide4.png" width="640">
+<img src="assets/examples/example3/Slide5.png" width="640">
+</details>
+
+---
+
+**Design keywords that elevate results:**
+
+| Aspect | Keywords / Phrases | What it does |
+|---|---|---|
+| **Icons** | `add icons` · `icon for each point` · `use icons throughout` | Searches Google Material Symbols and places crisp SVG icons automatically |
+| **Color scheme** | `dark navy` · `white background` · `monochrome` · `light gray` | Sets the overall color palette and mood |
+| **Accent color** | `teal accent` · `blue accent` · `brand color #2563EB` | Applies a specific highlight color to headings, icons, and shapes |
+| **Style tone** | `modern minimal` · `bold and vibrant` · `clean and professional` · `playful` | Signals the overall visual personality |
+| **Deck type** | `pitch deck` · `investor presentation` · `workshop slides` · `status report` | Guides layout and content density toward the intended purpose |
+| **Slide structure** | `Slides: title, problem, solution, features, CTA` · `4 slides` | Defines the narrative arc and slide count up front |
+| **Layout** | `card layout` · `two-column` · `centered` · `full-bleed background` | Shapes how content is arranged on each slide |
+| **Text density** | `minimal text` · `one message per slide` · `bullet points` | Controls how much text appears and how it's formatted |
+| **Backgrounds** | `gradient background` · `solid dark background` · `soft light background` | Specifies the background treatment across slides |
+| **Emphasis** | `highlight key numbers` · `bold headings` · `accent bar on each slide` | Draws attention to the most important information |
 
 ## 🔍 Features in Detail
 

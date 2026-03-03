@@ -148,32 +148,71 @@ uv sync
 | **フリーフォーム** | 7 | パス形状の作成、ノード位置の取得/移動、ノードの挿入/削除、編集タイプ変更、セグメントタイプ変更 |
 | | **147** | |
 
-## 💡 使用例
+## 💡 プロンプト例
 
-```python
-# 1. 操作対象のプレゼンテーションを指定（誤編集を防止）
-ppt_list_presentations()
-ppt_activate_presentation(presentation_name="demo.pptx")
+日本語でそのまま伝えるだけ — コードは不要です。
 
-# 2. テンプレートからプレゼンテーションを作成
-ppt_list_templates()
-ppt_create_presentation(template_path="C:\\...\\MyTemplate.potx")
+---
 
-# 3. スライド追加とコンテンツ設定
-ppt_add_slide(layout_index=2)
-ppt_set_text(slide_index=1, shape_name_or_index="Title 1", text="Hello World")
+**シンプル** — テーマだけ指定
 
-# 4. プレゼン全体のフォントを一括設定（英語・日本語フォントを個別に指定）
-ppt_set_default_fonts(latin="Segoe UI", east_asian="Meiryo")
+> *「Flowlyというアプリの紹介スライドを3枚作って。」*
 
-# 5. テーマカラーでGoogle Material Symbolsアイコンを挿入
-ppt_add_svg_icon(slide_index=1, icon_name="rocket",
-                 left=500, top=100, width=72, height=72,
-                 color="accent1", style="rounded", filled=True)
+<details>
+<summary>スライドを見る</summary>
+<br>
+<img src="assets/examples/example1/Slide1.png" width="640">
+<img src="assets/examples/example1/Slide2.png" width="640">
+<img src="assets/examples/example1/Slide3.png" width="640">
+</details>
 
-# 6. PDFにエクスポート
-ppt_export_pdf(file_path="C:\\output\\presentation.pdf")
-```
+---
+
+**スタイル指定あり** — テーマ＋ビジュアルの方向性
+
+> *「非同期ワークのメリットについて4枚スライドを作って。ダークネイビースタイルで、各メリットにアイコンを入れて。」*
+
+<details>
+<summary>スライドを見る</summary>
+<br>
+<img src="assets/examples/example2/Slide1.png" width="640">
+<img src="assets/examples/example2/Slide2.png" width="640">
+<img src="assets/examples/example2/Slide3.png" width="640">
+<img src="assets/examples/example2/Slide4.png" width="640">
+</details>
+
+---
+
+**詳細指定** — テーマ＋デザインイメージ＋スライド構成
+
+> *「NoteAIというAIメモアプリの5枚ピッチを作って。白背景・ティールアクセント。スライド構成：タイトル・課題・解決策・機能（アイコン付き）・クロージング。」*
+
+<details>
+<summary>スライドを見る</summary>
+<br>
+<img src="assets/examples/example3/Slide1.png" width="640">
+<img src="assets/examples/example3/Slide2.png" width="640">
+<img src="assets/examples/example3/Slide3.png" width="640">
+<img src="assets/examples/example3/Slide4.png" width="640">
+<img src="assets/examples/example3/Slide5.png" width="640">
+</details>
+
+---
+
+**クオリティを上げるデザインキーワード：**
+
+| 観点 | 単語やフレーズ例 | 詳細 |
+|---|---|---|
+| **アイコン** | `アイコンを入れて` · `各ポイントにアイコン` · `全スライドにアイコン` | Google Material Symbols を自動検索してSVGアイコンを配置 |
+| **カラースキーム** | `ダークネイビー` · `白背景` · `モノクロ` · `ライトグレー` | 全体のカラーパレットと雰囲気を設定 |
+| **アクセントカラー** | `ティールアクセント` · `ブルーアクセント` · `ブランドカラーは #2563EB` | 見出しやアイコン、図形に適用する強調色を指定 |
+| **スタイル・トーン** | `モダンでミニマル` · `ビビッドでインパクト重視` · `クリーンでプロフェッショナル` · `カジュアル` | デザイン全体のテイストを指定 |
+| **用途・目的** | `ピッチデッキ` · `投資家向けプレゼン` · `ワークショップ資料` · `進捗報告` | 目的に応じたレイアウトとコンテンツ密度に誘導 |
+| **スライド構成** | `構成：タイトル・課題・解決策・機能・CTA` · `4枚で` | 構成とスライド数を最初に明示 |
+| **レイアウト** | `カードレイアウト` · `2カラム` · `センタリング` · `全面背景` | 各スライドのコンテンツ配置を指定 |
+| **テキスト量** | `テキストは最小限` · `1スライド1メッセージ` · `箇条書き` | 情報量とテキストスタイルを制御 |
+| **背景** | `グラデーション背景` · `ダーク単色背景` · `ソフトな明るい背景` | 背景の処理を全体に指定 |
+| **強調** | `数字を強調` · `太い見出し` · `各スライドにアクセントバー` | 重要な情報への視線の誘導を指定 |
 
 ## 🔍 機能の詳細
 
