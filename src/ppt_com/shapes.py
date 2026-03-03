@@ -399,14 +399,14 @@ def _add_shape_impl(
     if line_weight is not None:
         shape.Line.Weight = line_weight
 
-    # Corner radius for rounded rectangles (msoShapeRoundedRectangle = 5)
+    # Corner radius for rounded rectangles
     if corner_radius is not None:
         try:
-            if shape.AutoShapeType == 5:
-                adj = shape.Adjustments
-                adj(1, corner_radius)
+            if shape.AutoShapeType == SHAPE_NAME_MAP["rounded_rectangle"]:
+                # Map user-facing 0.0–1.0 to COM's 0.0–0.5 range
+                shape.Adjustments[1] = corner_radius * 0.5
         except Exception:
-            pass  # silently ignore if Adjustments not accessible
+            logger.warning("Failed to set corner_radius on shape '%s'", shape.Name)
 
     return {
         "success": True,
