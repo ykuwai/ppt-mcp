@@ -4,6 +4,8 @@ Covers all model_validator decorated methods in:
 - freeform.py: NodeSpec, BuildFreeformInput, InsertNodeInput
 - tables.py: MergeTableCellsInput, SetTableBordersInput
 - advanced_ops.py: SetDefaultShapeStyleInput
+- shapes.py: AddShapeInput
+- layout.py: SetSlideBackgroundInput
 
 These are pure Python tests — no COM or PowerPoint required.
 """
@@ -25,6 +27,8 @@ from ppt_com.tables import (
     SetTableBordersInput,
 )
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput
+from ppt_com.shapes import AddShapeInput
+from ppt_com.layout import SetSlideBackgroundInput
 
 
 # ============================================================================
@@ -588,7 +592,6 @@ class TestSetDefaultShapeStyleInput:
 # ============================================================================
 # shapes.py — AddShapeInput corner_radius validation
 # ============================================================================
-from ppt_com.shapes import AddShapeInput
 
 
 class TestAddShapeCornerRadius:
@@ -641,3 +644,83 @@ class TestAddShapeCornerRadius:
                 slide_index=1, shape_type="rounded_rectangle",
                 left=0, top=0, width=100, height=50, corner_radius=-0.1,
             )
+
+
+# ============================================================================
+# layout.py — SetSlideBackgroundInput
+# ============================================================================
+
+class TestSetSlideBackgroundInput:
+    """Tests for SetSlideBackgroundInput validate_slide_target validator."""
+
+    def test_slide_index_only_valid(self):
+        """slide_index alone is accepted."""
+        inp = SetSlideBackgroundInput(
+            slide_index=1, fill_type="solid", color="#FF0000",
+        )
+        assert inp.slide_index == 1
+        assert inp.slide_indices is None
+
+    def test_slide_indices_only_valid(self):
+        """slide_indices alone is accepted."""
+        inp = SetSlideBackgroundInput(
+            slide_indices=[1, 2, 3], fill_type="solid", color="#FF0000",
+        )
+        assert inp.slide_indices == [1, 2, 3]
+        assert inp.slide_index is None
+
+    def test_both_slide_index_and_slide_indices_valid(self):
+        """Both slide_index and slide_indices provided is accepted (slide_indices wins)."""
+        inp = SetSlideBackgroundInput(
+            slide_index=1, slide_indices=[2, 3],
+            fill_type="solid", color="#FF0000",
+        )
+        assert inp.slide_index == 1
+        assert inp.slide_indices == [2, 3]
+
+    def test_neither_provided_raises(self):
+        """Neither slide_index nor slide_indices raises ValidationError."""
+        with pytest.raises(ValidationError, match="Either slide_index or slide_indices"):
+            SetSlideBackgroundInput(fill_type="solid", color="#FF0000")
+
+    def test_empty_slide_indices_raises(self):
+        """Empty slide_indices list raises ValidationError."""
+        with pytest.raises(ValidationError, match="slide_indices must not be empty"):
+            SetSlideBackgroundInput(
+                slide_indices=[], fill_type="solid", color="#FF0000",
+            )
+
+    def test_empty_slide_indices_with_slide_index_raises(self):
+        """Empty slide_indices=[] with valid slide_index still raises."""
+        with pytest.raises(ValidationError, match="slide_indices must not be empty"):
+            SetSlideBackgroundInput(
+                slide_index=1, slide_indices=[], fill_type="solid", color="#FF0000",
+            )
+
+    def test_slide_indices_with_zero_raises(self):
+        """slide_indices containing 0 raises ValidationError."""
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            SetSlideBackgroundInput(
+                slide_indices=[1, 0, 3], fill_type="solid", color="#FF0000",
+            )
+
+    def test_slide_indices_with_negative_raises(self):
+        """slide_indices containing negative value raises ValidationError."""
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            SetSlideBackgroundInput(
+                slide_indices=[-1, 2], fill_type="solid", color="#FF0000",
+            )
+
+    def test_slide_index_zero_raises(self):
+        """slide_index=0 is rejected by ge=1."""
+        with pytest.raises(ValidationError):
+            SetSlideBackgroundInput(
+                slide_index=0, fill_type="solid", color="#FF0000",
+            )
+
+    def test_single_slide_indices_valid(self):
+        """Single-element slide_indices list is accepted."""
+        inp = SetSlideBackgroundInput(
+            slide_indices=[5], fill_type="none",
+        )
+        assert inp.slide_indices == [5]
