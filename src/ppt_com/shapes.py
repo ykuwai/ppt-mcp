@@ -349,8 +349,11 @@ def _add_shape_impl(
         if align is not None:
             _ALIGN = {"left": 1, "center": 2, "right": 3, "justify": 4}
             align_val = _ALIGN.get(align.lower())
-            if align_val is not None:
-                shape.TextFrame.TextRange.ParagraphFormat.Alignment = align_val
+            if align_val is None:
+                raise ValueError(
+                    f"Invalid align '{align}'. Must be one of: {sorted(_ALIGN)}"
+                )
+            shape.TextFrame.TextRange.ParagraphFormat.Alignment = align_val
 
     # Inline fill — avoids a follow-up ppt_set_fill call
     _VALID_FILL_TYPES = {"solid", "none", "gradient"}
