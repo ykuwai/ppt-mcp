@@ -170,6 +170,10 @@ class AddTextboxInput(BaseModel):
         default=None,
         description="Paragraph alignment for all text: 'left', 'center', 'right', or 'justify'.",
     )
+    vertical_anchor: Optional[str] = Field(
+        default=None,
+        description="Vertical text anchor: 'top', 'middle', or 'bottom'.",
+    )
 
 
 class AddPictureInput(BaseModel):
@@ -346,6 +350,7 @@ def _add_shape_impl(
 def _add_textbox_impl(
     slide_index, left, top, width, height, text,
     font_name, font_size, bold, italic, font_color, align,
+    vertical_anchor,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -380,6 +385,21 @@ def _add_textbox_impl(
         if align_val is None:
             raise ValueError(f"Invalid align '{align}'. Must be one of: {sorted(_ALIGN)}")
         textbox.TextFrame.TextRange.ParagraphFormat.Alignment = align_val
+
+    # Inline vertical anchor — avoids a follow-up ppt_set_textframe call
+    if vertical_anchor is not None:
+        VERTICAL_ANCHOR_MAP = {
+            "top": 1,       # msoAnchorTop
+            "middle": 3,    # msoAnchorMiddle
+            "bottom": 4,    # msoAnchorBottom
+        }
+        anchor_val = VERTICAL_ANCHOR_MAP.get(vertical_anchor.lower())
+        if anchor_val is None:
+            raise ValueError(
+                f"Invalid vertical_anchor '{vertical_anchor}'. "
+                f"Must be one of: {sorted(VERTICAL_ANCHOR_MAP)}"
+            )
+        textbox.TextFrame.VerticalAnchor = anchor_val
 
     return {
         "success": True,
@@ -671,6 +691,7 @@ def add_textbox(params: AddTextboxInput) -> str:
             params.text,
             params.font_name, params.font_size, params.bold,
             params.italic, params.font_color, params.align,
+            params.vertical_anchor,
         )
         return json.dumps(result)
     except Exception as e:
@@ -907,8 +928,11 @@ def register_tools(mcp):
 
         Optionally apply font styling in the same call via font_name, font_size, bold,
         italic, font_color, and align — avoids a separate ppt_format_text call.
+        Use vertical_anchor ('top', 'middle', 'bottom') to control vertical text
+        alignment — avoids a separate ppt_set_textframe call.
         Example: text='Title', font_name='Segoe UI', font_size=32, bold=true,
-        font_color='#FFFFFF', align='center' creates a fully styled label in one step.
+        font_color='#FFFFFF', align='center', vertical_anchor='middle' creates a
+        fully styled, vertically centered label in one step.
         """
         return add_textbox(params)
 
