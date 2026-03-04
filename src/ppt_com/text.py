@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
@@ -256,6 +257,15 @@ class GetAllTextInput(BaseModel):
         description=(
             "1-based slide indices to extract. "
             "Omit to extract all slides."
+        ),
+    )
+    output_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "File path to write the markdown text to (UTF-8). "
+            "When provided, the result is written to the file and a JSON "
+            "confirmation is returned instead of the text itself. "
+            "Relative paths are resolved to absolute paths."
         ),
     )
 
@@ -584,8 +594,14 @@ def _group_into_rows(shape_infos: list, threshold: float = 0.4) -> list:
     return rows
 
 
-def _shape_info_to_markdown(info: dict) -> str:
-    """Convert a single shape_info dict to Markdown text."""
+def _shape_info_to_markdown(info: dict, subheading_level: str = "##") -> str:
+    """Convert a single shape_info dict to Markdown text.
+
+    Args:
+        info: Shape info dict from _collect_text_shapes.
+        subheading_level: Heading prefix for all-bold non-title shapes.
+            Use "##" for full-width (default), "###" for column shapes.
+    """
     shape = info["shape"]
 
     # Table
@@ -600,17 +616,71 @@ def _shape_info_to_markdown(info: dict) -> str:
     if info["is_subtitle"]:
         return _shape_paragraphs_to_markdown(shape)
 
-    # All-bold → subheading
+    # All-bold → subheading (level depends on context)
     if _is_all_bold(shape):
-        return _shape_paragraphs_to_markdown(shape, as_heading="##")
+        return _shape_paragraphs_to_markdown(shape, as_heading=subheading_level)
 
     # Regular text
     return _shape_paragraphs_to_markdown(shape)
 
 
+def _group_into_columns(shapes: list, threshold: float = 50.0) -> list:
+    """Group shapes by X-position proximity into columns.
+
+    Args:
+        shapes: Flat list of shape_info dicts (column shapes only).
+        threshold: Maximum difference in Left values (points) for
+            shapes to be considered the same column.
+
+    Returns:
+        List of columns (each a list of shape_infos sorted top-to-bottom),
+        columns sorted left-to-right.
+    """
+    if not shapes:
+        return []
+
+    sorted_shapes = sorted(shapes, key=lambda s: s["left"])
+
+    columns = []
+    current_col = [sorted_shapes[0]]
+    col_left = sorted_shapes[0]["left"]
+
+    for s in sorted_shapes[1:]:
+        if abs(s["left"] - col_left) <= threshold:
+            current_col.append(s)
+        else:
+            columns.append(current_col)
+            current_col = [s]
+            col_left = s["left"]
+    columns.append(current_col)
+
+    # Sort each column by Y position (top-to-bottom)
+    for col in columns:
+        col.sort(key=lambda s: s["top"])
+
+    # Sort columns left-to-right
+    columns.sort(key=lambda col: sum(s["left"] for s in col) / len(col))
+    return columns
+
+
 def _slide_to_markdown(slide, slide_index: int) -> str:
-    """Convert a single slide to pseudo-Markdown."""
-    parts = [f"--- Slide {slide_index} ---"]
+    """Convert a single slide to pseudo-Markdown.
+
+    Layout algorithm:
+    - If no multi-shape rows: output shapes in Y order (simple layout).
+    - If multi-shape rows exist: output full-width shapes first,
+      then group column shapes by X-position so heading + body from
+      the same column appear together.  Column all-bold shapes use
+      ### instead of ##.
+    """
+    # Check if slide is hidden
+    hidden = ""
+    try:
+        if slide.SlideShowTransition.Hidden:
+            hidden = " (hidden)"
+    except Exception:
+        pass
+    parts = [f"== Slide {slide_index}{hidden} =="]
 
     shape_infos = _collect_text_shapes(slide)
     if not shape_infos:
@@ -618,20 +688,41 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
         return "\n".join(parts)
 
     rows = _group_into_rows(shape_infos)
+    has_multi_shape_rows = any(len(row) > 1 for row in rows)
 
-    for row in rows:
-        if len(row) == 1:
-            # Single shape row
+    if not has_multi_shape_rows:
+        # Simple layout: all single-shape rows
+        for row in rows:
             md = _shape_info_to_markdown(row[0])
             if md.strip():
                 parts.append(md)
-        else:
-            # Multi-shape row → columns
-            for col_idx, info in enumerate(row, 1):
-                md = _shape_info_to_markdown(info)
-                if md.strip():
-                    parts.append(f"\n[Column {col_idx}]")
-                    parts.append(md)
+    else:
+        # Column layout: separate full-width vs column shapes
+        full_width_shapes = []
+        column_shapes = []
+
+        for row in rows:
+            if len(row) == 1:
+                full_width_shapes.append(row[0])
+            else:
+                column_shapes.extend(row)
+
+        # Full-width shapes first (already in Y order)
+        for info in full_width_shapes:
+            md = _shape_info_to_markdown(info)
+            if md.strip():
+                parts.append(md)
+
+        # Column shapes grouped by X-position
+        if column_shapes:
+            columns = _group_into_columns(column_shapes)
+            for col_idx, col in enumerate(columns):
+                if col_idx > 0:
+                    parts.append("")  # blank line between columns
+                for info in col:
+                    md = _shape_info_to_markdown(info, subheading_level="###")
+                    if md.strip():
+                        parts.append(md)
 
     return "\n".join(parts)
 
@@ -653,7 +744,7 @@ def _get_all_text_impl(slide_indices) -> str:
     for idx in indices:
         if idx < 1 or idx > total_slides:
             slide_parts.append(
-                f"--- Slide {idx} ---\n(invalid slide index, "
+                f"== Slide {idx} ==\n(invalid slide index, "
                 f"presentation has {total_slides} slides)"
             )
             continue
@@ -1141,6 +1232,7 @@ def get_all_text(params: GetAllTextInput) -> str:
     """Extract all text from the presentation as pseudo-Markdown.
 
     Batches COM calls to avoid the 30-second timeout on large presentations.
+    Optionally writes the result to a file if output_path is specified.
     """
     try:
         if params.slide_indices is not None:
@@ -1157,7 +1249,19 @@ def get_all_text(params: GetAllTextInput) -> str:
             part = ppt.execute(_get_all_text_impl, batch)
             all_parts.append(part)
 
-        return "\n\n".join(all_parts)
+        text = "\n\n".join(all_parts)
+
+        if params.output_path:
+            abs_path = os.path.abspath(params.output_path)
+            with open(abs_path, "w", encoding="utf-8") as f:
+                f.write(text)
+            return json.dumps({
+                "status": "success",
+                "output_path": abs_path,
+                "slide_count": len(indices),
+            })
+
+        return text
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -1339,13 +1443,18 @@ def register_tools(mcp):
 
         Returns a structured overview of every slide's content:
         - `# Heading` for slide titles
-        - `## Subheading` for all-bold text blocks
+        - `## Subheading` for all-bold full-width shapes
+        - `### Subheading` for all-bold shapes in multi-column layouts
         - `**bold**` and `*italic*` inline formatting
         - `- bullet` items with indentation
         - Markdown tables for table shapes
-        - `[Column N]` labels for side-by-side layouts
 
-        Use this to quickly understand the full content and structure of a
-        presentation in a single call. Omit slide_indices to get all slides.
+        Column shapes are grouped by X-position so heading + body from
+        the same column appear together.
+
+        Set output_path to write the result to a UTF-8 file instead of
+        returning the text directly.
+
+        Omit slide_indices to get all slides.
         """
         return get_all_text(params)
