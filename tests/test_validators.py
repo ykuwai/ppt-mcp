@@ -6,6 +6,7 @@ Covers all model_validator decorated methods in:
 - advanced_ops.py: SetDefaultShapeStyleInput
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
+- text.py: GetAllTextInput
 
 These are pure Python tests — no COM or PowerPoint required.
 """
@@ -29,6 +30,7 @@ from ppt_com.tables import (
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput
 from ppt_com.shapes import AddShapeInput
 from ppt_com.layout import SetSlideBackgroundInput
+from ppt_com.text import GetAllTextInput
 
 
 # ============================================================================
@@ -767,3 +769,61 @@ class TestSetSlideBackgroundInput:
             slide_indices=[5], fill_type="none",
         )
         assert inp.slide_indices == [5]
+
+
+# ============================================================================
+# text.py — GetAllTextInput
+# ============================================================================
+class TestGetAllTextInput:
+    """Tests for GetAllTextInput model validation."""
+
+    def test_no_params_valid(self):
+        """No parameters → extract all slides."""
+        inp = GetAllTextInput()
+        assert inp.slide_indices is None
+
+    def test_slide_indices_valid(self):
+        """Valid slide_indices list is accepted."""
+        inp = GetAllTextInput(slide_indices=[1, 3, 5])
+        assert inp.slide_indices == [1, 3, 5]
+
+    def test_single_slide_index_valid(self):
+        """Single-element list is accepted."""
+        inp = GetAllTextInput(slide_indices=[1])
+        assert inp.slide_indices == [1]
+
+    def test_empty_slide_indices_raises(self):
+        """Empty slide_indices list is rejected."""
+        with pytest.raises(ValidationError, match="slide_indices must not be empty"):
+            GetAllTextInput(slide_indices=[])
+
+    def test_zero_slide_index_raises(self):
+        """slide_indices with 0 is rejected."""
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            GetAllTextInput(slide_indices=[0])
+
+    def test_negative_slide_index_raises(self):
+        """slide_indices with negative value is rejected."""
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            GetAllTextInput(slide_indices=[-1])
+
+    def test_mixed_valid_invalid_raises(self):
+        """Mixed valid and invalid indices → rejected."""
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            GetAllTextInput(slide_indices=[1, 0, 3])
+
+    def test_output_path_default_none(self):
+        """output_path defaults to None."""
+        inp = GetAllTextInput()
+        assert inp.output_path is None
+
+    def test_output_path_valid_string(self):
+        """String output_path is accepted."""
+        inp = GetAllTextInput(output_path="slides.md")
+        assert inp.output_path == "slides.md"
+
+    def test_output_path_with_slide_indices(self):
+        """output_path and slide_indices can be used together."""
+        inp = GetAllTextInput(slide_indices=[1, 2], output_path="/tmp/out.md")
+        assert inp.slide_indices == [1, 2]
+        assert inp.output_path == "/tmp/out.md"
