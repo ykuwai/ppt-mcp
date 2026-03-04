@@ -265,7 +265,8 @@ class GetAllTextInput(BaseModel):
             "File path to write the markdown text to (UTF-8). "
             "When provided, the result is written to the file and a JSON "
             "confirmation is returned instead of the text itself. "
-            "Relative paths are resolved to absolute paths."
+            "Relative paths are resolved from the MCP server's working "
+            "directory. Parent directories must already exist."
         ),
     )
 
