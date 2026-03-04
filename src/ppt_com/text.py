@@ -11,6 +11,7 @@ from utils.navigation import goto_slide
 from utils.color import hex_to_int, int_to_hex, int_to_rgb, get_theme_color_index
 from ppt_com.constants import (
     msoTrue, msoFalse, msoTriStateMixed,
+    msoPlaceholder, msoGroup,
     ppAlignLeft, ppAlignCenter, ppAlignRight, ppAlignJustify, ppAlignDistribute,
     ppAutoSizeNone, ppAutoSizeShapeToFitText, ppAutoSizeTextToFitShape,
     ppBulletNone, ppBulletUnnumbered, ppBulletNumbered,
@@ -453,14 +454,27 @@ def _collect_text_shapes(slide) -> list:
 
     def _process_shape(shape):
         """Process a single shape (may be called recursively for groups)."""
-        # Check if placeholder and should skip
-        if shape.Type == 14:  # msoPlaceholder
+        # Check placeholder skip / classify in a single COM read
+        is_title = False
+        is_subtitle = False
+        if shape.Type == msoPlaceholder:
             try:
                 ph_type = shape.PlaceholderFormat.Type
                 if ph_type in _SKIP_PLACEHOLDER_TYPES:
                     return
+                is_title = ph_type in _TITLE_PLACEHOLDER_TYPES
+                is_subtitle = ph_type in _SUBTITLE_PLACEHOLDER_TYPES
             except Exception:
                 pass
+
+        # Recurse into groups early (no need to build info dict)
+        if shape.Type == msoGroup:
+            try:
+                for gi in range(1, shape.GroupItems.Count + 1):
+                    _process_shape(shape.GroupItems(gi))
+            except Exception:
+                pass
+            return
 
         info = {
             "shape": shape,
@@ -468,22 +482,10 @@ def _collect_text_shapes(slide) -> list:
             "left": shape.Left,
             "width": shape.Width,
             "height": shape.Height,
-            "is_title": False,
-            "is_subtitle": False,
+            "is_title": is_title,
+            "is_subtitle": is_subtitle,
             "has_table": False,
-            "is_group": False,
         }
-
-        # Check placeholder type
-        if shape.Type == 14:  # msoPlaceholder
-            try:
-                ph_type = shape.PlaceholderFormat.Type
-                if ph_type in _TITLE_PLACEHOLDER_TYPES:
-                    info["is_title"] = True
-                elif ph_type in _SUBTITLE_PLACEHOLDER_TYPES:
-                    info["is_subtitle"] = True
-            except Exception:
-                pass
 
         # Check for table
         try:
@@ -493,17 +495,6 @@ def _collect_text_shapes(slide) -> list:
                 return
         except Exception:
             pass
-
-        # Check for group — recurse into items
-        if shape.Type == 6:  # msoGroup
-            info["is_group"] = True
-            # Add group children individually with group's position offset
-            try:
-                for gi in range(1, shape.GroupItems.Count + 1):
-                    _process_shape(shape.GroupItems(gi))
-            except Exception:
-                pass
-            return
 
         # Check for text
         try:
@@ -1149,7 +1140,7 @@ def get_all_text(params: GetAllTextInput) -> str:
 
         return "\n\n".join(all_parts)
     except Exception as e:
-        return f"Error: {e}"
+        return json.dumps({"error": str(e)})
 
 
 # ---------------------------------------------------------------------------
