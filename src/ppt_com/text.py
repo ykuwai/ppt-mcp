@@ -643,15 +643,17 @@ def _group_into_columns(shapes: list, threshold: float = 50.0) -> list:
 
     columns = []
     current_col = [sorted_shapes[0]]
-    col_left = sorted_shapes[0]["left"]
+    col_avg_left = sorted_shapes[0]["left"]
 
     for s in sorted_shapes[1:]:
-        if abs(s["left"] - col_left) <= threshold:
+        if abs(s["left"] - col_avg_left) <= threshold:
             current_col.append(s)
+            # Update rolling average so drifting X values stay grouped
+            col_avg_left = sum(x["left"] for x in current_col) / len(current_col)
         else:
             columns.append(current_col)
             current_col = [s]
-            col_left = s["left"]
+            col_avg_left = s["left"]
     columns.append(current_col)
 
     # Sort each column by Y position (top-to-bottom)
@@ -667,11 +669,11 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
     """Convert a single slide to pseudo-Markdown.
 
     Layout algorithm:
-    - If no multi-shape rows: output shapes in Y order (simple layout).
-    - If multi-shape rows exist: output full-width shapes first,
-      then group column shapes by X-position so heading + body from
-      the same column appear together.  Column all-bold shapes use
-      ### instead of ##.
+    - Rows are processed in Y-order to preserve vertical position.
+    - Single-shape rows: rendered inline at their natural position.
+    - Consecutive multi-shape rows: collected together, then grouped
+      by X-position into columns so heading + body from the same
+      column appear together.  All-bold shapes in columns use ###.
     """
     # Check if slide is hidden
     hidden = ""
@@ -697,25 +699,16 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
             if md.strip():
                 parts.append(md)
     else:
-        # Column layout: separate full-width vs column shapes
-        full_width_shapes = []
-        column_shapes = []
+        # Mixed layout: interleave full-width and column groups
+        # in original Y-order.  Consecutive multi-shape rows are
+        # collected and flushed as a column group together.
+        pending_column_shapes = []
 
-        for row in rows:
-            if len(row) == 1:
-                full_width_shapes.append(row[0])
-            else:
-                column_shapes.extend(row)
-
-        # Full-width shapes first (already in Y order)
-        for info in full_width_shapes:
-            md = _shape_info_to_markdown(info)
-            if md.strip():
-                parts.append(md)
-
-        # Column shapes grouped by X-position
-        if column_shapes:
-            columns = _group_into_columns(column_shapes)
+        def _flush_columns():
+            """Group pending column shapes by X and append to parts."""
+            if not pending_column_shapes:
+                return
+            columns = _group_into_columns(pending_column_shapes)
             for col_idx, col in enumerate(columns):
                 if col_idx > 0:
                     parts.append("")  # blank line between columns
@@ -723,6 +716,21 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
                     md = _shape_info_to_markdown(info, subheading_level="###")
                     if md.strip():
                         parts.append(md)
+            pending_column_shapes.clear()
+
+        for row in rows:
+            if len(row) == 1:
+                # Flush any pending column shapes before this full-width row
+                _flush_columns()
+                md = _shape_info_to_markdown(row[0])
+                if md.strip():
+                    parts.append(md)
+            else:
+                # Collect column shapes from consecutive multi-shape rows
+                pending_column_shapes.extend(row)
+
+        # Flush remaining column shapes at the end
+        _flush_columns()
 
     return "\n".join(parts)
 
