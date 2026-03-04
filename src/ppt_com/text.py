@@ -357,6 +357,14 @@ def _runs_to_markdown(paragraph) -> str:
     return "".join(parts)
 
 
+def _plain_text(text_range) -> str:
+    """Extract plain text from a TextRange, stripping formatting markers."""
+    try:
+        return text_range.Text.replace("\r", " ").replace("\v", " ").strip()
+    except Exception:
+        return ""
+
+
 def _shape_paragraphs_to_markdown(shape, as_heading: str = "") -> str:
     """Convert a shape's paragraphs to Markdown text.
 
@@ -370,8 +378,8 @@ def _shape_paragraphs_to_markdown(shape, as_heading: str = "") -> str:
         return ""
 
     if as_heading:
-        # For headings, combine all text into one line
-        text = _runs_to_markdown(tr).strip()
+        # For headings, use plain text (bold markers are redundant for # and ##)
+        text = _plain_text(tr)
         if not text:
             return ""
         return f"{as_heading} {text}"
@@ -1118,9 +1126,28 @@ def set_textframe(params: SetTextframeInput) -> str:
 
 
 def get_all_text(params: GetAllTextInput) -> str:
-    """Extract all text from the presentation as pseudo-Markdown."""
+    """Extract all text from the presentation as pseudo-Markdown.
+
+    Batches COM calls to avoid the 30-second timeout on large presentations.
+    """
+    _BATCH_SIZE = 15
+
     try:
-        return ppt.execute(_get_all_text_impl, params.slide_indices)
+        if params.slide_indices is not None:
+            indices = params.slide_indices
+        else:
+            # Get total slide count first
+            total = ppt.execute(lambda: ppt._get_pres_impl().Slides.Count)
+            indices = list(range(1, total + 1))
+
+        # Process in batches
+        all_parts = []
+        for i in range(0, len(indices), _BATCH_SIZE):
+            batch = indices[i:i + _BATCH_SIZE]
+            part = ppt.execute(_get_all_text_impl, batch)
+            all_parts.append(part)
+
+        return "\n\n".join(all_parts)
     except Exception as e:
         return f"Error: {e}"
 
