@@ -2,9 +2,9 @@
 
 import json
 import logging
-from typing import Optional, Union
+from typing import List, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
@@ -244,6 +244,403 @@ class SetTextframeInput(BaseModel):
         default=None,
         description="Vertical text anchor: 'top', 'middle', or 'bottom'.",
     )
+
+
+class GetAllTextInput(BaseModel):
+    """Input for extracting all text from the presentation as pseudo-Markdown."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_indices: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "1-based slide indices to extract. "
+            "Omit to extract all slides."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def check_slide_indices(self):
+        """Validate slide_indices values."""
+        if self.slide_indices is not None:
+            if len(self.slide_indices) == 0:
+                raise ValueError("slide_indices must not be empty")
+            for idx in self.slide_indices:
+                if idx < 1:
+                    raise ValueError(
+                        f"slide_indices values must be >= 1, got {idx}"
+                    )
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Placeholder types to skip (non-content)
+# ---------------------------------------------------------------------------
+_SKIP_PLACEHOLDER_TYPES = {13, 14, 15, 16}  # SlideNumber, Header, Footer, Date
+_TITLE_PLACEHOLDER_TYPES = {1, 3, 5}  # Title, CenterTitle, VerticalTitle
+_SUBTITLE_PLACEHOLDER_TYPES = {4}  # Subtitle
+
+
+# ---------------------------------------------------------------------------
+# Helpers for ppt_get_all_text
+# ---------------------------------------------------------------------------
+def _is_all_bold(shape) -> bool:
+    """Check if ALL text runs in a shape are bold."""
+    try:
+        tr = shape.TextFrame.TextRange
+        text = tr.Text.strip()
+        if not text:
+            return False
+        run_count = tr.Runs().Count
+        if run_count == 0:
+            return False
+        for i in range(1, run_count + 1):
+            run = tr.Runs(i)
+            # Skip whitespace-only runs
+            if not run.Text.strip():
+                continue
+            if run.Font.Bold != msoTrue:
+                return False
+        return True
+    except Exception:
+        return False
+
+
+def _runs_to_markdown(paragraph) -> str:
+    """Convert a paragraph's runs to Markdown with bold/italic markers.
+
+    Merges consecutive runs with identical formatting to avoid
+    fragmented markers like **word1****word2**.
+    """
+    raw = []
+    try:
+        run_count = paragraph.Runs().Count
+    except Exception:
+        return paragraph.Text.replace("\r", "").replace("\v", "\n")
+
+    if run_count == 0:
+        return paragraph.Text.replace("\r", "").replace("\v", "\n")
+
+    for i in range(1, run_count + 1):
+        try:
+            run = paragraph.Runs(i)
+            text = run.Text.replace("\r", "").replace("\v", "\n")
+            if not text:
+                continue
+            font = run.Font
+            is_bold = font.Bold == msoTrue
+            is_italic = font.Italic == msoTrue
+            raw.append({"text": text, "bold": is_bold, "italic": is_italic})
+        except Exception:
+            continue
+
+    # Merge consecutive runs with identical formatting
+    merged = []
+    for r in raw:
+        if merged and merged[-1]["bold"] == r["bold"] and merged[-1]["italic"] == r["italic"]:
+            merged[-1]["text"] += r["text"]
+        else:
+            merged.append(dict(r))
+
+    # Format
+    parts = []
+    for m in merged:
+        t = m["text"]
+        if m["bold"] and m["italic"]:
+            parts.append(f"***{t}***")
+        elif m["bold"]:
+            parts.append(f"**{t}**")
+        elif m["italic"]:
+            parts.append(f"*{t}*")
+        else:
+            parts.append(t)
+
+    return "".join(parts)
+
+
+def _shape_paragraphs_to_markdown(shape, as_heading: str = "") -> str:
+    """Convert a shape's paragraphs to Markdown text.
+
+    Args:
+        shape: COM shape with text frame
+        as_heading: If set (e.g. "#" or "##"), render as heading
+    """
+    try:
+        tr = shape.TextFrame.TextRange
+    except Exception:
+        return ""
+
+    if as_heading:
+        # For headings, combine all text into one line
+        text = _runs_to_markdown(tr).strip()
+        if not text:
+            return ""
+        return f"{as_heading} {text}"
+
+    lines = []
+    para_count = tr.Paragraphs().Count
+    for i in range(1, para_count + 1):
+        para = tr.Paragraphs(i)
+        text = _runs_to_markdown(para).strip()
+        if not text:
+            # Preserve empty paragraph as blank line
+            lines.append("")
+            continue
+
+        # Detect bullet
+        indent_level = para.IndentLevel
+        bullet_prefix = ""
+        try:
+            bullet = para.ParagraphFormat.Bullet
+            if bullet.Visible == msoTrue:
+                indent = "  " * max(0, indent_level - 1)
+                if bullet.Type == ppBulletNumbered:
+                    bullet_prefix = f"{indent}1. "
+                else:
+                    bullet_prefix = f"{indent}- "
+        except Exception:
+            pass
+
+        lines.append(f"{bullet_prefix}{text}")
+
+    return "\n".join(lines)
+
+
+def _table_to_markdown(shape) -> str:
+    """Convert a table shape to a Markdown table."""
+    try:
+        table = shape.Table
+        rows = table.Rows.Count
+        cols = table.Columns.Count
+
+        md_rows = []
+        for r in range(1, rows + 1):
+            cells = []
+            for c in range(1, cols + 1):
+                try:
+                    text = table.Cell(r, c).Shape.TextFrame.TextRange.Text
+                    text = text.replace("\r", " ").replace("\v", " ").replace("|", "\\|").strip()
+                except Exception:
+                    text = ""
+                cells.append(text)
+            md_rows.append("| " + " | ".join(cells) + " |")
+
+            # Add header separator after first row
+            if r == 1:
+                md_rows.append("| " + " | ".join(["---"] * cols) + " |")
+
+        return "\n".join(md_rows)
+    except Exception:
+        return ""
+
+
+def _collect_text_shapes(slide) -> list:
+    """Collect all text-bearing shapes from a slide with position info.
+
+    Returns a list of dicts with keys:
+        shape, top, left, width, height, is_title, is_subtitle,
+        has_table, is_group
+    Skips SlideNumber, Header, Footer, Date placeholders.
+    """
+    shapes = []
+
+    def _process_shape(shape):
+        """Process a single shape (may be called recursively for groups)."""
+        # Check if placeholder and should skip
+        if shape.Type == 14:  # msoPlaceholder
+            try:
+                ph_type = shape.PlaceholderFormat.Type
+                if ph_type in _SKIP_PLACEHOLDER_TYPES:
+                    return
+            except Exception:
+                pass
+
+        info = {
+            "shape": shape,
+            "top": shape.Top,
+            "left": shape.Left,
+            "width": shape.Width,
+            "height": shape.Height,
+            "is_title": False,
+            "is_subtitle": False,
+            "has_table": False,
+            "is_group": False,
+        }
+
+        # Check placeholder type
+        if shape.Type == 14:  # msoPlaceholder
+            try:
+                ph_type = shape.PlaceholderFormat.Type
+                if ph_type in _TITLE_PLACEHOLDER_TYPES:
+                    info["is_title"] = True
+                elif ph_type in _SUBTITLE_PLACEHOLDER_TYPES:
+                    info["is_subtitle"] = True
+            except Exception:
+                pass
+
+        # Check for table
+        try:
+            if shape.HasTable:
+                info["has_table"] = True
+                shapes.append(info)
+                return
+        except Exception:
+            pass
+
+        # Check for group — recurse into items
+        if shape.Type == 6:  # msoGroup
+            info["is_group"] = True
+            # Add group children individually with group's position offset
+            try:
+                for gi in range(1, shape.GroupItems.Count + 1):
+                    _process_shape(shape.GroupItems(gi))
+            except Exception:
+                pass
+            return
+
+        # Check for text
+        try:
+            if shape.HasTextFrame:
+                if shape.TextFrame.HasText:
+                    shapes.append(info)
+        except Exception:
+            pass
+
+    for i in range(1, slide.Shapes.Count + 1):
+        _process_shape(slide.Shapes(i))
+
+    return shapes
+
+
+def _group_into_rows(shape_infos: list, threshold: float = 0.4) -> list:
+    """Group shapes into rows based on vertical overlap.
+
+    Two shapes are in the same row if their vertical overlap exceeds
+    `threshold` of the shorter shape's height.
+
+    Returns a list of rows, each row is a list of shape_infos sorted
+    left-to-right. Rows are sorted top-to-bottom.
+    """
+    if not shape_infos:
+        return []
+
+    # Sort by top position
+    sorted_shapes = sorted(shape_infos, key=lambda s: (s["top"], s["left"]))
+
+    rows = []
+    used = set()
+
+    for i, s in enumerate(sorted_shapes):
+        if i in used:
+            continue
+        row = [s]
+        used.add(i)
+
+        s_top = s["top"]
+        s_bottom = s_top + s["height"]
+
+        for j in range(i + 1, len(sorted_shapes)):
+            if j in used:
+                continue
+            other = sorted_shapes[j]
+            o_top = other["top"]
+            o_bottom = o_top + other["height"]
+
+            # Calculate vertical overlap
+            overlap_top = max(s_top, o_top)
+            overlap_bottom = min(s_bottom, o_bottom)
+            overlap = max(0, overlap_bottom - overlap_top)
+
+            shorter_height = min(s["height"], other["height"])
+            if shorter_height > 0 and overlap / shorter_height >= threshold:
+                row.append(other)
+                used.add(j)
+
+        # Sort row by left position
+        row.sort(key=lambda x: x["left"])
+        rows.append(row)
+
+    # Sort rows by average top position
+    rows.sort(key=lambda row: sum(s["top"] for s in row) / len(row))
+    return rows
+
+
+def _shape_info_to_markdown(info: dict) -> str:
+    """Convert a single shape_info dict to Markdown text."""
+    shape = info["shape"]
+
+    # Table
+    if info["has_table"]:
+        return _table_to_markdown(shape)
+
+    # Title
+    if info["is_title"]:
+        return _shape_paragraphs_to_markdown(shape, as_heading="#")
+
+    # Subtitle — plain text (no heading marker)
+    if info["is_subtitle"]:
+        return _shape_paragraphs_to_markdown(shape)
+
+    # All-bold → subheading
+    if _is_all_bold(shape):
+        return _shape_paragraphs_to_markdown(shape, as_heading="##")
+
+    # Regular text
+    return _shape_paragraphs_to_markdown(shape)
+
+
+def _slide_to_markdown(slide, slide_index: int) -> str:
+    """Convert a single slide to pseudo-Markdown."""
+    parts = [f"--- Slide {slide_index} ---"]
+
+    shape_infos = _collect_text_shapes(slide)
+    if not shape_infos:
+        parts.append("(no text)")
+        return "\n".join(parts)
+
+    rows = _group_into_rows(shape_infos)
+
+    for row in rows:
+        if len(row) == 1:
+            # Single shape row
+            md = _shape_info_to_markdown(row[0])
+            if md.strip():
+                parts.append(md)
+        else:
+            # Multi-shape row → columns
+            for col_idx, info in enumerate(row, 1):
+                md = _shape_info_to_markdown(info)
+                if md.strip():
+                    parts.append(f"\n[Column {col_idx}]")
+                    parts.append(md)
+
+    return "\n".join(parts)
+
+
+def _get_all_text_impl(slide_indices) -> str:
+    """Extract all text from the presentation as pseudo-Markdown.
+
+    Runs on the COM thread.
+    """
+    pres = ppt._get_pres_impl()
+    total_slides = pres.Slides.Count
+
+    if slide_indices is None:
+        indices = list(range(1, total_slides + 1))
+    else:
+        indices = slide_indices
+
+    slide_parts = []
+    for idx in indices:
+        if idx < 1 or idx > total_slides:
+            slide_parts.append(
+                f"--- Slide {idx} ---\n(invalid slide index, "
+                f"presentation has {total_slides} slides)"
+            )
+            continue
+        slide = pres.Slides(idx)
+        slide_parts.append(_slide_to_markdown(slide, idx))
+
+    return "\n\n".join(slide_parts)
 
 
 # ---------------------------------------------------------------------------
@@ -720,6 +1117,14 @@ def set_textframe(params: SetTextframeInput) -> str:
         return json.dumps({"error": str(e)})
 
 
+def get_all_text(params: GetAllTextInput) -> str:
+    """Extract all text from the presentation as pseudo-Markdown."""
+    try:
+        return ppt.execute(_get_all_text_impl, params.slide_indices)
+    except Exception as e:
+        return f"Error: {e}"
+
+
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
@@ -881,3 +1286,29 @@ def register_tools(mcp):
         Also sets inner margins (points) and text orientation.
         """
         return set_textframe(params)
+
+    @mcp.tool(
+        name="ppt_get_all_text",
+        annotations={
+            "title": "Get All Text as Markdown",
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_ppt_get_all_text(params: GetAllTextInput) -> str:
+        """Extract all text from the presentation as pseudo-Markdown.
+
+        Returns a structured overview of every slide's content:
+        - `# Heading` for slide titles
+        - `## Subheading` for all-bold text blocks
+        - `**bold**` and `*italic*` inline formatting
+        - `- bullet` items with indentation
+        - Markdown tables for table shapes
+        - `[Column N]` labels for side-by-side layouts
+
+        Use this to quickly understand the full content and structure of a
+        presentation in a single call. Omit slide_indices to get all slides.
+        """
+        return get_all_text(params)
