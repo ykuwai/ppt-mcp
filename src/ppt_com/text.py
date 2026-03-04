@@ -280,6 +280,9 @@ _SKIP_PLACEHOLDER_TYPES = {13, 14, 15, 16}  # SlideNumber, Header, Footer, Date
 _TITLE_PLACEHOLDER_TYPES = {1, 3, 5}  # Title, CenterTitle, VerticalTitle
 _SUBTITLE_PLACEHOLDER_TYPES = {4}  # Subtitle
 
+# Max slides per COM batch — keep under the 30-second COM call timeout
+_GET_ALL_TEXT_BATCH_SIZE = 15
+
 
 # ---------------------------------------------------------------------------
 # Helpers for ppt_get_all_text
@@ -415,7 +418,11 @@ def _shape_paragraphs_to_markdown(shape, as_heading: str = "") -> str:
 
 
 def _table_to_markdown(shape) -> str:
-    """Convert a table shape to a Markdown table."""
+    """Convert a table shape to a Markdown table.
+
+    Note: Cell text is extracted as plain text; inline bold/italic
+    formatting within table cells is not preserved.
+    """
     try:
         table = shape.Table
         rows = table.Rows.Count
@@ -452,8 +459,14 @@ def _collect_text_shapes(slide) -> list:
     """
     shapes = []
 
-    def _process_shape(shape):
-        """Process a single shape (may be called recursively for groups)."""
+    def _process_shape(shape, offset_top=0.0, offset_left=0.0):
+        """Process a single shape (may be called recursively for groups).
+
+        Args:
+            shape: COM shape object
+            offset_top: Accumulated Y offset from parent groups
+            offset_left: Accumulated X offset from parent groups
+        """
         # Check placeholder skip / classify in a single COM read
         is_title = False
         is_subtitle = False
@@ -468,18 +481,26 @@ def _collect_text_shapes(slide) -> list:
                 pass
 
         # Recurse into groups early (no need to build info dict)
+        # Pass group's position as offset since child coordinates are
+        # relative to the group, not the slide.
         if shape.Type == msoGroup:
             try:
+                g_top = shape.Top
+                g_left = shape.Left
                 for gi in range(1, shape.GroupItems.Count + 1):
-                    _process_shape(shape.GroupItems(gi))
+                    _process_shape(
+                        shape.GroupItems(gi),
+                        offset_top + g_top,
+                        offset_left + g_left,
+                    )
             except Exception:
                 pass
             return
 
         info = {
             "shape": shape,
-            "top": shape.Top,
-            "left": shape.Left,
+            "top": shape.Top + offset_top,
+            "left": shape.Left + offset_left,
             "width": shape.Width,
             "height": shape.Height,
             "is_title": is_title,
@@ -1121,8 +1142,6 @@ def get_all_text(params: GetAllTextInput) -> str:
 
     Batches COM calls to avoid the 30-second timeout on large presentations.
     """
-    _BATCH_SIZE = 15
-
     try:
         if params.slide_indices is not None:
             indices = params.slide_indices
@@ -1131,10 +1150,10 @@ def get_all_text(params: GetAllTextInput) -> str:
             total = ppt.execute(lambda: ppt._get_pres_impl().Slides.Count)
             indices = list(range(1, total + 1))
 
-        # Process in batches
+        # Process in batches to stay under the 30s COM timeout
         all_parts = []
-        for i in range(0, len(indices), _BATCH_SIZE):
-            batch = indices[i:i + _BATCH_SIZE]
+        for i in range(0, len(indices), _GET_ALL_TEXT_BATCH_SIZE):
+            batch = indices[i:i + _GET_ALL_TEXT_BATCH_SIZE]
             part = ppt.execute(_get_all_text_impl, batch)
             all_parts.append(part)
 
