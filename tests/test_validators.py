@@ -811,3 +811,19 @@ class TestGetAllTextInput:
         """Mixed valid and invalid indices → rejected."""
         with pytest.raises(ValidationError, match="must be >= 1"):
             GetAllTextInput(slide_indices=[1, 0, 3])
+
+    def test_output_path_default_none(self):
+        """output_path defaults to None."""
+        inp = GetAllTextInput()
+        assert inp.output_path is None
+
+    def test_output_path_valid_string(self):
+        """String output_path is accepted."""
+        inp = GetAllTextInput(output_path="slides.md")
+        assert inp.output_path == "slides.md"
+
+    def test_output_path_with_slide_indices(self):
+        """output_path and slide_indices can be used together."""
+        inp = GetAllTextInput(slide_indices=[1, 2], output_path="/tmp/out.md")
+        assert inp.slide_indices == [1, 2]
+        assert inp.output_path == "/tmp/out.md"
