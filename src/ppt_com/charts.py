@@ -120,6 +120,19 @@ class FormatChartInput(BaseModel):
     legend_font_size: Optional[float] = Field(
         default=None, description="Legend font size in points", gt=0
     )
+    title_position: Optional[str] = Field(
+        default=None,
+        description=(
+            "Chart title position preset: 'top' (default/auto), 'bottom' (below plot area), "
+            "'center' (vertically centered). Applied before title_top/title_left."
+        ),
+    )
+    title_top: Optional[float] = Field(
+        default=None, description="Chart title top position in points (relative to chart area). Overrides title_position."
+    )
+    title_left: Optional[float] = Field(
+        default=None, description="Chart title left position in points (relative to chart area). Overrides title_position."
+    )
 
 
 class SetChartSeriesInput(BaseModel):
@@ -336,6 +349,7 @@ def _get_chart_data_impl(slide_index, shape_name_or_index):
 def _format_chart_impl(
     slide_index, shape_name_or_index,
     title, has_legend, legend_position, chart_style, legend_font_size,
+    title_position, title_top, title_left,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -375,6 +389,35 @@ def _format_chart_impl(
                 "Set has_legend=true first."
             )
         chart.Legend.Font.Size = legend_font_size
+
+    if title_position is not None or title_top is not None or title_left is not None:
+        if not chart.HasTitle:
+            raise ValueError(
+                "Cannot set title position when chart has no title. "
+                "Set title first."
+            )
+        ct = chart.ChartTitle
+        if title_position is not None:
+            key = title_position.strip().lower()
+            if key == "top":
+                # Reset to PowerPoint default (auto-position)
+                ct.Top = 5
+                ct.Left = (chart.ChartArea.Width - ct.Width) / 2
+            elif key == "bottom":
+                ct.Top = chart.ChartArea.Height - ct.Height - 5
+                ct.Left = (chart.ChartArea.Width - ct.Width) / 2
+            elif key == "center":
+                ct.Top = (chart.ChartArea.Height - ct.Height) / 2
+                ct.Left = (chart.ChartArea.Width - ct.Width) / 2
+            else:
+                raise ValueError(
+                    f"Unknown title_position '{title_position}'. "
+                    "Valid values: 'top', 'bottom', 'center'."
+                )
+        if title_top is not None:
+            ct.Top = title_top
+        if title_left is not None:
+            ct.Left = title_left
 
     return {
         "success": True,
@@ -511,6 +554,7 @@ def format_chart(params: FormatChartInput) -> str:
             params.title, params.has_legend,
             params.legend_position, params.chart_style,
             params.legend_font_size,
+            params.title_position, params.title_top, params.title_left,
         )
         return json.dumps(result)
     except Exception as e:
@@ -640,6 +684,8 @@ def register_tools(mcp):
         set legend position ('bottom', 'left', 'right', 'top', 'corner'),
         apply a built-in chart style by index number,
         and set the legend font size in points via legend_font_size.
+        Control chart title position via title_position preset ('top', 'bottom',
+        'center') or explicit title_top/title_left coordinates in points.
         """
         return format_chart(params)
 
