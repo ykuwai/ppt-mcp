@@ -11,7 +11,7 @@ Excel processes.
 
 import json
 import logging
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import pythoncom
 from pydantic import BaseModel, Field, ConfigDict
@@ -112,13 +112,43 @@ class FormatChartInput(BaseModel):
     )
     legend_position: Optional[str] = Field(
         default=None,
-        description="Legend position: 'bottom', 'left', 'right', 'top', or 'corner'",
+        description=(
+            "Legend position. PowerPoint presets: 'bottom', 'left', 'right', 'top', 'corner'. "
+            "8-direction presets (coordinate-based): 'top-left', 'top-center', 'top-right', "
+            "'middle-left', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'. "
+            "Applied before legend_top/legend_left."
+        ),
     )
     chart_style: Optional[int] = Field(
         default=None, description="Built-in chart style index (1-48 typically)"
     )
     legend_font_size: Optional[float] = Field(
         default=None, description="Legend font size in points", gt=0
+    )
+    legend_top: Optional[float] = Field(
+        default=None, ge=0,
+        description="Legend top position in points (relative to chart area). Overrides legend_position."
+    )
+    legend_left: Optional[float] = Field(
+        default=None, ge=0,
+        description="Legend left position in points (relative to chart area). Overrides legend_position."
+    )
+    title_position: Optional[Literal["top", "bottom", "center"]] = Field(
+        default=None,
+        description=(
+            "Chart title position preset: 'top' (restores PowerPoint auto-placement), "
+            "'bottom' (below plot area, above legend), "
+            "'center' (vertically centered, overlaps plot area). "
+            "Applied before title_top/title_left."
+        ),
+    )
+    title_top: Optional[float] = Field(
+        default=None, ge=0,
+        description="Chart title top position in points (relative to chart area). Overrides title_position."
+    )
+    title_left: Optional[float] = Field(
+        default=None, ge=0,
+        description="Chart title left position in points (relative to chart area). Overrides title_position."
     )
 
 
@@ -336,6 +366,8 @@ def _get_chart_data_impl(slide_index, shape_name_or_index):
 def _format_chart_impl(
     slide_index, shape_name_or_index,
     title, has_legend, legend_position, chart_style, legend_font_size,
+    legend_top, legend_left,
+    title_position, title_top, title_left,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -358,12 +390,52 @@ def _format_chart_impl(
                 "Set has_legend=true first."
             )
         key = legend_position.strip().lower()
-        if key not in LEGEND_POSITION_MAP:
+        if key in LEGEND_POSITION_MAP:
+            chart.Legend.Position = LEGEND_POSITION_MAP[key]
+        else:
+            # 8-direction coordinate-based presets
+            parts = key.split("-")
+            if len(parts) != 2 or parts[0] not in ("top", "middle", "bottom") or parts[1] not in ("left", "center", "right"):
+                raise ValueError(
+                    f"Unknown legend position '{legend_position}'. "
+                    f"PowerPoint presets: {', '.join(LEGEND_POSITION_MAP.keys())}. "
+                    "8-direction presets: top-left, top-center, top-right, "
+                    "middle-left, middle-right, bottom-left, bottom-center, bottom-right."
+                )
+            row, col = parts
+            leg = chart.Legend
+            ca_w = chart.ChartArea.Width
+            ca_h = chart.ChartArea.Height
+            # Note: leg.Width/leg.Height may be 0 if the chart hasn't re-rendered.
+            # If placement is off, ensure the chart is fully rendered before this call.
+            leg_w = leg.Width
+            leg_h = leg.Height
+            gap = 5  # pt — small gap from chart edge
+            if row == "top":
+                leg_top = gap
+            elif row == "middle":
+                leg_top = (ca_h - leg_h) / 2
+            else:  # bottom
+                leg_top = ca_h - leg_h - gap
+            if col == "left":
+                leg_left = gap
+            elif col == "center":
+                leg_left = (ca_w - leg_w) / 2
+            else:  # right
+                leg_left = ca_w - leg_w - gap
+            leg.Top = leg_top
+            leg.Left = leg_left
+
+    if legend_top is not None or legend_left is not None:
+        if not chart.HasLegend:
             raise ValueError(
-                f"Unknown legend position '{legend_position}'. "
-                f"Valid: {', '.join(LEGEND_POSITION_MAP.keys())}"
+                "Cannot set legend coordinates when chart has no legend. "
+                "Set has_legend=true first."
             )
-        chart.Legend.Position = LEGEND_POSITION_MAP[key]
+        if legend_top is not None:
+            chart.Legend.Top = legend_top
+        if legend_left is not None:
+            chart.Legend.Left = legend_left
 
     if chart_style is not None:
         chart.ChartStyle = chart_style
@@ -375,6 +447,73 @@ def _format_chart_impl(
                 "Set has_legend=true first."
             )
         chart.Legend.Font.Size = legend_font_size
+
+    if title_position is not None or title_top is not None or title_left is not None:
+        if not chart.HasTitle:
+            raise ValueError(
+                "Cannot set title position when chart has no title. "
+                "Set title first."
+            )
+        ct = chart.ChartTitle
+        gap = 5  # pt — small gap from chart edge / between elements
+        # Note: ct.Width and ct.Height may be 0 if the chart has not yet
+        # re-rendered after a recent title or data change. If positioning
+        # appears off, ensure the chart is fully rendered before this call.
+        if title_position is not None:
+            if title_position == "top":
+                # Restore PowerPoint automatic title placement by toggling HasTitle.
+                # This clears any manual Top/Left and lets PowerPoint re-layout
+                # the title at the top and restore the PlotArea accordingly.
+                # NOTE: toggling HasTitle resets title formatting (font, color, size)
+                # to defaults, so we snapshot and restore basic font properties.
+                title_text = ct.Text
+                try:
+                    saved_name = ct.Font.Name
+                    saved_size = ct.Font.Size
+                    saved_bold = ct.Font.Bold
+                    try:
+                        saved_color = ct.Font.Color.RGB
+                    except Exception:
+                        saved_color = None
+                except Exception:
+                    saved_name = saved_size = saved_bold = saved_color = None
+                chart.HasTitle = False
+                chart.HasTitle = True
+                chart.ChartTitle.Text = title_text
+                ct = chart.ChartTitle  # re-bind after toggle
+                if saved_name is not None:
+                    ct.Font.Name = saved_name
+                if saved_size is not None:
+                    ct.Font.Size = saved_size
+                if saved_bold is not None:
+                    ct.Font.Bold = saved_bold
+                if saved_color is not None:
+                    ct.Font.Color.RGB = saved_color
+            elif title_position == "bottom":
+                # Shrink PlotArea from the bottom to make room for the title,
+                # then position the title in the freed space.
+                pa = chart.PlotArea
+                # Determine target top for the title.
+                # TODO: also detect legends placed at the bottom via 8-direction
+                # coordinate presets (bottom-left/center/right), which set Legend.Top/Left
+                # directly and don't change Legend.Position.
+                if chart.HasLegend and chart.Legend.Position == LEGEND_POSITION_MAP["bottom"]:
+                    title_top_target = chart.Legend.Top - ct.Height - gap
+                else:
+                    title_top_target = chart.ChartArea.Height - ct.Height - gap
+                # Shrink PlotArea so its bottom does not overlap the title
+                available_bottom = title_top_target - gap
+                if pa.Top + pa.Height > available_bottom:
+                    pa.Height = available_bottom - pa.Top
+                ct.Top = title_top_target
+                ct.Left = (chart.ChartArea.Width - ct.Width) / 2
+            elif title_position == "center":
+                ct.Top = (chart.ChartArea.Height - ct.Height) / 2
+                ct.Left = (chart.ChartArea.Width - ct.Width) / 2
+        if title_top is not None:
+            ct.Top = title_top
+        if title_left is not None:
+            ct.Left = title_left
 
     return {
         "success": True,
@@ -511,6 +650,8 @@ def format_chart(params: FormatChartInput) -> str:
             params.title, params.has_legend,
             params.legend_position, params.chart_style,
             params.legend_font_size,
+            params.legend_top, params.legend_left,
+            params.title_position, params.title_top, params.title_left,
         )
         return json.dumps(result)
     except Exception as e:
@@ -637,9 +778,15 @@ def register_tools(mcp):
         """Format chart properties: title, legend, and chart style.
 
         Set a chart title (enables HasTitle automatically), show/hide the legend,
-        set legend position ('bottom', 'left', 'right', 'top', 'corner'),
-        apply a built-in chart style by index number,
-        and set the legend font size in points via legend_font_size.
+        set legend position using PowerPoint presets ('bottom', 'left', 'right',
+        'top', 'corner') or 8-direction coordinate presets ('top-left',
+        'top-center', 'top-right', 'middle-left', 'middle-right', 'bottom-left',
+        'bottom-center', 'bottom-right'), or use legend_top/legend_left for
+        explicit coordinate positioning.
+        Apply a built-in chart style by index number, and set the legend font
+        size in points via legend_font_size.
+        Control chart title position via title_position preset ('top', 'bottom',
+        'center') or explicit title_top/title_left coordinates in points.
         """
         return format_chart(params)
 
