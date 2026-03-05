@@ -62,6 +62,10 @@ mcp = FastMCP(
 4. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
 5. Use `ppt_get_slide_preview` to visually inspect slides as you work.
 
+## Reading existing content
+
+To understand what text is already on the slides, call `ppt_get_all_text`. It extracts all text from the presentation (or selected slides) as pseudo-Markdown — titles, subheadings, body text, bullets, tables, and column layouts are all represented. Use `output_path` to save the result as a `.md` file for easy reference.
+
 ## Tips
 
 - Use accent colors from `ppt_get_presentation_info` (or `ppt_get_theme_colors`) instead of hardcoding RGB values — theme names adapt automatically to the presentation's palette.
