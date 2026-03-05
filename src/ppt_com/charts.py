@@ -118,7 +118,7 @@ class FormatChartInput(BaseModel):
         default=None, description="Built-in chart style index (1-48 typically)"
     )
     legend_font_size: Optional[float] = Field(
-        default=None, description="Legend font size in points"
+        default=None, description="Legend font size in points", gt=0
     )
 
 
