@@ -397,19 +397,31 @@ def _format_chart_impl(
                 "Set title first."
             )
         ct = chart.ChartTitle
+        gap = 5
         if title_position is not None:
             key = title_position.strip().lower()
             if key == "top":
-                # Reset to PowerPoint default (auto-position)
-                ct.Top = 5
-                ct.Left = (chart.ChartArea.Width - ct.Width) / 2
+                # Restore PowerPoint automatic title placement by toggling HasTitle.
+                # This clears any manual Top/Left and lets PowerPoint re-layout
+                # the title at the top and restore the PlotArea accordingly.
+                title_text = ct.Text
+                chart.HasTitle = False
+                chart.HasTitle = True
+                chart.ChartTitle.Text = title_text
             elif key == "bottom":
-                bottom_target = chart.ChartArea.Height - ct.Height - 5
-                # If legend is at the bottom, position title above it
-                if chart.HasLegend:
-                    if chart.Legend.Position == LEGEND_POSITION_MAP["bottom"]:
-                        bottom_target = chart.Legend.Top - ct.Height - 5
-                ct.Top = bottom_target
+                # Shrink PlotArea from the bottom to make room for the title,
+                # then position the title in the freed space.
+                pa = chart.PlotArea
+                # Determine target top for the title
+                if chart.HasLegend and chart.Legend.Position == LEGEND_POSITION_MAP["bottom"]:
+                    title_top_target = chart.Legend.Top - ct.Height - gap
+                else:
+                    title_top_target = chart.ChartArea.Height - ct.Height - gap
+                # Shrink PlotArea so its bottom does not overlap the title
+                available_bottom = title_top_target - gap
+                if pa.Top + pa.Height > available_bottom:
+                    pa.Height = available_bottom - pa.Top
+                ct.Top = title_top_target
                 ct.Left = (chart.ChartArea.Width - ct.Width) / 2
             elif key == "center":
                 ct.Top = (chart.ChartArea.Height - ct.Height) / 2
