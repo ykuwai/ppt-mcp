@@ -406,21 +406,23 @@ def _format_chart_impl(
             leg = chart.Legend
             ca_w = chart.ChartArea.Width
             ca_h = chart.ChartArea.Height
+            # Note: leg.Width/leg.Height may be 0 if the chart hasn't re-rendered.
+            # If placement is off, ensure the chart is fully rendered before this call.
             leg_w = leg.Width
             leg_h = leg.Height
-            lg = 5  # gap in points
+            gap = 5  # pt — small gap from chart edge
             if row == "top":
-                leg_top = lg
+                leg_top = gap
             elif row == "middle":
                 leg_top = (ca_h - leg_h) / 2
             else:  # bottom
-                leg_top = ca_h - leg_h - lg
+                leg_top = ca_h - leg_h - gap
             if col == "left":
-                leg_left = lg
+                leg_left = gap
             elif col == "center":
                 leg_left = (ca_w - leg_w) / 2
             else:  # right
-                leg_left = ca_w - leg_w - lg
+                leg_left = ca_w - leg_w - gap
             leg.Top = leg_top
             leg.Left = leg_left
 
@@ -491,7 +493,10 @@ def _format_chart_impl(
                 # Shrink PlotArea from the bottom to make room for the title,
                 # then position the title in the freed space.
                 pa = chart.PlotArea
-                # Determine target top for the title
+                # Determine target top for the title.
+                # TODO: also detect legends placed at the bottom via 8-direction
+                # coordinate presets (bottom-left/center/right), which set Legend.Top/Left
+                # directly and don't change Legend.Position.
                 if chart.HasLegend and chart.Legend.Position == LEGEND_POSITION_MAP["bottom"]:
                     title_top_target = chart.Legend.Top - ct.Height - gap
                 else:
@@ -773,9 +778,13 @@ def register_tools(mcp):
         """Format chart properties: title, legend, and chart style.
 
         Set a chart title (enables HasTitle automatically), show/hide the legend,
-        set legend position ('bottom', 'left', 'right', 'top', 'corner'),
-        apply a built-in chart style by index number,
-        and set the legend font size in points via legend_font_size.
+        set legend position using PowerPoint presets ('bottom', 'left', 'right',
+        'top', 'corner') or 8-direction coordinate presets ('top-left',
+        'top-center', 'top-right', 'middle-left', 'middle-right', 'bottom-left',
+        'bottom-center', 'bottom-right'), or use legend_top/legend_left for
+        explicit coordinate positioning.
+        Apply a built-in chart style by index number, and set the legend font
+        size in points via legend_font_size.
         Control chart title position via title_position preset ('top', 'bottom',
         'center') or explicit title_top/title_left coordinates in points.
         """
