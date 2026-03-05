@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 from utils.color import hex_to_int
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
+from utils.validation import font_size_warning
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
     msoTrue, msoFalse,
@@ -762,6 +763,9 @@ def add_shape(params: AddShapeInput) -> str:
             params.line_visible, params.line_color, params.line_weight,
             params.corner_radius, params.corner_radius_pt,
         )
+        warn = font_size_warning(params.font_size)
+        if warn:
+            result["warning"] = warn
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add shape: {str(e)}"})
@@ -788,6 +792,9 @@ def add_textbox(params: AddTextboxInput) -> str:
             params.italic, params.font_color, params.align,
             params.vertical_anchor,
         )
+        warn = font_size_warning(params.font_size)
+        if warn:
+            result["warning"] = warn
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add textbox: {str(e)}"})

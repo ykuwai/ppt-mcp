@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from utils.color import hex_to_int, int_to_hex, int_to_rgb, get_theme_color_index
+from utils.validation import font_size_warning
 from ppt_com.constants import (
     msoTrue, msoFalse, msoTriStateMixed,
     msoPlaceholder, msoGroup,
@@ -1162,6 +1163,9 @@ def format_text(params: FormatTextInput) -> str:
             params.font_size, params.bold, params.italic,
             params.underline, params.color, params.font_color_theme,
         )
+        warn = font_size_warning(params.font_size)
+        if warn:
+            result["warning"] = warn
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
@@ -1178,6 +1182,9 @@ def format_text_range(params: FormatTextRangeInput) -> str:
             params.font_size, params.bold, params.italic,
             params.underline, params.color, params.font_color_theme,
         )
+        warn = font_size_warning(params.font_size)
+        if warn:
+            result["warning"] = warn
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
