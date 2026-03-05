@@ -11,7 +11,7 @@ Excel processes.
 
 import json
 import logging
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import pythoncom
 from pydantic import BaseModel, Field, ConfigDict
@@ -120,18 +120,22 @@ class FormatChartInput(BaseModel):
     legend_font_size: Optional[float] = Field(
         default=None, description="Legend font size in points", gt=0
     )
-    title_position: Optional[str] = Field(
+    title_position: Optional[Literal["top", "bottom", "center"]] = Field(
         default=None,
         description=(
-            "Chart title position preset: 'top' (default/auto), 'bottom' (below plot area), "
-            "'center' (vertically centered). Applied before title_top/title_left."
+            "Chart title position preset: 'top' (restores PowerPoint auto-placement), "
+            "'bottom' (below plot area, above legend), "
+            "'center' (vertically centered, overlaps plot area). "
+            "Applied before title_top/title_left."
         ),
     )
     title_top: Optional[float] = Field(
-        default=None, description="Chart title top position in points (relative to chart area). Overrides title_position."
+        default=None, ge=0,
+        description="Chart title top position in points (relative to chart area). Overrides title_position."
     )
     title_left: Optional[float] = Field(
-        default=None, description="Chart title left position in points (relative to chart area). Overrides title_position."
+        default=None, ge=0,
+        description="Chart title left position in points (relative to chart area). Overrides title_position."
     )
 
 
@@ -397,18 +401,41 @@ def _format_chart_impl(
                 "Set title first."
             )
         ct = chart.ChartTitle
-        gap = 5
+        gap = 5  # pt — small gap from chart edge / between elements
+        # Note: ct.Width and ct.Height may be 0 if the chart has not yet
+        # re-rendered after a recent title or data change. If positioning
+        # appears off, ensure the chart is fully rendered before this call.
         if title_position is not None:
-            key = title_position.strip().lower()
-            if key == "top":
+            if title_position == "top":
                 # Restore PowerPoint automatic title placement by toggling HasTitle.
                 # This clears any manual Top/Left and lets PowerPoint re-layout
                 # the title at the top and restore the PlotArea accordingly.
+                # NOTE: toggling HasTitle resets title formatting (font, color, size)
+                # to defaults, so we snapshot and restore basic font properties.
                 title_text = ct.Text
+                try:
+                    saved_name = ct.Font.Name
+                    saved_size = ct.Font.Size
+                    saved_bold = ct.Font.Bold
+                    try:
+                        saved_color = ct.Font.Color.RGB
+                    except Exception:
+                        saved_color = None
+                except Exception:
+                    saved_name = saved_size = saved_bold = saved_color = None
                 chart.HasTitle = False
                 chart.HasTitle = True
                 chart.ChartTitle.Text = title_text
-            elif key == "bottom":
+                ct = chart.ChartTitle  # re-bind after toggle
+                if saved_name is not None:
+                    ct.Font.Name = saved_name
+                if saved_size is not None:
+                    ct.Font.Size = saved_size
+                if saved_bold is not None:
+                    ct.Font.Bold = saved_bold
+                if saved_color is not None:
+                    ct.Font.Color.RGB = saved_color
+            elif title_position == "bottom":
                 # Shrink PlotArea from the bottom to make room for the title,
                 # then position the title in the freed space.
                 pa = chart.PlotArea
@@ -423,14 +450,9 @@ def _format_chart_impl(
                     pa.Height = available_bottom - pa.Top
                 ct.Top = title_top_target
                 ct.Left = (chart.ChartArea.Width - ct.Width) / 2
-            elif key == "center":
+            elif title_position == "center":
                 ct.Top = (chart.ChartArea.Height - ct.Height) / 2
                 ct.Left = (chart.ChartArea.Width - ct.Width) / 2
-            else:
-                raise ValueError(
-                    f"Unknown title_position '{title_position}'. "
-                    "Valid values: 'top', 'bottom', 'center'."
-                )
         if title_top is not None:
             ct.Top = title_top
         if title_left is not None:
