@@ -58,32 +58,32 @@ mcp = FastMCP(
 
 1. Call `ppt_activate_presentation` first — locks all tools to a specific file and prevents accidental edits to the wrong presentation.
 2. Call `ppt_get_presentation_info` to understand the presentation — slide count, dimensions, template, current default fonts, and accent colors. Use this to inform all subsequent decisions. To read the existing slide content, call `ppt_get_all_text` — it returns all text as pseudo-Markdown with layout analysis, heading detection, and formatting markers.
-3. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale Windows, the slide master default is often 游ゴシック, which renders thin and illegible when projected. Preferred fonts: BIZ UDPゴシック (Japanese) + Segoe UI (Latin).
-4. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
-5. Use `ppt_get_slide_preview` to visually inspect slides as you work.
+3. When adding slides, use `ppt_add_slide` with `count` to create multiple slides at once instead of calling it repeatedly.
+4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale Windows, the slide master default is often 游ゴシック, which renders thin and illegible when projected. Preferred fonts: BIZ UDPゴシック (Japanese) + Segoe UI (Latin).
+5. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
+6. Use `ppt_get_slide_preview` to visually inspect slides as you work.
 
-## Tips
+## Key tools
 
-- Use accent colors from `ppt_get_presentation_info` (or `ppt_get_theme_colors`) instead of hardcoding RGB values — theme names adapt automatically to the presentation's palette.
-- Standard 16:9 slide = 960 × 540 pt.
-- `ppt_batch_apply_formatting` applies multiple operations to multiple shapes in one call. Supported operations: `set_fill`, `set_line`, `set_shadow`, `set_glow`, `set_reflection`, `set_soft_edge`, `format_text`. Specify shapes by name or 1-based index. Use this whenever you want consistent styling across several shapes — much more efficient than calling individual tools per shape.
-- For consistent shape styling, call `ppt_set_default_shape_style` before inserting shapes. Shape-based mode (`slide_index` + `shape_name_or_index`) captures all properties of a template shape including gradients and effects. Property-based mode sets fill/border/font directly without needing a pre-existing shape.
-- `ppt_add_shape` supports inline text styling (`font_name`, `font_size`, `bold`, `font_color`, `align`) — style text in the same call instead of a separate `ppt_format_text`.
-- `ppt_add_slide` accepts `count` to create multiple slides at once. `ppt_set_slide_background` accepts `slide_indices` to apply a background to multiple slides in one call.
+- `ppt_batch_apply_formatting`: Apply fill, line, shadow, text formatting to multiple shapes at once. Use whenever styling multiple shapes consistently.
+- `ppt_set_default_shape_style`: Set default fill/border/font before inserting shapes. Can capture all properties from a template shape including gradients.
+- `ppt_add_shape`: Supports inline text styling (`font_name`, `font_size`, `bold`, `font_color`, `align`) — no need for a separate `ppt_format_text` call.
+- `ppt_add_slide`: Accepts `count` to create multiple slides at once.
+- `ppt_set_slide_background`: Accepts `slide_indices` to set background on multiple slides in one call.
 
 ## Design thinking
 
 Before placing any shapes, take a moment to plan:
 - **Slide structure**: decide the narrative arc and number of slides upfront
-- **Color system**: pick one accent color and use it consistently for icons, headings, and highlights
+- **Color system**: use accent colors from `ppt_get_presentation_info` instead of hardcoding RGB values. Pick one accent and use it consistently for icons, headings, and highlights.
 - **Icons**: whenever content has distinct points, steps, or features, add an icon for each — use `ppt_search_icons` + `ppt_add_svg_icon`
 - **One message per slide**: decide what this slide communicates, then place only what supports that message
 
-**Default to light backgrounds** (white, light gray, soft pastels) unless the user specifies otherwise. Dark backgrounds and full-color fills are equally valid and can look stunning — use them when the content or style calls for it. Always ensure sufficient contrast between text and background. Use `ppt_set_slide_background` to set slide backgrounds — solid colors and gradients are both supported.
+Standard 16:9 slide = 960 × 540 pt. Default to light backgrounds unless the user specifies otherwise. Always ensure sufficient contrast between text and background.
 
-**Consistency across slides:** use the same heading size, card style, and spacing throughout. `ppt_set_default_shape_style` and `ppt_batch_apply_formatting` are your tools for this. For rounded rectangles, use `corner_radius_pt` (e.g. `10`) to keep the same corner radius in points across shapes of different sizes.
+**Consistency across slides:** use the same heading size, card style, and spacing throughout. `ppt_set_default_shape_style` and `ppt_batch_apply_formatting` are your tools for this. For rounded rectangles, use `corner_radius_pt` (e.g. `10`) to keep the same corner radius across shapes.
 
-**Font sizes** — minimum sizes for projected readability:
+**Font sizes** — prefer larger sizes for projected readability:
 - Slide title: 40–48 pt
 - Section heading / subheading: 24–32 pt
 - Body text: 20–28 pt

@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
+from utils.validation import font_size_warning
 from ppt_com.constants import (
     msoTrue, msoFalse,
     ppAlignLeft, ppAlignCenter, ppAlignRight, ppAlignJustify,
@@ -796,6 +797,9 @@ def set_table_cell(params: SetTableCellInput) -> str:
             params.color, params.fill_color, params.alignment,
             params.vertical_alignment,
         )
+        warn = font_size_warning(params.font_size)
+        if warn:
+            result["warning"] = warn
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set table cell: {str(e)}"})
