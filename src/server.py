@@ -64,7 +64,7 @@ mcp = FastMCP(
 
 ## Reading existing content
 
-To understand what text is already on the slides, call `ppt_get_all_text`. It extracts all text from the presentation (or selected slides) as pseudo-Markdown — titles, subheadings, body text, bullets, tables, and column layouts are all represented. Use `output_path` to save the result as a `.md` file for easy reference.
+Call `ppt_get_all_text` to extract all slide text as pseudo-Markdown. Use `output_path` to save as a `.md` file.
 
 ## Tips
 
