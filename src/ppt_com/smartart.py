@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int
 from utils.navigation import goto_slide
+from utils.validation import font_size_warning
 from ppt_com.constants import msoSmartArt, SHAPE_TYPE_NAMES, msoTrue, msoFalse
 
 logger = logging.getLogger(__name__)
@@ -473,6 +474,9 @@ def add_smartart(params: AddSmartArtInput) -> str:
             params.color_index, params.style_index,
             params.font_name, params.font_size, params.bold, params.font_color,
         )
+        warn = font_size_warning(params.font_size)
+        if warn:
+            result["warning"] = warn
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add SmartArt: {str(e)}"})
@@ -489,6 +493,9 @@ def modify_smartart(params: ModifySmartArtInput) -> str:
             params.font_name, params.font_size, params.bold, params.font_color,
             params.fill_color, params.line_color, params.line_width,
         )
+        warn = font_size_warning(params.font_size)
+        if warn:
+            result["warning"] = warn
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to modify SmartArt: {str(e)}"})
