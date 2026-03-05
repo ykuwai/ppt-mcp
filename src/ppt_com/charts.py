@@ -117,6 +117,9 @@ class FormatChartInput(BaseModel):
     chart_style: Optional[int] = Field(
         default=None, description="Built-in chart style index (1-48 typically)"
     )
+    legend_font_size: Optional[float] = Field(
+        default=None, description="Legend font size in points"
+    )
 
 
 class SetChartSeriesInput(BaseModel):
@@ -332,7 +335,7 @@ def _get_chart_data_impl(slide_index, shape_name_or_index):
 
 def _format_chart_impl(
     slide_index, shape_name_or_index,
-    title, has_legend, legend_position, chart_style,
+    title, has_legend, legend_position, chart_style, legend_font_size,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -364,6 +367,14 @@ def _format_chart_impl(
 
     if chart_style is not None:
         chart.ChartStyle = chart_style
+
+    if legend_font_size is not None:
+        if not chart.HasLegend:
+            raise ValueError(
+                "Cannot set legend font size when chart has no legend. "
+                "Set has_legend=true first."
+            )
+        chart.Legend.Font.Size = legend_font_size
 
     return {
         "success": True,
@@ -499,6 +510,7 @@ def format_chart(params: FormatChartInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.title, params.has_legend,
             params.legend_position, params.chart_style,
+            params.legend_font_size,
         )
         return json.dumps(result)
     except Exception as e:
@@ -626,7 +638,8 @@ def register_tools(mcp):
 
         Set a chart title (enables HasTitle automatically), show/hide the legend,
         set legend position ('bottom', 'left', 'right', 'top', 'corner'),
-        and apply a built-in chart style by index number.
+        apply a built-in chart style by index number,
+        and set the legend font size in points via legend_font_size.
         """
         return format_chart(params)
 
