@@ -827,3 +827,33 @@ class TestGetAllTextInput:
         inp = GetAllTextInput(slide_indices=[1, 2], output_path="/tmp/out.md")
         assert inp.slide_indices == [1, 2]
         assert inp.output_path == "/tmp/out.md"
+
+
+# ============================================================================
+# utils/validation.py — font_size_warning
+# ============================================================================
+from utils.validation import font_size_warning
+
+
+class TestFontSizeWarning:
+    """Tests for font_size_warning helper."""
+
+    def test_none_returns_none(self):
+        assert font_size_warning(None) is None
+
+    def test_large_size_returns_none(self):
+        assert font_size_warning(20) is None
+
+    def test_boundary_16_returns_none(self):
+        assert font_size_warning(16) is None
+
+    def test_just_below_16_returns_warning(self):
+        result = font_size_warning(15.9)
+        assert result is not None
+        assert "15.9pt" in result
+        assert "below the recommended minimum" in result
+
+    def test_small_size_returns_warning(self):
+        result = font_size_warning(8)
+        assert result is not None
+        assert "8pt" in result
