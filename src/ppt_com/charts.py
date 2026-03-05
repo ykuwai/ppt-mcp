@@ -112,13 +112,26 @@ class FormatChartInput(BaseModel):
     )
     legend_position: Optional[str] = Field(
         default=None,
-        description="Legend position: 'bottom', 'left', 'right', 'top', or 'corner'",
+        description=(
+            "Legend position. PowerPoint presets: 'bottom', 'left', 'right', 'top', 'corner'. "
+            "8-direction presets (coordinate-based): 'top-left', 'top-center', 'top-right', "
+            "'middle-left', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'. "
+            "Applied before legend_top/legend_left."
+        ),
     )
     chart_style: Optional[int] = Field(
         default=None, description="Built-in chart style index (1-48 typically)"
     )
     legend_font_size: Optional[float] = Field(
         default=None, description="Legend font size in points", gt=0
+    )
+    legend_top: Optional[float] = Field(
+        default=None, ge=0,
+        description="Legend top position in points (relative to chart area). Overrides legend_position."
+    )
+    legend_left: Optional[float] = Field(
+        default=None, ge=0,
+        description="Legend left position in points (relative to chart area). Overrides legend_position."
     )
     title_position: Optional[Literal["top", "bottom", "center"]] = Field(
         default=None,
@@ -353,6 +366,7 @@ def _get_chart_data_impl(slide_index, shape_name_or_index):
 def _format_chart_impl(
     slide_index, shape_name_or_index,
     title, has_legend, legend_position, chart_style, legend_font_size,
+    legend_top, legend_left,
     title_position, title_top, title_left,
 ):
     app = ppt._get_app_impl()
@@ -376,12 +390,50 @@ def _format_chart_impl(
                 "Set has_legend=true first."
             )
         key = legend_position.strip().lower()
-        if key not in LEGEND_POSITION_MAP:
+        if key in LEGEND_POSITION_MAP:
+            chart.Legend.Position = LEGEND_POSITION_MAP[key]
+        else:
+            # 8-direction coordinate-based presets
+            parts = key.split("-")
+            if len(parts) != 2 or parts[0] not in ("top", "middle", "bottom") or parts[1] not in ("left", "center", "right"):
+                raise ValueError(
+                    f"Unknown legend position '{legend_position}'. "
+                    f"PowerPoint presets: {', '.join(LEGEND_POSITION_MAP.keys())}. "
+                    "8-direction presets: top-left, top-center, top-right, "
+                    "middle-left, middle-right, bottom-left, bottom-center, bottom-right."
+                )
+            row, col = parts
+            leg = chart.Legend
+            ca_w = chart.ChartArea.Width
+            ca_h = chart.ChartArea.Height
+            leg_w = leg.Width
+            leg_h = leg.Height
+            lg = 5  # gap in points
+            if row == "top":
+                leg_top = lg
+            elif row == "middle":
+                leg_top = (ca_h - leg_h) / 2
+            else:  # bottom
+                leg_top = ca_h - leg_h - lg
+            if col == "left":
+                leg_left = lg
+            elif col == "center":
+                leg_left = (ca_w - leg_w) / 2
+            else:  # right
+                leg_left = ca_w - leg_w - lg
+            leg.Top = leg_top
+            leg.Left = leg_left
+
+    if legend_top is not None or legend_left is not None:
+        if not chart.HasLegend:
             raise ValueError(
-                f"Unknown legend position '{legend_position}'. "
-                f"Valid: {', '.join(LEGEND_POSITION_MAP.keys())}"
+                "Cannot set legend coordinates when chart has no legend. "
+                "Set has_legend=true first."
             )
-        chart.Legend.Position = LEGEND_POSITION_MAP[key]
+        if legend_top is not None:
+            chart.Legend.Top = legend_top
+        if legend_left is not None:
+            chart.Legend.Left = legend_left
 
     if chart_style is not None:
         chart.ChartStyle = chart_style
@@ -593,6 +645,7 @@ def format_chart(params: FormatChartInput) -> str:
             params.title, params.has_legend,
             params.legend_position, params.chart_style,
             params.legend_font_size,
+            params.legend_top, params.legend_left,
             params.title_position, params.title_top, params.title_left,
         )
         return json.dumps(result)
