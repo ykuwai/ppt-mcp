@@ -404,7 +404,12 @@ def _format_chart_impl(
                 ct.Top = 5
                 ct.Left = (chart.ChartArea.Width - ct.Width) / 2
             elif key == "bottom":
-                ct.Top = chart.ChartArea.Height - ct.Height - 5
+                bottom_target = chart.ChartArea.Height - ct.Height - 5
+                # If legend is at the bottom, position title above it
+                if chart.HasLegend:
+                    if chart.Legend.Position == LEGEND_POSITION_MAP["bottom"]:
+                        bottom_target = chart.Legend.Top - ct.Height - 5
+                ct.Top = bottom_target
                 ct.Left = (chart.ChartArea.Width - ct.Width) / 2
             elif key == "center":
                 ct.Top = (chart.ChartArea.Height - ct.Height) / 2
