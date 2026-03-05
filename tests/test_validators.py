@@ -31,6 +31,7 @@ from ppt_com.advanced_ops import SetDefaultShapeStyleInput
 from ppt_com.shapes import AddShapeInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
+from utils.validation import font_size_warning
 
 
 # ============================================================================
@@ -832,9 +833,6 @@ class TestGetAllTextInput:
 # ============================================================================
 # utils/validation.py — font_size_warning
 # ============================================================================
-from utils.validation import font_size_warning
-
-
 class TestFontSizeWarning:
     """Tests for font_size_warning helper."""
 

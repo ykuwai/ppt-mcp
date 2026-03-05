@@ -7,7 +7,7 @@ FONT_SIZE_WARNING = (
 )
 
 
-def font_size_warning(font_size) -> str | None:
+def font_size_warning(font_size: float | None) -> str | None:
     """Return a warning string if font_size is too small, else None."""
     if font_size is not None and font_size < 16:
         return FONT_SIZE_WARNING.format(size=font_size)
