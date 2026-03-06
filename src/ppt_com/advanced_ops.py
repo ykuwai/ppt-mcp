@@ -255,6 +255,7 @@ class CropPictureInput(BaseModel):
             "Pass a friendly name ('oval', 'rounded_rectangle', 'triangle', etc.) "
             "or an MsoAutoShapeType integer. "
             "Use 'rectangle' to reset to normal rectangular display. "
+            "The response always returns crop_shape as an integer (e.g. 'oval' → 9). "
             "Note: 'oval' produces a circle only when the picture's width == height; "
             "otherwise it produces an ellipse. To get a perfect circle, ensure equal "
             "width and height before applying (use crop_left/right/top/bottom or "
@@ -639,15 +640,25 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, 
     if crop_shape is not None:
         if isinstance(crop_shape, str):
             key = crop_shape.strip().lower()
-            if key not in SHAPE_NAME_MAP:
+            if key.lstrip("-").isdigit():
+                # Accept numeric strings like "9" the same as the integer 9
+                auto_shape_int = int(key)
+            elif key not in SHAPE_NAME_MAP:
                 raise ValueError(
                     f"Unknown crop_shape '{crop_shape}'. "
                     f"Available names: {', '.join(sorted(SHAPE_NAME_MAP.keys()))}"
                 )
-            auto_shape_int = SHAPE_NAME_MAP[key]
+            else:
+                auto_shape_int = SHAPE_NAME_MAP[key]
         else:
             auto_shape_int = int(crop_shape)
-        shape.AutoShapeType = auto_shape_int
+        try:
+            shape.AutoShapeType = auto_shape_int
+        except Exception as e:
+            raise ValueError(
+                f"Invalid crop_shape value {auto_shape_int}: must be a valid "
+                f"MsoAutoShapeType integer (1–187). COM error: {e}"
+            ) from e
 
     return {
         "success": True,
