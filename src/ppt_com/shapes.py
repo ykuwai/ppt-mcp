@@ -522,10 +522,10 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height):
         pic.Width = width
         pic.Height = height
     elif width is not None:
-        # Width only: COM's LockAspectRatio auto-scales height correctly.
+        pic.LockAspectRatio = msoTrue
         pic.Width = width
     elif height is not None:
-        # Height only: COM's LockAspectRatio auto-scales width correctly.
+        pic.LockAspectRatio = msoTrue
         pic.Height = height
     return {
         "success": True,
