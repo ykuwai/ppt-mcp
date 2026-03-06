@@ -243,10 +243,10 @@ class CropPictureInput(BaseModel):
     shape_name_or_index: Union[str, int] = Field(
         ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
-    crop_left: Optional[float] = Field(default=None, description="Crop from left in points")
-    crop_right: Optional[float] = Field(default=None, description="Crop from right in points")
-    crop_top: Optional[float] = Field(default=None, description="Crop from top in points")
-    crop_bottom: Optional[float] = Field(default=None, description="Crop from bottom in points")
+    crop_left: Optional[float] = Field(default=None, description="Crop from left in points (original image coordinates)")
+    crop_right: Optional[float] = Field(default=None, description="Crop from right in points (original image coordinates)")
+    crop_top: Optional[float] = Field(default=None, description="Crop from top in points (original image coordinates)")
+    crop_bottom: Optional[float] = Field(default=None, description="Crop from bottom in points (original image coordinates)")
     crop_shape: Optional[Union[str, int]] = Field(
         default=None,
         description=(
@@ -256,13 +256,52 @@ class CropPictureInput(BaseModel):
             "or an MsoAutoShapeType integer. "
             "Use 'rectangle' to reset to normal rectangular display. "
             "The response always returns crop_shape as an integer (e.g. 'oval' → 9). "
-            "Note: 'oval' produces a circle only when the picture's width == height; "
-            "otherwise it produces an ellipse. To get a perfect circle, ensure equal "
-            "width and height before applying (use crop_left/right/top/bottom or "
-            "ppt_update_shape first). "
+            "Tip: combine with crop_fit='square' to get a perfect circle from "
+            "non-square images (e.g. crop_fit='square', crop_shape='oval'). "
             f"Available names: {', '.join(sorted(SHAPE_NAME_MAP.keys()))}"
         ),
     )
+    crop_fit: Optional[str] = Field(
+        default=None,
+        description=(
+            "Auto-adjust the crop frame to a target aspect ratio before applying "
+            "crop_shape. Resets any existing crop values and resizes the shape. "
+            "Supported values: 'square' or '1:1'. "
+            "Example: crop_fit='square' + crop_shape='oval' = perfect circle. "
+            "Cannot be combined with crop_left/right/top/bottom."
+        ),
+    )
+    crop_anchor: Optional[float] = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Position anchor for crop_fit (0.0–1.0, default 0.5 = center). "
+            "For landscape images: 0.0 = keep left edge, 1.0 = keep right edge. "
+            "For portrait images: 0.0 = keep top edge, 1.0 = keep bottom edge. "
+            "Only used when crop_fit is set."
+        ),
+    )
+    corner_radius_pt: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Corner radius in points for 'rounded_rectangle' crop_shape. "
+            "Example: 10 = 10pt radius. Only used when crop_shape='rounded_rectangle'."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_crop_fit_exclusivity(self):
+        if self.crop_fit is not None:
+            manual = [self.crop_left, self.crop_right, self.crop_top, self.crop_bottom]
+            if any(v is not None for v in manual):
+                raise ValueError(
+                    "crop_fit cannot be combined with crop_left/crop_right/crop_top/"
+                    "crop_bottom. Use crop_fit alone for automatic cropping, or "
+                    "manual crop values without crop_fit."
+                )
+        return self
 
 
 # --- Shape Export ---
@@ -613,7 +652,9 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
 # ---------------------------------------------------------------------------
 # Picture Crop
 # ---------------------------------------------------------------------------
-def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, crop_top, crop_bottom, crop_shape):
+def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
+                       crop_top, crop_bottom, crop_shape, crop_fit, crop_anchor,
+                       corner_radius_pt):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -646,15 +687,74 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, 
         else:
             auto_shape_int = int(crop_shape)
 
+    # Validate crop_fit
+    if crop_fit is not None:
+        fit_key = crop_fit.strip().lower()
+        if fit_key not in ("square", "1:1"):
+            raise ValueError(
+                f"Unknown crop_fit '{crop_fit}'. Supported values: 'square', '1:1'"
+            )
+
     pic_fmt = shape.PictureFormat
-    if crop_left is not None:
-        pic_fmt.CropLeft = crop_left
-    if crop_right is not None:
-        pic_fmt.CropRight = crop_right
-    if crop_top is not None:
-        pic_fmt.CropTop = crop_top
-    if crop_bottom is not None:
-        pic_fmt.CropBottom = crop_bottom
+
+    if crop_fit is not None:
+        # Auto-crop to 1:1 aspect ratio (2-stage approach for perfect circles).
+        # Stage 1: Get original image dimensions and calculate crop values.
+        # Stage 2: Resize the shape to square.
+        anchor = crop_anchor if crop_anchor is not None else 0.5
+
+        # Reset existing crops so we work from the full image.
+        pic_fmt.CropLeft = 0
+        pic_fmt.CropRight = 0
+        pic_fmt.CropTop = 0
+        pic_fmt.CropBottom = 0
+
+        # Get original image dimensions via ScaleWidth/ScaleHeight reset.
+        old_lock = shape.LockAspectRatio
+        shape.LockAspectRatio = msoFalse
+
+        cur_w = shape.Width
+        cur_h = shape.Height
+
+        # ScaleWidth(1.0, msoTrue) resets to 100% of original image size.
+        shape.ScaleWidth(1.0, msoTrue)
+        shape.ScaleHeight(1.0, msoTrue)
+        orig_w = shape.Width
+        orig_h = shape.Height
+
+        # Restore to the display size before crop.
+        shape.Width = cur_w
+        shape.Height = cur_h
+
+        # Calculate crop values in original-image coordinates.
+        if orig_w > orig_h:
+            # Landscape: crop left and right to make content square.
+            excess = orig_w - orig_h
+            pic_fmt.CropLeft = excess * anchor
+            pic_fmt.CropRight = excess * (1.0 - anchor)
+        elif orig_h > orig_w:
+            # Portrait: crop top and bottom to make content square.
+            excess = orig_h - orig_w
+            pic_fmt.CropTop = excess * anchor
+            pic_fmt.CropBottom = excess * (1.0 - anchor)
+        # else: already square — no crop needed.
+
+        # Resize the shape to square (use the smaller dimension).
+        min_dim = min(cur_w, cur_h)
+        shape.Width = min_dim
+        shape.Height = min_dim
+
+        shape.LockAspectRatio = old_lock
+    else:
+        # Manual crop values (existing behavior).
+        if crop_left is not None:
+            pic_fmt.CropLeft = crop_left
+        if crop_right is not None:
+            pic_fmt.CropRight = crop_right
+        if crop_top is not None:
+            pic_fmt.CropTop = crop_top
+        if crop_bottom is not None:
+            pic_fmt.CropBottom = crop_bottom
 
     if auto_shape_int is not None:
         try:
@@ -665,9 +765,19 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, 
                 f"MsoAutoShapeType integer (1–187). COM error: {e}"
             ) from e
 
+    # Apply corner radius for rounded_rectangle crop shapes.
+    if corner_radius_pt is not None:
+        # msoShapeRoundedRectangle = 5
+        if shape.AutoShapeType == 5:
+            short_side = min(shape.Width, shape.Height)
+            adj_value = min(0.5, corner_radius_pt / short_side) if short_side > 0 else 0
+            shape.Adjustments[1] = adj_value
+
     return {
         "success": True,
         "shape_name": shape.Name,
+        "width": round(shape.Width, 2),
+        "height": round(shape.Height, 2),
         "crop_left": round(pic_fmt.CropLeft, 2),
         "crop_right": round(pic_fmt.CropRight, 2),
         "crop_top": round(pic_fmt.CropTop, 2),
@@ -1277,11 +1387,19 @@ def set_default_fonts(params: SetDefaultFontsInput) -> str:
 def crop_picture(params: CropPictureInput) -> str:
     """Crop a picture shape.
 
+    Supports three modes:
+
+    1. **Manual crop** — set crop_left/right/top/bottom in points (original image coords).
+    2. **Shape crop** — set crop_shape to clip to a geometric shape (oval, triangle, etc.).
+    3. **Fit + shape** — set crop_fit='square' + crop_shape='oval' to get a perfect circle
+       from any image, regardless of its original aspect ratio. Use crop_anchor (0.0–1.0)
+       to control which part of the image is kept.
+
     Args:
-        params: Shape identification, rectangular crop values, and optional shape crop.
+        params: Shape identification, crop values, shape crop, and fit options.
 
     Returns:
-        JSON with current crop values and active crop_shape after setting.
+        JSON with shape dimensions, crop values, and active crop_shape.
     """
     try:
         result = ppt.execute(
@@ -1289,7 +1407,8 @@ def crop_picture(params: CropPictureInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.crop_left, params.crop_right,
             params.crop_top, params.crop_bottom,
-            params.crop_shape,
+            params.crop_shape, params.crop_fit, params.crop_anchor,
+            params.corner_radius_pt,
         )
         return json.dumps(result)
     except Exception as e:
