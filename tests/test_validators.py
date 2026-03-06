@@ -28,7 +28,7 @@ from ppt_com.tables import (
     SetTableBordersInput,
 )
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput
-from ppt_com.shapes import AddShapeInput
+from ppt_com.shapes import AddShapeInput, UpdateShapeInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
 from utils.validation import font_size_warning
@@ -916,3 +916,37 @@ class TestCropPictureInput:
             crop_shape="rounded_rectangle", corner_radius_pt=10,
         )
         assert m.corner_radius_pt == 10
+
+
+# ============================================================================
+# shapes.py — UpdateShapeInput
+# ============================================================================
+class TestUpdateShapeInput:
+    """Tests for UpdateShapeInput with adjustments field."""
+
+    def test_adjustments_dict_valid(self):
+        m = UpdateShapeInput(
+            slide_index=1, shape_name="Triangle 1",
+            adjustments={1: 0.25},
+        )
+        assert m.adjustments == {1: 0.25}
+
+    def test_adjustments_multiple_keys(self):
+        m = UpdateShapeInput(
+            slide_index=1, shape_name="Arrow 1",
+            adjustments={1: 0.4, 2: 0.6},
+        )
+        assert m.adjustments[1] == 0.4
+        assert m.adjustments[2] == 0.6
+
+    def test_adjustments_none_by_default(self):
+        m = UpdateShapeInput(slide_index=1, shape_name="Box")
+        assert m.adjustments is None
+
+    def test_adjustments_with_other_fields(self):
+        m = UpdateShapeInput(
+            slide_index=1, shape_name="Star 1",
+            rotation=45, adjustments={1: 0.3},
+        )
+        assert m.rotation == 45
+        assert m.adjustments == {1: 0.3}

@@ -279,6 +279,16 @@ class UpdateShapeInput(BaseModel):
     height: Optional[float] = Field(default=None, description="New height in points")
     rotation: Optional[float] = Field(default=None, description="Rotation in degrees (0-360)")
     name: Optional[str] = Field(default=None, description="New name for the shape")
+    adjustments: Optional[dict[int, float]] = Field(
+        default=None,
+        description=(
+            "Shape-specific adjustment handle values. Keys are 1-based indices, "
+            "values are floats (typically 0.0–1.0, but range varies by shape). "
+            "Use ppt_get_shape_info to read current values and count. "
+            "Examples: triangle apex {1: 0.25}, arrow proportions {1: 0.4, 2: 0.6}, "
+            "cross thickness {1: 0.3}, star depth {1: 0.4}, callout pointer {1: 0.1, 2: 0.8}."
+        ),
+    )
 
 
 class SetZOrderInput(BaseModel):
@@ -676,10 +686,25 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
     except Exception:
         pass
 
+    # Adjustment handles
+    try:
+        adj_count = shape.Adjustments.Count
+        if adj_count > 0:
+            adj_dict = {}
+            for i in range(1, adj_count + 1):
+                try:
+                    adj_dict[i] = round(shape.Adjustments[i], 4)
+                except Exception:
+                    pass
+            info["adjustments"] = adj_dict
+            info["adjustments_count"] = adj_count
+    except Exception:
+        pass
+
     return info
 
 
-def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height, rotation, name):
+def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height, rotation, name, adjustments):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -699,7 +724,24 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
     if name is not None:
         shape.Name = name
 
-    return {
+    # Apply adjustment handle values.
+    if adjustments:
+        try:
+            adj_count = shape.Adjustments.Count
+        except Exception:
+            raise ValueError(
+                f"Shape '{shape.Name}' does not support adjustment handles"
+            )
+        for idx_str, value in adjustments.items():
+            idx = int(idx_str)
+            if idx < 1 or idx > adj_count:
+                raise ValueError(
+                    f"Adjustment index {idx} out of range for shape "
+                    f"'{shape.Name}' (has {adj_count} adjustment(s))"
+                )
+            shape.Adjustments[idx] = value
+
+    result = {
         "success": True,
         "shape_name": shape.Name,
         "left": round(shape.Left, 2),
@@ -707,6 +749,15 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
         "width": round(shape.Width, 2),
         "height": round(shape.Height, 2),
     }
+
+    # Include current adjustment values in response when adjustments were set.
+    if adjustments:
+        adj_dict = {}
+        for i in range(1, adj_count + 1):
+            adj_dict[i] = round(shape.Adjustments[i], 4)
+        result["adjustments"] = adj_dict
+
+    return result
 
 
 def _delete_shape_impl(slide_index, shape_name, shape_index):
@@ -907,20 +958,24 @@ def update_shape(params: UpdateShapeInput) -> str:
     """Update properties of an existing shape.
 
     Only updates properties that are provided (not None). Can change
-    position, size, rotation, and name.
+    position, size, rotation, name, and shape-specific adjustment handles.
+
+    Adjustment handles control shape-specific geometry — e.g., triangle apex
+    position, arrow proportions, callout pointer, star depth, cross thickness.
+    Use ppt_get_shape_info to discover available adjustments and current values.
 
     Args:
         params: Shape identifier and properties to update.
 
     Returns:
-        JSON with updated shape name and current position/size.
+        JSON with updated shape name, position/size, and adjustment values.
     """
     try:
         result = ppt.execute(
             _update_shape_impl,
             params.slide_index, params.shape_name, params.shape_index,
             params.left, params.top, params.width, params.height,
-            params.rotation, params.name,
+            params.rotation, params.name, params.adjustments,
         )
         return json.dumps(result)
     except Exception as e:
