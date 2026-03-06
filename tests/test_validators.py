@@ -1033,3 +1033,82 @@ class TestFormatConnectorInput:
         """shape_name_or_index accepts an integer index."""
         m = FormatConnectorInput(slide_index=1, shape_name_or_index=3)
         assert m.shape_name_or_index == 3
+
+    def test_reconnect_begin_shape(self):
+        """begin_shape and begin_site are accepted."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="Connector 1",
+            begin_shape="Rectangle 2", begin_site=3,
+        )
+        assert m.begin_shape == "Rectangle 2"
+        assert m.begin_site == 3
+
+    def test_reconnect_end_shape(self):
+        """end_shape and end_site are accepted."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="Connector 1",
+            end_shape="Oval 1", end_site=2,
+        )
+        assert m.end_shape == "Oval 1"
+        assert m.end_site == 2
+
+    def test_reconnect_both_ends(self):
+        """Both begin and end reconnection params together."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="Connector 1",
+            begin_shape="Rect 1", begin_site=1,
+            end_shape="Rect 2", end_site=4,
+        )
+        assert m.begin_shape == "Rect 1"
+        assert m.end_shape == "Rect 2"
+
+    def test_reconnect_defaults_none(self):
+        """Reconnection params default to None."""
+        m = FormatConnectorInput(slide_index=1, shape_name_or_index="c1")
+        assert m.begin_shape is None
+        assert m.begin_site is None
+        assert m.end_shape is None
+        assert m.end_site is None
+
+    def test_reconnect_site_must_be_positive(self):
+        """begin_site and end_site must be >= 1."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_shape="Rect 1", begin_site=0,
+            )
+
+    def test_reconnect_with_formatting(self):
+        """Reconnection and formatting params can be combined."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="Connector 1",
+            begin_shape="Rect 3", begin_site=2,
+            color="#0000FF", weight=3.0, end_arrow="triangle",
+        )
+        assert m.begin_shape == "Rect 3"
+        assert m.color == "#0000FF"
+        assert m.end_arrow == "triangle"
+
+    def test_reconnect_end_site_must_be_positive(self):
+        """end_site must be >= 1."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                end_shape="Rect 2", end_site=0,
+            )
+
+    def test_begin_site_without_begin_shape_rejected(self):
+        """begin_site without begin_shape raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_site=2,
+            )
+
+    def test_end_site_without_end_shape_rejected(self):
+        """end_site without end_shape raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                end_site=3,
+            )
