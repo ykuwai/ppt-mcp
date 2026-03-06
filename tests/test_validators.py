@@ -7,6 +7,7 @@ Covers all model_validator decorated methods in:
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
 - text.py: GetAllTextInput
+- connectors.py: FormatConnectorInput
 
 These are pure Python tests — no COM or PowerPoint required.
 """
@@ -29,6 +30,7 @@ from ppt_com.tables import (
 )
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput
 from ppt_com.shapes import AddShapeInput, UpdateShapeInput
+from ppt_com.connectors import FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
 from utils.validation import font_size_warning
@@ -974,3 +976,60 @@ class TestUpdateShapeInput:
             adjustments={},
         )
         assert m.adjustments == {}
+
+
+# ============================================================================
+# connectors.py — FormatConnectorInput arrowhead size fields
+# ============================================================================
+class TestFormatConnectorInput:
+    """Tests for FormatConnectorInput arrowhead size parameters."""
+
+    def test_all_defaults_valid(self):
+        """Minimal input with only required fields is accepted."""
+        m = FormatConnectorInput(slide_index=1, shape_name_or_index="Line 1")
+        assert m.begin_arrow_length is None
+        assert m.end_arrow_width is None
+
+    def test_arrow_length_values(self):
+        """All valid begin_arrow_length values are accepted."""
+        for val in ("short", "medium", "long"):
+            m = FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_arrow_length=val,
+            )
+            assert m.begin_arrow_length == val
+
+    def test_arrow_width_values(self):
+        """All valid begin_arrow_width values are accepted."""
+        for val in ("narrow", "medium", "wide"):
+            m = FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_arrow_width=val,
+            )
+            assert m.begin_arrow_width == val
+
+    def test_end_arrow_length_and_width(self):
+        """end_arrow_length and end_arrow_width are accepted together."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="c1",
+            end_arrow_length="long", end_arrow_width="wide",
+        )
+        assert m.end_arrow_length == "long"
+        assert m.end_arrow_width == "wide"
+
+    def test_all_arrow_params_together(self):
+        """All arrowhead params can be set in a single call."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="c1",
+            begin_arrow="triangle", begin_arrow_length="short", begin_arrow_width="narrow",
+            end_arrow="stealth", end_arrow_length="long", end_arrow_width="wide",
+            color="#FF0000", weight=2.0,
+        )
+        assert m.begin_arrow == "triangle"
+        assert m.end_arrow_length == "long"
+        assert m.weight == 2.0
+
+    def test_shape_name_or_index_accepts_int(self):
+        """shape_name_or_index accepts an integer index."""
+        m = FormatConnectorInput(slide_index=1, shape_name_or_index=3)
+        assert m.shape_name_or_index == 3
