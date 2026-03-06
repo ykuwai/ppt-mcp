@@ -779,7 +779,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
                 except Exception:
                     pass
             info["adjustments"] = adj_dict
-            info["adjustments_count"] = adj_count
+            info["adjustments_count"] = len(adj_dict)
             # Include semantic labels when available
             try:
                 auto_type = shape.AutoShapeType
