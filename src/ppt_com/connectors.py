@@ -374,6 +374,8 @@ def register_tools(mcp):
         """Format a connector's line properties.
 
         Configure color, weight, dash style, and arrowheads (begin/end).
+        Arrowhead size is controlled separately via begin_arrow_length,
+        begin_arrow_width, end_arrow_length, and end_arrow_width.
         Identify the connector by shape name or 1-based shape index.
         """
         return format_connector(params)
