@@ -110,43 +110,27 @@ class FormatConnectorInput(BaseModel):
     )
     begin_arrow: Optional[str] = Field(
         default=None,
-        description=(
-            "Begin arrowhead style: "
-            "'none' (no arrowhead), "
-            "'triangle' (filled triangle ▶), "
-            "'open' (outline-only triangle ▷), "
-            "'stealth' (pointed wedge/barbed arrow ◁▷), "
-            "'diamond' (filled diamond ◆), "
-            "'oval' (filled circle ●)"
-        ),
+        description="Begin arrowhead: 'none', 'triangle', 'open', 'stealth', 'diamond', or 'oval'",
     )
     begin_arrow_length: Optional[str] = Field(
         default=None,
-        description="Begin arrowhead length along the line axis: 'short', 'medium', or 'long'",
+        description="Begin arrowhead length: 'short', 'medium', or 'long'",
     )
     begin_arrow_width: Optional[str] = Field(
         default=None,
-        description="Begin arrowhead width perpendicular to the line: 'narrow', 'medium', or 'wide'",
+        description="Begin arrowhead width: 'narrow', 'medium', or 'wide'",
     )
     end_arrow: Optional[str] = Field(
         default=None,
-        description=(
-            "End arrowhead style: "
-            "'none' (no arrowhead), "
-            "'triangle' (filled triangle ▶), "
-            "'open' (outline-only triangle ▷), "
-            "'stealth' (pointed wedge/barbed arrow ◁▷), "
-            "'diamond' (filled diamond ◆), "
-            "'oval' (filled circle ●)"
-        ),
+        description="End arrowhead: 'none', 'triangle', 'open', 'stealth', 'diamond', or 'oval'",
     )
     end_arrow_length: Optional[str] = Field(
         default=None,
-        description="End arrowhead length along the line axis: 'short', 'medium', or 'long'",
+        description="End arrowhead length: 'short', 'medium', or 'long'",
     )
     end_arrow_width: Optional[str] = Field(
         default=None,
-        description="End arrowhead width perpendicular to the line: 'narrow', 'medium', or 'wide'",
+        description="End arrowhead width: 'narrow', 'medium', or 'wide'",
     )
 
 
