@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int
@@ -39,6 +39,18 @@ ARROW_STYLE_MAP: dict[str, int] = {
     "stealth": msoArrowheadStealth,
     "diamond": msoArrowheadDiamond,
     "oval": msoArrowheadOval,
+}
+
+ARROW_LENGTH_MAP: dict[str, int] = {
+    "short": 1,    # msoArrowheadShort
+    "medium": 2,   # msoArrowheadLengthMedium
+    "long": 3,     # msoArrowheadLong
+}
+
+ARROW_WIDTH_MAP: dict[str, int] = {
+    "narrow": 1,   # msoArrowheadNarrow
+    "medium": 2,   # msoArrowheadWidthMedium
+    "wide": 3,     # msoArrowheadWide
 }
 
 DASH_STYLE_MAP: dict[str, int] = {
@@ -100,10 +112,50 @@ class FormatConnectorInput(BaseModel):
         default=None,
         description="Begin arrowhead: 'none', 'triangle', 'open', 'stealth', 'diamond', or 'oval'",
     )
+    begin_arrow_length: Optional[str] = Field(
+        default=None,
+        description="Begin arrowhead length: 'short', 'medium', or 'long'",
+    )
+    begin_arrow_width: Optional[str] = Field(
+        default=None,
+        description="Begin arrowhead width: 'narrow', 'medium', or 'wide'",
+    )
     end_arrow: Optional[str] = Field(
         default=None,
         description="End arrowhead: 'none', 'triangle', 'open', 'stealth', 'diamond', or 'oval'",
     )
+    end_arrow_length: Optional[str] = Field(
+        default=None,
+        description="End arrowhead length: 'short', 'medium', or 'long'",
+    )
+    end_arrow_width: Optional[str] = Field(
+        default=None,
+        description="End arrowhead width: 'narrow', 'medium', or 'wide'",
+    )
+    begin_shape: Optional[str] = Field(
+        default=None,
+        description="Reconnect the start to this shape (by name)",
+    )
+    begin_site: Optional[int] = Field(
+        default=None, ge=1,
+        description="1-based connection site on the new begin shape. Defaults to 1 if omitted",
+    )
+    end_shape: Optional[str] = Field(
+        default=None,
+        description="Reconnect the end to this shape (by name)",
+    )
+    end_site: Optional[int] = Field(
+        default=None, ge=1,
+        description="1-based connection site on the new end shape. Defaults to 1 if omitted",
+    )
+
+    @model_validator(mode="after")
+    def check_site_requires_shape(self) -> "FormatConnectorInput":
+        if self.begin_site is not None and self.begin_shape is None:
+            raise ValueError("begin_site requires begin_shape to be set")
+        if self.end_site is not None and self.end_shape is None:
+            raise ValueError("end_site requires end_shape to be set")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +228,10 @@ def _add_connector_impl(slide_index, connector_type, begin_shape, begin_site,
 
 def _format_connector_impl(slide_index, shape_name_or_index,
                              color, weight, dash_style,
-                             begin_arrow, end_arrow):
+                             begin_arrow, begin_arrow_length, begin_arrow_width,
+                             end_arrow, end_arrow_length, end_arrow_width,
+                             begin_shape, begin_site,
+                             end_shape, end_site):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -209,6 +264,24 @@ def _format_connector_impl(slide_index, shape_name_or_index,
             )
         line.BeginArrowheadStyle = arrow_val
 
+    if begin_arrow_length is not None:
+        length_val = ARROW_LENGTH_MAP.get(begin_arrow_length.strip().lower())
+        if length_val is None:
+            raise ValueError(
+                f"Unknown begin_arrow_length '{begin_arrow_length}'. "
+                f"Valid values: {list(ARROW_LENGTH_MAP.keys())}"
+            )
+        line.BeginArrowheadLength = length_val
+
+    if begin_arrow_width is not None:
+        width_val = ARROW_WIDTH_MAP.get(begin_arrow_width.strip().lower())
+        if width_val is None:
+            raise ValueError(
+                f"Unknown begin_arrow_width '{begin_arrow_width}'. "
+                f"Valid values: {list(ARROW_WIDTH_MAP.keys())}"
+            )
+        line.BeginArrowheadWidth = width_val
+
     if end_arrow is not None:
         arrow_val = ARROW_STYLE_MAP.get(end_arrow.strip().lower())
         if arrow_val is None:
@@ -217,6 +290,41 @@ def _format_connector_impl(slide_index, shape_name_or_index,
                 f"Valid values: {list(ARROW_STYLE_MAP.keys())}"
             )
         line.EndArrowheadStyle = arrow_val
+
+    if end_arrow_length is not None:
+        length_val = ARROW_LENGTH_MAP.get(end_arrow_length.strip().lower())
+        if length_val is None:
+            raise ValueError(
+                f"Unknown end_arrow_length '{end_arrow_length}'. "
+                f"Valid values: {list(ARROW_LENGTH_MAP.keys())}"
+            )
+        line.EndArrowheadLength = length_val
+
+    if end_arrow_width is not None:
+        width_val = ARROW_WIDTH_MAP.get(end_arrow_width.strip().lower())
+        if width_val is None:
+            raise ValueError(
+                f"Unknown end_arrow_width '{end_arrow_width}'. "
+                f"Valid values: {list(ARROW_WIDTH_MAP.keys())}"
+            )
+        line.EndArrowheadWidth = width_val
+
+    # Reconnect begin/end to different shapes
+    reroute = False
+    if begin_shape is not None:
+        target = _get_shape(slide, begin_shape)
+        site = begin_site if begin_site is not None else 1
+        shape.ConnectorFormat.BeginConnect(target, site)
+        reroute = True
+
+    if end_shape is not None:
+        target = _get_shape(slide, end_shape)
+        site = end_site if end_site is not None else 1
+        shape.ConnectorFormat.EndConnect(target, site)
+        reroute = True
+
+    if reroute:
+        shape.RerouteConnections()
 
     return {
         "success": True,
@@ -262,7 +370,10 @@ def format_connector(params: FormatConnectorInput) -> str:
             _format_connector_impl,
             params.slide_index, params.shape_name_or_index,
             params.color, params.weight, params.dash_style,
-            params.begin_arrow, params.end_arrow,
+            params.begin_arrow, params.begin_arrow_length, params.begin_arrow_width,
+            params.end_arrow, params.end_arrow_length, params.end_arrow_width,
+            params.begin_shape, params.begin_site,
+            params.end_shape, params.end_site,
         )
         return json.dumps(result)
     except Exception as e:
@@ -305,9 +416,10 @@ def register_tools(mcp):
         },
     )
     async def tool_format_connector(params: FormatConnectorInput) -> str:
-        """Format a connector's line properties.
+        """Format a connector's line properties and reconnect endpoints.
 
-        Configure color, weight, dash style, and arrowheads (begin/end).
+        Configure color, weight, dash style, arrowheads, and arrowhead size.
+        Reconnect begin/end to different shapes via begin_shape/end_shape.
         Identify the connector by shape name or 1-based shape index.
         """
         return format_connector(params)

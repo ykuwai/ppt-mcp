@@ -3,10 +3,11 @@
 Covers all model_validator decorated methods in:
 - freeform.py: NodeSpec, BuildFreeformInput, InsertNodeInput
 - tables.py: MergeTableCellsInput, SetTableBordersInput
-- advanced_ops.py: SetDefaultShapeStyleInput
+- advanced_ops.py: SetDefaultShapeStyleInput, CropPictureInput
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
 - text.py: GetAllTextInput
+- connectors.py: FormatConnectorInput
 
 These are pure Python tests — no COM or PowerPoint required.
 """
@@ -27,8 +28,9 @@ from ppt_com.tables import (
     MergeTableCellsInput,
     SetTableBordersInput,
 )
-from ppt_com.advanced_ops import SetDefaultShapeStyleInput
-from ppt_com.shapes import AddShapeInput
+from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput
+from ppt_com.shapes import AddShapeInput, UpdateShapeInput
+from ppt_com.connectors import FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
 from utils.validation import font_size_warning
@@ -855,3 +857,258 @@ class TestFontSizeWarning:
         result = font_size_warning(8)
         assert result is not None
         assert "8pt" in result
+
+
+# ============================================================================
+# advanced_ops.py — CropPictureInput
+# ============================================================================
+class TestCropPictureInput:
+    """Tests for CropPictureInput validators."""
+
+    def test_crop_fit_alone_valid(self):
+        m = CropPictureInput(slide_index=1, shape_name_or_index="pic", crop_fit="square")
+        assert m.crop_fit == "square"
+        assert m.crop_anchor == 0.5  # default
+
+    def test_crop_fit_with_shape_and_anchor(self):
+        m = CropPictureInput(
+            slide_index=1, shape_name_or_index="pic",
+            crop_fit="1:1", crop_shape="oval", crop_anchor=0.3,
+        )
+        assert m.crop_fit == "1:1"
+        assert m.crop_anchor == 0.3
+
+    def test_crop_fit_with_crop_left_raises(self):
+        with pytest.raises(ValidationError, match="crop_fit cannot be combined"):
+            CropPictureInput(
+                slide_index=1, shape_name_or_index="pic",
+                crop_fit="square", crop_left=10,
+            )
+
+    def test_crop_fit_with_crop_bottom_raises(self):
+        with pytest.raises(ValidationError, match="crop_fit cannot be combined"):
+            CropPictureInput(
+                slide_index=1, shape_name_or_index="pic",
+                crop_fit="square", crop_bottom=5,
+            )
+
+    def test_manual_crop_without_fit_valid(self):
+        m = CropPictureInput(
+            slide_index=1, shape_name_or_index="pic",
+            crop_left=50, crop_right=50, crop_shape="oval",
+        )
+        assert m.crop_left == 50
+        assert m.crop_fit is None
+
+    def test_crop_anchor_bounds(self):
+        with pytest.raises(ValidationError):
+            CropPictureInput(
+                slide_index=1, shape_name_or_index="pic",
+                crop_fit="square", crop_anchor=1.5,
+            )
+        with pytest.raises(ValidationError):
+            CropPictureInput(
+                slide_index=1, shape_name_or_index="pic",
+                crop_fit="square", crop_anchor=-0.1,
+            )
+
+    def test_corner_radius_pt_valid(self):
+        m = CropPictureInput(
+            slide_index=1, shape_name_or_index="pic",
+            crop_shape="rounded_rectangle", corner_radius_pt=10,
+        )
+        assert m.corner_radius_pt == 10
+
+
+# ============================================================================
+# shapes.py — UpdateShapeInput
+# ============================================================================
+class TestUpdateShapeInput:
+    """Tests for UpdateShapeInput with adjustments field."""
+
+    def test_adjustments_dict_valid(self):
+        m = UpdateShapeInput(
+            slide_index=1, shape_name="Triangle 1",
+            adjustments={1: 0.25},
+        )
+        assert m.adjustments == {1: 0.25}
+
+    def test_adjustments_multiple_keys(self):
+        m = UpdateShapeInput(
+            slide_index=1, shape_name="Arrow 1",
+            adjustments={1: 0.4, 2: 0.6},
+        )
+        assert m.adjustments[1] == 0.4
+        assert m.adjustments[2] == 0.6
+
+    def test_adjustments_none_by_default(self):
+        m = UpdateShapeInput(slide_index=1, shape_name="Box")
+        assert m.adjustments is None
+
+    def test_adjustments_with_other_fields(self):
+        m = UpdateShapeInput(
+            slide_index=1, shape_name="Star 1",
+            rotation=45, adjustments={1: 0.3},
+        )
+        assert m.rotation == 45
+        assert m.adjustments == {1: 0.3}
+
+    def test_adjustments_key_zero_rejected(self):
+        """Adjustment index 0 is rejected (must be >= 1)."""
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            UpdateShapeInput(
+                slide_index=1, shape_name="Rect",
+                adjustments={0: 0.5},
+            )
+
+    def test_adjustments_key_negative_rejected(self):
+        """Negative adjustment index is rejected."""
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            UpdateShapeInput(
+                slide_index=1, shape_name="Rect",
+                adjustments={-1: 0.5},
+            )
+
+    def test_adjustments_empty_dict_valid(self):
+        """Empty adjustments dict is a valid no-op."""
+        m = UpdateShapeInput(
+            slide_index=1, shape_name="Box",
+            adjustments={},
+        )
+        assert m.adjustments == {}
+
+
+# ============================================================================
+# connectors.py — FormatConnectorInput arrowhead size fields
+# ============================================================================
+class TestFormatConnectorInput:
+    """Tests for FormatConnectorInput arrowhead size parameters."""
+
+    def test_all_defaults_valid(self):
+        """Minimal input with only required fields is accepted."""
+        m = FormatConnectorInput(slide_index=1, shape_name_or_index="Line 1")
+        assert m.begin_arrow_length is None
+        assert m.end_arrow_width is None
+
+    def test_arrow_length_values(self):
+        """All valid begin_arrow_length values are accepted."""
+        for val in ("short", "medium", "long"):
+            m = FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_arrow_length=val,
+            )
+            assert m.begin_arrow_length == val
+
+    def test_arrow_width_values(self):
+        """All valid begin_arrow_width values are accepted."""
+        for val in ("narrow", "medium", "wide"):
+            m = FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_arrow_width=val,
+            )
+            assert m.begin_arrow_width == val
+
+    def test_end_arrow_length_and_width(self):
+        """end_arrow_length and end_arrow_width are accepted together."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="c1",
+            end_arrow_length="long", end_arrow_width="wide",
+        )
+        assert m.end_arrow_length == "long"
+        assert m.end_arrow_width == "wide"
+
+    def test_all_arrow_params_together(self):
+        """All arrowhead params can be set in a single call."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="c1",
+            begin_arrow="triangle", begin_arrow_length="short", begin_arrow_width="narrow",
+            end_arrow="stealth", end_arrow_length="long", end_arrow_width="wide",
+            color="#FF0000", weight=2.0,
+        )
+        assert m.begin_arrow == "triangle"
+        assert m.end_arrow_length == "long"
+        assert m.weight == 2.0
+
+    def test_shape_name_or_index_accepts_int(self):
+        """shape_name_or_index accepts an integer index."""
+        m = FormatConnectorInput(slide_index=1, shape_name_or_index=3)
+        assert m.shape_name_or_index == 3
+
+    def test_reconnect_begin_shape(self):
+        """begin_shape and begin_site are accepted."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="Connector 1",
+            begin_shape="Rectangle 2", begin_site=3,
+        )
+        assert m.begin_shape == "Rectangle 2"
+        assert m.begin_site == 3
+
+    def test_reconnect_end_shape(self):
+        """end_shape and end_site are accepted."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="Connector 1",
+            end_shape="Oval 1", end_site=2,
+        )
+        assert m.end_shape == "Oval 1"
+        assert m.end_site == 2
+
+    def test_reconnect_both_ends(self):
+        """Both begin and end reconnection params together."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="Connector 1",
+            begin_shape="Rect 1", begin_site=1,
+            end_shape="Rect 2", end_site=4,
+        )
+        assert m.begin_shape == "Rect 1"
+        assert m.end_shape == "Rect 2"
+
+    def test_reconnect_defaults_none(self):
+        """Reconnection params default to None."""
+        m = FormatConnectorInput(slide_index=1, shape_name_or_index="c1")
+        assert m.begin_shape is None
+        assert m.begin_site is None
+        assert m.end_shape is None
+        assert m.end_site is None
+
+    def test_reconnect_site_must_be_positive(self):
+        """begin_site and end_site must be >= 1."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_shape="Rect 1", begin_site=0,
+            )
+
+    def test_reconnect_with_formatting(self):
+        """Reconnection and formatting params can be combined."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="Connector 1",
+            begin_shape="Rect 3", begin_site=2,
+            color="#0000FF", weight=3.0, end_arrow="triangle",
+        )
+        assert m.begin_shape == "Rect 3"
+        assert m.color == "#0000FF"
+        assert m.end_arrow == "triangle"
+
+    def test_reconnect_end_site_must_be_positive(self):
+        """end_site must be >= 1."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                end_shape="Rect 2", end_site=0,
+            )
+
+    def test_begin_site_without_begin_shape_rejected(self):
+        """begin_site without begin_shape raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_site=2,
+            )
+
+    def test_end_site_without_end_shape_rejected(self):
+        """end_site without end_shape raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                end_site=3,
+            )
