@@ -132,6 +132,22 @@ class FormatConnectorInput(BaseModel):
         default=None,
         description="End arrowhead width: 'narrow', 'medium', or 'wide'",
     )
+    begin_shape: Optional[str] = Field(
+        default=None,
+        description="Reconnect the start to this shape (by name)",
+    )
+    begin_site: Optional[int] = Field(
+        default=None, ge=1,
+        description="1-based connection site index on the new begin shape",
+    )
+    end_shape: Optional[str] = Field(
+        default=None,
+        description="Reconnect the end to this shape (by name)",
+    )
+    end_site: Optional[int] = Field(
+        default=None, ge=1,
+        description="1-based connection site index on the new end shape",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +221,9 @@ def _add_connector_impl(slide_index, connector_type, begin_shape, begin_site,
 def _format_connector_impl(slide_index, shape_name_or_index,
                              color, weight, dash_style,
                              begin_arrow, begin_arrow_length, begin_arrow_width,
-                             end_arrow, end_arrow_length, end_arrow_width):
+                             end_arrow, end_arrow_length, end_arrow_width,
+                             begin_shape, begin_site,
+                             end_shape, end_site):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -283,6 +301,23 @@ def _format_connector_impl(slide_index, shape_name_or_index,
             )
         line.EndArrowheadWidth = width_val
 
+    # Reconnect begin/end to different shapes
+    reroute = False
+    if begin_shape is not None:
+        target = _get_shape(slide, begin_shape)
+        site = begin_site if begin_site is not None else 1
+        shape.ConnectorFormat.BeginConnect(target, site)
+        reroute = True
+
+    if end_shape is not None:
+        target = _get_shape(slide, end_shape)
+        site = end_site if end_site is not None else 1
+        shape.ConnectorFormat.EndConnect(target, site)
+        reroute = True
+
+    if reroute:
+        shape.RerouteConnections()
+
     return {
         "success": True,
         "shape_name": shape.Name,
@@ -329,6 +364,8 @@ def format_connector(params: FormatConnectorInput) -> str:
             params.color, params.weight, params.dash_style,
             params.begin_arrow, params.begin_arrow_length, params.begin_arrow_width,
             params.end_arrow, params.end_arrow_length, params.end_arrow_width,
+            params.begin_shape, params.begin_site,
+            params.end_shape, params.end_site,
         )
         return json.dumps(result)
     except Exception as e:
@@ -371,11 +408,10 @@ def register_tools(mcp):
         },
     )
     async def tool_format_connector(params: FormatConnectorInput) -> str:
-        """Format a connector's line properties.
+        """Format a connector's line properties and reconnect endpoints.
 
-        Configure color, weight, dash style, and arrowheads (begin/end).
-        Arrowhead size is controlled separately via begin_arrow_length,
-        begin_arrow_width, end_arrow_length, and end_arrow_width.
+        Configure color, weight, dash style, arrowheads, and arrowhead size.
+        Reconnect begin/end to different shapes via begin_shape/end_shape.
         Identify the connector by shape name or 1-based shape index.
         """
         return format_connector(params)

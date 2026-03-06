@@ -768,6 +768,27 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
     except Exception:
         pass
 
+    # Connector info
+    try:
+        cf = shape.ConnectorFormat
+        conn_info = {}
+        try:
+            if cf.BeginConnected:
+                conn_info["begin_connected_shape"] = cf.BeginConnectedShape.Name
+                conn_info["begin_connection_site"] = cf.BeginConnectionSite
+        except Exception:
+            pass
+        try:
+            if cf.EndConnected:
+                conn_info["end_connected_shape"] = cf.EndConnectedShape.Name
+                conn_info["end_connection_site"] = cf.EndConnectionSite
+        except Exception:
+            pass
+        if conn_info:
+            info["connector_format"] = conn_info
+    except Exception:
+        pass
+
     # Adjustment handles
     try:
         adj_count = shape.Adjustments.Count
