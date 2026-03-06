@@ -950,3 +950,27 @@ class TestUpdateShapeInput:
         )
         assert m.rotation == 45
         assert m.adjustments == {1: 0.3}
+
+    def test_adjustments_key_zero_rejected(self):
+        """Adjustment index 0 is rejected (must be >= 1)."""
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            UpdateShapeInput(
+                slide_index=1, shape_name="Rect",
+                adjustments={0: 0.5},
+            )
+
+    def test_adjustments_key_negative_rejected(self):
+        """Negative adjustment index is rejected."""
+        with pytest.raises(ValidationError, match="must be >= 1"):
+            UpdateShapeInput(
+                slide_index=1, shape_name="Rect",
+                adjustments={-1: 0.5},
+            )
+
+    def test_adjustments_empty_dict_valid(self):
+        """Empty adjustments dict is a valid no-op."""
+        m = UpdateShapeInput(
+            slide_index=1, shape_name="Box",
+            adjustments={},
+        )
+        assert m.adjustments == {}
