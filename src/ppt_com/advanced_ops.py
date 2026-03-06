@@ -627,16 +627,9 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, 
             "ppt_crop_picture only works on picture shapes inserted via ppt_add_picture."
         )
 
-    pic_fmt = shape.PictureFormat
-    if crop_left is not None:
-        pic_fmt.CropLeft = crop_left
-    if crop_right is not None:
-        pic_fmt.CropRight = crop_right
-    if crop_top is not None:
-        pic_fmt.CropTop = crop_top
-    if crop_bottom is not None:
-        pic_fmt.CropBottom = crop_bottom
-
+    # Resolve crop_shape first so any validation error aborts before mutating
+    # the slide — prevents partial updates when crop_shape is invalid.
+    auto_shape_int = None
     if crop_shape is not None:
         if isinstance(crop_shape, str):
             key = crop_shape.strip().lower()
@@ -652,6 +645,18 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, 
                 auto_shape_int = SHAPE_NAME_MAP[key]
         else:
             auto_shape_int = int(crop_shape)
+
+    pic_fmt = shape.PictureFormat
+    if crop_left is not None:
+        pic_fmt.CropLeft = crop_left
+    if crop_right is not None:
+        pic_fmt.CropRight = crop_right
+    if crop_top is not None:
+        pic_fmt.CropTop = crop_top
+    if crop_bottom is not None:
+        pic_fmt.CropBottom = crop_bottom
+
+    if auto_shape_int is not None:
         try:
             shape.AutoShapeType = auto_shape_int
         except Exception as e:
