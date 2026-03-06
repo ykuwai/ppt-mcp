@@ -674,8 +674,8 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
     if crop_shape is not None:
         if isinstance(crop_shape, str):
             key = crop_shape.strip().lower()
-            if key.lstrip("-").isdigit():
-                # Accept numeric strings like "9" the same as the integer 9
+            if key.isdigit():
+                # Accept non-negative numeric strings like "9" as integer 9
                 auto_shape_int = int(key)
             elif key not in SHAPE_NAME_MAP:
                 raise ValueError(
@@ -768,10 +768,20 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
     # Apply corner radius for rounded_rectangle crop shapes.
     if corner_radius_pt is not None:
         # msoShapeRoundedRectangle = 5
-        if shape.AutoShapeType == 5:
+        try:
+            current_type = shape.AutoShapeType
+        except Exception:
+            current_type = None
+        if current_type == 5:
             short_side = min(shape.Width, shape.Height)
             adj_value = min(0.5, corner_radius_pt / short_side) if short_side > 0 else 0
             shape.Adjustments[1] = adj_value
+
+    # Read AutoShapeType safely — may fail on msoLinkedPicture (type 11).
+    try:
+        auto_shape_val = shape.AutoShapeType
+    except Exception:
+        auto_shape_val = None
 
     return {
         "success": True,
@@ -782,7 +792,7 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
         "crop_right": round(pic_fmt.CropRight, 2),
         "crop_top": round(pic_fmt.CropTop, 2),
         "crop_bottom": round(pic_fmt.CropBottom, 2),
-        "crop_shape": shape.AutoShapeType,
+        "crop_shape": auto_shape_val,
     }
 
 

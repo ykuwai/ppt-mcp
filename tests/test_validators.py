@@ -3,7 +3,7 @@
 Covers all model_validator decorated methods in:
 - freeform.py: NodeSpec, BuildFreeformInput, InsertNodeInput
 - tables.py: MergeTableCellsInput, SetTableBordersInput
-- advanced_ops.py: SetDefaultShapeStyleInput
+- advanced_ops.py: SetDefaultShapeStyleInput, CropPictureInput
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
 - text.py: GetAllTextInput
@@ -27,7 +27,7 @@ from ppt_com.tables import (
     MergeTableCellsInput,
     SetTableBordersInput,
 )
-from ppt_com.advanced_ops import SetDefaultShapeStyleInput
+from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput
 from ppt_com.shapes import AddShapeInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
@@ -855,3 +855,64 @@ class TestFontSizeWarning:
         result = font_size_warning(8)
         assert result is not None
         assert "8pt" in result
+
+
+# ============================================================================
+# advanced_ops.py — CropPictureInput
+# ============================================================================
+class TestCropPictureInput:
+    """Tests for CropPictureInput validators."""
+
+    def test_crop_fit_alone_valid(self):
+        m = CropPictureInput(slide_index=1, shape_name_or_index="pic", crop_fit="square")
+        assert m.crop_fit == "square"
+        assert m.crop_anchor == 0.5  # default
+
+    def test_crop_fit_with_shape_and_anchor(self):
+        m = CropPictureInput(
+            slide_index=1, shape_name_or_index="pic",
+            crop_fit="1:1", crop_shape="oval", crop_anchor=0.3,
+        )
+        assert m.crop_fit == "1:1"
+        assert m.crop_anchor == 0.3
+
+    def test_crop_fit_with_crop_left_raises(self):
+        with pytest.raises(ValidationError, match="crop_fit cannot be combined"):
+            CropPictureInput(
+                slide_index=1, shape_name_or_index="pic",
+                crop_fit="square", crop_left=10,
+            )
+
+    def test_crop_fit_with_crop_bottom_raises(self):
+        with pytest.raises(ValidationError, match="crop_fit cannot be combined"):
+            CropPictureInput(
+                slide_index=1, shape_name_or_index="pic",
+                crop_fit="square", crop_bottom=5,
+            )
+
+    def test_manual_crop_without_fit_valid(self):
+        m = CropPictureInput(
+            slide_index=1, shape_name_or_index="pic",
+            crop_left=50, crop_right=50, crop_shape="oval",
+        )
+        assert m.crop_left == 50
+        assert m.crop_fit is None
+
+    def test_crop_anchor_bounds(self):
+        with pytest.raises(ValidationError):
+            CropPictureInput(
+                slide_index=1, shape_name_or_index="pic",
+                crop_fit="square", crop_anchor=1.5,
+            )
+        with pytest.raises(ValidationError):
+            CropPictureInput(
+                slide_index=1, shape_name_or_index="pic",
+                crop_fit="square", crop_anchor=-0.1,
+            )
+
+    def test_corner_radius_pt_valid(self):
+        m = CropPictureInput(
+            slide_index=1, shape_name_or_index="pic",
+            crop_shape="rounded_rectangle", corner_radius_pt=10,
+        )
+        assert m.corner_radius_pt == 10
