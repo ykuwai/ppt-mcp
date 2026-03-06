@@ -517,16 +517,16 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height):
         Left=left, Top=top, Width=-1, Height=-1,
     )
     if width is not None and height is not None:
+        # Both specified: user intentionally overrides aspect ratio.
+        pic.LockAspectRatio = msoFalse
         pic.Width = width
         pic.Height = height
     elif width is not None:
-        scale = width / pic.Width
+        # Width only: COM's LockAspectRatio auto-scales height correctly.
         pic.Width = width
-        pic.Height = round(pic.Height * scale, 2)
     elif height is not None:
-        scale = height / pic.Height
+        # Height only: COM's LockAspectRatio auto-scales width correctly.
         pic.Height = height
-        pic.Width = round(pic.Width * scale, 2)
     return {
         "success": True,
         "shape_name": pic.Name,
