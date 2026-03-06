@@ -26,6 +26,7 @@ from ppt_com.constants import (
     VIEW_TYPE_MAP, VIEW_TYPE_NAMES,
     ppSelectionNone, ppSelectionSlides, ppSelectionShapes, ppSelectionText,
 )
+from ppt_com.shapes import SHAPE_NAME_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +247,21 @@ class CropPictureInput(BaseModel):
     crop_right: Optional[float] = Field(default=None, description="Crop from right in points")
     crop_top: Optional[float] = Field(default=None, description="Crop from top in points")
     crop_bottom: Optional[float] = Field(default=None, description="Crop from bottom in points")
+    crop_shape: Optional[Union[str, int]] = Field(
+        default=None,
+        description=(
+            "Clip the visible area of the picture to a shape — equivalent to "
+            "PowerPoint's Format → Crop → Crop to Shape. "
+            "Pass a friendly name ('oval', 'rounded_rectangle', 'triangle', etc.) "
+            "or an MsoAutoShapeType integer. "
+            "Use 'rectangle' to reset to normal rectangular display. "
+            "Note: 'oval' produces a circle only when the picture's width == height; "
+            "otherwise it produces an ellipse. To get a perfect circle, ensure equal "
+            "width and height before applying (use crop_left/right/top/bottom or "
+            "ppt_update_shape first). "
+            f"Available names: {', '.join(sorted(SHAPE_NAME_MAP.keys()))}"
+        ),
+    )
 
 
 # --- Shape Export ---
@@ -596,12 +612,19 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
 # ---------------------------------------------------------------------------
 # Picture Crop
 # ---------------------------------------------------------------------------
-def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, crop_top, crop_bottom):
+def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, crop_top, crop_bottom, crop_shape):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
+
+    # msoPicture=13, msoLinkedPicture=11
+    if shape.Type not in (11, 13):
+        raise ValueError(
+            f"Shape '{shape.Name}' is not a picture (type={shape.Type}). "
+            "ppt_crop_picture only works on picture shapes inserted via ppt_add_picture."
+        )
 
     pic_fmt = shape.PictureFormat
     if crop_left is not None:
@@ -613,6 +636,19 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, 
     if crop_bottom is not None:
         pic_fmt.CropBottom = crop_bottom
 
+    if crop_shape is not None:
+        if isinstance(crop_shape, str):
+            key = crop_shape.strip().lower()
+            if key not in SHAPE_NAME_MAP:
+                raise ValueError(
+                    f"Unknown crop_shape '{crop_shape}'. "
+                    f"Available names: {', '.join(sorted(SHAPE_NAME_MAP.keys()))}"
+                )
+            auto_shape_int = SHAPE_NAME_MAP[key]
+        else:
+            auto_shape_int = int(crop_shape)
+        shape.AutoShapeType = auto_shape_int
+
     return {
         "success": True,
         "shape_name": shape.Name,
@@ -620,6 +656,7 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right, 
         "crop_right": round(pic_fmt.CropRight, 2),
         "crop_top": round(pic_fmt.CropTop, 2),
         "crop_bottom": round(pic_fmt.CropBottom, 2),
+        "crop_shape": shape.AutoShapeType,
     }
 
 
@@ -1225,10 +1262,10 @@ def crop_picture(params: CropPictureInput) -> str:
     """Crop a picture shape.
 
     Args:
-        params: Shape identification and crop values in points.
+        params: Shape identification, rectangular crop values, and optional shape crop.
 
     Returns:
-        JSON with current crop values after setting.
+        JSON with current crop values and active crop_shape after setting.
     """
     try:
         result = ppt.execute(
@@ -1236,6 +1273,7 @@ def crop_picture(params: CropPictureInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.crop_left, params.crop_right,
             params.crop_top, params.crop_bottom,
+            params.crop_shape,
         )
         return json.dumps(result)
     except Exception as e:
@@ -1568,10 +1606,23 @@ def register_tools(mcp):
         },
     )
     async def tool_crop_picture(params: CropPictureInput) -> str:
-        """Crop a picture shape by setting crop values in points.
+        """Crop a picture shape — rectangular trim and/or crop-to-shape.
 
-        Only provided crop values are updated. Returns current crop values
-        (crop_left, crop_right, crop_top, crop_bottom) after applying changes.
+        Two independent crop modes (both optional, combinable):
+
+        **Rectangular crop** (crop_left / crop_right / crop_top / crop_bottom):
+          Trims the picture by the given number of points from each edge.
+          Non-destructive — set all values to 0 to restore the full image.
+
+        **Crop to shape** (crop_shape):
+          Clips the visible area to a geometric shape, equivalent to
+          PowerPoint's Format → Crop → Crop to Shape.
+          Examples: 'oval' for a circular/oval frame, 'rounded_rectangle' for
+          rounded corners, 'triangle', 'diamond', etc.
+          Use 'rectangle' to reset back to a normal rectangular display.
+          Tip: for a perfect circle use 'oval' on a picture whose width == height.
+
+        Returns current crop values and the active crop_shape integer after applying.
         """
         return crop_picture(params)
 
