@@ -506,14 +506,27 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height):
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
-    w = width if width is not None else -1
-    h = height if height is not None else -1
+    # Insert at natural size first to obtain true aspect ratio.
+    # Passing Width/Height directly to AddPicture when only one dimension is
+    # specified causes COM to set that dimension but leave the other at its
+    # natural value, resulting in a distorted (non-proportional) image.
     pic = slide.Shapes.AddPicture(
         FileName=file_path,
         LinkToFile=msoFalse,
         SaveWithDocument=msoTrue,
-        Left=left, Top=top, Width=w, Height=h,
+        Left=left, Top=top, Width=-1, Height=-1,
     )
+    if width is not None and height is not None:
+        pic.Width = width
+        pic.Height = height
+    elif width is not None:
+        scale = width / pic.Width
+        pic.Width = width
+        pic.Height = round(pic.Height * scale, 2)
+    elif height is not None:
+        scale = height / pic.Height
+        pic.Height = height
+        pic.Width = round(pic.Width * scale, 2)
     return {
         "success": True,
         "shape_name": pic.Name,
