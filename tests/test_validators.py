@@ -1088,3 +1088,27 @@ class TestFormatConnectorInput:
         assert m.begin_shape == "Rect 3"
         assert m.color == "#0000FF"
         assert m.end_arrow == "triangle"
+
+    def test_reconnect_end_site_must_be_positive(self):
+        """end_site must be >= 1."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                end_shape="Rect 2", end_site=0,
+            )
+
+    def test_begin_site_without_begin_shape_rejected(self):
+        """begin_site without begin_shape raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_site=2,
+            )
+
+    def test_end_site_without_end_shape_rejected(self):
+        """end_site without end_shape raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                end_site=3,
+            )

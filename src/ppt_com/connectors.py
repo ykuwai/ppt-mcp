@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int
@@ -138,7 +138,7 @@ class FormatConnectorInput(BaseModel):
     )
     begin_site: Optional[int] = Field(
         default=None, ge=1,
-        description="1-based connection site index on the new begin shape",
+        description="1-based connection site on the new begin shape. Defaults to 1 if omitted",
     )
     end_shape: Optional[str] = Field(
         default=None,
@@ -146,8 +146,16 @@ class FormatConnectorInput(BaseModel):
     )
     end_site: Optional[int] = Field(
         default=None, ge=1,
-        description="1-based connection site index on the new end shape",
+        description="1-based connection site on the new end shape. Defaults to 1 if omitted",
     )
+
+    @model_validator(mode="after")
+    def check_site_requires_shape(self) -> "FormatConnectorInput":
+        if self.begin_site is not None and self.begin_shape is None:
+            raise ValueError("begin_site requires begin_shape to be set")
+        if self.end_site is not None and self.end_shape is None:
+            raise ValueError("end_site requires end_shape to be set")
+        return self
 
 
 # ---------------------------------------------------------------------------
