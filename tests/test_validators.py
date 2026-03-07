@@ -30,6 +30,7 @@ from ppt_com.tables import (
 )
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput, SetPictureFormatInput
 from ppt_com.shapes import AddShapeInput, UpdateShapeInput
+from ppt_com.animation import UpdateAnimationInput
 from ppt_com.connectors import FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
@@ -1289,3 +1290,78 @@ class TestSetPictureFormatInput:
             slide_index=1, shape_name_or_index=3, brightness=0.5,
         )
         assert inp.shape_name_or_index == 3
+
+
+# ============================================================================
+# animation.py — UpdateAnimationInput
+# ============================================================================
+class TestUpdateAnimationInput:
+    """Tests for UpdateAnimationInput model validator."""
+
+    def test_valid_all_params(self):
+        """All optional params provided is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=2,
+            effect="fade", trigger="with_previous",
+            duration=1.5, delay=0.5, move_to=3,
+        )
+        assert inp.effect == "fade"
+        assert inp.trigger == "with_previous"
+        assert inp.duration == 1.5
+        assert inp.delay == 0.5
+        assert inp.move_to == 3
+
+    def test_valid_effect_only(self):
+        """Just effect change is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, effect="zoom",
+        )
+        assert inp.effect == "zoom"
+        assert inp.trigger is None
+
+    def test_valid_move_to_only(self):
+        """Just reorder is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, move_to=5,
+        )
+        assert inp.move_to == 5
+
+    def test_valid_duration_only(self):
+        """Just duration change is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, duration=2.0,
+        )
+        assert inp.duration == 2.0
+
+    def test_no_params_raises(self):
+        """No optional params raises ValidationError."""
+        with pytest.raises(ValidationError, match="At least one optional parameter"):
+            UpdateAnimationInput(slide_index=1, animation_index=1)
+
+    def test_invalid_trigger(self):
+        """Unknown trigger raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown trigger"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1, trigger="invalid_trigger",
+            )
+
+    def test_invalid_effect_string(self):
+        """Unknown effect name raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown effect"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1, effect="nonexistent_effect",
+            )
+
+    def test_valid_effect_integer(self):
+        """Effect as integer is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, effect=42,
+        )
+        assert inp.effect == 42
+
+    def test_move_to_zero_raises(self):
+        """move_to=0 raises ValidationError."""
+        with pytest.raises(ValidationError):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1, move_to=0,
+            )
