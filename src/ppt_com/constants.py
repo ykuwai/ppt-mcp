@@ -592,6 +592,21 @@ ANIMATION_TRIGGER_NAMES = {
     3: "after_previous", 4: "on_shape_click",
 }
 
+# MsoAnimDirection
+ANIM_DIRECTION_MAP = {
+    "none": 0, "up": 1, "right": 2, "down": 3, "left": 4,
+    "up_left": 6, "up_right": 7, "down_right": 8, "down_left": 9,
+    "top": 10, "bottom": 11, "top_left": 12, "top_right": 13,
+    "bottom_right": 14, "bottom_left": 15,
+    "horizontal": 16, "vertical": 17, "across": 18,
+    "in": 19, "out": 20,
+    "clockwise": 21, "counterclockwise": 22,
+    "horizontal_in": 23, "horizontal_out": 24,
+    "vertical_in": 25, "vertical_out": 26,
+}
+
+ANIM_DIRECTION_NAMES = {v: k for k, v in ANIM_DIRECTION_MAP.items()}
+
 # ==============================================================================
 # Phase 4 Constants
 # ==============================================================================

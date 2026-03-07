@@ -1373,6 +1373,20 @@ class TestUpdateAnimationInput:
         )
         assert inp.exit is True
 
+    def test_direction_only(self):
+        """direction alone is a valid update."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, direction="left",
+        )
+        assert inp.direction == "left"
+
+    def test_repeat_count_only(self):
+        """repeat_count alone is a valid update."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, repeat_count=5,
+        )
+        assert inp.repeat_count == 5
+
 
 # ============================================================================
 # animation.py — AddAnimationInput
@@ -1426,3 +1440,52 @@ class TestAddAnimationInput:
             effect="path_circle",
         )
         assert inp.effect == "path_circle"
+
+    def test_direction_string(self):
+        """Direction as friendly name string is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            effect="fly", direction="left",
+        )
+        assert inp.direction == "left"
+
+    def test_direction_integer(self):
+        """Direction as MsoAnimDirection integer is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            effect="fly", direction=4,
+        )
+        assert inp.direction == 4
+
+    def test_repeat_count_valid(self):
+        """repeat_count with valid value is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            repeat_count=3,
+        )
+        assert inp.repeat_count == 3
+
+    def test_repeat_count_negative_raises(self):
+        """repeat_count with negative value is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                repeat_count=-1,
+            )
+
+    def test_auto_reverse_true(self):
+        """auto_reverse=True is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            auto_reverse=True,
+        )
+        assert inp.auto_reverse is True
+
+    def test_smooth_start_end(self):
+        """smooth_start and smooth_end are accepted together."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            smooth_start=True, smooth_end=True,
+        )
+        assert inp.smooth_start is True
+        assert inp.smooth_end is True
