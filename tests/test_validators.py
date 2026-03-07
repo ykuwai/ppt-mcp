@@ -30,7 +30,7 @@ from ppt_com.tables import (
 )
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput, SetPictureFormatInput
 from ppt_com.shapes import AddShapeInput, UpdateShapeInput
-from ppt_com.animation import UpdateAnimationInput
+from ppt_com.animation import AddAnimationInput, UpdateAnimationInput
 from ppt_com.connectors import FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
@@ -1365,3 +1365,64 @@ class TestUpdateAnimationInput:
             UpdateAnimationInput(
                 slide_index=1, animation_index=1, move_to=0,
             )
+
+    def test_exit_only(self):
+        """exit=True alone is a valid update."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, exit=True,
+        )
+        assert inp.exit is True
+
+
+# ============================================================================
+# animation.py — AddAnimationInput
+# ============================================================================
+class TestAddAnimationInput:
+    """Tests for AddAnimationInput model."""
+
+    def test_exit_default_false(self):
+        """exit defaults to False."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+        )
+        assert inp.exit is False
+
+    def test_exit_true(self):
+        """exit=True is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            effect="fade", exit=True,
+        )
+        assert inp.exit is True
+
+    def test_exit_with_emphasis_raises(self):
+        """exit=True with emphasis effect is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                effect="teeter", exit=True,
+            )
+
+    def test_exit_with_motion_path_raises(self):
+        """exit=True with motion path effect is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                effect="path_circle", exit=True,
+            )
+
+    def test_emphasis_effect_accepted(self):
+        """Emphasis effect name is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index=1,
+            effect="teeter",
+        )
+        assert inp.effect == "teeter"
+
+    def test_motion_path_effect_accepted(self):
+        """Motion path effect name is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            effect="path_circle",
+        )
+        assert inp.effect == "path_circle"

@@ -28,11 +28,26 @@ logger = logging.getLogger(__name__)
 # Friendly name maps
 # ---------------------------------------------------------------------------
 ANIMATION_EFFECT_MAP: dict[str, int] = {
+    # Entrance effects (1-53)
     "appear": 1, "fly": 2, "blinds": 3, "box": 4,
     "checkerboard": 5, "circle": 6, "diamond": 8,
     "dissolve": 9, "fade": 10, "split": 16, "wipe": 22,
-    "zoom": 23, "bounce": 26, "float": 56,
-    "grow_and_turn": 57, "spin": 61, "transparency": 62,
+    "zoom": 23, "bounce": 26, "float": 30, "grow_and_turn": 31,
+    # Emphasis effects (54-82)
+    "change_fill_color": 54, "change_font": 55, "change_font_color": 56,
+    "change_font_size": 57, "grow_shrink": 59, "spin": 61, "transparency": 62,
+    "bold_flash": 63, "color_wave": 69, "darken": 73, "desaturate": 74,
+    "flash_bulb": 75, "lighten": 78, "teeter": 80, "wave": 82,
+    # Motion path effects (86-149)
+    "path_circle": 86, "path_diamond": 88, "path_star": 90,
+    "path_square": 92, "path_heart": 94, "path_loop": 109,
+    "path_left": 120, "path_arc_down": 122, "path_zigzag": 123,
+    "path_sine_wave": 125, "path_bounce_left": 126, "path_down": 127,
+    "path_arc_up": 129, "path_spiral_right": 131, "path_wave": 132,
+    "path_diagonal_down_right": 134, "path_arc_left": 136,
+    "path_funnel": 137, "path_spring": 138, "path_bounce_right": 139,
+    "path_diagonal_up_right": 141, "path_arc_right": 143,
+    "path_up": 148, "path_right": 149,
 }
 
 TRIGGER_MAP: dict[str, int] = {
@@ -87,8 +102,10 @@ class AddAnimationInput(BaseModel):
     effect: Union[int, str] = Field(
         default="appear",
         description=(
-            "Animation effect: friendly name ('appear', 'fade', 'fly', 'wipe', "
-            "'zoom', 'bounce', 'spin', etc.) or MsoAnimEffect integer"
+            "Animation effect: friendly name or MsoAnimEffect integer. "
+            "Entrance: 'appear', 'fade', 'fly', 'wipe', 'zoom', 'bounce', 'float', etc. "
+            "Emphasis: 'spin', 'transparency', 'grow_shrink', 'teeter', 'wave', etc. "
+            "Motion path: 'path_circle', 'path_down', 'path_up', 'path_left', etc."
         ),
     )
     trigger: str = Field(
@@ -104,6 +121,21 @@ class AddAnimationInput(BaseModel):
     delay: Optional[float] = Field(
         default=None, description="Delay before animation starts in seconds"
     )
+    exit: bool = Field(
+        default=False,
+        description="Set to true for exit animation (shape disappears). Only applies to entrance/exit effects (effectId 1-53).",
+    )
+
+    @model_validator(mode="after")
+    def validate_exit_effect(self):
+        if self.exit:
+            effect_int = ANIMATION_EFFECT_MAP.get(self.effect, self.effect) if isinstance(self.effect, str) else self.effect
+            if isinstance(effect_int, int) and effect_int > 53:
+                raise ValueError(
+                    f"exit=True is only valid for entrance/exit effects (effectId 1-53), "
+                    f"got effectId {effect_int}"
+                )
+        return self
 
 
 class ListAnimationsInput(BaseModel):
@@ -141,8 +173,9 @@ class UpdateAnimationInput(BaseModel):
     effect: Optional[Union[int, str]] = Field(
         default=None,
         description=(
-            "New animation effect: friendly name ('appear', 'fade', 'fly', 'wipe', "
-            "'zoom', 'bounce', 'spin', etc.) or MsoAnimEffect integer"
+            "New animation effect: friendly name or MsoAnimEffect integer. "
+            "Entrance: 'appear', 'fade', 'fly', etc. Emphasis: 'spin', 'teeter', etc. "
+            "Motion path: 'path_circle', 'path_down', etc."
         ),
     )
     trigger: Optional[str] = Field(
@@ -158,15 +191,19 @@ class UpdateAnimationInput(BaseModel):
     move_to: Optional[int] = Field(
         default=None, ge=1, description="Move animation to this 1-based position in the sequence"
     )
+    exit: Optional[bool] = Field(
+        default=None,
+        description="Change to exit animation (true) or entrance animation (false). Only for entrance/exit effects.",
+    )
 
     @model_validator(mode="after")
     def validate_params(self):
         if all(
             v is None
-            for v in (self.effect, self.trigger, self.duration, self.delay, self.move_to)
+            for v in (self.effect, self.trigger, self.duration, self.delay, self.move_to, self.exit)
         ):
             raise ValueError(
-                "At least one optional parameter (effect, trigger, duration, delay, move_to) must be provided"
+                "At least one optional parameter (effect, trigger, duration, delay, move_to, exit) must be provided"
             )
         if self.trigger is not None and self.trigger not in TRIGGER_MAP:
             raise ValueError(
@@ -243,7 +280,7 @@ def _set_slide_transition_impl(
 
 
 def _add_animation_impl(
-    slide_index, shape_name_or_index, effect, trigger, duration, delay,
+    slide_index, shape_name_or_index, effect, trigger, duration, delay, exit_flag,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -257,6 +294,9 @@ def _add_animation_impl(
     # AddEffect uses positional args: Shape, effectId, level, trigger, index
     effect_obj = slide.TimeLine.MainSequence.AddEffect(shape, effect_int, 0, trigger_int)
 
+    if exit_flag:
+        effect_obj.Exit = msoTrue
+
     if duration is not None:
         effect_obj.Timing.Duration = duration
     if delay is not None:
@@ -266,8 +306,24 @@ def _add_animation_impl(
         "success": True,
         "shape_name": shape.Name,
         "effect": effect_int,
+        "exit": exit_flag,
         "animation_index": effect_obj.Index,
     }
+
+
+def _get_animation_category(effect_type, exit_flag):
+    """Determine animation category from effectId and exit flag."""
+    if exit_flag:
+        return "exit"
+    if 54 <= effect_type <= 82:
+        return "emphasis"
+    if 83 <= effect_type <= 85:
+        return "media"
+    if 86 <= effect_type <= 149:
+        return "motion_path"
+    if 1 <= effect_type <= 53:
+        return "entrance"
+    return "unknown"
 
 
 def _list_animations_impl(slide_index):
@@ -281,6 +337,9 @@ def _list_animations_impl(slide_index):
         eff = seq(i)
         effect_type = eff.EffectType
         trigger_type = eff.Timing.TriggerType
+        exit_flag = bool(eff.Exit)
+        category = _get_animation_category(effect_type, exit_flag)
+
         animations.append({
             "index": eff.Index,
             "shape_name": eff.Shape.Name,
@@ -289,6 +348,8 @@ def _list_animations_impl(slide_index):
             "trigger_type": trigger_type,
             "trigger_name": ANIMATION_TRIGGER_NAMES.get(trigger_type, f"Unknown({trigger_type})"),
             "duration": eff.Timing.Duration,
+            "exit": exit_flag,
+            "category": category,
         })
 
     return {
@@ -343,7 +404,7 @@ def _clear_animations_impl(slide_index, clear_transitions):
 
 
 def _update_animation_impl(
-    slide_index, animation_index, effect, trigger, duration, delay, move_to,
+    slide_index, animation_index, effect, trigger, duration, delay, move_to, exit_flag,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -369,6 +430,8 @@ def _update_animation_impl(
         eff.Timing.Duration = duration
     if delay is not None:
         eff.Timing.TriggerDelayTime = delay
+    if exit_flag is not None:
+        eff.Exit = msoTrue if exit_flag else msoFalse
 
     # Reorder last (after property changes to avoid index confusion)
     if move_to is not None:
@@ -380,16 +443,20 @@ def _update_animation_impl(
 
     # Read back current state (re-fetch since MoveTo may have changed index)
     final_index = eff.Index
+    exit_flag = bool(eff.Exit)
+    effect_type = eff.EffectType
     return {
         "success": True,
         "animation_index": final_index,
         "shape_name": eff.Shape.Name,
-        "effect_type": eff.EffectType,
-        "effect_name": ANIMATION_EFFECT_NAMES.get(eff.EffectType, f"Unknown({eff.EffectType})"),
+        "effect_type": effect_type,
+        "effect_name": ANIMATION_EFFECT_NAMES.get(effect_type, f"Unknown({effect_type})"),
         "trigger_type": eff.Timing.TriggerType,
         "trigger_name": ANIMATION_TRIGGER_NAMES.get(eff.Timing.TriggerType, f"Unknown({eff.Timing.TriggerType})"),
         "duration": eff.Timing.Duration,
         "delay": eff.Timing.TriggerDelayTime,
+        "exit": exit_flag,
+        "category": _get_animation_category(effect_type, exit_flag),
     }
 
 
@@ -430,6 +497,7 @@ def add_animation(params: AddAnimationInput) -> str:
             _add_animation_impl,
             params.slide_index, params.shape_name_or_index,
             params.effect, params.trigger, params.duration, params.delay,
+            params.exit,
         )
         return json.dumps(result)
     except Exception as e:
@@ -507,7 +575,7 @@ def update_animation(params: UpdateAnimationInput) -> str:
             _update_animation_impl,
             params.slide_index, params.animation_index,
             params.effect, params.trigger, params.duration,
-            params.delay, params.move_to,
+            params.delay, params.move_to, params.exit,
         )
         return json.dumps(result)
     except Exception as e:
@@ -554,8 +622,12 @@ def register_tools(mcp):
         """Add an animation effect to a shape on a slide.
 
         Specify the shape by name or 1-based index. Use a friendly effect name
-        ('appear', 'fade', 'fly', 'wipe', 'zoom', 'bounce', 'spin', etc.)
-        or an MsoAnimEffect integer. Set trigger, duration, and delay.
+        or an MsoAnimEffect integer. Supports four categories:
+        - Entrance: 'appear', 'fade', 'fly', 'wipe', 'zoom', 'bounce', etc.
+        - Exit: same effects as entrance, but set exit=true
+        - Emphasis: 'spin', 'transparency', 'grow_shrink', 'teeter', 'wave', etc.
+        - Motion path: 'path_circle', 'path_down', 'path_up', 'path_left', etc.
+        Set trigger, duration, and delay.
         """
         return add_animation(params)
 
