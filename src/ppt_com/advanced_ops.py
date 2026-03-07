@@ -16,12 +16,13 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
-from utils.color import hex_to_int
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
+from utils.color import hex_to_int, int_to_hex
 from ppt_com.constants import (
     msoTrue, msoFalse,
     msoShapeRectangle,
+    msoLinkedPicture, msoPicture,
     SHAPE_FORMAT_MAP,
     VIEW_TYPE_MAP, VIEW_TYPE_NAMES,
     ppSelectionNone, ppSelectionSlides, ppSelectionShapes, ppSelectionText,
@@ -717,8 +718,7 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
-    # msoPicture=13, msoLinkedPicture=11
-    if shape.Type not in (11, 13):
+    if shape.Type not in (msoLinkedPicture, msoPicture):
         raise ValueError(
             f"Shape '{shape.Name}' is not a picture (type={shape.Type}). "
             "ppt_crop_picture only works on picture shapes inserted via ppt_add_picture."
@@ -1491,8 +1491,7 @@ def _set_picture_format_impl(slide_index, shape_name_or_index, brightness,
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
-    # msoPicture=13, msoLinkedPicture=11
-    if shape.Type not in (11, 13):
+    if shape.Type not in (msoLinkedPicture, msoPicture):
         raise ValueError(
             f"Shape '{shape.Name}' is not a picture (type={shape.Type}). "
             "ppt_set_picture_format only works on picture shapes."
@@ -1508,7 +1507,9 @@ def _set_picture_format_impl(slide_index, shape_name_or_index, brightness,
         pf.ColorType = PICTURE_COLOR_TYPE_MAP[color_type]
     if transparent_color is not None:
         pf.TransparencyColor = hex_to_int(transparent_color)
-        pf.TransparentBackground = msoTrue
+        # Only auto-enable if transparent_background wasn't explicitly set to False
+        if transparent_background is not False:
+            pf.TransparentBackground = msoTrue
     if transparent_background is not None:
         pf.TransparentBackground = msoTrue if transparent_background else msoFalse
 
@@ -1516,7 +1517,7 @@ def _set_picture_format_impl(slide_index, shape_name_or_index, brightness,
     cur_color_type = pf.ColorType
     color_type_name = PICTURE_COLOR_TYPE_NAMES.get(cur_color_type, "unknown")
 
-    return {
+    result = {
         "success": True,
         "shape_name": shape.Name,
         "brightness": pf.Brightness,
@@ -1524,7 +1525,9 @@ def _set_picture_format_impl(slide_index, shape_name_or_index, brightness,
         "color_type": cur_color_type,
         "color_type_name": color_type_name,
         "transparent_background": bool(pf.TransparentBackground),
+        "transparent_color": int_to_hex(pf.TransparencyColor),
     }
+    return result
 
 
 def set_picture_format(params: SetPictureFormatInput) -> str:
