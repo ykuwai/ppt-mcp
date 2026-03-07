@@ -126,6 +126,17 @@ class AddAnimationInput(BaseModel):
         description="Set to true for exit animation (shape disappears). Only applies to entrance/exit effects (effectId 1-53).",
     )
 
+    @model_validator(mode="after")
+    def validate_exit_effect(self):
+        if self.exit:
+            effect_int = ANIMATION_EFFECT_MAP.get(self.effect, self.effect) if isinstance(self.effect, str) else self.effect
+            if isinstance(effect_int, int) and effect_int > 53:
+                raise ValueError(
+                    f"exit=True is only valid for entrance/exit effects (effectId 1-53), "
+                    f"got effectId {effect_int}"
+                )
+        return self
+
 
 class ListAnimationsInput(BaseModel):
     """Input for listing animations on a slide."""
@@ -300,6 +311,21 @@ def _add_animation_impl(
     }
 
 
+def _get_animation_category(effect_type, exit_flag):
+    """Determine animation category from effectId and exit flag."""
+    if exit_flag:
+        return "exit"
+    if 54 <= effect_type <= 82:
+        return "emphasis"
+    if 83 <= effect_type <= 85:
+        return "media"
+    if 86 <= effect_type <= 149:
+        return "motion_path"
+    if 1 <= effect_type <= 53:
+        return "entrance"
+    return "unknown"
+
+
 def _list_animations_impl(slide_index):
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
@@ -312,16 +338,7 @@ def _list_animations_impl(slide_index):
         effect_type = eff.EffectType
         trigger_type = eff.Timing.TriggerType
         exit_flag = bool(eff.Exit)
-
-        # Determine animation category
-        if exit_flag:
-            category = "exit"
-        elif 54 <= effect_type <= 82:
-            category = "emphasis"
-        elif 86 <= effect_type <= 149:
-            category = "motion_path"
-        else:
-            category = "entrance"
+        category = _get_animation_category(effect_type, exit_flag)
 
         animations.append({
             "index": eff.Index,
@@ -426,16 +443,20 @@ def _update_animation_impl(
 
     # Read back current state (re-fetch since MoveTo may have changed index)
     final_index = eff.Index
+    exit_flag = bool(eff.Exit)
+    effect_type = eff.EffectType
     return {
         "success": True,
         "animation_index": final_index,
         "shape_name": eff.Shape.Name,
-        "effect_type": eff.EffectType,
-        "effect_name": ANIMATION_EFFECT_NAMES.get(eff.EffectType, f"Unknown({eff.EffectType})"),
+        "effect_type": effect_type,
+        "effect_name": ANIMATION_EFFECT_NAMES.get(effect_type, f"Unknown({effect_type})"),
         "trigger_type": eff.Timing.TriggerType,
         "trigger_name": ANIMATION_TRIGGER_NAMES.get(eff.Timing.TriggerType, f"Unknown({eff.Timing.TriggerType})"),
         "duration": eff.Timing.Duration,
         "delay": eff.Timing.TriggerDelayTime,
+        "exit": exit_flag,
+        "category": _get_animation_category(effect_type, exit_flag),
     }
 
 

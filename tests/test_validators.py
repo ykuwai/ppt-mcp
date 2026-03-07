@@ -1395,6 +1395,22 @@ class TestAddAnimationInput:
         )
         assert inp.exit is True
 
+    def test_exit_with_emphasis_raises(self):
+        """exit=True with emphasis effect is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                effect="teeter", exit=True,
+            )
+
+    def test_exit_with_motion_path_raises(self):
+        """exit=True with motion path effect is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                effect="path_circle", exit=True,
+            )
+
     def test_emphasis_effect_accepted(self):
         """Emphasis effect name is accepted."""
         inp = AddAnimationInput(
