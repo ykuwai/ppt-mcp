@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
@@ -130,6 +130,55 @@ class ClearAnimationsInput(BaseModel):
         default=False,
         description="Also clear the slide transition effect",
     )
+
+
+class UpdateAnimationInput(BaseModel):
+    """Input for updating an existing animation in the main sequence."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    animation_index: int = Field(..., ge=1, description="1-based animation index in the main sequence")
+    effect: Optional[Union[int, str]] = Field(
+        default=None,
+        description=(
+            "New animation effect: friendly name ('appear', 'fade', 'fly', 'wipe', "
+            "'zoom', 'bounce', 'spin', etc.) or MsoAnimEffect integer"
+        ),
+    )
+    trigger: Optional[str] = Field(
+        default=None,
+        description="New trigger: 'on_click', 'with_previous', 'after_previous'",
+    )
+    duration: Optional[float] = Field(
+        default=None, description="New duration in seconds"
+    )
+    delay: Optional[float] = Field(
+        default=None, description="New delay before animation starts in seconds"
+    )
+    move_to: Optional[int] = Field(
+        default=None, ge=1, description="Move animation to this 1-based position in the sequence"
+    )
+
+    @model_validator(mode="after")
+    def validate_params(self):
+        if all(
+            v is None
+            for v in (self.effect, self.trigger, self.duration, self.delay, self.move_to)
+        ):
+            raise ValueError(
+                "At least one optional parameter (effect, trigger, duration, delay, move_to) must be provided"
+            )
+        if self.trigger is not None and self.trigger not in TRIGGER_MAP:
+            raise ValueError(
+                f"Unknown trigger '{self.trigger}'. "
+                f"Valid values: {', '.join(TRIGGER_MAP.keys())}"
+            )
+        if isinstance(self.effect, str) and self.effect not in ANIMATION_EFFECT_MAP:
+            raise ValueError(
+                f"Unknown effect '{self.effect}'. "
+                f"Valid values: {', '.join(ANIMATION_EFFECT_MAP.keys())}"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +342,57 @@ def _clear_animations_impl(slide_index, clear_transitions):
     }
 
 
+def _update_animation_impl(
+    slide_index, animation_index, effect, trigger, duration, delay, move_to,
+):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.Slides(slide_index)
+
+    seq = slide.TimeLine.MainSequence
+    if animation_index < 1 or animation_index > seq.Count:
+        raise ValueError(
+            f"Animation index {animation_index} out of range (1-{seq.Count})"
+        )
+
+    eff = seq(animation_index)
+
+    # Apply property changes first (before reorder)
+    if effect is not None:
+        effect_int = ANIMATION_EFFECT_MAP.get(effect, effect) if isinstance(effect, str) else effect
+        eff.EffectType = effect_int
+    if trigger is not None:
+        trigger_int = TRIGGER_MAP[trigger]
+        eff.Timing.TriggerType = trigger_int
+    if duration is not None:
+        eff.Timing.Duration = duration
+    if delay is not None:
+        eff.Timing.TriggerDelayTime = delay
+
+    # Reorder last (after property changes to avoid index confusion)
+    if move_to is not None:
+        if move_to < 1 or move_to > seq.Count:
+            raise ValueError(
+                f"move_to {move_to} out of range (1-{seq.Count})"
+            )
+        eff.MoveTo(move_to)
+
+    # Read back current state (re-fetch since MoveTo may have changed index)
+    final_index = eff.Index
+    return {
+        "success": True,
+        "animation_index": final_index,
+        "shape_name": eff.Shape.Name,
+        "effect_type": eff.EffectType,
+        "effect_name": ANIMATION_EFFECT_NAMES.get(eff.EffectType, f"Unknown({eff.EffectType})"),
+        "trigger_type": eff.Timing.TriggerType,
+        "trigger_name": ANIMATION_TRIGGER_NAMES.get(eff.Timing.TriggerType, f"Unknown({eff.Timing.TriggerType})"),
+        "duration": eff.Timing.Duration,
+        "delay": eff.Timing.TriggerDelayTime,
+    }
+
+
 # ---------------------------------------------------------------------------
 # MCP tool functions (sync wrappers that delegate to COM thread)
 # ---------------------------------------------------------------------------
@@ -393,6 +493,27 @@ def clear_animations(params: ClearAnimationsInput) -> str:
         return json.dumps({"error": f"Failed to clear animations: {str(e)}"})
 
 
+def update_animation(params: UpdateAnimationInput) -> str:
+    """Update an existing animation in the main sequence.
+
+    Args:
+        params: Slide index, animation index, and properties to change.
+
+    Returns:
+        JSON with the updated animation state.
+    """
+    try:
+        result = ppt.execute(
+            _update_animation_impl,
+            params.slide_index, params.animation_index,
+            params.effect, params.trigger, params.duration,
+            params.delay, params.move_to,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to update animation: {str(e)}"})
+
+
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
@@ -491,3 +612,22 @@ def register_tools(mcp):
         clear_transitions=true.
         """
         return clear_animations(params)
+
+    @mcp.tool(
+        name="ppt_update_animation",
+        annotations={
+            "title": "Update Animation",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_update_animation(params: UpdateAnimationInput) -> str:
+        """Update an existing animation in a slide's main sequence.
+
+        Change the effect type, trigger, duration, or delay of an animation.
+        Use move_to to reorder the animation within the sequence.
+        Use ppt_list_animations first to find the correct animation index.
+        """
+        return update_animation(params)
