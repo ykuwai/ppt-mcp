@@ -381,7 +381,19 @@ def _add_animation_impl(
     # Interactive sequence when trigger_shape is provided
     if trigger_shape is not None:
         trig_shape = _get_shape(slide, trigger_shape)
-        seq = slide.TimeLine.InteractiveSequences.Add()
+        # Reuse existing sequence for the same trigger shape
+        int_seqs = slide.TimeLine.InteractiveSequences
+        seq = None
+        for i in range(1, int_seqs.Count + 1):
+            s = int_seqs(i)
+            try:
+                if s.Count > 0 and s(1).Timing.TriggerShape.Name == trig_shape.Name:
+                    seq = s
+                    break
+            except Exception:
+                continue
+        if seq is None:
+            seq = int_seqs.Add()
         effect_obj = seq.AddEffect(shape, effect_int, 0, trigger_int)
         effect_obj.Timing.TriggerShape = trig_shape
     else:
@@ -417,6 +429,13 @@ def _add_animation_impl(
         "animation_index": effect_obj.Index,
     }
     if trigger_shape is not None:
+        # Find sequence_index for the interactive sequence
+        int_seqs = slide.TimeLine.InteractiveSequences
+        for i in range(1, int_seqs.Count + 1):
+            if int_seqs(i) is seq or (int_seqs(i).Count > 0 and int_seqs(i).Count == seq.Count):
+                result["sequence_index"] = i
+                break
+        result["effect_index"] = effect_obj.Index
         result["trigger_shape_name"] = trig_shape.Name
     return result
 
@@ -520,7 +539,7 @@ def _list_animations_impl(slide_index):
     return {
         "success": True,
         "slide_index": slide_index,
-        "count": seq.Count,
+        "main_sequence_count": seq.Count,
         "animations": animations,
         "interactive_sequences": interactive,
         "interactive_count": len(interactive),
