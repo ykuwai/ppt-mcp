@@ -1449,6 +1449,14 @@ class TestAddAnimationInput:
         )
         assert inp.direction == "left"
 
+    def test_direction_invalid_string(self):
+        """Invalid direction string is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                effect="fly", direction="diagonal",
+            )
+
     def test_direction_integer(self):
         """Direction as MsoAnimDirection integer is accepted."""
         inp = AddAnimationInput(

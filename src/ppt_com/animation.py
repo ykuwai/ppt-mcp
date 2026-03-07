@@ -164,6 +164,11 @@ class AddAnimationInput(BaseModel):
                     f"exit=True is only valid for entrance/exit effects (effectId 1-53), "
                     f"got effectId {effect_int}"
                 )
+        if isinstance(self.direction, str) and self.direction not in ANIM_DIRECTION_MAP:
+            raise ValueError(
+                f"Unknown direction '{self.direction}'. "
+                f"Valid values: {', '.join(ANIM_DIRECTION_MAP.keys())}"
+            )
         return self
 
 
@@ -274,6 +279,11 @@ class UpdateAnimationInput(BaseModel):
             raise ValueError(
                 f"Unknown effect '{self.effect}'. "
                 f"Valid values: {', '.join(ANIMATION_EFFECT_MAP.keys())}"
+            )
+        if isinstance(self.direction, str) and self.direction not in ANIM_DIRECTION_MAP:
+            raise ValueError(
+                f"Unknown direction '{self.direction}'. "
+                f"Valid values: {', '.join(ANIM_DIRECTION_MAP.keys())}"
             )
         return self
 
@@ -728,7 +738,8 @@ def register_tools(mcp):
         - Exit: same effects as entrance, but set exit=true
         - Emphasis: 'spin', 'transparency', 'grow_shrink', 'teeter', 'wave', etc.
         - Motion path: 'path_circle', 'path_down', 'path_up', 'path_left', etc.
-        Set trigger, duration, and delay.
+        Set trigger, duration, delay, direction, repeat_count, auto_reverse,
+        rewind, smooth_start, and smooth_end.
         """
         return add_animation(params)
 
@@ -799,7 +810,8 @@ def register_tools(mcp):
     async def tool_update_animation(params: UpdateAnimationInput) -> str:
         """Update an existing animation in a slide's main sequence.
 
-        Change the effect type, trigger, duration, or delay of an animation.
+        Change effect type, trigger, duration, delay, direction, exit flag,
+        repeat_count, auto_reverse, rewind, smooth_start, or smooth_end.
         Use move_to to reorder the animation within the sequence.
         Use ppt_list_animations first to find the correct animation index.
         """
