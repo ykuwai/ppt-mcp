@@ -28,7 +28,7 @@ from ppt_com.tables import (
     MergeTableCellsInput,
     SetTableBordersInput,
 )
-from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput
+from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput, SetPictureFormatInput
 from ppt_com.shapes import AddShapeInput, UpdateShapeInput
 from ppt_com.connectors import FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
@@ -1112,3 +1112,156 @@ class TestFormatConnectorInput:
                 slide_index=1, shape_name_or_index="c1",
                 end_site=3,
             )
+
+
+# ============================================================================
+# advanced_ops.py — SetPictureFormatInput
+# ============================================================================
+class TestSetPictureFormatInput:
+    """Tests for SetPictureFormatInput validators."""
+
+    def test_brightness_valid_zero(self):
+        """brightness=0.0 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", brightness=0.0,
+        )
+        assert inp.brightness == 0.0
+
+    def test_brightness_valid_half(self):
+        """brightness=0.5 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", brightness=0.5,
+        )
+        assert inp.brightness == 0.5
+
+    def test_brightness_valid_one(self):
+        """brightness=1.0 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", brightness=1.0,
+        )
+        assert inp.brightness == 1.0
+
+    def test_brightness_too_low(self):
+        """brightness=-0.1 is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", brightness=-0.1,
+            )
+
+    def test_brightness_too_high(self):
+        """brightness=1.1 is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", brightness=1.1,
+            )
+
+    def test_contrast_valid_zero(self):
+        """contrast=0.0 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", contrast=0.0,
+        )
+        assert inp.contrast == 0.0
+
+    def test_contrast_valid_one(self):
+        """contrast=1.0 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", contrast=1.0,
+        )
+        assert inp.contrast == 1.0
+
+    def test_contrast_too_low(self):
+        """contrast=-0.1 is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", contrast=-0.1,
+            )
+
+    def test_contrast_too_high(self):
+        """contrast=1.1 is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", contrast=1.1,
+            )
+
+    def test_color_type_automatic(self):
+        """color_type='automatic' is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", color_type="automatic",
+        )
+        assert inp.color_type == "automatic"
+
+    def test_color_type_grayscale(self):
+        """color_type='grayscale' is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", color_type="grayscale",
+        )
+        assert inp.color_type == "grayscale"
+
+    def test_color_type_black_and_white(self):
+        """color_type='black_and_white' is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", color_type="black_and_white",
+        )
+        assert inp.color_type == "black_and_white"
+
+    def test_color_type_watermark(self):
+        """color_type='watermark' is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", color_type="watermark",
+        )
+        assert inp.color_type == "watermark"
+
+    def test_color_type_invalid(self):
+        """Invalid color_type is rejected."""
+        with pytest.raises(ValidationError, match="Unknown color_type"):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", color_type="sepia",
+            )
+
+    def test_transparent_color_valid(self):
+        """Valid hex color for transparent_color is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic",
+            transparent_color="#FF0000",
+        )
+        assert inp.transparent_color == "#FF0000"
+
+    def test_transparent_background_true(self):
+        """transparent_background=True is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic",
+            transparent_background=True,
+        )
+        assert inp.transparent_background is True
+
+    def test_transparent_background_false(self):
+        """transparent_background=False is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic",
+            transparent_background=False,
+        )
+        assert inp.transparent_background is False
+
+    def test_no_params_rejected(self):
+        """No adjustment parameters raises ValidationError."""
+        with pytest.raises(ValidationError, match="At least one adjustment"):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic",
+            )
+
+    def test_multiple_params_valid(self):
+        """Multiple parameters together are accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic",
+            brightness=0.7, contrast=0.5, color_type="grayscale",
+        )
+        assert inp.brightness == 0.7
+        assert inp.contrast == 0.5
+        assert inp.color_type == "grayscale"
+
+    def test_shape_name_or_index_accepts_int(self):
+        """shape_name_or_index accepts an integer index."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index=3, brightness=0.5,
+        )
+        assert inp.shape_name_or_index == 3

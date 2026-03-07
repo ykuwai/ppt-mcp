@@ -750,3 +750,20 @@ SEGMENT_TYPE_MAP = {
 SEGMENT_TYPE_NAMES = {
     0: "line", 1: "curve",
 }
+
+# ==============================================================================
+# MsoPictureColorType
+# ==============================================================================
+msoPictureAutomatic = 1
+msoPictureGrayscale = 2
+msoPictureBlackAndWhite = 3
+msoPictureWatermark = 4
+
+PICTURE_COLOR_TYPE_MAP = {
+    "automatic": 1,
+    "grayscale": 2,
+    "black_and_white": 3,
+    "watermark": 4,
+}
+
+PICTURE_COLOR_TYPE_NAMES = {v: k for k, v in PICTURE_COLOR_TYPE_MAP.items()}
