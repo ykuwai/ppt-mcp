@@ -331,9 +331,11 @@ class SetPictureFormatInput(BaseModel):
     )
     transparent_color: Optional[str] = Field(
         default=None,
+        pattern=r"^#[0-9A-Fa-f]{6}$",
         description=(
             "Hex color like '#RRGGBB' to set as transparency key color. "
-            "Also enables transparent background automatically."
+            "Also enables transparent background automatically, "
+            "unless transparent_background=False is explicitly passed."
         ),
     )
     transparent_background: Optional[bool] = Field(

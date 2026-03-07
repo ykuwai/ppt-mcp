@@ -1226,6 +1226,30 @@ class TestSetPictureFormatInput:
         )
         assert inp.transparent_color == "#FF0000"
 
+    def test_transparent_color_invalid_no_hash(self):
+        """Hex color without '#' prefix is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic",
+                transparent_color="FF0000",
+            )
+
+    def test_transparent_color_invalid_hex_chars(self):
+        """Hex color with invalid characters is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic",
+                transparent_color="#GG0000",
+            )
+
+    def test_transparent_color_invalid_format(self):
+        """Non-hex string is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic",
+                transparent_color="notahex",
+            )
+
     def test_transparent_background_true(self):
         """transparent_background=True is accepted."""
         inp = SetPictureFormatInput(
