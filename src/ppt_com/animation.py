@@ -154,6 +154,13 @@ class AddAnimationInput(BaseModel):
         default=None,
         description="Decelerate at end of animation",
     )
+    trigger_shape: Optional[Union[str, int]] = Field(
+        default=None,
+        description=(
+            "Shape that triggers the animation when clicked (name or 1-based index). "
+            "Required when trigger='on_shape_click'. Creates an interactive sequence."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_exit_effect(self):
@@ -168,6 +175,14 @@ class AddAnimationInput(BaseModel):
             raise ValueError(
                 f"Unknown direction '{self.direction}'. "
                 f"Valid values: {', '.join(ANIM_DIRECTION_MAP.keys())}"
+            )
+        if self.trigger == "on_shape_click" and self.trigger_shape is None:
+            raise ValueError(
+                "trigger_shape is required when trigger='on_shape_click'"
+            )
+        if self.trigger != "on_shape_click" and self.trigger_shape is not None:
+            raise ValueError(
+                "trigger_shape can only be used with trigger='on_shape_click'"
             )
         return self
 
@@ -352,6 +367,7 @@ def _set_slide_transition_impl(
 def _add_animation_impl(
     slide_index, shape_name_or_index, effect, trigger, duration, delay, exit_flag,
     direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
+    trigger_shape,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -362,8 +378,27 @@ def _add_animation_impl(
     effect_int = ANIMATION_EFFECT_MAP.get(effect, effect) if isinstance(effect, str) else effect
     trigger_int = TRIGGER_MAP.get(trigger, 1)
 
-    # AddEffect uses positional args: Shape, effectId, level, trigger, index
-    effect_obj = slide.TimeLine.MainSequence.AddEffect(shape, effect_int, 0, trigger_int)
+    # Interactive sequence when trigger_shape is provided
+    if trigger_shape is not None:
+        trig_shape = _get_shape(slide, trigger_shape)
+        # Reuse existing sequence for the same trigger shape
+        int_seqs = slide.TimeLine.InteractiveSequences
+        seq = None
+        for i in range(1, int_seqs.Count + 1):
+            s = int_seqs(i)
+            try:
+                if s.Count > 0 and s(1).Timing.TriggerShape.Name == trig_shape.Name:
+                    seq = s
+                    break
+            except Exception:
+                continue
+        if seq is None:
+            seq = int_seqs.Add()
+        effect_obj = seq.AddEffect(shape, effect_int, 0, trigger_int)
+        effect_obj.Timing.TriggerShape = trig_shape
+    else:
+        # Main sequence (existing behavior)
+        effect_obj = slide.TimeLine.MainSequence.AddEffect(shape, effect_int, 0, trigger_int)
 
     if exit_flag:
         effect_obj.Exit = msoTrue
@@ -386,13 +421,23 @@ def _add_animation_impl(
     if smooth_end is not None:
         effect_obj.Timing.SmoothEnd = msoTrue if smooth_end else msoFalse
 
-    return {
+    result = {
         "success": True,
         "shape_name": shape.Name,
         "effect": effect_int,
         "exit": exit_flag,
         "animation_index": effect_obj.Index,
     }
+    if trigger_shape is not None:
+        # Find sequence_index for the interactive sequence
+        int_seqs = slide.TimeLine.InteractiveSequences
+        for i in range(1, int_seqs.Count + 1):
+            if int_seqs(i) is seq or (int_seqs(i).Count > 0 and int_seqs(i).Count == seq.Count):
+                result["sequence_index"] = i
+                break
+        result["effect_index"] = effect_obj.Index
+        result["trigger_shape_name"] = trig_shape.Name
+    return result
 
 
 def _get_animation_category(effect_type, exit_flag):
@@ -445,11 +490,59 @@ def _list_animations_impl(slide_index):
             "direction_name": direction_name,
         })
 
+    # Interactive sequences
+    interactive = []
+    int_seqs = slide.TimeLine.InteractiveSequences
+    for seq_idx in range(1, int_seqs.Count + 1):
+        int_seq = int_seqs(seq_idx)
+        for eff_idx in range(1, int_seq.Count + 1):
+            eff = int_seq(eff_idx)
+            effect_type = eff.EffectType
+            exit_flag = bool(eff.Exit)
+            category = _get_animation_category(effect_type, exit_flag)
+
+            try:
+                trigger_shape_name = eff.Timing.TriggerShape.Name
+            except Exception:
+                trigger_shape_name = None
+
+            try:
+                direction_val = eff.EffectParameters.Direction
+                direction_name = ANIM_DIRECTION_NAMES.get(
+                    direction_val, f"Unknown({direction_val})"
+                )
+            except Exception:
+                direction_val = None
+                direction_name = None
+
+            interactive.append({
+                "sequence_index": seq_idx,
+                "effect_index": eff_idx,
+                "shape_name": eff.Shape.Name,
+                "trigger_shape_name": trigger_shape_name,
+                "effect_type": effect_type,
+                "effect_name": ANIMATION_EFFECT_NAMES.get(
+                    effect_type, f"Unknown({effect_type})"
+                ),
+                "trigger_type": eff.Timing.TriggerType,
+                "trigger_name": ANIMATION_TRIGGER_NAMES.get(
+                    eff.Timing.TriggerType,
+                    f"Unknown({eff.Timing.TriggerType})",
+                ),
+                "duration": eff.Timing.Duration,
+                "exit": exit_flag,
+                "category": category,
+                "direction": direction_val,
+                "direction_name": direction_name,
+            })
+
     return {
         "success": True,
         "slide_index": slide_index,
-        "count": seq.Count,
+        "main_sequence_count": seq.Count,
         "animations": animations,
+        "interactive_sequences": interactive,
+        "interactive_count": len(interactive),
     }
 
 
@@ -486,6 +579,15 @@ def _clear_animations_impl(slide_index, clear_transitions):
     for i in range(seq.Count, 0, -1):
         seq(i).Delete()
 
+    # Clear interactive sequences
+    int_seqs = slide.TimeLine.InteractiveSequences
+    interactive_cleared = 0
+    for seq_idx in range(int_seqs.Count, 0, -1):
+        int_seq = int_seqs(seq_idx)
+        for eff_idx in range(int_seq.Count, 0, -1):
+            int_seq(eff_idx).Delete()
+            interactive_cleared += 1
+
     if clear_transitions:
         slide.SlideShowTransition.EntryEffect = 0  # ppEffectNone
 
@@ -493,6 +595,7 @@ def _clear_animations_impl(slide_index, clear_transitions):
         "success": True,
         "slide_index": slide_index,
         "cleared_count": cleared_count,
+        "interactive_cleared": interactive_cleared,
     }
 
 
@@ -607,6 +710,7 @@ def add_animation(params: AddAnimationInput) -> str:
             params.exit,
             params.direction, params.repeat_count, params.auto_reverse,
             params.rewind, params.smooth_start, params.smooth_end,
+            params.trigger_shape,
         )
         return json.dumps(result)
     except Exception as e:
@@ -740,6 +844,9 @@ def register_tools(mcp):
         - Motion path: 'path_circle', 'path_down', 'path_up', 'path_left', etc.
         Set trigger, duration, delay, direction, repeat_count, auto_reverse,
         rewind, smooth_start, and smooth_end.
+
+        For interactive sequences (click a shape to trigger animation on another),
+        set trigger='on_shape_click' and trigger_shape to the clickable shape.
         """
         return add_animation(params)
 
@@ -754,10 +861,11 @@ def register_tools(mcp):
         },
     )
     async def tool_list_animations(params: ListAnimationsInput) -> str:
-        """List all animations in the main sequence of a slide.
+        """List all animations on a slide (main sequence and interactive sequences).
 
         Returns each animation's index, target shape name, effect type,
-        trigger type, and duration.
+        trigger type, and duration. Interactive sequences include the
+        trigger shape name and sequence index.
         """
         return list_animations(params)
 
@@ -790,7 +898,7 @@ def register_tools(mcp):
         },
     )
     async def tool_clear_animations(params: ClearAnimationsInput) -> str:
-        """Clear all animations from a slide's main sequence.
+        """Clear all animations from a slide (main sequence and interactive sequences).
 
         Optionally also clears the slide transition effect by setting
         clear_transitions=true.

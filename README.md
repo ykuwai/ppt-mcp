@@ -131,7 +131,7 @@ uv sync
 | **Export** | 3 | PDF, images, slide preview |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
 | **Charts** | 6 | Add charts, set/get data, format, series, change type |
-| **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path) |
+| **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
 | **Themes** | 3 | Apply themes, get theme colors, headers/footers |
 | **Groups** | 3 | Group, ungroup, get group items |
 | **Connectors** | 2 | Add, format |

@@ -1497,3 +1497,28 @@ class TestAddAnimationInput:
         )
         assert inp.smooth_start is True
         assert inp.smooth_end is True
+
+    def test_trigger_shape_with_on_shape_click(self):
+        """trigger='on_shape_click' with trigger_shape is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            trigger="on_shape_click", trigger_shape="Button 1",
+        )
+        assert inp.trigger == "on_shape_click"
+        assert inp.trigger_shape == "Button 1"
+
+    def test_trigger_shape_without_on_shape_click_raises(self):
+        """trigger_shape without trigger='on_shape_click' is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                trigger="on_click", trigger_shape="Button 1",
+            )
+
+    def test_on_shape_click_without_trigger_shape_raises(self):
+        """trigger='on_shape_click' without trigger_shape is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                trigger="on_shape_click",
+            )
