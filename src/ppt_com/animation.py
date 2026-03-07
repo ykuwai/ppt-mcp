@@ -20,6 +20,7 @@ from ppt_com.constants import (
     msoAnimTriggerAfterPrevious,
     ppEffectNone, ppEffectFade, ppEffectPush, ppEffectWipe, ppEffectSplit,
     ANIMATION_EFFECT_NAMES, ANIMATION_TRIGGER_NAMES,
+    ANIM_DIRECTION_MAP, ANIM_DIRECTION_NAMES,
 )
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,34 @@ class AddAnimationInput(BaseModel):
         default=False,
         description="Set to true for exit animation (shape disappears). Only applies to entrance/exit effects (effectId 1-53).",
     )
+    direction: Optional[Union[str, int]] = Field(
+        default=None,
+        description=(
+            "Animation direction: 'up', 'down', 'left', 'right', 'in', 'out', "
+            "'horizontal', 'vertical', 'clockwise', 'counterclockwise', etc. "
+            "or MsoAnimDirection integer. Not all effects support all directions."
+        ),
+    )
+    repeat_count: Optional[int] = Field(
+        default=None, ge=0,
+        description="Number of times to repeat the animation (0 = no repeat)",
+    )
+    auto_reverse: Optional[bool] = Field(
+        default=None,
+        description="Play animation forward then in reverse",
+    )
+    rewind: Optional[bool] = Field(
+        default=None,
+        description="Return to starting position after animation ends",
+    )
+    smooth_start: Optional[bool] = Field(
+        default=None,
+        description="Accelerate at start of animation",
+    )
+    smooth_end: Optional[bool] = Field(
+        default=None,
+        description="Decelerate at end of animation",
+    )
 
     @model_validator(mode="after")
     def validate_exit_effect(self):
@@ -135,6 +164,11 @@ class AddAnimationInput(BaseModel):
                     f"exit=True is only valid for entrance/exit effects (effectId 1-53), "
                     f"got effectId {effect_int}"
                 )
+        if isinstance(self.direction, str) and self.direction not in ANIM_DIRECTION_MAP:
+            raise ValueError(
+                f"Unknown direction '{self.direction}'. "
+                f"Valid values: {', '.join(ANIM_DIRECTION_MAP.keys())}"
+            )
         return self
 
 
@@ -195,15 +229,46 @@ class UpdateAnimationInput(BaseModel):
         default=None,
         description="Change to exit animation (true) or entrance animation (false). Only for entrance/exit effects.",
     )
+    direction: Optional[Union[str, int]] = Field(
+        default=None,
+        description=(
+            "Animation direction: 'up', 'down', 'left', 'right', 'in', 'out', "
+            "'horizontal', 'vertical', 'clockwise', 'counterclockwise', etc. "
+            "or MsoAnimDirection integer. Not all effects support all directions."
+        ),
+    )
+    repeat_count: Optional[int] = Field(
+        default=None, ge=0,
+        description="Number of times to repeat the animation (0 = no repeat)",
+    )
+    auto_reverse: Optional[bool] = Field(
+        default=None,
+        description="Play animation forward then in reverse",
+    )
+    rewind: Optional[bool] = Field(
+        default=None,
+        description="Return to starting position after animation ends",
+    )
+    smooth_start: Optional[bool] = Field(
+        default=None,
+        description="Accelerate at start of animation",
+    )
+    smooth_end: Optional[bool] = Field(
+        default=None,
+        description="Decelerate at end of animation",
+    )
 
     @model_validator(mode="after")
     def validate_params(self):
         if all(
             v is None
-            for v in (self.effect, self.trigger, self.duration, self.delay, self.move_to, self.exit)
+            for v in (self.effect, self.trigger, self.duration, self.delay, self.move_to, self.exit,
+                      self.direction, self.repeat_count, self.auto_reverse, self.rewind,
+                      self.smooth_start, self.smooth_end)
         ):
             raise ValueError(
-                "At least one optional parameter (effect, trigger, duration, delay, move_to, exit) must be provided"
+                "At least one optional parameter (effect, trigger, duration, delay, move_to, exit, "
+                "direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end) must be provided"
             )
         if self.trigger is not None and self.trigger not in TRIGGER_MAP:
             raise ValueError(
@@ -214,6 +279,11 @@ class UpdateAnimationInput(BaseModel):
             raise ValueError(
                 f"Unknown effect '{self.effect}'. "
                 f"Valid values: {', '.join(ANIMATION_EFFECT_MAP.keys())}"
+            )
+        if isinstance(self.direction, str) and self.direction not in ANIM_DIRECTION_MAP:
+            raise ValueError(
+                f"Unknown direction '{self.direction}'. "
+                f"Valid values: {', '.join(ANIM_DIRECTION_MAP.keys())}"
             )
         return self
 
@@ -281,6 +351,7 @@ def _set_slide_transition_impl(
 
 def _add_animation_impl(
     slide_index, shape_name_or_index, effect, trigger, duration, delay, exit_flag,
+    direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -301,6 +372,19 @@ def _add_animation_impl(
         effect_obj.Timing.Duration = duration
     if delay is not None:
         effect_obj.Timing.TriggerDelayTime = delay
+    if direction is not None:
+        direction_int = ANIM_DIRECTION_MAP.get(direction, direction) if isinstance(direction, str) else direction
+        effect_obj.EffectParameters.Direction = direction_int
+    if repeat_count is not None:
+        effect_obj.Timing.RepeatCount = repeat_count
+    if auto_reverse is not None:
+        effect_obj.Timing.AutoReverse = msoTrue if auto_reverse else msoFalse
+    if rewind is not None:
+        effect_obj.Timing.RewindAtEnd = msoTrue if rewind else msoFalse
+    if smooth_start is not None:
+        effect_obj.Timing.SmoothStart = msoTrue if smooth_start else msoFalse
+    if smooth_end is not None:
+        effect_obj.Timing.SmoothEnd = msoTrue if smooth_end else msoFalse
 
     return {
         "success": True,
@@ -340,6 +424,13 @@ def _list_animations_impl(slide_index):
         exit_flag = bool(eff.Exit)
         category = _get_animation_category(effect_type, exit_flag)
 
+        try:
+            direction_val = eff.EffectParameters.Direction
+            direction_name = ANIM_DIRECTION_NAMES.get(direction_val, f"Unknown({direction_val})")
+        except Exception:
+            direction_val = None
+            direction_name = None
+
         animations.append({
             "index": eff.Index,
             "shape_name": eff.Shape.Name,
@@ -350,6 +441,8 @@ def _list_animations_impl(slide_index):
             "duration": eff.Timing.Duration,
             "exit": exit_flag,
             "category": category,
+            "direction": direction_val,
+            "direction_name": direction_name,
         })
 
     return {
@@ -405,6 +498,7 @@ def _clear_animations_impl(slide_index, clear_transitions):
 
 def _update_animation_impl(
     slide_index, animation_index, effect, trigger, duration, delay, move_to, exit_flag,
+    direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -432,6 +526,19 @@ def _update_animation_impl(
         eff.Timing.TriggerDelayTime = delay
     if exit_flag is not None:
         eff.Exit = msoTrue if exit_flag else msoFalse
+    if direction is not None:
+        direction_int = ANIM_DIRECTION_MAP.get(direction, direction) if isinstance(direction, str) else direction
+        eff.EffectParameters.Direction = direction_int
+    if repeat_count is not None:
+        eff.Timing.RepeatCount = repeat_count
+    if auto_reverse is not None:
+        eff.Timing.AutoReverse = msoTrue if auto_reverse else msoFalse
+    if rewind is not None:
+        eff.Timing.RewindAtEnd = msoTrue if rewind else msoFalse
+    if smooth_start is not None:
+        eff.Timing.SmoothStart = msoTrue if smooth_start else msoFalse
+    if smooth_end is not None:
+        eff.Timing.SmoothEnd = msoTrue if smooth_end else msoFalse
 
     # Reorder last (after property changes to avoid index confusion)
     if move_to is not None:
@@ -498,6 +605,8 @@ def add_animation(params: AddAnimationInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.effect, params.trigger, params.duration, params.delay,
             params.exit,
+            params.direction, params.repeat_count, params.auto_reverse,
+            params.rewind, params.smooth_start, params.smooth_end,
         )
         return json.dumps(result)
     except Exception as e:
@@ -576,6 +685,8 @@ def update_animation(params: UpdateAnimationInput) -> str:
             params.slide_index, params.animation_index,
             params.effect, params.trigger, params.duration,
             params.delay, params.move_to, params.exit,
+            params.direction, params.repeat_count, params.auto_reverse,
+            params.rewind, params.smooth_start, params.smooth_end,
         )
         return json.dumps(result)
     except Exception as e:
@@ -627,7 +738,8 @@ def register_tools(mcp):
         - Exit: same effects as entrance, but set exit=true
         - Emphasis: 'spin', 'transparency', 'grow_shrink', 'teeter', 'wave', etc.
         - Motion path: 'path_circle', 'path_down', 'path_up', 'path_left', etc.
-        Set trigger, duration, and delay.
+        Set trigger, duration, delay, direction, repeat_count, auto_reverse,
+        rewind, smooth_start, and smooth_end.
         """
         return add_animation(params)
 
@@ -698,7 +810,8 @@ def register_tools(mcp):
     async def tool_update_animation(params: UpdateAnimationInput) -> str:
         """Update an existing animation in a slide's main sequence.
 
-        Change the effect type, trigger, duration, or delay of an animation.
+        Change effect type, trigger, duration, delay, direction, exit flag,
+        repeat_count, auto_reverse, rewind, smooth_start, or smooth_end.
         Use move_to to reorder the animation within the sequence.
         Use ppt_list_animations first to find the correct animation index.
         """
