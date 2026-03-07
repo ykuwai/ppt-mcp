@@ -147,7 +147,7 @@ class UpdateAnimationInput(BaseModel):
     )
     trigger: Optional[str] = Field(
         default=None,
-        description="New trigger: 'on_click', 'with_previous', 'after_previous'",
+        description="New trigger: 'on_click', 'with_previous', 'after_previous', 'on_shape_click'",
     )
     duration: Optional[float] = Field(
         default=None, description="New duration in seconds"
@@ -619,7 +619,7 @@ def register_tools(mcp):
             "title": "Update Animation",
             "readOnlyHint": False,
             "destructiveHint": False,
-            "idempotentHint": True,
+            "idempotentHint": False,
             "openWorldHint": False,
         },
     )
