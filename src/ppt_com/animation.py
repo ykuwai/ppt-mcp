@@ -23,6 +23,7 @@ from ppt_com.constants import (
     ANIM_DIRECTION_MAP, ANIM_DIRECTION_NAMES,
     AFTER_EFFECT_MAP, AFTER_EFFECT_NAMES,
 )
+from utils.color import hex_to_int
 
 logger = logging.getLogger(__name__)
 
@@ -462,16 +463,11 @@ def _add_animation_impl(
     # After-effect (must be applied via sequence, not effect directly)
     if after_effect is not None:
         after_int = AFTER_EFFECT_MAP[after_effect]
-        if trigger_shape is not None:
-            # seq is already defined from the interactive sequence code above
-            pass
-        else:
-            seq = slide.TimeLine.MainSequence
+        after_seq = seq if trigger_shape is not None else slide.TimeLine.MainSequence
         if after_int == 1 and dim_color is not None:  # dim
-            from utils.color import hex_to_int
-            effect_obj = seq.ConvertToAfterEffect(effect_obj, after_int, hex_to_int(dim_color))
+            effect_obj = after_seq.ConvertToAfterEffect(effect_obj, after_int, hex_to_int(dim_color))
         else:
-            effect_obj = seq.ConvertToAfterEffect(effect_obj, after_int)
+            effect_obj = after_seq.ConvertToAfterEffect(effect_obj, after_int)
 
     result = {
         "success": True,
@@ -728,7 +724,6 @@ def _update_animation_impl(
     if after_effect is not None:
         after_int = AFTER_EFFECT_MAP[after_effect]
         if after_int == 1 and dim_color is not None:  # dim
-            from utils.color import hex_to_int
             eff = seq.ConvertToAfterEffect(eff, after_int, hex_to_int(dim_color))
         else:
             eff = seq.ConvertToAfterEffect(eff, after_int)
@@ -944,6 +939,8 @@ def register_tools(mcp):
         - Motion path: 'path_circle', 'path_down', 'path_up', 'path_left', etc.
         Set trigger, duration, delay, direction, repeat_count, auto_reverse,
         rewind, smooth_start, and smooth_end.
+        Set after_effect to 'hide', 'dim', 'hide_on_next_click', or 'none'
+        for post-animation behavior; use dim_color (hex) when dimming.
 
         For interactive sequences (click a shape to trigger animation on another),
         set trigger='on_shape_click' and trigger_shape to the clickable shape.
@@ -1020,6 +1017,8 @@ def register_tools(mcp):
 
         Change effect type, trigger, duration, delay, direction, exit flag,
         repeat_count, auto_reverse, rewind, smooth_start, or smooth_end.
+        Set after_effect to 'hide', 'dim', 'hide_on_next_click', or 'none';
+        use dim_color (hex) when dimming.
         Use move_to to reorder the animation within the sequence.
         Use ppt_list_animations first to find the correct animation index.
         """

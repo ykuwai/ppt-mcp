@@ -1531,6 +1531,22 @@ class TestAddAnimationInput:
         )
         assert inp.after_effect == "hide"
 
+    def test_after_effect_none(self):
+        """after_effect='none' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="none",
+        )
+        assert inp.after_effect == "none"
+
+    def test_after_effect_hide_on_next_click(self):
+        """after_effect='hide_on_next_click' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="hide_on_next_click",
+        )
+        assert inp.after_effect == "hide_on_next_click"
+
     def test_after_effect_dim_with_color(self):
         """after_effect='dim' with dim_color is accepted."""
         inp = AddAnimationInput(
@@ -1587,6 +1603,22 @@ class TestUpdateAnimationInputAfterEffect:
             after_effect="hide",
         )
         assert inp.after_effect == "hide"
+
+    def test_after_effect_none(self):
+        """after_effect='none' is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="none",
+        )
+        assert inp.after_effect == "none"
+
+    def test_after_effect_hide_on_next_click(self):
+        """after_effect='hide_on_next_click' is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="hide_on_next_click",
+        )
+        assert inp.after_effect == "hide_on_next_click"
 
     def test_after_effect_dim_with_color(self):
         """after_effect='dim' with dim_color is accepted."""
