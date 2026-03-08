@@ -28,8 +28,9 @@ from ppt_com.tables import (
     MergeTableCellsInput,
     SetTableBordersInput,
 )
-from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput
+from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput, SetPictureFormatInput
 from ppt_com.shapes import AddShapeInput, UpdateShapeInput
+from ppt_com.animation import AddAnimationInput, RemoveAnimationInput, UpdateAnimationInput
 from ppt_com.connectors import FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
@@ -1111,4 +1112,697 @@ class TestFormatConnectorInput:
             FormatConnectorInput(
                 slide_index=1, shape_name_or_index="c1",
                 end_site=3,
+            )
+
+
+# ============================================================================
+# advanced_ops.py — SetPictureFormatInput
+# ============================================================================
+class TestSetPictureFormatInput:
+    """Tests for SetPictureFormatInput validators."""
+
+    def test_brightness_valid_zero(self):
+        """brightness=0.0 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", brightness=0.0,
+        )
+        assert inp.brightness == 0.0
+
+    def test_brightness_valid_half(self):
+        """brightness=0.5 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", brightness=0.5,
+        )
+        assert inp.brightness == 0.5
+
+    def test_brightness_valid_one(self):
+        """brightness=1.0 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", brightness=1.0,
+        )
+        assert inp.brightness == 1.0
+
+    def test_brightness_too_low(self):
+        """brightness=-0.1 is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", brightness=-0.1,
+            )
+
+    def test_brightness_too_high(self):
+        """brightness=1.1 is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", brightness=1.1,
+            )
+
+    def test_contrast_valid_zero(self):
+        """contrast=0.0 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", contrast=0.0,
+        )
+        assert inp.contrast == 0.0
+
+    def test_contrast_valid_one(self):
+        """contrast=1.0 is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", contrast=1.0,
+        )
+        assert inp.contrast == 1.0
+
+    def test_contrast_too_low(self):
+        """contrast=-0.1 is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", contrast=-0.1,
+            )
+
+    def test_contrast_too_high(self):
+        """contrast=1.1 is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", contrast=1.1,
+            )
+
+    def test_color_type_automatic(self):
+        """color_type='automatic' is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", color_type="automatic",
+        )
+        assert inp.color_type == "automatic"
+
+    def test_color_type_grayscale(self):
+        """color_type='grayscale' is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", color_type="grayscale",
+        )
+        assert inp.color_type == "grayscale"
+
+    def test_color_type_black_and_white(self):
+        """color_type='black_and_white' is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", color_type="black_and_white",
+        )
+        assert inp.color_type == "black_and_white"
+
+    def test_color_type_watermark(self):
+        """color_type='watermark' is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic", color_type="watermark",
+        )
+        assert inp.color_type == "watermark"
+
+    def test_color_type_invalid(self):
+        """Invalid color_type is rejected."""
+        with pytest.raises(ValidationError, match="Unknown color_type"):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic", color_type="sepia",
+            )
+
+    def test_transparent_color_valid(self):
+        """Valid hex color for transparent_color is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic",
+            transparent_color="#FF0000",
+        )
+        assert inp.transparent_color == "#FF0000"
+
+    def test_transparent_color_invalid_no_hash(self):
+        """Hex color without '#' prefix is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic",
+                transparent_color="FF0000",
+            )
+
+    def test_transparent_color_invalid_hex_chars(self):
+        """Hex color with invalid characters is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic",
+                transparent_color="#GG0000",
+            )
+
+    def test_transparent_color_invalid_format(self):
+        """Non-hex string is rejected."""
+        with pytest.raises(ValidationError):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic",
+                transparent_color="notahex",
+            )
+
+    def test_transparent_background_true(self):
+        """transparent_background=True is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic",
+            transparent_background=True,
+        )
+        assert inp.transparent_background is True
+
+    def test_transparent_background_false(self):
+        """transparent_background=False is accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic",
+            transparent_background=False,
+        )
+        assert inp.transparent_background is False
+
+    def test_no_params_rejected(self):
+        """No adjustment parameters raises ValidationError."""
+        with pytest.raises(ValidationError, match="At least one adjustment"):
+            SetPictureFormatInput(
+                slide_index=1, shape_name_or_index="pic",
+            )
+
+    def test_multiple_params_valid(self):
+        """Multiple parameters together are accepted."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index="pic",
+            brightness=0.7, contrast=0.5, color_type="grayscale",
+        )
+        assert inp.brightness == 0.7
+        assert inp.contrast == 0.5
+        assert inp.color_type == "grayscale"
+
+    def test_shape_name_or_index_accepts_int(self):
+        """shape_name_or_index accepts an integer index."""
+        inp = SetPictureFormatInput(
+            slide_index=1, shape_name_or_index=3, brightness=0.5,
+        )
+        assert inp.shape_name_or_index == 3
+
+
+# ============================================================================
+# animation.py — UpdateAnimationInput
+# ============================================================================
+class TestUpdateAnimationInput:
+    """Tests for UpdateAnimationInput model validator."""
+
+    def test_valid_all_params(self):
+        """All optional params provided is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=2,
+            effect="fade", trigger="with_previous",
+            duration=1.5, delay=0.5, move_to=3,
+        )
+        assert inp.effect == "fade"
+        assert inp.trigger == "with_previous"
+        assert inp.duration == 1.5
+        assert inp.delay == 0.5
+        assert inp.move_to == 3
+
+    def test_valid_effect_only(self):
+        """Just effect change is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, effect="zoom",
+        )
+        assert inp.effect == "zoom"
+        assert inp.trigger is None
+
+    def test_valid_move_to_only(self):
+        """Just reorder is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, move_to=5,
+        )
+        assert inp.move_to == 5
+
+    def test_valid_duration_only(self):
+        """Just duration change is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, duration=2.0,
+        )
+        assert inp.duration == 2.0
+
+    def test_no_params_raises(self):
+        """No optional params raises ValidationError."""
+        with pytest.raises(ValidationError, match="At least one optional parameter"):
+            UpdateAnimationInput(slide_index=1, animation_index=1)
+
+    def test_invalid_trigger(self):
+        """Unknown trigger raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown trigger"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1, trigger="invalid_trigger",
+            )
+
+    def test_invalid_effect_string(self):
+        """Unknown effect name raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown effect"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1, effect="nonexistent_effect",
+            )
+
+    def test_valid_effect_integer(self):
+        """Effect as integer is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, effect=42,
+        )
+        assert inp.effect == 42
+
+    def test_move_to_zero_raises(self):
+        """move_to=0 raises ValidationError."""
+        with pytest.raises(ValidationError):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1, move_to=0,
+            )
+
+    def test_exit_only(self):
+        """exit=True alone is a valid update."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, exit=True,
+        )
+        assert inp.exit is True
+
+    def test_direction_only(self):
+        """direction alone is a valid update."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, direction="left",
+        )
+        assert inp.direction == "left"
+
+    def test_repeat_count_only(self):
+        """repeat_count alone is a valid update."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1, repeat_count=5,
+        )
+        assert inp.repeat_count == 5
+
+
+# ============================================================================
+# animation.py — AddAnimationInput
+# ============================================================================
+class TestAddAnimationInput:
+    """Tests for AddAnimationInput model."""
+
+    def test_exit_default_false(self):
+        """exit defaults to False."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+        )
+        assert inp.exit is False
+
+    def test_exit_true(self):
+        """exit=True is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            effect="fade", exit=True,
+        )
+        assert inp.exit is True
+
+    def test_exit_with_emphasis_raises(self):
+        """exit=True with emphasis effect is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                effect="teeter", exit=True,
+            )
+
+    def test_exit_with_motion_path_raises(self):
+        """exit=True with motion path effect is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                effect="path_circle", exit=True,
+            )
+
+    def test_emphasis_effect_accepted(self):
+        """Emphasis effect name is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index=1,
+            effect="teeter",
+        )
+        assert inp.effect == "teeter"
+
+    def test_motion_path_effect_accepted(self):
+        """Motion path effect name is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            effect="path_circle",
+        )
+        assert inp.effect == "path_circle"
+
+    def test_direction_string(self):
+        """Direction as friendly name string is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            effect="fly", direction="left",
+        )
+        assert inp.direction == "left"
+
+    def test_direction_invalid_string(self):
+        """Invalid direction string is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                effect="fly", direction="diagonal",
+            )
+
+    def test_direction_integer(self):
+        """Direction as MsoAnimDirection integer is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            effect="fly", direction=4,
+        )
+        assert inp.direction == 4
+
+    def test_repeat_count_valid(self):
+        """repeat_count with valid value is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            repeat_count=3,
+        )
+        assert inp.repeat_count == 3
+
+    def test_repeat_count_negative_raises(self):
+        """repeat_count with negative value is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                repeat_count=-1,
+            )
+
+    def test_auto_reverse_true(self):
+        """auto_reverse=True is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            auto_reverse=True,
+        )
+        assert inp.auto_reverse is True
+
+    def test_smooth_start_end(self):
+        """smooth_start and smooth_end are accepted together."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            smooth_start=True, smooth_end=True,
+        )
+        assert inp.smooth_start is True
+        assert inp.smooth_end is True
+
+    def test_trigger_shape_with_on_shape_click(self):
+        """trigger='on_shape_click' with trigger_shape is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            trigger="on_shape_click", trigger_shape="Button 1",
+        )
+        assert inp.trigger == "on_shape_click"
+        assert inp.trigger_shape == "Button 1"
+
+    def test_trigger_shape_without_on_shape_click_raises(self):
+        """trigger_shape without trigger='on_shape_click' is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                trigger="on_click", trigger_shape="Button 1",
+            )
+
+    def test_on_shape_click_without_trigger_shape_raises(self):
+        """trigger='on_shape_click' without trigger_shape is rejected."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                trigger="on_shape_click",
+            )
+
+    def test_after_effect_valid(self):
+        """after_effect='hide' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="hide",
+        )
+        assert inp.after_effect == "hide"
+
+    def test_after_effect_none(self):
+        """after_effect='none' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="none",
+        )
+        assert inp.after_effect == "none"
+
+    def test_after_effect_hide_on_next_click(self):
+        """after_effect='hide_on_next_click' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="hide_on_next_click",
+        )
+        assert inp.after_effect == "hide_on_next_click"
+
+    def test_after_effect_dim_with_color(self):
+        """after_effect='dim' with dim_color is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="dim", dim_color="#808080",
+        )
+        assert inp.after_effect == "dim"
+        assert inp.dim_color == "#808080"
+
+    def test_after_effect_dim_without_color(self):
+        """after_effect='dim' without dim_color is accepted (dim_color is optional)."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="dim",
+        )
+        assert inp.after_effect == "dim"
+        assert inp.dim_color is None
+
+    def test_after_effect_invalid(self):
+        """Invalid after_effect raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown after_effect"):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                after_effect="invalid",
+            )
+
+    def test_dim_color_without_dim(self):
+        """dim_color without after_effect='dim' raises ValidationError."""
+        with pytest.raises(ValidationError, match="dim_color can only be used"):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                after_effect="hide", dim_color="#808080",
+            )
+
+    def test_dim_color_invalid_format(self):
+        """dim_color with invalid format raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                after_effect="dim", dim_color="red",
+            )
+
+    def test_build_level_valid(self):
+        """build_level='first_level' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            build_level="first_level",
+        )
+        assert inp.build_level == "first_level"
+
+    def test_build_level_invalid(self):
+        """Invalid build_level raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown build_level"):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                build_level="invalid",
+            )
+
+    def test_text_unit_effect_valid(self):
+        """text_unit_effect='by_word' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            text_unit_effect="by_word",
+        )
+        assert inp.text_unit_effect == "by_word"
+
+    def test_text_unit_effect_invalid(self):
+        """Invalid text_unit_effect raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown text_unit_effect"):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                text_unit_effect="invalid",
+            )
+
+    def test_animate_in_reverse(self):
+        """animate_in_reverse=True is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            animate_in_reverse=True,
+        )
+        assert inp.animate_in_reverse is True
+
+    def test_animate_background(self):
+        """animate_background=False is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            animate_background=False,
+        )
+        assert inp.animate_background is False
+
+
+# ============================================================================
+# animation.py — UpdateAnimationInput (after_effect)
+# ============================================================================
+class TestUpdateAnimationInputAfterEffect:
+    """Tests for UpdateAnimationInput after_effect fields."""
+
+    def test_after_effect_valid(self):
+        """after_effect='hide' is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="hide",
+        )
+        assert inp.after_effect == "hide"
+
+    def test_after_effect_none(self):
+        """after_effect='none' is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="none",
+        )
+        assert inp.after_effect == "none"
+
+    def test_after_effect_hide_on_next_click(self):
+        """after_effect='hide_on_next_click' is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="hide_on_next_click",
+        )
+        assert inp.after_effect == "hide_on_next_click"
+
+    def test_after_effect_dim_with_color(self):
+        """after_effect='dim' with dim_color is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="dim", dim_color="#808080",
+        )
+        assert inp.after_effect == "dim"
+        assert inp.dim_color == "#808080"
+
+    def test_after_effect_dim_without_color(self):
+        """after_effect='dim' without dim_color is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="dim",
+        )
+        assert inp.after_effect == "dim"
+        assert inp.dim_color is None
+
+    def test_after_effect_invalid(self):
+        """Invalid after_effect raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown after_effect"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                after_effect="invalid",
+            )
+
+    def test_dim_color_without_dim(self):
+        """dim_color without after_effect='dim' raises ValidationError."""
+        with pytest.raises(ValidationError, match="dim_color can only be used"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                after_effect="hide", dim_color="#808080",
+            )
+
+    def test_dim_color_invalid_format(self):
+        """dim_color with invalid format raises ValidationError."""
+        with pytest.raises(ValidationError):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                after_effect="dim", dim_color="red",
+            )
+
+    def test_build_level_valid(self):
+        """build_level='first_level' is accepted as sole update param."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            build_level="first_level",
+        )
+        assert inp.build_level == "first_level"
+
+    def test_build_level_invalid(self):
+        """Invalid build_level raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown build_level"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                build_level="invalid",
+            )
+
+    def test_text_unit_effect_valid(self):
+        """text_unit_effect='by_character' is accepted as sole update param."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            text_unit_effect="by_character",
+        )
+        assert inp.text_unit_effect == "by_character"
+
+    def test_text_unit_effect_invalid(self):
+        """Invalid text_unit_effect raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown text_unit_effect"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                text_unit_effect="invalid",
+            )
+
+    def test_animate_in_reverse_valid(self):
+        """animate_in_reverse=True is accepted as sole update param."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            animate_in_reverse=True,
+        )
+        assert inp.animate_in_reverse is True
+
+    def test_animate_background_valid(self):
+        """animate_background=True is accepted as sole update param."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            animate_background=True,
+        )
+        assert inp.animate_background is True
+
+
+# ============================================================================
+# animation.py — RemoveAnimationInput (sequence_index)
+# ============================================================================
+class TestRemoveAnimationInputSequenceIndex:
+    """Tests for RemoveAnimationInput sequence_index field."""
+
+    def test_sequence_index_valid(self):
+        """sequence_index=1 is accepted."""
+        inp = RemoveAnimationInput(
+            slide_index=1, animation_index=1, sequence_index=1,
+        )
+        assert inp.sequence_index == 1
+
+    def test_sequence_index_zero(self):
+        """sequence_index=0 raises ValidationError (ge=1)."""
+        with pytest.raises(ValidationError):
+            RemoveAnimationInput(
+                slide_index=1, animation_index=1, sequence_index=0,
+            )
+
+    def test_sequence_index_default_none(self):
+        """Omitting sequence_index defaults to None (main sequence)."""
+        inp = RemoveAnimationInput(slide_index=1, animation_index=1)
+        assert inp.sequence_index is None
+
+
+# ============================================================================
+# animation.py — UpdateAnimationInput (sequence_index)
+# ============================================================================
+class TestUpdateAnimationInputSequenceIndex:
+    """Tests for UpdateAnimationInput sequence_index field."""
+
+    def test_sequence_index_valid(self):
+        """sequence_index=1 with a change param is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            sequence_index=1, duration=1.0,
+        )
+        assert inp.sequence_index == 1
+        assert inp.duration == 1.0
+
+    def test_sequence_index_alone_raises(self):
+        """sequence_index alone (no change param) raises ValidationError."""
+        with pytest.raises(ValidationError, match="At least one optional parameter"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1, sequence_index=1,
             )

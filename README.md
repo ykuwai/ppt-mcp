@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 148 tools for AI agents and developers.</strong>
+  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 150 tools for AI agents and developers.</strong>
 </p>
 
 ---
@@ -24,7 +24,7 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
-- **148 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
+- **150 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
@@ -131,7 +131,7 @@ uv sync
 | **Export** | 3 | PDF, images, slide preview |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
 | **Charts** | 6 | Add charts, set/get data, format, series, change type |
-| **Animation** | 5 | Transitions, add/list/remove/clear animations |
+| **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
 | **Themes** | 3 | Apply themes, get theme colors, headers/footers |
 | **Groups** | 3 | Group, ungroup, get group items |
 | **Connectors** | 2 | Add, format |
@@ -144,9 +144,9 @@ uv sync
 | **Layout** | 7 | Align, distribute, slide size, background, flip, merge shapes |
 | **Effects** | 3 | Glow, reflection, soft edge |
 | **Comments** | 3 | Add, list, delete |
-| **Advanced** | 18 | Tags, fonts (set defaults + bulk replace), crop, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
+| **Advanced** | 19 | Tags, fonts (set defaults + bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
-| | **148** | |
+| | **150** | |
 
 ## 💡 Example Prompts
 

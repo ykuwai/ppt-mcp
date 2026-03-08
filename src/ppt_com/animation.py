@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
@@ -20,7 +20,12 @@ from ppt_com.constants import (
     msoAnimTriggerAfterPrevious,
     ppEffectNone, ppEffectFade, ppEffectPush, ppEffectWipe, ppEffectSplit,
     ANIMATION_EFFECT_NAMES, ANIMATION_TRIGGER_NAMES,
+    ANIM_DIRECTION_MAP, ANIM_DIRECTION_NAMES,
+    AFTER_EFFECT_MAP, AFTER_EFFECT_NAMES,
+    BUILD_LEVEL_MAP, BUILD_LEVEL_NAMES,
+    TEXT_UNIT_EFFECT_MAP, TEXT_UNIT_EFFECT_NAMES,
 )
+from utils.color import hex_to_int
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +33,26 @@ logger = logging.getLogger(__name__)
 # Friendly name maps
 # ---------------------------------------------------------------------------
 ANIMATION_EFFECT_MAP: dict[str, int] = {
+    # Entrance effects (1-53)
     "appear": 1, "fly": 2, "blinds": 3, "box": 4,
     "checkerboard": 5, "circle": 6, "diamond": 8,
     "dissolve": 9, "fade": 10, "split": 16, "wipe": 22,
-    "zoom": 23, "bounce": 26, "float": 56,
-    "grow_and_turn": 57, "spin": 61, "transparency": 62,
+    "zoom": 23, "bounce": 26, "float": 30, "grow_and_turn": 31,
+    # Emphasis effects (54-82)
+    "change_fill_color": 54, "change_font": 55, "change_font_color": 56,
+    "change_font_size": 57, "grow_shrink": 59, "spin": 61, "transparency": 62,
+    "bold_flash": 63, "color_wave": 69, "darken": 73, "desaturate": 74,
+    "flash_bulb": 75, "lighten": 78, "teeter": 80, "wave": 82,
+    # Motion path effects (86-149)
+    "path_circle": 86, "path_diamond": 88, "path_star": 90,
+    "path_square": 92, "path_heart": 94, "path_loop": 109,
+    "path_left": 120, "path_arc_down": 122, "path_zigzag": 123,
+    "path_sine_wave": 125, "path_bounce_left": 126, "path_down": 127,
+    "path_arc_up": 129, "path_spiral_right": 131, "path_wave": 132,
+    "path_diagonal_down_right": 134, "path_arc_left": 136,
+    "path_funnel": 137, "path_spring": 138, "path_bounce_right": 139,
+    "path_diagonal_up_right": 141, "path_arc_right": 143,
+    "path_up": 148, "path_right": 149,
 }
 
 TRIGGER_MAP: dict[str, int] = {
@@ -87,8 +107,10 @@ class AddAnimationInput(BaseModel):
     effect: Union[int, str] = Field(
         default="appear",
         description=(
-            "Animation effect: friendly name ('appear', 'fade', 'fly', 'wipe', "
-            "'zoom', 'bounce', 'spin', etc.) or MsoAnimEffect integer"
+            "Animation effect: friendly name or MsoAnimEffect integer. "
+            "Entrance: 'appear', 'fade', 'fly', 'wipe', 'zoom', 'bounce', 'float', etc. "
+            "Emphasis: 'spin', 'transparency', 'grow_shrink', 'teeter', 'wave', etc. "
+            "Motion path: 'path_circle', 'path_down', 'path_up', 'path_left', etc."
         ),
     )
     trigger: str = Field(
@@ -104,6 +126,117 @@ class AddAnimationInput(BaseModel):
     delay: Optional[float] = Field(
         default=None, description="Delay before animation starts in seconds"
     )
+    exit: bool = Field(
+        default=False,
+        description="Set to true for exit animation (shape disappears). Only applies to entrance/exit effects (effectId 1-53).",
+    )
+    direction: Optional[Union[str, int]] = Field(
+        default=None,
+        description=(
+            "Animation direction: 'up', 'down', 'left', 'right', 'in', 'out', "
+            "'horizontal', 'vertical', 'clockwise', 'counterclockwise', etc. "
+            "or MsoAnimDirection integer. Not all effects support all directions."
+        ),
+    )
+    repeat_count: Optional[int] = Field(
+        default=None, ge=0,
+        description="Number of times to repeat the animation (0 = no repeat)",
+    )
+    auto_reverse: Optional[bool] = Field(
+        default=None,
+        description="Play animation forward then in reverse",
+    )
+    rewind: Optional[bool] = Field(
+        default=None,
+        description="Return to starting position after animation ends",
+    )
+    smooth_start: Optional[bool] = Field(
+        default=None,
+        description="Accelerate at start of animation",
+    )
+    smooth_end: Optional[bool] = Field(
+        default=None,
+        description="Decelerate at end of animation",
+    )
+    trigger_shape: Optional[Union[str, int]] = Field(
+        default=None,
+        description=(
+            "Shape that triggers the animation when clicked (name or 1-based index). "
+            "Required when trigger='on_shape_click'. Creates an interactive sequence."
+        ),
+    )
+    after_effect: Optional[str] = Field(
+        default=None,
+        description="After-animation behavior: 'none', 'dim', 'hide', 'hide_on_next_click'",
+    )
+    dim_color: Optional[str] = Field(
+        default=None,
+        description="Hex color to dim to (e.g. '#808080'). Only used with after_effect='dim'.",
+        pattern=r"^#[0-9a-fA-F]{6}$",
+    )
+    build_level: Optional[str] = Field(
+        default=None,
+        description=(
+            "Text build level: 'none' (as one unit), 'all_levels', "
+            "'first_level' (by 1st level paragraphs), 'second_level', etc. "
+            "Creates separate animations for each paragraph."
+        ),
+    )
+    text_unit_effect: Optional[str] = Field(
+        default=None,
+        description="Text unit: 'by_paragraph' (default), 'by_character', 'by_word'.",
+    )
+    animate_in_reverse: Optional[bool] = Field(
+        default=None,
+        description="Animate paragraphs in reverse order.",
+    )
+    animate_background: Optional[bool] = Field(
+        default=None,
+        description="Animate shape background separately from text.",
+    )
+
+    @model_validator(mode="after")
+    def validate_exit_effect(self):
+        if self.exit:
+            effect_int = ANIMATION_EFFECT_MAP.get(self.effect, self.effect) if isinstance(self.effect, str) else self.effect
+            if isinstance(effect_int, int) and effect_int > 53:
+                raise ValueError(
+                    f"exit=True is only valid for entrance/exit effects (effectId 1-53), "
+                    f"got effectId {effect_int}"
+                )
+        if isinstance(self.direction, str) and self.direction not in ANIM_DIRECTION_MAP:
+            raise ValueError(
+                f"Unknown direction '{self.direction}'. "
+                f"Valid values: {', '.join(ANIM_DIRECTION_MAP.keys())}"
+            )
+        if self.trigger == "on_shape_click" and self.trigger_shape is None:
+            raise ValueError(
+                "trigger_shape is required when trigger='on_shape_click'"
+            )
+        if self.trigger != "on_shape_click" and self.trigger_shape is not None:
+            raise ValueError(
+                "trigger_shape can only be used with trigger='on_shape_click'"
+            )
+        if self.after_effect is not None and self.after_effect not in AFTER_EFFECT_MAP:
+            raise ValueError(
+                f"Unknown after_effect '{self.after_effect}'. "
+                f"Valid values: {', '.join(AFTER_EFFECT_MAP.keys())}"
+            )
+        if self.dim_color is not None and self.after_effect != "dim":
+            raise ValueError(
+                "dim_color can only be used with after_effect='dim'"
+            )
+        if self.build_level is not None and self.build_level not in BUILD_LEVEL_MAP:
+            raise ValueError(
+                f"Unknown build_level '{self.build_level}'. "
+                f"Valid values: {', '.join(BUILD_LEVEL_MAP.keys())}"
+            )
+        if self.text_unit_effect is not None and self.text_unit_effect not in TEXT_UNIT_EFFECT_MAP:
+            raise ValueError(
+                f"Unknown text_unit_effect '{self.text_unit_effect}'. "
+                f"Valid values: {', '.join(TEXT_UNIT_EFFECT_MAP.keys())}"
+            )
+        return self
 
 
 class ListAnimationsInput(BaseModel):
@@ -118,7 +251,14 @@ class RemoveAnimationInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
-    animation_index: int = Field(..., ge=1, description="1-based animation index in the main sequence")
+    animation_index: int = Field(
+        ..., ge=1,
+        description="1-based animation index (effect_index) within the sequence. Works for both main and interactive sequences.",
+    )
+    sequence_index: Optional[int] = Field(
+        default=None, ge=1,
+        description="Interactive sequence index (1-based). If omitted, operates on main sequence. Use ppt_list_animations to find sequence_index.",
+    )
 
 
 class ClearAnimationsInput(BaseModel):
@@ -130,6 +270,155 @@ class ClearAnimationsInput(BaseModel):
         default=False,
         description="Also clear the slide transition effect",
     )
+
+
+class UpdateAnimationInput(BaseModel):
+    """Input for updating an existing animation in the main or interactive sequence."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    animation_index: int = Field(
+        ..., ge=1,
+        description="1-based animation index (effect_index) within the sequence. Works for both main and interactive sequences.",
+    )
+    sequence_index: Optional[int] = Field(
+        default=None, ge=1,
+        description="Interactive sequence index (1-based). If omitted, operates on main sequence. Use ppt_list_animations to find sequence_index.",
+    )
+    effect: Optional[Union[int, str]] = Field(
+        default=None,
+        description=(
+            "New animation effect: friendly name or MsoAnimEffect integer. "
+            "Entrance: 'appear', 'fade', 'fly', etc. Emphasis: 'spin', 'teeter', etc. "
+            "Motion path: 'path_circle', 'path_down', etc."
+        ),
+    )
+    trigger: Optional[str] = Field(
+        default=None,
+        description="New trigger: 'on_click', 'with_previous', 'after_previous', 'on_shape_click'",
+    )
+    duration: Optional[float] = Field(
+        default=None, description="New duration in seconds"
+    )
+    delay: Optional[float] = Field(
+        default=None, description="New delay before animation starts in seconds"
+    )
+    move_to: Optional[int] = Field(
+        default=None, ge=1, description="Move animation to this 1-based position in the sequence"
+    )
+    exit: Optional[bool] = Field(
+        default=None,
+        description="Change to exit animation (true) or entrance animation (false). Only for entrance/exit effects.",
+    )
+    direction: Optional[Union[str, int]] = Field(
+        default=None,
+        description=(
+            "Animation direction: 'up', 'down', 'left', 'right', 'in', 'out', "
+            "'horizontal', 'vertical', 'clockwise', 'counterclockwise', etc. "
+            "or MsoAnimDirection integer. Not all effects support all directions."
+        ),
+    )
+    repeat_count: Optional[int] = Field(
+        default=None, ge=0,
+        description="Number of times to repeat the animation (0 = no repeat)",
+    )
+    auto_reverse: Optional[bool] = Field(
+        default=None,
+        description="Play animation forward then in reverse",
+    )
+    rewind: Optional[bool] = Field(
+        default=None,
+        description="Return to starting position after animation ends",
+    )
+    smooth_start: Optional[bool] = Field(
+        default=None,
+        description="Accelerate at start of animation",
+    )
+    smooth_end: Optional[bool] = Field(
+        default=None,
+        description="Decelerate at end of animation",
+    )
+    after_effect: Optional[str] = Field(
+        default=None,
+        description="After-animation behavior: 'none', 'dim', 'hide', 'hide_on_next_click'",
+    )
+    dim_color: Optional[str] = Field(
+        default=None,
+        description="Hex color to dim to (e.g. '#808080'). Only used with after_effect='dim'.",
+        pattern=r"^#[0-9a-fA-F]{6}$",
+    )
+    build_level: Optional[str] = Field(
+        default=None,
+        description=(
+            "Text build level: 'none' (as one unit), 'all_levels', "
+            "'first_level' (by 1st level paragraphs), 'second_level', etc. "
+            "Creates separate animations for each paragraph."
+        ),
+    )
+    text_unit_effect: Optional[str] = Field(
+        default=None,
+        description="Text unit: 'by_paragraph' (default), 'by_character', 'by_word'.",
+    )
+    animate_in_reverse: Optional[bool] = Field(
+        default=None,
+        description="Animate paragraphs in reverse order.",
+    )
+    animate_background: Optional[bool] = Field(
+        default=None,
+        description="Animate shape background separately from text.",
+    )
+
+    @model_validator(mode="after")
+    def validate_params(self):
+        if all(
+            v is None
+            for v in (self.effect, self.trigger, self.duration, self.delay, self.move_to, self.exit,
+                      self.direction, self.repeat_count, self.auto_reverse, self.rewind,
+                      self.smooth_start, self.smooth_end, self.after_effect, self.dim_color,
+                      self.build_level, self.text_unit_effect, self.animate_in_reverse,
+                      self.animate_background)
+        ):
+            raise ValueError(
+                "At least one optional parameter (effect, trigger, duration, delay, move_to, exit, "
+                "direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end, "
+                "after_effect, dim_color, build_level, text_unit_effect, animate_in_reverse, "
+                "animate_background) must be provided"
+            )
+        if self.trigger is not None and self.trigger not in TRIGGER_MAP:
+            raise ValueError(
+                f"Unknown trigger '{self.trigger}'. "
+                f"Valid values: {', '.join(TRIGGER_MAP.keys())}"
+            )
+        if isinstance(self.effect, str) and self.effect not in ANIMATION_EFFECT_MAP:
+            raise ValueError(
+                f"Unknown effect '{self.effect}'. "
+                f"Valid values: {', '.join(ANIMATION_EFFECT_MAP.keys())}"
+            )
+        if isinstance(self.direction, str) and self.direction not in ANIM_DIRECTION_MAP:
+            raise ValueError(
+                f"Unknown direction '{self.direction}'. "
+                f"Valid values: {', '.join(ANIM_DIRECTION_MAP.keys())}"
+            )
+        if self.after_effect is not None and self.after_effect not in AFTER_EFFECT_MAP:
+            raise ValueError(
+                f"Unknown after_effect '{self.after_effect}'. "
+                f"Valid values: {', '.join(AFTER_EFFECT_MAP.keys())}"
+            )
+        if self.dim_color is not None and self.after_effect != "dim":
+            raise ValueError(
+                "dim_color can only be used with after_effect='dim'"
+            )
+        if self.build_level is not None and self.build_level not in BUILD_LEVEL_MAP:
+            raise ValueError(
+                f"Unknown build_level '{self.build_level}'. "
+                f"Valid values: {', '.join(BUILD_LEVEL_MAP.keys())}"
+            )
+        if self.text_unit_effect is not None and self.text_unit_effect not in TEXT_UNIT_EFFECT_MAP:
+            raise ValueError(
+                f"Unknown text_unit_effect '{self.text_unit_effect}'. "
+                f"Valid values: {', '.join(TEXT_UNIT_EFFECT_MAP.keys())}"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +483,10 @@ def _set_slide_transition_impl(
 
 
 def _add_animation_impl(
-    slide_index, shape_name_or_index, effect, trigger, duration, delay,
+    slide_index, shape_name_or_index, effect, trigger, duration, delay, exit_flag,
+    direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
+    trigger_shape, after_effect, dim_color,
+    build_level, text_unit_effect, animate_in_reverse, animate_background,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -204,21 +496,185 @@ def _add_animation_impl(
 
     effect_int = ANIMATION_EFFECT_MAP.get(effect, effect) if isinstance(effect, str) else effect
     trigger_int = TRIGGER_MAP.get(trigger, 1)
+    build_level_int = BUILD_LEVEL_MAP.get(build_level, 0) if build_level else 0
 
-    # AddEffect uses positional args: Shape, effectId, level, trigger, index
-    effect_obj = slide.TimeLine.MainSequence.AddEffect(shape, effect_int, 0, trigger_int)
+    # Interactive sequence when trigger_shape is provided
+    if trigger_shape is not None:
+        trig_shape = _get_shape(slide, trigger_shape)
+        # Reuse existing sequence for the same trigger shape
+        int_seqs = slide.TimeLine.InteractiveSequences
+        the_seq = None
+        for i in range(1, int_seqs.Count + 1):
+            s = int_seqs(i)
+            try:
+                if s.Count > 0 and s(1).Timing.TriggerShape.Name == trig_shape.Name:
+                    the_seq = s
+                    break
+            except Exception:
+                continue
+        if the_seq is None:
+            the_seq = int_seqs.Add()
+        effect_obj = the_seq.AddEffect(shape, effect_int, build_level_int, trigger_int)
+        effect_obj.Timing.TriggerShape = trig_shape
+    else:
+        # Main sequence (existing behavior)
+        the_seq = slide.TimeLine.MainSequence
+        effect_obj = the_seq.AddEffect(shape, effect_int, build_level_int, trigger_int)
+
+    if exit_flag:
+        effect_obj.Exit = msoTrue
 
     if duration is not None:
         effect_obj.Timing.Duration = duration
     if delay is not None:
         effect_obj.Timing.TriggerDelayTime = delay
+    if direction is not None:
+        direction_int = ANIM_DIRECTION_MAP.get(direction, direction) if isinstance(direction, str) else direction
+        effect_obj.EffectParameters.Direction = direction_int
+    if repeat_count is not None:
+        effect_obj.Timing.RepeatCount = repeat_count
+    if auto_reverse is not None:
+        effect_obj.Timing.AutoReverse = msoTrue if auto_reverse else msoFalse
+    if rewind is not None:
+        effect_obj.Timing.RewindAtEnd = msoTrue if rewind else msoFalse
+    if smooth_start is not None:
+        effect_obj.Timing.SmoothStart = msoTrue if smooth_start else msoFalse
+    if smooth_end is not None:
+        effect_obj.Timing.SmoothEnd = msoTrue if smooth_end else msoFalse
 
-    return {
+    # Text animation settings (applied via sequence, before after_effect)
+    # NOTE: ConvertTo* methods may invalidate the effect_obj reference when
+    # build_level creates multiple effects. Use _safe_refetch to recover.
+    def _safe_refetch():
+        """Re-fetch the first effect for this shape if effect_obj is stale."""
+        refetched = the_seq.FindFirstAnimationFor(shape)
+        if refetched is None:
+            raise RuntimeError("Could not find animation for shape after ConvertTo operation")
+        return refetched
+
+    if text_unit_effect is not None:
+        text_unit_int = TEXT_UNIT_EFFECT_MAP[text_unit_effect]
+        try:
+            effect_obj = the_seq.ConvertToTextUnitEffect(effect_obj, text_unit_int)
+        except Exception:
+            effect_obj = _safe_refetch()
+            effect_obj = the_seq.ConvertToTextUnitEffect(effect_obj, text_unit_int)
+    if animate_in_reverse is not None:
+        try:
+            effect_obj = the_seq.ConvertToAnimateInReverse(
+                effect_obj, msoTrue if animate_in_reverse else msoFalse,
+            )
+        except Exception:
+            effect_obj = _safe_refetch()
+            effect_obj = the_seq.ConvertToAnimateInReverse(
+                effect_obj, msoTrue if animate_in_reverse else msoFalse,
+            )
+    # When build_level is set, default animate_background to False so
+    # text paragraphs animate separately from the shape background.
+    effective_bg = animate_background
+    if effective_bg is None and build_level is not None and build_level != "none":
+        effective_bg = False
+    if effective_bg is not None:
+        try:
+            effect_obj = the_seq.ConvertToAnimateBackground(
+                effect_obj, msoTrue if effective_bg else msoFalse,
+            )
+        except Exception:
+            effect_obj = _safe_refetch()
+            effect_obj = the_seq.ConvertToAnimateBackground(
+                effect_obj, msoTrue if effective_bg else msoFalse,
+            )
+
+    # After-effect (must be applied via sequence, not effect directly)
+    if after_effect is not None:
+        after_int = AFTER_EFFECT_MAP[after_effect]
+        try:
+            if after_int == 1 and dim_color is not None:  # dim
+                effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int, hex_to_int(dim_color))
+            else:
+                effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int)
+        except Exception:
+            effect_obj = _safe_refetch()
+            if after_int == 1 and dim_color is not None:
+                effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int, hex_to_int(dim_color))
+            else:
+                effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int)
+
+    # Safely get final effect reference for result
+    try:
+        anim_index = effect_obj.Index
+    except Exception:
+        effect_obj = _safe_refetch()
+        anim_index = effect_obj.Index if effect_obj else 0
+
+    result = {
         "success": True,
         "shape_name": shape.Name,
         "effect": effect_int,
-        "animation_index": effect_obj.Index,
+        "exit": exit_flag,
+        "animation_index": anim_index,
     }
+
+    # Read back after-effect state
+    try:
+        after_effect_val = effect_obj.EffectInformation.AfterEffect
+        result["after_effect"] = AFTER_EFFECT_NAMES.get(after_effect_val, str(after_effect_val))
+    except Exception:
+        pass
+
+    if trigger_shape is not None:
+        # Find sequence_index for the interactive sequence
+        int_seqs = slide.TimeLine.InteractiveSequences
+        for i in range(1, int_seqs.Count + 1):
+            if int_seqs(i) is the_seq or (int_seqs(i).Count > 0 and int_seqs(i).Count == the_seq.Count):
+                result["sequence_index"] = i
+                break
+        result["effect_index"] = effect_obj.Index
+        result["trigger_shape_name"] = trig_shape.Name
+    return result
+
+
+def _get_animation_category(effect_type, exit_flag):
+    """Determine animation category from effectId and exit flag."""
+    if exit_flag:
+        return "exit"
+    if 54 <= effect_type <= 82:
+        return "emphasis"
+    if 83 <= effect_type <= 85:
+        return "media"
+    if 86 <= effect_type <= 149:
+        return "motion_path"
+    if 1 <= effect_type <= 53:
+        return "entrance"
+    return "unknown"
+
+
+def _read_text_anim_info(eff) -> dict:
+    """Read text animation info from an effect's EffectInformation."""
+    info = {}
+    try:
+        val = eff.EffectInformation.BuildByLevelEffect
+        info["build_level"] = int(val)
+        info["build_level_name"] = BUILD_LEVEL_NAMES.get(val, f"Unknown({val})")
+    except Exception:
+        info["build_level"] = None
+        info["build_level_name"] = None
+    try:
+        val = eff.EffectInformation.TextUnitEffect
+        info["text_unit_effect"] = int(val)
+        info["text_unit_effect_name"] = TEXT_UNIT_EFFECT_NAMES.get(val, f"Unknown({val})")
+    except Exception:
+        info["text_unit_effect"] = None
+        info["text_unit_effect_name"] = None
+    try:
+        info["animate_in_reverse"] = bool(eff.EffectInformation.AnimateTextInReverse)
+    except Exception:
+        info["animate_in_reverse"] = None
+    try:
+        info["animate_background"] = bool(eff.EffectInformation.AnimateBackground)
+    except Exception:
+        info["animate_background"] = None
+    return info
 
 
 def _list_animations_impl(slide_index):
@@ -232,7 +688,24 @@ def _list_animations_impl(slide_index):
         eff = seq(i)
         effect_type = eff.EffectType
         trigger_type = eff.Timing.TriggerType
-        animations.append({
+        exit_flag = bool(eff.Exit)
+        category = _get_animation_category(effect_type, exit_flag)
+
+        try:
+            direction_val = eff.EffectParameters.Direction
+            direction_name = ANIM_DIRECTION_NAMES.get(direction_val, f"Unknown({direction_val})")
+        except Exception:
+            direction_val = None
+            direction_name = None
+
+        try:
+            after_effect_val = eff.EffectInformation.AfterEffect
+            after_effect_name = AFTER_EFFECT_NAMES.get(after_effect_val, f"Unknown({after_effect_val})")
+        except Exception:
+            after_effect_val = None
+            after_effect_name = None
+
+        anim_dict = {
             "index": eff.Index,
             "shape_name": eff.Shape.Name,
             "effect_type": effect_type,
@@ -240,23 +713,101 @@ def _list_animations_impl(slide_index):
             "trigger_type": trigger_type,
             "trigger_name": ANIMATION_TRIGGER_NAMES.get(trigger_type, f"Unknown({trigger_type})"),
             "duration": eff.Timing.Duration,
-        })
+            "exit": exit_flag,
+            "category": category,
+            "direction": direction_val,
+            "direction_name": direction_name,
+            "after_effect": after_effect_val,
+            "after_effect_name": after_effect_name,
+        }
+        anim_dict.update(_read_text_anim_info(eff))
+        animations.append(anim_dict)
+
+    # Interactive sequences
+    interactive = []
+    int_seqs = slide.TimeLine.InteractiveSequences
+    for seq_idx in range(1, int_seqs.Count + 1):
+        int_seq = int_seqs(seq_idx)
+        for eff_idx in range(1, int_seq.Count + 1):
+            eff = int_seq(eff_idx)
+            effect_type = eff.EffectType
+            exit_flag = bool(eff.Exit)
+            category = _get_animation_category(effect_type, exit_flag)
+
+            try:
+                trigger_shape_name = eff.Timing.TriggerShape.Name
+            except Exception:
+                trigger_shape_name = None
+
+            try:
+                direction_val = eff.EffectParameters.Direction
+                direction_name = ANIM_DIRECTION_NAMES.get(
+                    direction_val, f"Unknown({direction_val})"
+                )
+            except Exception:
+                direction_val = None
+                direction_name = None
+
+            try:
+                after_effect_val = eff.EffectInformation.AfterEffect
+                after_effect_name = AFTER_EFFECT_NAMES.get(
+                    after_effect_val, f"Unknown({after_effect_val})"
+                )
+            except Exception:
+                after_effect_val = None
+                after_effect_name = None
+
+            anim_dict = {
+                "sequence_index": seq_idx,
+                "effect_index": eff_idx,
+                "shape_name": eff.Shape.Name,
+                "trigger_shape_name": trigger_shape_name,
+                "effect_type": effect_type,
+                "effect_name": ANIMATION_EFFECT_NAMES.get(
+                    effect_type, f"Unknown({effect_type})"
+                ),
+                "trigger_type": eff.Timing.TriggerType,
+                "trigger_name": ANIMATION_TRIGGER_NAMES.get(
+                    eff.Timing.TriggerType,
+                    f"Unknown({eff.Timing.TriggerType})",
+                ),
+                "duration": eff.Timing.Duration,
+                "exit": exit_flag,
+                "category": category,
+                "direction": direction_val,
+                "direction_name": direction_name,
+                "after_effect": after_effect_val,
+                "after_effect_name": after_effect_name,
+            }
+            anim_dict.update(_read_text_anim_info(eff))
+            interactive.append(anim_dict)
 
     return {
         "success": True,
         "slide_index": slide_index,
-        "count": seq.Count,
+        "main_sequence_count": seq.Count,
         "animations": animations,
+        "interactive_sequences": interactive,
+        "interactive_count": len(interactive),
     }
 
 
-def _remove_animation_impl(slide_index, animation_index):
+def _remove_animation_impl(slide_index, animation_index, sequence_index):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
-    seq = slide.TimeLine.MainSequence
+    if sequence_index is not None:
+        int_seqs = slide.TimeLine.InteractiveSequences
+        if sequence_index < 1 or sequence_index > int_seqs.Count:
+            raise ValueError(
+                f"Sequence index {sequence_index} out of range (1-{int_seqs.Count})"
+            )
+        seq = int_seqs(sequence_index)
+    else:
+        seq = slide.TimeLine.MainSequence
+
     if animation_index < 1 or animation_index > seq.Count:
         raise ValueError(
             f"Animation index {animation_index} out of range (1-{seq.Count})"
@@ -283,6 +834,15 @@ def _clear_animations_impl(slide_index, clear_transitions):
     for i in range(seq.Count, 0, -1):
         seq(i).Delete()
 
+    # Clear interactive sequences
+    int_seqs = slide.TimeLine.InteractiveSequences
+    interactive_cleared = 0
+    for seq_idx in range(int_seqs.Count, 0, -1):
+        int_seq = int_seqs(seq_idx)
+        for eff_idx in range(int_seq.Count, 0, -1):
+            int_seq(eff_idx).Delete()
+            interactive_cleared += 1
+
     if clear_transitions:
         slide.SlideShowTransition.EntryEffect = 0  # ppEffectNone
 
@@ -290,7 +850,161 @@ def _clear_animations_impl(slide_index, clear_transitions):
         "success": True,
         "slide_index": slide_index,
         "cleared_count": cleared_count,
+        "interactive_cleared": interactive_cleared,
     }
+
+
+def _update_animation_impl(
+    slide_index, animation_index, sequence_index,
+    effect, trigger, duration, delay, move_to, exit_flag,
+    direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
+    after_effect, dim_color,
+    build_level, text_unit_effect, animate_in_reverse, animate_background,
+):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.Slides(slide_index)
+
+    if sequence_index is not None:
+        int_seqs = slide.TimeLine.InteractiveSequences
+        if sequence_index < 1 or sequence_index > int_seqs.Count:
+            raise ValueError(
+                f"Sequence index {sequence_index} out of range (1-{int_seqs.Count})"
+            )
+        seq = int_seqs(sequence_index)
+    else:
+        seq = slide.TimeLine.MainSequence
+
+    if animation_index < 1 or animation_index > seq.Count:
+        raise ValueError(
+            f"Animation index {animation_index} out of range (1-{seq.Count})"
+        )
+
+    eff = seq(animation_index)
+
+    # Apply property changes first (before reorder)
+    if effect is not None:
+        effect_int = ANIMATION_EFFECT_MAP.get(effect, effect) if isinstance(effect, str) else effect
+        eff.EffectType = effect_int
+    if trigger is not None:
+        trigger_int = TRIGGER_MAP[trigger]
+        eff.Timing.TriggerType = trigger_int
+    if duration is not None:
+        eff.Timing.Duration = duration
+    if delay is not None:
+        eff.Timing.TriggerDelayTime = delay
+    if exit_flag is not None:
+        eff.Exit = msoTrue if exit_flag else msoFalse
+    if direction is not None:
+        direction_int = ANIM_DIRECTION_MAP.get(direction, direction) if isinstance(direction, str) else direction
+        eff.EffectParameters.Direction = direction_int
+    if repeat_count is not None:
+        eff.Timing.RepeatCount = repeat_count
+    if auto_reverse is not None:
+        eff.Timing.AutoReverse = msoTrue if auto_reverse else msoFalse
+    if rewind is not None:
+        eff.Timing.RewindAtEnd = msoTrue if rewind else msoFalse
+    if smooth_start is not None:
+        eff.Timing.SmoothStart = msoTrue if smooth_start else msoFalse
+    if smooth_end is not None:
+        eff.Timing.SmoothEnd = msoTrue if smooth_end else msoFalse
+
+    # Text animation settings (applied via sequence, before after_effect)
+    # NOTE: ConvertTo* methods may invalidate the eff reference when
+    # build_level creates multiple effects. Use _safe_refetch to recover.
+    target_shape = eff.Shape
+
+    def _safe_refetch():
+        refetched = seq.FindFirstAnimationFor(target_shape)
+        if refetched is None:
+            raise RuntimeError("Could not find animation for shape after ConvertTo operation")
+        return refetched
+
+    if build_level is not None:
+        build_level_int = BUILD_LEVEL_MAP[build_level]
+        try:
+            eff = seq.ConvertToBuildLevel(eff, build_level_int)
+        except Exception:
+            eff = _safe_refetch()
+            eff = seq.ConvertToBuildLevel(eff, build_level_int)
+    if text_unit_effect is not None:
+        text_unit_int = TEXT_UNIT_EFFECT_MAP[text_unit_effect]
+        try:
+            eff = seq.ConvertToTextUnitEffect(eff, text_unit_int)
+        except Exception:
+            eff = _safe_refetch()
+            eff = seq.ConvertToTextUnitEffect(eff, text_unit_int)
+    if animate_in_reverse is not None:
+        try:
+            eff = seq.ConvertToAnimateInReverse(
+                eff, msoTrue if animate_in_reverse else msoFalse,
+            )
+        except Exception:
+            eff = _safe_refetch()
+            eff = seq.ConvertToAnimateInReverse(
+                eff, msoTrue if animate_in_reverse else msoFalse,
+            )
+    if animate_background is not None:
+        try:
+            eff = seq.ConvertToAnimateBackground(
+                eff, msoTrue if animate_background else msoFalse,
+            )
+        except Exception:
+            eff = _safe_refetch()
+            eff = seq.ConvertToAnimateBackground(
+                eff, msoTrue if animate_background else msoFalse,
+            )
+
+    # After-effect (must be applied via sequence)
+    if after_effect is not None:
+        after_int = AFTER_EFFECT_MAP[after_effect]
+        try:
+            if after_int == 1 and dim_color is not None:  # dim
+                eff = seq.ConvertToAfterEffect(eff, after_int, hex_to_int(dim_color))
+            else:
+                eff = seq.ConvertToAfterEffect(eff, after_int)
+        except Exception:
+            eff = _safe_refetch()
+            if after_int == 1 and dim_color is not None:
+                eff = seq.ConvertToAfterEffect(eff, after_int, hex_to_int(dim_color))
+            else:
+                eff = seq.ConvertToAfterEffect(eff, after_int)
+
+    # Reorder last (after property changes to avoid index confusion)
+    if move_to is not None:
+        if move_to < 1 or move_to > seq.Count:
+            raise ValueError(
+                f"move_to {move_to} out of range (1-{seq.Count})"
+            )
+        eff.MoveTo(move_to)
+
+    # Read back current state (re-fetch since MoveTo may have changed index)
+    final_index = eff.Index
+    exit_flag = bool(eff.Exit)
+    effect_type = eff.EffectType
+    result = {
+        "success": True,
+        "animation_index": final_index,
+        "shape_name": eff.Shape.Name,
+        "effect_type": effect_type,
+        "effect_name": ANIMATION_EFFECT_NAMES.get(effect_type, f"Unknown({effect_type})"),
+        "trigger_type": eff.Timing.TriggerType,
+        "trigger_name": ANIMATION_TRIGGER_NAMES.get(eff.Timing.TriggerType, f"Unknown({eff.Timing.TriggerType})"),
+        "duration": eff.Timing.Duration,
+        "delay": eff.Timing.TriggerDelayTime,
+        "exit": exit_flag,
+        "category": _get_animation_category(effect_type, exit_flag),
+    }
+
+    # Read back after-effect state
+    try:
+        after_effect_val = eff.EffectInformation.AfterEffect
+        result["after_effect"] = AFTER_EFFECT_NAMES.get(after_effect_val, str(after_effect_val))
+    except Exception:
+        pass
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -330,6 +1044,12 @@ def add_animation(params: AddAnimationInput) -> str:
             _add_animation_impl,
             params.slide_index, params.shape_name_or_index,
             params.effect, params.trigger, params.duration, params.delay,
+            params.exit,
+            params.direction, params.repeat_count, params.auto_reverse,
+            params.rewind, params.smooth_start, params.smooth_end,
+            params.trigger_shape, params.after_effect, params.dim_color,
+            params.build_level, params.text_unit_effect,
+            params.animate_in_reverse, params.animate_background,
         )
         return json.dumps(result)
     except Exception as e:
@@ -356,10 +1076,10 @@ def list_animations(params: ListAnimationsInput) -> str:
 
 
 def remove_animation(params: RemoveAnimationInput) -> str:
-    """Remove a single animation from a slide's main sequence.
+    """Remove a single animation from a slide's main or interactive sequence.
 
     Args:
-        params: Slide index and 1-based animation index.
+        params: Slide index, 1-based animation index, and optional sequence_index.
 
     Returns:
         JSON confirming removal and remaining count.
@@ -367,7 +1087,7 @@ def remove_animation(params: RemoveAnimationInput) -> str:
     try:
         result = ppt.execute(
             _remove_animation_impl,
-            params.slide_index, params.animation_index,
+            params.slide_index, params.animation_index, params.sequence_index,
         )
         return json.dumps(result)
     except Exception as e:
@@ -391,6 +1111,32 @@ def clear_animations(params: ClearAnimationsInput) -> str:
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to clear animations: {str(e)}"})
+
+
+def update_animation(params: UpdateAnimationInput) -> str:
+    """Update an existing animation in the main or interactive sequence.
+
+    Args:
+        params: Slide index, animation index, optional sequence_index, and properties to change.
+
+    Returns:
+        JSON with the updated animation state.
+    """
+    try:
+        result = ppt.execute(
+            _update_animation_impl,
+            params.slide_index, params.animation_index, params.sequence_index,
+            params.effect, params.trigger, params.duration,
+            params.delay, params.move_to, params.exit,
+            params.direction, params.repeat_count, params.auto_reverse,
+            params.rewind, params.smooth_start, params.smooth_end,
+            params.after_effect, params.dim_color,
+            params.build_level, params.text_unit_effect,
+            params.animate_in_reverse, params.animate_background,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to update animation: {str(e)}"})
 
 
 # ---------------------------------------------------------------------------
@@ -433,8 +1179,24 @@ def register_tools(mcp):
         """Add an animation effect to a shape on a slide.
 
         Specify the shape by name or 1-based index. Use a friendly effect name
-        ('appear', 'fade', 'fly', 'wipe', 'zoom', 'bounce', 'spin', etc.)
-        or an MsoAnimEffect integer. Set trigger, duration, and delay.
+        or an MsoAnimEffect integer. Supports four categories:
+        - Entrance: 'appear', 'fade', 'fly', 'wipe', 'zoom', 'bounce', etc.
+        - Exit: same effects as entrance, but set exit=true
+        - Emphasis: 'spin', 'transparency', 'grow_shrink', 'teeter', 'wave', etc.
+        - Motion path: 'path_circle', 'path_down', 'path_up', 'path_left', etc.
+        Set trigger, duration, delay, direction, repeat_count, auto_reverse,
+        rewind, smooth_start, and smooth_end.
+        Set after_effect to 'hide', 'dim', 'hide_on_next_click', or 'none'
+        for post-animation behavior; use dim_color (hex) when dimming.
+
+        Text animation: use build_level to animate by paragraph level
+        ('first_level', 'second_level', etc.), text_unit_effect for
+        'by_character' or 'by_word' delivery, animate_in_reverse to
+        reverse paragraph order, and animate_background to animate the
+        shape background separately from text.
+
+        For interactive sequences (click a shape to trigger animation on another),
+        set trigger='on_shape_click' and trigger_shape to the clickable shape.
         """
         return add_animation(params)
 
@@ -449,10 +1211,11 @@ def register_tools(mcp):
         },
     )
     async def tool_list_animations(params: ListAnimationsInput) -> str:
-        """List all animations in the main sequence of a slide.
+        """List all animations on a slide (main sequence and interactive sequences).
 
         Returns each animation's index, target shape name, effect type,
-        trigger type, and duration.
+        trigger type, and duration. Interactive sequences include the
+        trigger shape name and sequence index.
         """
         return list_animations(params)
 
@@ -467,10 +1230,12 @@ def register_tools(mcp):
         },
     )
     async def tool_remove_animation(params: RemoveAnimationInput) -> str:
-        """Remove a single animation from a slide's main sequence.
+        """Remove a single animation from a slide's main or interactive sequence.
 
-        Specify the 1-based animation index. Remaining animations re-index
-        automatically. Use ppt_list_animations to find the correct index.
+        Specify the 1-based animation index (effect_index). Remaining animations
+        re-index automatically. Use ppt_list_animations to find the correct index.
+        For interactive sequences, provide sequence_index to target a specific
+        interactive sequence instead of the main sequence.
         """
         return remove_animation(params)
 
@@ -485,9 +1250,37 @@ def register_tools(mcp):
         },
     )
     async def tool_clear_animations(params: ClearAnimationsInput) -> str:
-        """Clear all animations from a slide's main sequence.
+        """Clear all animations from a slide (main sequence and interactive sequences).
 
         Optionally also clears the slide transition effect by setting
         clear_transitions=true.
         """
         return clear_animations(params)
+
+    @mcp.tool(
+        name="ppt_update_animation",
+        annotations={
+            "title": "Update Animation",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_update_animation(params: UpdateAnimationInput) -> str:
+        """Update an existing animation in a slide's main or interactive sequence.
+
+        Change effect type, trigger, duration, delay, direction, exit flag,
+        repeat_count, auto_reverse, rewind, smooth_start, or smooth_end.
+        Set after_effect to 'hide', 'dim', 'hide_on_next_click', or 'none';
+        use dim_color (hex) when dimming.
+        Text animation: use build_level to change paragraph build level,
+        text_unit_effect for 'by_character'/'by_word', animate_in_reverse
+        to reverse paragraph order, animate_background to animate background
+        separately from text.
+        Use move_to to reorder the animation within the sequence.
+        For interactive sequences, provide sequence_index to target a specific
+        interactive sequence instead of the main sequence.
+        Use ppt_list_animations first to find the correct animation index.
+        """
+        return update_animation(params)

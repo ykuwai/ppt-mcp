@@ -16,15 +16,17 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
-from utils.color import hex_to_int
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
+from utils.color import hex_to_int, int_to_hex
 from ppt_com.constants import (
     msoTrue, msoFalse,
     msoShapeRectangle,
+    msoLinkedPicture, msoPicture,
     SHAPE_FORMAT_MAP,
     VIEW_TYPE_MAP, VIEW_TYPE_NAMES,
     ppSelectionNone, ppSelectionSlides, ppSelectionShapes, ppSelectionText,
+    PICTURE_COLOR_TYPE_MAP, PICTURE_COLOR_TYPE_NAMES,
 )
 from ppt_com.shapes import SHAPE_NAME_MAP
 
@@ -301,6 +303,63 @@ class CropPictureInput(BaseModel):
                     "crop_bottom. Use crop_fit alone for automatic cropping, or "
                     "manual crop values without crop_fit."
                 )
+        return self
+
+
+# --- Picture Format ---
+class SetPictureFormatInput(BaseModel):
+    """Input for adjusting picture format properties (brightness, contrast, etc.)."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    shape_name_or_index: Union[str, int] = Field(
+        ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
+    )
+    brightness: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Picture brightness (0.0 = darkest, 1.0 = brightest)",
+    )
+    contrast: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Picture contrast (0.0 = lowest, 1.0 = highest)",
+    )
+    color_type: Optional[str] = Field(
+        default=None,
+        description=(
+            "Picture color type: 'automatic', 'grayscale', 'black_and_white', 'watermark'"
+        ),
+    )
+    transparent_color: Optional[str] = Field(
+        default=None,
+        pattern=r"^#[0-9A-Fa-f]{6}$",
+        description=(
+            "Hex color like '#RRGGBB' to set as transparency key color. "
+            "Also enables transparent background automatically, "
+            "unless transparent_background=False is explicitly passed."
+        ),
+    )
+    transparent_background: Optional[bool] = Field(
+        default=None,
+        description="Explicitly enable/disable color-key transparency",
+    )
+
+    @model_validator(mode="after")
+    def validate_at_least_one_param(self):
+        params = [
+            self.brightness, self.contrast, self.color_type,
+            self.transparent_color, self.transparent_background,
+        ]
+        if all(v is None for v in params):
+            raise ValueError(
+                "At least one adjustment parameter must be provided: "
+                "brightness, contrast, color_type, transparent_color, "
+                "or transparent_background."
+            )
+        if self.color_type is not None and self.color_type not in PICTURE_COLOR_TYPE_MAP:
+            raise ValueError(
+                f"Unknown color_type '{self.color_type}'. "
+                f"Valid values: {list(PICTURE_COLOR_TYPE_MAP.keys())}"
+            )
         return self
 
 
@@ -661,8 +720,7 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
-    # msoPicture=13, msoLinkedPicture=11
-    if shape.Type not in (11, 13):
+    if shape.Type not in (msoLinkedPicture, msoPicture):
         raise ValueError(
             f"Shape '{shape.Name}' is not a picture (type={shape.Type}). "
             "ppt_crop_picture only works on picture shapes inserted via ppt_add_picture."
@@ -1425,6 +1483,76 @@ def crop_picture(params: CropPictureInput) -> str:
         return json.dumps({"error": f"Failed to crop picture: {str(e)}"})
 
 
+# --- Picture Format ---
+def _set_picture_format_impl(slide_index, shape_name_or_index, brightness,
+                             contrast, color_type, transparent_color,
+                             transparent_background):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.Slides(slide_index)
+    shape = _get_shape(slide, shape_name_or_index)
+
+    if shape.Type not in (msoLinkedPicture, msoPicture):
+        raise ValueError(
+            f"Shape '{shape.Name}' is not a picture (type={shape.Type}). "
+            "ppt_set_picture_format only works on picture shapes."
+        )
+
+    pf = shape.PictureFormat
+
+    if brightness is not None:
+        pf.Brightness = brightness
+    if contrast is not None:
+        pf.Contrast = contrast
+    if color_type is not None:
+        pf.ColorType = PICTURE_COLOR_TYPE_MAP[color_type]
+    if transparent_color is not None:
+        pf.TransparencyColor = hex_to_int(transparent_color)
+        # Only auto-enable if transparent_background wasn't explicitly set to False
+        if transparent_background is not False:
+            pf.TransparentBackground = msoTrue
+    if transparent_background is not None:
+        pf.TransparentBackground = msoTrue if transparent_background else msoFalse
+
+    # Read back current state
+    cur_color_type = pf.ColorType
+    color_type_name = PICTURE_COLOR_TYPE_NAMES.get(cur_color_type, "unknown")
+
+    result = {
+        "success": True,
+        "shape_name": shape.Name,
+        "brightness": pf.Brightness,
+        "contrast": pf.Contrast,
+        "color_type": cur_color_type,
+        "color_type_name": color_type_name,
+        "transparent_background": bool(pf.TransparentBackground),
+        "transparent_color": int_to_hex(pf.TransparencyColor),
+    }
+    return result
+
+
+def set_picture_format(params: SetPictureFormatInput) -> str:
+    """Set picture format properties (brightness, contrast, color type, transparency).
+
+    Args:
+        params: Shape identification and picture adjustment values.
+
+    Returns:
+        JSON with current picture format properties after applying changes.
+    """
+    try:
+        result = ppt.execute(
+            _set_picture_format_impl,
+            params.slide_index, params.shape_name_or_index,
+            params.brightness, params.contrast, params.color_type,
+            params.transparent_color, params.transparent_background,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to set picture format: {str(e)}"})
+
+
 # --- Shape Export ---
 def export_shape(params: ExportShapeInput) -> str:
     """Export a shape as an image file.
@@ -1770,6 +1898,30 @@ def register_tools(mcp):
         Returns current crop values and the active crop_shape integer after applying.
         """
         return crop_picture(params)
+
+    # --- Picture Format ---
+    @mcp.tool(
+        name="ppt_set_picture_format",
+        annotations={
+            "title": "Set Picture Format",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_set_picture_format(params: SetPictureFormatInput) -> str:
+        """Adjust picture format properties: brightness, contrast, color type, and transparency.
+
+        Works on picture shapes (inserted via ppt_add_picture or ppt_add_picture_from_url).
+        All parameters are optional but at least one must be provided.
+
+        brightness/contrast: 0.0–1.0 range.
+        color_type: 'automatic', 'grayscale', 'black_and_white', 'watermark'.
+        transparent_color: '#RRGGBB' hex — sets the color-key and enables transparency.
+        transparent_background: explicitly enable/disable color-key transparency.
+        """
+        return set_picture_format(params)
 
     # --- Shape Export ---
     @mcp.tool(

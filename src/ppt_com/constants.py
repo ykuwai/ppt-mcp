@@ -495,8 +495,8 @@ msoAnimEffectSplit = 16
 msoAnimEffectWipe = 22
 msoAnimEffectZoom = 23
 msoAnimEffectBounce = 26
-msoAnimEffectFloat = 56
-msoAnimEffectGrowAndTurn = 57
+msoAnimEffectFloat = 30
+msoAnimEffectGrowAndTurn = 31
 msoAnimEffectSpin = 61
 msoAnimEffectTransparency = 62
 
@@ -565,17 +565,47 @@ CONNECTOR_TYPE_NAMES = {
 }
 
 ANIMATION_EFFECT_NAMES = {
+    # Entrance effects (1-53)
     1: "appear", 2: "fly", 3: "blinds", 4: "box",
     5: "checkerboard", 6: "circle", 8: "diamond",
     9: "dissolve", 10: "fade", 16: "split", 22: "wipe",
-    23: "zoom", 26: "bounce", 56: "float",
-    57: "grow_and_turn", 61: "spin", 62: "transparency",
+    23: "zoom", 26: "bounce", 30: "float", 31: "grow_and_turn",
+    # Emphasis effects (54-82)
+    54: "change_fill_color", 55: "change_font", 56: "change_font_color",
+    57: "change_font_size", 59: "grow_shrink", 61: "spin", 62: "transparency",
+    63: "bold_flash", 69: "color_wave", 73: "darken", 74: "desaturate",
+    75: "flash_bulb", 78: "lighten", 80: "teeter", 82: "wave",
+    # Motion path effects (86-149)
+    86: "path_circle", 88: "path_diamond", 90: "path_star",
+    92: "path_square", 94: "path_heart", 109: "path_loop",
+    120: "path_left", 122: "path_arc_down", 123: "path_zigzag",
+    125: "path_sine_wave", 126: "path_bounce_left", 127: "path_down",
+    129: "path_arc_up", 131: "path_spiral_right", 132: "path_wave",
+    134: "path_diagonal_down_right", 136: "path_arc_left",
+    137: "path_funnel", 138: "path_spring", 139: "path_bounce_right",
+    141: "path_diagonal_up_right", 143: "path_arc_right",
+    148: "path_up", 149: "path_right",
 }
 
 ANIMATION_TRIGGER_NAMES = {
     0: "none", 1: "on_click", 2: "with_previous",
     3: "after_previous", 4: "on_shape_click",
 }
+
+# MsoAnimDirection
+ANIM_DIRECTION_MAP = {
+    "none": 0, "up": 1, "right": 2, "down": 3, "left": 4,
+    "up_left": 6, "up_right": 7, "down_right": 8, "down_left": 9,
+    "top": 10, "bottom": 11, "top_left": 12, "top_right": 13,
+    "bottom_right": 14, "bottom_left": 15,
+    "horizontal": 16, "vertical": 17, "across": 18,
+    "in": 19, "out": 20,
+    "clockwise": 21, "counterclockwise": 22,
+    "horizontal_in": 23, "horizontal_out": 24,
+    "vertical_in": 25, "vertical_out": 26,
+}
+
+ANIM_DIRECTION_NAMES = {v: k for k, v in ANIM_DIRECTION_MAP.items()}
 
 # ==============================================================================
 # Phase 4 Constants
@@ -750,3 +780,63 @@ SEGMENT_TYPE_MAP = {
 SEGMENT_TYPE_NAMES = {
     0: "line", 1: "curve",
 }
+
+# ==============================================================================
+# MsoPictureColorType
+# ==============================================================================
+msoPictureAutomatic = 1
+msoPictureGrayscale = 2
+msoPictureBlackAndWhite = 3
+msoPictureWatermark = 4
+
+PICTURE_COLOR_TYPE_MAP = {
+    "automatic": 1,
+    "grayscale": 2,
+    "black_and_white": 3,
+    "watermark": 4,
+}
+
+PICTURE_COLOR_TYPE_NAMES = {v: k for k, v in PICTURE_COLOR_TYPE_MAP.items()}
+
+# ==============================================================================
+# MsoAnimAfterEffect
+# ==============================================================================
+msoAnimAfterEffectNone = 0
+msoAnimAfterEffectDim = 1
+msoAnimAfterEffectHide = 2
+msoAnimAfterEffectHideOnNextClick = 3
+
+AFTER_EFFECT_MAP = {
+    "none": 0, "dim": 1, "hide": 2, "hide_on_next_click": 3,
+}
+
+AFTER_EFFECT_NAMES = {v: k for k, v in AFTER_EFFECT_MAP.items()}
+
+# ==============================================================================
+# MsoAnimateByLevel (text build level)
+# ==============================================================================
+msoAnimateLevelNone = 0
+msoAnimateTextByAllLevels = 1
+msoAnimateTextByFirstLevel = 2
+msoAnimateTextBySecondLevel = 3
+msoAnimateTextByThirdLevel = 4
+msoAnimateTextByFourthLevel = 5
+msoAnimateTextByFifthLevel = 6
+
+BUILD_LEVEL_MAP = {
+    "none": 0, "all_levels": 1, "first_level": 2, "second_level": 3,
+    "third_level": 4, "fourth_level": 5, "fifth_level": 6,
+}
+BUILD_LEVEL_NAMES = {v: k for k, v in BUILD_LEVEL_MAP.items()}
+
+# ==============================================================================
+# MsoAnimTextUnitEffect
+# ==============================================================================
+msoAnimTextUnitEffectByParagraph = 0
+msoAnimTextUnitEffectByCharacter = 1
+msoAnimTextUnitEffectByWord = 2
+
+TEXT_UNIT_EFFECT_MAP = {
+    "by_paragraph": 0, "by_character": 1, "by_word": 2,
+}
+TEXT_UNIT_EFFECT_NAMES = {v: k for k, v in TEXT_UNIT_EFFECT_MAP.items()}

@@ -17,6 +17,7 @@ from ppt_com.constants import (
     ppShowTypeSpeaker,
     ppShowTypeWindow,
     ppShowTypeKiosk,
+    ppShowAll,
     ppShowSlideRange,
     ppSlideShowRunning,
     SLIDESHOW_STATE_NAMES,
@@ -102,21 +103,27 @@ def _slideshow_start_impl(
         settings.ShowType = ppShowTypeSpeaker
 
     # Slide range
-    actual_start = start_slide if start_slide is not None else 1
-    actual_end = end_slide if end_slide is not None else pres.Slides.Count
+    if start_slide is None and end_slide is None:
+        # No range specified → show all slides (resets any previous range)
+        settings.RangeType = ppShowAll
+        actual_start = 1
+        actual_end = pres.Slides.Count
+    else:
+        actual_start = start_slide if start_slide is not None else 1
+        actual_end = end_slide if end_slide is not None else pres.Slides.Count
 
-    if actual_start < 1 or actual_start > pres.Slides.Count:
-        raise ValueError(
-            f"start_slide {actual_start} out of range (1-{pres.Slides.Count})"
-        )
-    if actual_end < actual_start or actual_end > pres.Slides.Count:
-        raise ValueError(
-            f"end_slide {actual_end} out of range ({actual_start}-{pres.Slides.Count})"
-        )
+        if actual_start < 1 or actual_start > pres.Slides.Count:
+            raise ValueError(
+                f"start_slide {actual_start} out of range (1-{pres.Slides.Count})"
+            )
+        if actual_end < actual_start or actual_end > pres.Slides.Count:
+            raise ValueError(
+                f"end_slide {actual_end} out of range ({actual_start}-{pres.Slides.Count})"
+            )
 
-    settings.RangeType = ppShowSlideRange
-    settings.StartingSlide = actual_start
-    settings.EndingSlide = actual_end
+        settings.RangeType = ppShowSlideRange
+        settings.StartingSlide = actual_start
+        settings.EndingSlide = actual_end
 
     # Loop
     if loop is not None:
