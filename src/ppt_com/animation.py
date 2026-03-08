@@ -21,6 +21,7 @@ from ppt_com.constants import (
     ppEffectNone, ppEffectFade, ppEffectPush, ppEffectWipe, ppEffectSplit,
     ANIMATION_EFFECT_NAMES, ANIMATION_TRIGGER_NAMES,
     ANIM_DIRECTION_MAP, ANIM_DIRECTION_NAMES,
+    AFTER_EFFECT_MAP, AFTER_EFFECT_NAMES,
 )
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,15 @@ class AddAnimationInput(BaseModel):
             "Required when trigger='on_shape_click'. Creates an interactive sequence."
         ),
     )
+    after_effect: Optional[str] = Field(
+        default=None,
+        description="After-animation behavior: 'none', 'dim', 'hide', 'hide_on_next_click'",
+    )
+    dim_color: Optional[str] = Field(
+        default=None,
+        description="Hex color to dim to (e.g. '#808080'). Only used with after_effect='dim'.",
+        pattern=r"^#[0-9a-fA-F]{6}$",
+    )
 
     @model_validator(mode="after")
     def validate_exit_effect(self):
@@ -183,6 +193,15 @@ class AddAnimationInput(BaseModel):
         if self.trigger != "on_shape_click" and self.trigger_shape is not None:
             raise ValueError(
                 "trigger_shape can only be used with trigger='on_shape_click'"
+            )
+        if self.after_effect is not None and self.after_effect not in AFTER_EFFECT_MAP:
+            raise ValueError(
+                f"Unknown after_effect '{self.after_effect}'. "
+                f"Valid values: {', '.join(AFTER_EFFECT_MAP.keys())}"
+            )
+        if self.dim_color is not None and self.after_effect != "dim":
+            raise ValueError(
+                "dim_color can only be used with after_effect='dim'"
             )
         return self
 
@@ -272,6 +291,15 @@ class UpdateAnimationInput(BaseModel):
         default=None,
         description="Decelerate at end of animation",
     )
+    after_effect: Optional[str] = Field(
+        default=None,
+        description="After-animation behavior: 'none', 'dim', 'hide', 'hide_on_next_click'",
+    )
+    dim_color: Optional[str] = Field(
+        default=None,
+        description="Hex color to dim to (e.g. '#808080'). Only used with after_effect='dim'.",
+        pattern=r"^#[0-9a-fA-F]{6}$",
+    )
 
     @model_validator(mode="after")
     def validate_params(self):
@@ -279,11 +307,12 @@ class UpdateAnimationInput(BaseModel):
             v is None
             for v in (self.effect, self.trigger, self.duration, self.delay, self.move_to, self.exit,
                       self.direction, self.repeat_count, self.auto_reverse, self.rewind,
-                      self.smooth_start, self.smooth_end)
+                      self.smooth_start, self.smooth_end, self.after_effect, self.dim_color)
         ):
             raise ValueError(
                 "At least one optional parameter (effect, trigger, duration, delay, move_to, exit, "
-                "direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end) must be provided"
+                "direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end, "
+                "after_effect, dim_color) must be provided"
             )
         if self.trigger is not None and self.trigger not in TRIGGER_MAP:
             raise ValueError(
@@ -299,6 +328,15 @@ class UpdateAnimationInput(BaseModel):
             raise ValueError(
                 f"Unknown direction '{self.direction}'. "
                 f"Valid values: {', '.join(ANIM_DIRECTION_MAP.keys())}"
+            )
+        if self.after_effect is not None and self.after_effect not in AFTER_EFFECT_MAP:
+            raise ValueError(
+                f"Unknown after_effect '{self.after_effect}'. "
+                f"Valid values: {', '.join(AFTER_EFFECT_MAP.keys())}"
+            )
+        if self.dim_color is not None and self.after_effect != "dim":
+            raise ValueError(
+                "dim_color can only be used with after_effect='dim'"
             )
         return self
 
@@ -367,7 +405,7 @@ def _set_slide_transition_impl(
 def _add_animation_impl(
     slide_index, shape_name_or_index, effect, trigger, duration, delay, exit_flag,
     direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
-    trigger_shape,
+    trigger_shape, after_effect, dim_color,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -421,6 +459,20 @@ def _add_animation_impl(
     if smooth_end is not None:
         effect_obj.Timing.SmoothEnd = msoTrue if smooth_end else msoFalse
 
+    # After-effect (must be applied via sequence, not effect directly)
+    if after_effect is not None:
+        after_int = AFTER_EFFECT_MAP[after_effect]
+        if trigger_shape is not None:
+            # seq is already defined from the interactive sequence code above
+            pass
+        else:
+            seq = slide.TimeLine.MainSequence
+        if after_int == 1 and dim_color is not None:  # dim
+            from utils.color import hex_to_int
+            effect_obj = seq.ConvertToAfterEffect(effect_obj, after_int, hex_to_int(dim_color))
+        else:
+            effect_obj = seq.ConvertToAfterEffect(effect_obj, after_int)
+
     result = {
         "success": True,
         "shape_name": shape.Name,
@@ -428,6 +480,14 @@ def _add_animation_impl(
         "exit": exit_flag,
         "animation_index": effect_obj.Index,
     }
+
+    # Read back after-effect state
+    try:
+        after_effect_val = effect_obj.EffectInformation.AfterEffect
+        result["after_effect"] = AFTER_EFFECT_NAMES.get(after_effect_val, str(after_effect_val))
+    except Exception:
+        pass
+
     if trigger_shape is not None:
         # Find sequence_index for the interactive sequence
         int_seqs = slide.TimeLine.InteractiveSequences
@@ -476,6 +536,13 @@ def _list_animations_impl(slide_index):
             direction_val = None
             direction_name = None
 
+        try:
+            after_effect_val = eff.EffectInformation.AfterEffect
+            after_effect_name = AFTER_EFFECT_NAMES.get(after_effect_val, f"Unknown({after_effect_val})")
+        except Exception:
+            after_effect_val = None
+            after_effect_name = None
+
         animations.append({
             "index": eff.Index,
             "shape_name": eff.Shape.Name,
@@ -488,6 +555,8 @@ def _list_animations_impl(slide_index):
             "category": category,
             "direction": direction_val,
             "direction_name": direction_name,
+            "after_effect": after_effect_val,
+            "after_effect_name": after_effect_name,
         })
 
     # Interactive sequences
@@ -515,6 +584,15 @@ def _list_animations_impl(slide_index):
                 direction_val = None
                 direction_name = None
 
+            try:
+                after_effect_val = eff.EffectInformation.AfterEffect
+                after_effect_name = AFTER_EFFECT_NAMES.get(
+                    after_effect_val, f"Unknown({after_effect_val})"
+                )
+            except Exception:
+                after_effect_val = None
+                after_effect_name = None
+
             interactive.append({
                 "sequence_index": seq_idx,
                 "effect_index": eff_idx,
@@ -534,6 +612,8 @@ def _list_animations_impl(slide_index):
                 "category": category,
                 "direction": direction_val,
                 "direction_name": direction_name,
+                "after_effect": after_effect_val,
+                "after_effect_name": after_effect_name,
             })
 
     return {
@@ -602,6 +682,7 @@ def _clear_animations_impl(slide_index, clear_transitions):
 def _update_animation_impl(
     slide_index, animation_index, effect, trigger, duration, delay, move_to, exit_flag,
     direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
+    after_effect, dim_color,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -643,6 +724,15 @@ def _update_animation_impl(
     if smooth_end is not None:
         eff.Timing.SmoothEnd = msoTrue if smooth_end else msoFalse
 
+    # After-effect (must be applied via sequence)
+    if after_effect is not None:
+        after_int = AFTER_EFFECT_MAP[after_effect]
+        if after_int == 1 and dim_color is not None:  # dim
+            from utils.color import hex_to_int
+            eff = seq.ConvertToAfterEffect(eff, after_int, hex_to_int(dim_color))
+        else:
+            eff = seq.ConvertToAfterEffect(eff, after_int)
+
     # Reorder last (after property changes to avoid index confusion)
     if move_to is not None:
         if move_to < 1 or move_to > seq.Count:
@@ -655,7 +745,7 @@ def _update_animation_impl(
     final_index = eff.Index
     exit_flag = bool(eff.Exit)
     effect_type = eff.EffectType
-    return {
+    result = {
         "success": True,
         "animation_index": final_index,
         "shape_name": eff.Shape.Name,
@@ -668,6 +758,15 @@ def _update_animation_impl(
         "exit": exit_flag,
         "category": _get_animation_category(effect_type, exit_flag),
     }
+
+    # Read back after-effect state
+    try:
+        after_effect_val = eff.EffectInformation.AfterEffect
+        result["after_effect"] = AFTER_EFFECT_NAMES.get(after_effect_val, str(after_effect_val))
+    except Exception:
+        pass
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -710,7 +809,7 @@ def add_animation(params: AddAnimationInput) -> str:
             params.exit,
             params.direction, params.repeat_count, params.auto_reverse,
             params.rewind, params.smooth_start, params.smooth_end,
-            params.trigger_shape,
+            params.trigger_shape, params.after_effect, params.dim_color,
         )
         return json.dumps(result)
     except Exception as e:
@@ -791,6 +890,7 @@ def update_animation(params: UpdateAnimationInput) -> str:
             params.delay, params.move_to, params.exit,
             params.direction, params.repeat_count, params.auto_reverse,
             params.rewind, params.smooth_start, params.smooth_end,
+            params.after_effect, params.dim_color,
         )
         return json.dumps(result)
     except Exception as e:
