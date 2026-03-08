@@ -533,7 +533,10 @@ def _add_animation_impl(
     # build_level creates multiple effects. Use _safe_refetch to recover.
     def _safe_refetch():
         """Re-fetch the first effect for this shape if effect_obj is stale."""
-        return the_seq.FindFirstAnimationFor(shape)
+        refetched = the_seq.FindFirstAnimationFor(shape)
+        if refetched is None:
+            raise RuntimeError("Could not find animation for shape after ConvertTo operation")
+        return refetched
 
     if text_unit_effect is not None:
         text_unit_int = TEXT_UNIT_EFFECT_MAP[text_unit_effect]
@@ -632,6 +635,34 @@ def _get_animation_category(effect_type, exit_flag):
     return "unknown"
 
 
+def _read_text_anim_info(eff) -> dict:
+    """Read text animation info from an effect's EffectInformation."""
+    info = {}
+    try:
+        val = eff.EffectInformation.BuildByLevelEffect
+        info["build_level"] = int(val)
+        info["build_level_name"] = BUILD_LEVEL_NAMES.get(val, f"Unknown({val})")
+    except Exception:
+        info["build_level"] = None
+        info["build_level_name"] = None
+    try:
+        val = eff.EffectInformation.TextUnitEffect
+        info["text_unit_effect"] = int(val)
+        info["text_unit_effect_name"] = TEXT_UNIT_EFFECT_NAMES.get(val, f"Unknown({val})")
+    except Exception:
+        info["text_unit_effect"] = None
+        info["text_unit_effect_name"] = None
+    try:
+        info["animate_in_reverse"] = bool(eff.EffectInformation.AnimateTextInReverse)
+    except Exception:
+        info["animate_in_reverse"] = None
+    try:
+        info["animate_background"] = bool(eff.EffectInformation.AnimateBackground)
+    except Exception:
+        info["animate_background"] = None
+    return info
+
+
 def _list_animations_impl(slide_index):
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
@@ -660,31 +691,7 @@ def _list_animations_impl(slide_index):
             after_effect_val = None
             after_effect_name = None
 
-        try:
-            build_level_val = eff.EffectInformation.BuildByLevelEffect
-            build_level_name = BUILD_LEVEL_NAMES.get(build_level_val, f"Unknown({build_level_val})")
-        except Exception:
-            build_level_val = None
-            build_level_name = None
-
-        try:
-            text_unit_val = eff.EffectInformation.TextUnitEffect
-            text_unit_name = TEXT_UNIT_EFFECT_NAMES.get(text_unit_val, f"Unknown({text_unit_val})")
-        except Exception:
-            text_unit_val = None
-            text_unit_name = None
-
-        try:
-            animate_in_reverse_val = bool(eff.EffectInformation.AnimateTextInReverse)
-        except Exception:
-            animate_in_reverse_val = None
-
-        try:
-            animate_background_val = bool(eff.EffectInformation.AnimateBackground)
-        except Exception:
-            animate_background_val = None
-
-        animations.append({
+        anim_dict = {
             "index": eff.Index,
             "shape_name": eff.Shape.Name,
             "effect_type": effect_type,
@@ -698,13 +705,9 @@ def _list_animations_impl(slide_index):
             "direction_name": direction_name,
             "after_effect": after_effect_val,
             "after_effect_name": after_effect_name,
-            "build_level": build_level_val,
-            "build_level_name": build_level_name,
-            "text_unit_effect": text_unit_val,
-            "text_unit_effect_name": text_unit_name,
-            "animate_in_reverse": animate_in_reverse_val,
-            "animate_background": animate_background_val,
-        })
+        }
+        anim_dict.update(_read_text_anim_info(eff))
+        animations.append(anim_dict)
 
     # Interactive sequences
     interactive = []
@@ -740,35 +743,7 @@ def _list_animations_impl(slide_index):
                 after_effect_val = None
                 after_effect_name = None
 
-            try:
-                build_level_val = eff.EffectInformation.BuildByLevelEffect
-                build_level_name = BUILD_LEVEL_NAMES.get(
-                    build_level_val, f"Unknown({build_level_val})"
-                )
-            except Exception:
-                build_level_val = None
-                build_level_name = None
-
-            try:
-                text_unit_val = eff.EffectInformation.TextUnitEffect
-                text_unit_name = TEXT_UNIT_EFFECT_NAMES.get(
-                    text_unit_val, f"Unknown({text_unit_val})"
-                )
-            except Exception:
-                text_unit_val = None
-                text_unit_name = None
-
-            try:
-                animate_in_reverse_val = bool(eff.EffectInformation.AnimateTextInReverse)
-            except Exception:
-                animate_in_reverse_val = None
-
-            try:
-                animate_background_val = bool(eff.EffectInformation.AnimateBackground)
-            except Exception:
-                animate_background_val = None
-
-            interactive.append({
+            anim_dict = {
                 "sequence_index": seq_idx,
                 "effect_index": eff_idx,
                 "shape_name": eff.Shape.Name,
@@ -789,13 +764,9 @@ def _list_animations_impl(slide_index):
                 "direction_name": direction_name,
                 "after_effect": after_effect_val,
                 "after_effect_name": after_effect_name,
-                "build_level": build_level_val,
-                "build_level_name": build_level_name,
-                "text_unit_effect": text_unit_val,
-                "text_unit_effect_name": text_unit_name,
-                "animate_in_reverse": animate_in_reverse_val,
-                "animate_background": animate_background_val,
-            })
+            }
+            anim_dict.update(_read_text_anim_info(eff))
+            interactive.append(anim_dict)
 
     return {
         "success": True,
@@ -907,28 +878,65 @@ def _update_animation_impl(
         eff.Timing.SmoothEnd = msoTrue if smooth_end else msoFalse
 
     # Text animation settings (applied via sequence, before after_effect)
+    # NOTE: ConvertTo* methods may invalidate the eff reference when
+    # build_level creates multiple effects. Use _safe_refetch to recover.
+    target_shape = eff.Shape
+
+    def _safe_refetch():
+        refetched = seq.FindFirstAnimationFor(target_shape)
+        if refetched is None:
+            raise RuntimeError("Could not find animation for shape after ConvertTo operation")
+        return refetched
+
     if build_level is not None:
         build_level_int = BUILD_LEVEL_MAP[build_level]
-        eff = seq.ConvertToBuildLevel(eff, build_level_int)
+        try:
+            eff = seq.ConvertToBuildLevel(eff, build_level_int)
+        except Exception:
+            eff = _safe_refetch()
+            eff = seq.ConvertToBuildLevel(eff, build_level_int)
     if text_unit_effect is not None:
         text_unit_int = TEXT_UNIT_EFFECT_MAP[text_unit_effect]
-        eff = seq.ConvertToTextUnitEffect(eff, text_unit_int)
+        try:
+            eff = seq.ConvertToTextUnitEffect(eff, text_unit_int)
+        except Exception:
+            eff = _safe_refetch()
+            eff = seq.ConvertToTextUnitEffect(eff, text_unit_int)
     if animate_in_reverse is not None:
-        eff = seq.ConvertToAnimateInReverse(
-            eff, msoTrue if animate_in_reverse else msoFalse,
-        )
+        try:
+            eff = seq.ConvertToAnimateInReverse(
+                eff, msoTrue if animate_in_reverse else msoFalse,
+            )
+        except Exception:
+            eff = _safe_refetch()
+            eff = seq.ConvertToAnimateInReverse(
+                eff, msoTrue if animate_in_reverse else msoFalse,
+            )
     if animate_background is not None:
-        eff = seq.ConvertToAnimateBackground(
-            eff, msoTrue if animate_background else msoFalse,
-        )
+        try:
+            eff = seq.ConvertToAnimateBackground(
+                eff, msoTrue if animate_background else msoFalse,
+            )
+        except Exception:
+            eff = _safe_refetch()
+            eff = seq.ConvertToAnimateBackground(
+                eff, msoTrue if animate_background else msoFalse,
+            )
 
     # After-effect (must be applied via sequence)
     if after_effect is not None:
         after_int = AFTER_EFFECT_MAP[after_effect]
-        if after_int == 1 and dim_color is not None:  # dim
-            eff = seq.ConvertToAfterEffect(eff, after_int, hex_to_int(dim_color))
-        else:
-            eff = seq.ConvertToAfterEffect(eff, after_int)
+        try:
+            if after_int == 1 and dim_color is not None:  # dim
+                eff = seq.ConvertToAfterEffect(eff, after_int, hex_to_int(dim_color))
+            else:
+                eff = seq.ConvertToAfterEffect(eff, after_int)
+        except Exception:
+            eff = _safe_refetch()
+            if after_int == 1 and dim_color is not None:
+                eff = seq.ConvertToAfterEffect(eff, after_int, hex_to_int(dim_color))
+            else:
+                eff = seq.ConvertToAfterEffect(eff, after_int)
 
     # Reorder last (after property changes to avoid index confusion)
     if move_to is not None:
