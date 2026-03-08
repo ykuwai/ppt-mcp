@@ -30,7 +30,7 @@ from ppt_com.tables import (
 )
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput, SetPictureFormatInput
 from ppt_com.shapes import AddShapeInput, UpdateShapeInput
-from ppt_com.animation import AddAnimationInput, UpdateAnimationInput
+from ppt_com.animation import AddAnimationInput, RemoveAnimationInput, UpdateAnimationInput
 from ppt_com.connectors import FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
@@ -1757,3 +1757,47 @@ class TestUpdateAnimationInputAfterEffect:
             animate_background=True,
         )
         assert inp.animate_background is True
+
+
+# ============================================================================
+# animation.py — RemoveAnimationInput (sequence_index)
+# ============================================================================
+class TestRemoveAnimationInputSequenceIndex:
+    """Tests for RemoveAnimationInput sequence_index field."""
+
+    def test_sequence_index_valid(self):
+        """sequence_index=1 is accepted."""
+        inp = RemoveAnimationInput(
+            slide_index=1, animation_index=1, sequence_index=1,
+        )
+        assert inp.sequence_index == 1
+
+    def test_sequence_index_zero(self):
+        """sequence_index=0 raises ValidationError (ge=1)."""
+        with pytest.raises(ValidationError):
+            RemoveAnimationInput(
+                slide_index=1, animation_index=1, sequence_index=0,
+            )
+
+
+# ============================================================================
+# animation.py — UpdateAnimationInput (sequence_index)
+# ============================================================================
+class TestUpdateAnimationInputSequenceIndex:
+    """Tests for UpdateAnimationInput sequence_index field."""
+
+    def test_sequence_index_valid(self):
+        """sequence_index=1 with a change param is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            sequence_index=1, duration=1.0,
+        )
+        assert inp.sequence_index == 1
+        assert inp.duration == 1.0
+
+    def test_sequence_index_alone_raises(self):
+        """sequence_index alone (no change param) raises ValidationError."""
+        with pytest.raises(ValidationError, match="At least one optional parameter"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1, sequence_index=1,
+            )
