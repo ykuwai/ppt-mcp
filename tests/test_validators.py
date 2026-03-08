@@ -13,6 +13,7 @@ These are pure Python tests — no COM or PowerPoint required.
 """
 
 import sys
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, "src")
 
@@ -1806,3 +1807,105 @@ class TestUpdateAnimationInputSequenceIndex:
             UpdateAnimationInput(
                 slide_index=1, animation_index=1, sequence_index=1,
             )
+
+
+# ============================================================================
+# OneDrive URL resolver
+# ============================================================================
+from utils.onedrive import resolve_local_path
+
+
+class TestOneDriveResolver:
+    """Tests for OneDrive URL to local path resolution."""
+
+    def test_local_path_passthrough(self):
+        """A regular local path is returned unchanged."""
+        path = r"C:\Users\test\Documents\presentation.pptx"
+        assert resolve_local_path(path) == path
+
+    def test_local_path_unc_passthrough(self):
+        """A UNC path is returned unchanged."""
+        path = r"\\server\share\file.pptx"
+        assert resolve_local_path(path) == path
+
+    def test_none_on_unknown_url(self):
+        """An unknown URL returns None when registry is empty and env vars unset."""
+        from utils import onedrive
+        with patch.object(onedrive.winreg, "OpenKey", side_effect=FileNotFoundError):
+            with patch.dict("os.environ", {}, clear=True):
+                result = resolve_local_path("https://unknown.example.com/file.pptx")
+                assert result is None
+
+    def test_url_decoding_spaces(self):
+        """URL-encoded spaces (%20) are decoded correctly."""
+        with patch("utils.onedrive._resolve_via_registry") as mock_reg:
+            mock_reg.return_value = None
+            with patch.dict(
+                "os.environ",
+                {"OneDriveConsumer": r"C:\Users\test\OneDrive"},
+                clear=True,
+            ):
+                with patch("os.path.isdir", return_value=True):
+                    result = resolve_local_path(
+                        "https://d.docs.live.net/ABC123/My%20Documents/file.pptx"
+                    )
+                    assert result is not None
+                    assert "My Documents" in result
+                    assert "%20" not in result
+
+    def test_url_decoding_japanese(self):
+        """URL-encoded Japanese characters are decoded correctly."""
+        with patch("utils.onedrive._resolve_via_registry") as mock_reg:
+            mock_reg.return_value = None
+            with patch.dict(
+                "os.environ",
+                {"OneDriveConsumer": r"C:\Users\test\OneDrive"},
+                clear=True,
+            ):
+                with patch("os.path.isdir", return_value=True):
+                    # Japanese "ドキュメント" URL-encoded
+                    encoded = "%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88"
+                    result = resolve_local_path(
+                        f"https://d.docs.live.net/ABC123/{encoded}/file.pptx"
+                    )
+                    assert result is not None
+                    assert "ドキュメント" in result
+
+    def test_registry_resolution(self):
+        """Registry-based resolution replaces URL prefix with mount point."""
+        from utils import onedrive
+
+        mock_providers_key = MagicMock()
+        mock_subkey = MagicMock()
+
+        with patch.object(
+            onedrive.winreg, "OpenKey",
+            side_effect=[mock_providers_key, mock_subkey],
+        ), patch.object(
+            onedrive.winreg, "EnumKey",
+            side_effect=["Personal", OSError],
+        ), patch.object(
+            onedrive.winreg, "QueryValueEx",
+            side_effect=[
+                ("https://d.docs.live.net/ABC123", None),  # UrlNamespace
+                (r"C:\Users\test\OneDrive", None),  # MountPoint
+            ],
+        ), patch.object(
+            onedrive.winreg, "CloseKey",
+        ):
+            result = onedrive._resolve_via_registry(
+                "https://d.docs.live.net/ABC123/Documents/test.pptx"
+            )
+            assert result == r"C:\Users\test\OneDrive\Documents\test.pptx"
+
+    def test_empty_string_passthrough(self):
+        """Empty string is returned as-is (not a URL)."""
+        assert resolve_local_path("") == ""
+
+    def test_exception_returns_none(self):
+        """If an unexpected exception occurs, None is returned."""
+        with patch("utils.onedrive._resolve_via_registry", side_effect=Exception("boom")):
+            with patch("utils.onedrive._resolve_via_env", side_effect=Exception("boom")):
+                # The outer try/except in resolve_local_path catches this
+                result = resolve_local_path("https://d.docs.live.net/ABC/file.pptx")
+                assert result is None
