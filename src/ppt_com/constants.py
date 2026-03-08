@@ -811,3 +811,32 @@ AFTER_EFFECT_MAP = {
 }
 
 AFTER_EFFECT_NAMES = {v: k for k, v in AFTER_EFFECT_MAP.items()}
+
+# ==============================================================================
+# MsoAnimateByLevel (text build level)
+# ==============================================================================
+msoAnimateLevelNone = 0
+msoAnimateTextByAllLevels = 1
+msoAnimateTextByFirstLevel = 2
+msoAnimateTextBySecondLevel = 3
+msoAnimateTextByThirdLevel = 4
+msoAnimateTextByFourthLevel = 5
+msoAnimateTextByFifthLevel = 6
+
+BUILD_LEVEL_MAP = {
+    "none": 0, "all_levels": 1, "first_level": 2, "second_level": 3,
+    "third_level": 4, "fourth_level": 5, "fifth_level": 6,
+}
+BUILD_LEVEL_NAMES = {v: k for k, v in BUILD_LEVEL_MAP.items()}
+
+# ==============================================================================
+# MsoAnimTextUnitEffect
+# ==============================================================================
+msoAnimTextUnitEffectByParagraph = 0
+msoAnimTextUnitEffectByCharacter = 1
+msoAnimTextUnitEffectByWord = 2
+
+TEXT_UNIT_EFFECT_MAP = {
+    "by_paragraph": 0, "by_character": 1, "by_word": 2,
+}
+TEXT_UNIT_EFFECT_NAMES = {v: k for k, v in TEXT_UNIT_EFFECT_MAP.items()}

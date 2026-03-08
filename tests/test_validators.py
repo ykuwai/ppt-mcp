@@ -1589,6 +1589,54 @@ class TestAddAnimationInput:
                 after_effect="dim", dim_color="red",
             )
 
+    def test_build_level_valid(self):
+        """build_level='first_level' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            build_level="first_level",
+        )
+        assert inp.build_level == "first_level"
+
+    def test_build_level_invalid(self):
+        """Invalid build_level raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown build_level"):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                build_level="invalid",
+            )
+
+    def test_text_unit_effect_valid(self):
+        """text_unit_effect='by_word' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            text_unit_effect="by_word",
+        )
+        assert inp.text_unit_effect == "by_word"
+
+    def test_text_unit_effect_invalid(self):
+        """Invalid text_unit_effect raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown text_unit_effect"):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                text_unit_effect="invalid",
+            )
+
+    def test_animate_in_reverse(self):
+        """animate_in_reverse=True is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            animate_in_reverse=True,
+        )
+        assert inp.animate_in_reverse is True
+
+    def test_animate_background(self):
+        """animate_background=False is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            animate_background=False,
+        )
+        assert inp.animate_background is False
+
 
 # ============================================================================
 # animation.py — UpdateAnimationInput (after_effect)
@@ -1661,3 +1709,51 @@ class TestUpdateAnimationInputAfterEffect:
                 slide_index=1, animation_index=1,
                 after_effect="dim", dim_color="red",
             )
+
+    def test_build_level_valid(self):
+        """build_level='first_level' is accepted as sole update param."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            build_level="first_level",
+        )
+        assert inp.build_level == "first_level"
+
+    def test_build_level_invalid(self):
+        """Invalid build_level raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown build_level"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                build_level="invalid",
+            )
+
+    def test_text_unit_effect_valid(self):
+        """text_unit_effect='by_character' is accepted as sole update param."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            text_unit_effect="by_character",
+        )
+        assert inp.text_unit_effect == "by_character"
+
+    def test_text_unit_effect_invalid(self):
+        """Invalid text_unit_effect raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown text_unit_effect"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                text_unit_effect="invalid",
+            )
+
+    def test_animate_in_reverse_valid(self):
+        """animate_in_reverse=True is accepted as sole update param."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            animate_in_reverse=True,
+        )
+        assert inp.animate_in_reverse is True
+
+    def test_animate_background_valid(self):
+        """animate_background=True is accepted as sole update param."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            animate_background=True,
+        )
+        assert inp.animate_background is True
