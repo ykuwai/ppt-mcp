@@ -92,6 +92,18 @@ def _resolve_via_registry(full_name: str) -> Optional[str]:
 
                     if full_name.startswith(url_namespace):
                         relative = full_name[len(url_namespace):]
+
+                        # If UrlNamespace lacks the CID (e.g. "https://d.docs.live.net"
+                        # without "/<CID>"), the relative path starts with the CID
+                        # segment. Strip it so the local path doesn't include the CID.
+                        if "d.docs.live.net" in url_namespace and "/" in relative:
+                            cid_candidate, _, after_cid = relative.partition("/")
+                            # CID is a hex string (8-16 chars); if it looks like one, skip it
+                            if cid_candidate and all(
+                                c in "0123456789abcdefABCDEF" for c in cid_candidate
+                            ):
+                                relative = after_cid
+
                         relative = unquote(relative)
                         relative = relative.replace("/", "\\")
 

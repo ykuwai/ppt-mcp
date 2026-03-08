@@ -1898,6 +1898,35 @@ class TestOneDriveResolver:
             )
             assert result == r"C:\Users\test\OneDrive\Documents\test.pptx"
 
+    def test_registry_resolution_without_cid(self):
+        """Registry UrlNamespace without CID still resolves correctly."""
+        from utils import onedrive
+
+        mock_providers_key = MagicMock()
+        mock_subkey = MagicMock()
+
+        # UrlNamespace lacks the CID — just "https://d.docs.live.net"
+        with patch.object(
+            onedrive.winreg, "OpenKey",
+            side_effect=[mock_providers_key, mock_subkey],
+        ), patch.object(
+            onedrive.winreg, "EnumKey",
+            side_effect=["Personal", OSError],
+        ), patch.object(
+            onedrive.winreg, "QueryValueEx",
+            side_effect=[
+                ("https://d.docs.live.net", None),  # UrlNamespace (no CID)
+                (r"C:\Users\test\OneDrive", None),  # MountPoint
+            ],
+        ), patch.object(
+            onedrive.winreg, "CloseKey",
+        ):
+            result = onedrive._resolve_via_registry(
+                "https://d.docs.live.net/45333604723378ea/Udemy%E8%AC%9B%E5%BA%A7/file.pptx"
+            )
+            # CID should be stripped, Japanese should be decoded
+            assert result == r"C:\Users\test\OneDrive\Udemy講座\file.pptx"
+
     def test_empty_string_passthrough(self):
         """Empty string is returned as-is (not a URL)."""
         assert resolve_local_path("") == ""
