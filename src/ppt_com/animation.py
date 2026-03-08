@@ -251,7 +251,14 @@ class RemoveAnimationInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
-    animation_index: int = Field(..., ge=1, description="1-based animation index in the main sequence")
+    animation_index: int = Field(
+        ..., ge=1,
+        description="1-based animation index (effect_index) within the sequence. Works for both main and interactive sequences.",
+    )
+    sequence_index: Optional[int] = Field(
+        default=None, ge=1,
+        description="Interactive sequence index (1-based). If omitted, operates on main sequence. Use ppt_list_animations to find sequence_index.",
+    )
 
 
 class ClearAnimationsInput(BaseModel):
@@ -266,11 +273,18 @@ class ClearAnimationsInput(BaseModel):
 
 
 class UpdateAnimationInput(BaseModel):
-    """Input for updating an existing animation in the main sequence."""
+    """Input for updating an existing animation in the main or interactive sequence."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
-    animation_index: int = Field(..., ge=1, description="1-based animation index in the main sequence")
+    animation_index: int = Field(
+        ..., ge=1,
+        description="1-based animation index (effect_index) within the sequence. Works for both main and interactive sequences.",
+    )
+    sequence_index: Optional[int] = Field(
+        default=None, ge=1,
+        description="Interactive sequence index (1-based). If omitted, operates on main sequence. Use ppt_list_animations to find sequence_index.",
+    )
     effect: Optional[Union[int, str]] = Field(
         default=None,
         description=(
@@ -778,13 +792,22 @@ def _list_animations_impl(slide_index):
     }
 
 
-def _remove_animation_impl(slide_index, animation_index):
+def _remove_animation_impl(slide_index, animation_index, sequence_index):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
-    seq = slide.TimeLine.MainSequence
+    if sequence_index is not None:
+        int_seqs = slide.TimeLine.InteractiveSequences
+        if sequence_index < 1 or sequence_index > int_seqs.Count:
+            raise ValueError(
+                f"Sequence index {sequence_index} out of range (1-{int_seqs.Count})"
+            )
+        seq = int_seqs(sequence_index)
+    else:
+        seq = slide.TimeLine.MainSequence
+
     if animation_index < 1 or animation_index > seq.Count:
         raise ValueError(
             f"Animation index {animation_index} out of range (1-{seq.Count})"
@@ -832,7 +855,8 @@ def _clear_animations_impl(slide_index, clear_transitions):
 
 
 def _update_animation_impl(
-    slide_index, animation_index, effect, trigger, duration, delay, move_to, exit_flag,
+    slide_index, animation_index, sequence_index,
+    effect, trigger, duration, delay, move_to, exit_flag,
     direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
     after_effect, dim_color,
     build_level, text_unit_effect, animate_in_reverse, animate_background,
@@ -842,7 +866,16 @@ def _update_animation_impl(
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
-    seq = slide.TimeLine.MainSequence
+    if sequence_index is not None:
+        int_seqs = slide.TimeLine.InteractiveSequences
+        if sequence_index < 1 or sequence_index > int_seqs.Count:
+            raise ValueError(
+                f"Sequence index {sequence_index} out of range (1-{int_seqs.Count})"
+            )
+        seq = int_seqs(sequence_index)
+    else:
+        seq = slide.TimeLine.MainSequence
+
     if animation_index < 1 or animation_index > seq.Count:
         raise ValueError(
             f"Animation index {animation_index} out of range (1-{seq.Count})"
@@ -1043,10 +1076,10 @@ def list_animations(params: ListAnimationsInput) -> str:
 
 
 def remove_animation(params: RemoveAnimationInput) -> str:
-    """Remove a single animation from a slide's main sequence.
+    """Remove a single animation from a slide's main or interactive sequence.
 
     Args:
-        params: Slide index and 1-based animation index.
+        params: Slide index, 1-based animation index, and optional sequence_index.
 
     Returns:
         JSON confirming removal and remaining count.
@@ -1054,7 +1087,7 @@ def remove_animation(params: RemoveAnimationInput) -> str:
     try:
         result = ppt.execute(
             _remove_animation_impl,
-            params.slide_index, params.animation_index,
+            params.slide_index, params.animation_index, params.sequence_index,
         )
         return json.dumps(result)
     except Exception as e:
@@ -1081,10 +1114,10 @@ def clear_animations(params: ClearAnimationsInput) -> str:
 
 
 def update_animation(params: UpdateAnimationInput) -> str:
-    """Update an existing animation in the main sequence.
+    """Update an existing animation in the main or interactive sequence.
 
     Args:
-        params: Slide index, animation index, and properties to change.
+        params: Slide index, animation index, optional sequence_index, and properties to change.
 
     Returns:
         JSON with the updated animation state.
@@ -1092,7 +1125,7 @@ def update_animation(params: UpdateAnimationInput) -> str:
     try:
         result = ppt.execute(
             _update_animation_impl,
-            params.slide_index, params.animation_index,
+            params.slide_index, params.animation_index, params.sequence_index,
             params.effect, params.trigger, params.duration,
             params.delay, params.move_to, params.exit,
             params.direction, params.repeat_count, params.auto_reverse,
@@ -1197,10 +1230,12 @@ def register_tools(mcp):
         },
     )
     async def tool_remove_animation(params: RemoveAnimationInput) -> str:
-        """Remove a single animation from a slide's main sequence.
+        """Remove a single animation from a slide's main or interactive sequence.
 
-        Specify the 1-based animation index. Remaining animations re-index
-        automatically. Use ppt_list_animations to find the correct index.
+        Specify the 1-based animation index (effect_index). Remaining animations
+        re-index automatically. Use ppt_list_animations to find the correct index.
+        For interactive sequences, provide sequence_index to target a specific
+        interactive sequence instead of the main sequence.
         """
         return remove_animation(params)
 
@@ -1233,7 +1268,7 @@ def register_tools(mcp):
         },
     )
     async def tool_update_animation(params: UpdateAnimationInput) -> str:
-        """Update an existing animation in a slide's main sequence.
+        """Update an existing animation in a slide's main or interactive sequence.
 
         Change effect type, trigger, duration, delay, direction, exit flag,
         repeat_count, auto_reverse, rewind, smooth_start, or smooth_end.
@@ -1244,6 +1279,8 @@ def register_tools(mcp):
         to reverse paragraph order, animate_background to animate background
         separately from text.
         Use move_to to reorder the animation within the sequence.
+        For interactive sequences, provide sequence_index to target a specific
+        interactive sequence instead of the main sequence.
         Use ppt_list_animations first to find the correct animation index.
         """
         return update_animation(params)
