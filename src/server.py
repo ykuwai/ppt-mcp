@@ -57,7 +57,7 @@ mcp = FastMCP(
 ## Getting started
 
 1. Call `ppt_activate_presentation` first — locks all tools to a specific file and prevents accidental edits to the wrong presentation.
-2. Call `ppt_get_presentation_info` to understand the presentation — slide count, dimensions, template, current default fonts, and accent colors. Use this to inform all subsequent decisions. To read the existing slide content, call `ppt_get_all_text` — it returns all text as pseudo-Markdown with layout analysis, heading detection, and formatting markers.
+2. Call `ppt_get_presentation_info` to understand the presentation — slide count, dimensions, template, current default fonts, and accent colors. Use this to inform all subsequent decisions. When saving files (e.g., exported markdown, images), use the presentation's `local_dir` from `ppt_get_presentation_info` as the default save directory. To read the existing slide content, call `ppt_get_all_text` — it returns all text as pseudo-Markdown with layout analysis, heading detection, and formatting markers.
 3. When adding slides, use `ppt_add_slide` with `count` to create multiple slides at once instead of calling it repeatedly.
 4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale Windows, the slide master default is often 游ゴシック, which renders thin and illegible when projected. Preferred fonts: BIZ UDPゴシック (Japanese) + Segoe UI (Latin).
 5. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
