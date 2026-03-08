@@ -1522,3 +1522,142 @@ class TestAddAnimationInput:
                 slide_index=1, shape_name_or_index="Shape 1",
                 trigger="on_shape_click",
             )
+
+    def test_after_effect_valid(self):
+        """after_effect='hide' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="hide",
+        )
+        assert inp.after_effect == "hide"
+
+    def test_after_effect_none(self):
+        """after_effect='none' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="none",
+        )
+        assert inp.after_effect == "none"
+
+    def test_after_effect_hide_on_next_click(self):
+        """after_effect='hide_on_next_click' is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="hide_on_next_click",
+        )
+        assert inp.after_effect == "hide_on_next_click"
+
+    def test_after_effect_dim_with_color(self):
+        """after_effect='dim' with dim_color is accepted."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="dim", dim_color="#808080",
+        )
+        assert inp.after_effect == "dim"
+        assert inp.dim_color == "#808080"
+
+    def test_after_effect_dim_without_color(self):
+        """after_effect='dim' without dim_color is accepted (dim_color is optional)."""
+        inp = AddAnimationInput(
+            slide_index=1, shape_name_or_index="Shape 1",
+            after_effect="dim",
+        )
+        assert inp.after_effect == "dim"
+        assert inp.dim_color is None
+
+    def test_after_effect_invalid(self):
+        """Invalid after_effect raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown after_effect"):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                after_effect="invalid",
+            )
+
+    def test_dim_color_without_dim(self):
+        """dim_color without after_effect='dim' raises ValidationError."""
+        with pytest.raises(ValidationError, match="dim_color can only be used"):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                after_effect="hide", dim_color="#808080",
+            )
+
+    def test_dim_color_invalid_format(self):
+        """dim_color with invalid format raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddAnimationInput(
+                slide_index=1, shape_name_or_index="Shape 1",
+                after_effect="dim", dim_color="red",
+            )
+
+
+# ============================================================================
+# animation.py — UpdateAnimationInput (after_effect)
+# ============================================================================
+class TestUpdateAnimationInputAfterEffect:
+    """Tests for UpdateAnimationInput after_effect fields."""
+
+    def test_after_effect_valid(self):
+        """after_effect='hide' is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="hide",
+        )
+        assert inp.after_effect == "hide"
+
+    def test_after_effect_none(self):
+        """after_effect='none' is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="none",
+        )
+        assert inp.after_effect == "none"
+
+    def test_after_effect_hide_on_next_click(self):
+        """after_effect='hide_on_next_click' is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="hide_on_next_click",
+        )
+        assert inp.after_effect == "hide_on_next_click"
+
+    def test_after_effect_dim_with_color(self):
+        """after_effect='dim' with dim_color is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="dim", dim_color="#808080",
+        )
+        assert inp.after_effect == "dim"
+        assert inp.dim_color == "#808080"
+
+    def test_after_effect_dim_without_color(self):
+        """after_effect='dim' without dim_color is accepted."""
+        inp = UpdateAnimationInput(
+            slide_index=1, animation_index=1,
+            after_effect="dim",
+        )
+        assert inp.after_effect == "dim"
+        assert inp.dim_color is None
+
+    def test_after_effect_invalid(self):
+        """Invalid after_effect raises ValidationError."""
+        with pytest.raises(ValidationError, match="Unknown after_effect"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                after_effect="invalid",
+            )
+
+    def test_dim_color_without_dim(self):
+        """dim_color without after_effect='dim' raises ValidationError."""
+        with pytest.raises(ValidationError, match="dim_color can only be used"):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                after_effect="hide", dim_color="#808080",
+            )
+
+    def test_dim_color_invalid_format(self):
+        """dim_color with invalid format raises ValidationError."""
+        with pytest.raises(ValidationError):
+            UpdateAnimationInput(
+                slide_index=1, animation_index=1,
+                after_effect="dim", dim_color="red",
+            )

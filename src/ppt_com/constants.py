@@ -797,3 +797,17 @@ PICTURE_COLOR_TYPE_MAP = {
 }
 
 PICTURE_COLOR_TYPE_NAMES = {v: k for k, v in PICTURE_COLOR_TYPE_MAP.items()}
+
+# ==============================================================================
+# MsoAnimAfterEffect
+# ==============================================================================
+msoAnimAfterEffectNone = 0
+msoAnimAfterEffectDim = 1
+msoAnimAfterEffectHide = 2
+msoAnimAfterEffectHideOnNextClick = 3
+
+AFTER_EFFECT_MAP = {
+    "none": 0, "dim": 1, "hide": 2, "hide_on_next_click": 3,
+}
+
+AFTER_EFFECT_NAMES = {v: k for k, v in AFTER_EFFECT_MAP.items()}
