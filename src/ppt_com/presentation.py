@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from utils.color import int_to_hex
 from utils.com_wrapper import ppt
+from utils.onedrive import resolve_local_path
 from ppt_com.constants import (
     msoTrue,
     msoFalse,
@@ -528,9 +529,15 @@ def _get_presentation_info_impl(
     except Exception:
         pass
 
+    full_name = pres.FullName
+    local_path = resolve_local_path(full_name)
+    local_dir = os.path.dirname(local_path) if local_path else None
+
     return {
         "name": pres.Name,
-        "full_name": pres.FullName,
+        "full_name": full_name,
+        "local_path": local_path,
+        "local_dir": local_dir,
         "path": pres.Path,
         "slides_count": pres.Slides.Count,
         "read_only": int(pres.ReadOnly) == -1,  # msoTrue=-1; bool() misidentifies msoCTrue(1)
@@ -868,9 +875,10 @@ def register_tools(mcp):
     ) -> str:
         """Get detailed information about a presentation.
 
-        Returns name, file path, slide count, dimensions, save status,
-        template name, default fonts (title/body, Latin/East Asian),
-        and accent colors (accent1–accent6).
+        Returns name, file path, local_path (resolved from OneDrive URL),
+        local_dir (directory of local_path), slide count, dimensions,
+        save status, template name, default fonts (title/body,
+        Latin/East Asian), and accent colors (accent1–accent6).
         """
         return get_presentation_info(params)
 
