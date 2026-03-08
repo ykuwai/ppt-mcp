@@ -29,7 +29,7 @@ def resolve_local_path(full_name: str) -> Optional[str]:
     """
     try:
         # Not a URL — already a local path
-        if not full_name.startswith("http"):
+        if not full_name.lower().startswith(("http://", "https://")):
             return full_name
 
         # Try registry-based resolution first
@@ -163,7 +163,7 @@ def _resolve_via_env(full_name: str) -> Optional[str]:
         # SharePoint / OneDrive for Business: https://<tenant>.sharepoint.com/...
         if ".sharepoint.com" in decoded_url:
             # Extract path after /Documents/ or /Shared Documents/
-            for marker in ("/Documents/", "/Shared%20Documents/", "/Shared Documents/"):
+            for marker in ("/Documents/", "/Shared Documents/"):
                 idx = decoded_url.find(marker)
                 if idx >= 0:
                     relative = decoded_url[idx + len(marker):]
