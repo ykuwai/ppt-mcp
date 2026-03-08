@@ -855,11 +855,11 @@ def _clear_animations_impl(slide_index, clear_transitions):
 
 
 def _update_animation_impl(
-    slide_index, animation_index, effect, trigger, duration, delay, move_to, exit_flag,
+    slide_index, animation_index, sequence_index,
+    effect, trigger, duration, delay, move_to, exit_flag,
     direction, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
     after_effect, dim_color,
     build_level, text_unit_effect, animate_in_reverse, animate_background,
-    sequence_index,
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -1125,7 +1125,7 @@ def update_animation(params: UpdateAnimationInput) -> str:
     try:
         result = ppt.execute(
             _update_animation_impl,
-            params.slide_index, params.animation_index,
+            params.slide_index, params.animation_index, params.sequence_index,
             params.effect, params.trigger, params.duration,
             params.delay, params.move_to, params.exit,
             params.direction, params.repeat_count, params.auto_reverse,
@@ -1133,7 +1133,6 @@ def update_animation(params: UpdateAnimationInput) -> str:
             params.after_effect, params.dim_color,
             params.build_level, params.text_unit_effect,
             params.animate_in_reverse, params.animate_background,
-            params.sequence_index,
         )
         return json.dumps(result)
     except Exception as e:

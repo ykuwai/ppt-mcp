@@ -1779,6 +1779,11 @@ class TestRemoveAnimationInputSequenceIndex:
                 slide_index=1, animation_index=1, sequence_index=0,
             )
 
+    def test_sequence_index_default_none(self):
+        """Omitting sequence_index defaults to None (main sequence)."""
+        inp = RemoveAnimationInput(slide_index=1, animation_index=1)
+        assert inp.sequence_index is None
+
 
 # ============================================================================
 # animation.py — UpdateAnimationInput (sequence_index)
