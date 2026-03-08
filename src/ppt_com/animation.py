@@ -529,32 +529,73 @@ def _add_animation_impl(
         effect_obj.Timing.SmoothEnd = msoTrue if smooth_end else msoFalse
 
     # Text animation settings (applied via sequence, before after_effect)
+    # NOTE: ConvertTo* methods may invalidate the effect_obj reference when
+    # build_level creates multiple effects. Use _safe_refetch to recover.
+    def _safe_refetch():
+        """Re-fetch the first effect for this shape if effect_obj is stale."""
+        return the_seq.FindFirstAnimationFor(shape)
+
     if text_unit_effect is not None:
         text_unit_int = TEXT_UNIT_EFFECT_MAP[text_unit_effect]
-        effect_obj = the_seq.ConvertToTextUnitEffect(effect_obj, text_unit_int)
+        try:
+            effect_obj = the_seq.ConvertToTextUnitEffect(effect_obj, text_unit_int)
+        except Exception:
+            effect_obj = _safe_refetch()
+            effect_obj = the_seq.ConvertToTextUnitEffect(effect_obj, text_unit_int)
     if animate_in_reverse is not None:
-        effect_obj = the_seq.ConvertToAnimateInReverse(
-            effect_obj, msoTrue if animate_in_reverse else msoFalse,
-        )
-    if animate_background is not None:
-        effect_obj = the_seq.ConvertToAnimateBackground(
-            effect_obj, msoTrue if animate_background else msoFalse,
-        )
+        try:
+            effect_obj = the_seq.ConvertToAnimateInReverse(
+                effect_obj, msoTrue if animate_in_reverse else msoFalse,
+            )
+        except Exception:
+            effect_obj = _safe_refetch()
+            effect_obj = the_seq.ConvertToAnimateInReverse(
+                effect_obj, msoTrue if animate_in_reverse else msoFalse,
+            )
+    # When build_level is set, default animate_background to False so
+    # text paragraphs animate separately from the shape background.
+    effective_bg = animate_background
+    if effective_bg is None and build_level is not None and build_level != "none":
+        effective_bg = False
+    if effective_bg is not None:
+        try:
+            effect_obj = the_seq.ConvertToAnimateBackground(
+                effect_obj, msoTrue if effective_bg else msoFalse,
+            )
+        except Exception:
+            effect_obj = _safe_refetch()
+            effect_obj = the_seq.ConvertToAnimateBackground(
+                effect_obj, msoTrue if effective_bg else msoFalse,
+            )
 
     # After-effect (must be applied via sequence, not effect directly)
     if after_effect is not None:
         after_int = AFTER_EFFECT_MAP[after_effect]
-        if after_int == 1 and dim_color is not None:  # dim
-            effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int, hex_to_int(dim_color))
-        else:
-            effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int)
+        try:
+            if after_int == 1 and dim_color is not None:  # dim
+                effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int, hex_to_int(dim_color))
+            else:
+                effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int)
+        except Exception:
+            effect_obj = _safe_refetch()
+            if after_int == 1 and dim_color is not None:
+                effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int, hex_to_int(dim_color))
+            else:
+                effect_obj = the_seq.ConvertToAfterEffect(effect_obj, after_int)
+
+    # Safely get final effect reference for result
+    try:
+        anim_index = effect_obj.Index
+    except Exception:
+        effect_obj = _safe_refetch()
+        anim_index = effect_obj.Index if effect_obj else 0
 
     result = {
         "success": True,
         "shape_name": shape.Name,
         "effect": effect_int,
         "exit": exit_flag,
-        "animation_index": effect_obj.Index,
+        "animation_index": anim_index,
     }
 
     # Read back after-effect state
