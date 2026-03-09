@@ -1938,3 +1938,123 @@ class TestOneDriveResolver:
                 # The outer try/except in resolve_local_path catches this
                 result = resolve_local_path("https://d.docs.live.net/ABC/file.pptx")
                 assert result is None
+
+
+# ============================================================================
+# export.py — ExportImagesInput (file_name)
+# ============================================================================
+from ppt_com.export import ExportImagesInput
+
+
+class TestExportImagesInputFileName:
+    """Tests for ExportImagesInput file_name field."""
+
+    def test_file_name_default_none(self):
+        """file_name defaults to None."""
+        inp = ExportImagesInput(output_dir="C:/tmp")
+        assert inp.file_name is None
+
+    def test_file_name_with_slide_index(self):
+        """file_name is accepted alongside slide_index."""
+        inp = ExportImagesInput(
+            output_dir="C:/tmp", slide_index=1, file_name="cover.png",
+        )
+        assert inp.file_name == "cover.png"
+        assert inp.slide_index == 1
+
+    def test_file_name_without_extension(self):
+        """file_name without extension is accepted (extension added at runtime)."""
+        inp = ExportImagesInput(
+            output_dir="C:/tmp", slide_index=1, file_name="cover",
+        )
+        assert inp.file_name == "cover"
+
+    def test_file_name_without_slide_index_raises(self):
+        """file_name without slide_index raises ValidationError."""
+        with pytest.raises(ValidationError, match="file_name requires slide_index"):
+            ExportImagesInput(
+                output_dir="C:/tmp", file_name="cover.png",
+            )
+
+
+# ============================================================================
+# text.py — FormatTextInput / FormatTextRangeInput (highlight_color)
+# ============================================================================
+from ppt_com.text import FormatTextInput, FormatTextRangeInput
+
+
+class TestFormatTextHighlightColor:
+    """Tests for highlight_color field on FormatTextInput."""
+
+    def test_highlight_color_default_none(self):
+        """highlight_color defaults to None."""
+        inp = FormatTextInput(slide_index=1, shape_name_or_index=1, bold=True)
+        assert inp.highlight_color is None
+
+    def test_highlight_color_valid(self):
+        """highlight_color accepts hex string."""
+        inp = FormatTextInput(
+            slide_index=1, shape_name_or_index=1,
+            highlight_color="#FFFF00",
+        )
+        assert inp.highlight_color == "#FFFF00"
+
+    def test_highlight_color_clear(self):
+        """highlight_color accepts 'clear' to remove highlight."""
+        inp = FormatTextInput(
+            slide_index=1, shape_name_or_index=1,
+            highlight_color="clear",
+        )
+        assert inp.highlight_color == "clear"
+
+    def test_highlight_color_invalid_rejected(self):
+        """Invalid highlight_color string raises ValidationError."""
+        with pytest.raises(ValidationError, match="highlight_color must be"):
+            FormatTextInput(
+                slide_index=1, shape_name_or_index=1,
+                highlight_color="not-a-color",
+            )
+
+    def test_highlight_color_missing_hash_rejected(self):
+        """Hex without '#' prefix is rejected."""
+        with pytest.raises(ValidationError, match="highlight_color must be"):
+            FormatTextInput(
+                slide_index=1, shape_name_or_index=1,
+                highlight_color="FFFF00",
+            )
+
+
+class TestFormatTextRangeHighlightColor:
+    """Tests for highlight_color field on FormatTextRangeInput."""
+
+    def test_highlight_color_default_none(self):
+        """highlight_color defaults to None."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            start=1, length=5, bold=True,
+        )
+        assert inp.highlight_color is None
+
+    def test_highlight_color_valid(self):
+        """highlight_color accepts hex string."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            start=1, length=5, highlight_color="#00FF00",
+        )
+        assert inp.highlight_color == "#00FF00"
+
+    def test_highlight_color_clear(self):
+        """highlight_color accepts 'clear' for range."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            start=1, length=5, highlight_color="clear",
+        )
+        assert inp.highlight_color == "clear"
+
+    def test_highlight_color_invalid_rejected(self):
+        """Invalid highlight_color string raises ValidationError."""
+        with pytest.raises(ValidationError, match="highlight_color must be"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                start=1, length=5, highlight_color="bad",
+            )

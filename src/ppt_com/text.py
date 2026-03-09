@@ -3,9 +3,11 @@
 import json
 import logging
 import os
+import re
+import time
 from typing import List, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
@@ -137,6 +139,21 @@ class FormatTextInput(BaseModel):
         default=None,
         description="Theme color name (e.g. 'accent1', 'dark1')"
     )
+    highlight_color: Optional[str] = Field(
+        default=None,
+        description="Text highlight (marker) color as '#RRGGBB' hex string, or 'clear' to remove highlight. Requires Office 2019+.",
+    )
+
+    @field_validator("highlight_color")
+    @classmethod
+    def validate_highlight_color(cls, v):
+        if v is None:
+            return v
+        if v.lower() == "clear":
+            return v
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", v):
+            raise ValueError("highlight_color must be '#RRGGBB' hex string or 'clear'")
+        return v
 
 
 class FormatTextRangeInput(BaseModel):
@@ -160,6 +177,21 @@ class FormatTextRangeInput(BaseModel):
         default=None,
         description="Theme color name (e.g. 'accent1', 'dark1')"
     )
+    highlight_color: Optional[str] = Field(
+        default=None,
+        description="Text highlight (marker) color as '#RRGGBB' hex string, or 'clear' to remove highlight. Requires Office 2019+.",
+    )
+
+    @field_validator("highlight_color")
+    @classmethod
+    def validate_highlight_color(cls, v):
+        if v is None:
+            return v
+        if v.lower() == "clear":
+            return v
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", v):
+            raise ValueError("highlight_color must be '#RRGGBB' hex string or 'clear'")
+        return v
 
 
 class SetParagraphFormatInput(BaseModel):
@@ -849,6 +881,167 @@ def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
     return result
 
 
+def _apply_highlight(shape, highlight_color, start=None, length=None):
+    """Apply or clear text highlight color via TextFrame2.
+
+    Args:
+        shape: PowerPoint Shape COM object.
+        highlight_color: Hex color string (e.g. '#FFFF00'), or 'clear' to remove.
+        start: 1-based start position (None for full range).
+        length: Number of characters (None for full range).
+    """
+    if highlight_color.lower() == "clear":
+        _clear_highlight(shape, start, length)
+        return
+
+    # Imported locally — only available on Windows where COM is used
+    import win32com.client
+    tr2 = shape.TextFrame2.TextRange
+    if start is not None and length is not None:
+        target = _get_textrange2_characters(tr2, start, length)
+    else:
+        target = tr2
+    target.Font.Highlight.RGB = hex_to_int(highlight_color)
+
+
+def _get_textrange2_characters(tr2, start, length):
+    """Get a TextRange2.Characters sub-range via InvokeTypes.
+
+    pywin32 late-binding dispatches Characters(start, length) incorrectly,
+    so we call the COM method directly via InvokeTypes.
+    """
+    import win32com.client
+    oleobj = tr2._oleobj_
+    dispid = oleobj.GetIDsOfNames('Characters')
+    # InvokeTypes args:
+    #   2 = DISPATCH_PROPERTYGET
+    #   (9, 0) = return type VT_DISPATCH, no flags
+    #   (12, 17) = VT_VARIANT, PARAMFLAG_FIN|PARAMFLAG_FHASDEFAULT (optional input)
+    result = oleobj.InvokeTypes(
+        dispid, 0, 2,
+        (9, 0),
+        ((12, 17), (12, 17)),
+        start, length,
+    )
+    return win32com.client.Dispatch(result)
+
+
+def _clear_highlight(shape, start=None, length=None):
+    """Clear text highlight by using ClearFormatting and restoring font properties.
+
+    COM does not expose a direct method to remove highlights. This workaround:
+    1. Saves per-run font formatting of the target range.
+    2. Selects the text and executes ClearFormatting (clears highlight + all formatting).
+    3. Restores the saved formatting so only the highlight is removed.
+
+    Note: Requires the PowerPoint window to be visible and active, because
+    Select() + ExecuteMso("ClearFormatting") operates through the UI layer.
+    """
+    app = shape.Application
+    tr = shape.TextFrame.TextRange
+
+    if start is not None and length is not None:
+        target = tr.Characters(start, length)
+    else:
+        target = tr
+
+    # Step 1: Save per-run formatting
+    runs = _save_run_formatting(target)
+
+    # Step 2: Select text and clear formatting (removes highlight + all formatting).
+    # Sleep durations give the COM/UI layer time to process the selection and
+    # ribbon command. These are empirically chosen minimums that work reliably
+    # on typical hardware; very slow machines may need longer.
+    target.Select()
+    time.sleep(0.15)
+    app.CommandBars.ExecuteMso("ClearFormatting")
+    time.sleep(0.05)
+
+    # Step 3: Restore saved formatting
+    # Re-fetch the range after ClearFormatting (COM object may be stale)
+    if start is not None and length is not None:
+        target = shape.TextFrame.TextRange.Characters(start, length)
+    else:
+        target = shape.TextFrame.TextRange
+    _restore_run_formatting(target, runs)
+
+
+def _save_run_formatting(text_range):
+    """Save per-run font formatting for later restoration.
+
+    Groups consecutive characters with identical formatting into runs
+    to minimize the number of COM calls during restore.
+    """
+    total = text_range.Length
+    if total == 0:
+        return []
+
+    runs = []
+    i = 1
+    while i <= total:
+        ch = text_range.Characters(i, 1)
+        font = ch.Font
+        fmt = {
+            'start': i,
+            'bold': font.Bold,
+            'italic': font.Italic,
+            'underline': font.Underline,
+            'size': font.Size,
+            'color_rgb': font.Color.RGB,
+            'name': font.Name,
+        }
+        try:
+            fmt['name_far_east'] = font.NameFarEast
+        except Exception as e:
+            logger.debug("NameFarEast unavailable at char %d: %s", i, e)
+
+        # Extend run while formatting matches
+        j = i + 1
+        while j <= total:
+            ch2 = text_range.Characters(j, 1)
+            f2 = ch2.Font
+            if not (f2.Bold == fmt['bold'] and
+                    f2.Italic == fmt['italic'] and
+                    f2.Underline == fmt['underline'] and
+                    f2.Size == fmt['size'] and
+                    f2.Color.RGB == fmt['color_rgb'] and
+                    f2.Name == fmt['name']):
+                break
+            # Compare NameFarEast if available
+            if 'name_far_east' in fmt:
+                try:
+                    if f2.NameFarEast != fmt['name_far_east']:
+                        break
+                except Exception as e:
+                    logger.debug("NameFarEast comparison failed at char %d: %s", j, e)
+                    break
+            j += 1
+
+        fmt['length'] = j - i
+        runs.append(fmt)
+        i = j
+
+    return runs
+
+
+def _restore_run_formatting(text_range, runs):
+    """Restore per-run font formatting saved by _save_run_formatting."""
+    for r in runs:
+        chars = text_range.Characters(r['start'], r['length'])
+        font = chars.Font
+        font.Bold = r['bold']
+        font.Italic = r['italic']
+        font.Underline = r['underline']
+        font.Size = r['size']
+        font.Color.RGB = r['color_rgb']
+        font.Name = r['name']
+        if 'name_far_east' in r:
+            try:
+                font.NameFarEast = r['name_far_east']
+            except Exception as e:
+                logger.debug("Failed to restore NameFarEast: %s", e)
+
+
 def _apply_font_props(font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme):
     """Apply font properties to a Font COM object."""
     if font_name is not None:
@@ -872,7 +1065,7 @@ def _apply_font_props(font, font_name, font_name_fareast, font_size, bold, itali
 
 def _format_text_impl(slide_index, shape_name_or_index,
                        font_name, font_name_fareast, font_size, bold, italic, underline,
-                       color, font_color_theme) -> dict:
+                       color, font_color_theme, highlight_color) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -885,6 +1078,9 @@ def _format_text_impl(slide_index, shape_name_or_index,
     tr = shape.TextFrame.TextRange
     _apply_font_props(tr.Font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme)
 
+    if highlight_color is not None:
+        _apply_highlight(shape, highlight_color)
+
     return {
         "status": "success",
         "shape_name": shape.Name,
@@ -896,7 +1092,7 @@ def _format_text_impl(slide_index, shape_name_or_index,
 
 def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
                               font_name, font_name_fareast, font_size, bold, italic, underline,
-                              color, font_color_theme) -> dict:
+                              color, font_color_theme, highlight_color) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -909,6 +1105,9 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
     tr = shape.TextFrame.TextRange
     target = tr.Characters(Start=start, Length=length)
     _apply_font_props(target.Font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme)
+
+    if highlight_color is not None:
+        _apply_highlight(shape, highlight_color, start, length)
 
     return {
         "status": "success",
@@ -1162,6 +1361,7 @@ def format_text(params: FormatTextInput) -> str:
             params.font_name, params.font_name_fareast,
             params.font_size, params.bold, params.italic,
             params.underline, params.color, params.font_color_theme,
+            params.highlight_color,
         )
         warn = font_size_warning(params.font_size)
         if warn:
@@ -1181,6 +1381,7 @@ def format_text_range(params: FormatTextRangeInput) -> str:
             params.font_name, params.font_name_fareast,
             params.font_size, params.bold, params.italic,
             params.underline, params.color, params.font_color_theme,
+            params.highlight_color,
         )
         warn = font_size_warning(params.font_size)
         if warn:
