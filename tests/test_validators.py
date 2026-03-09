@@ -1968,3 +1968,10 @@ class TestExportImagesInputFileName:
             output_dir="C:/tmp", slide_index=1, file_name="cover",
         )
         assert inp.file_name == "cover"
+
+    def test_file_name_without_slide_index_raises(self):
+        """file_name without slide_index raises ValidationError."""
+        with pytest.raises(ValidationError, match="file_name requires slide_index"):
+            ExportImagesInput(
+                output_dir="C:/tmp", file_name="cover.png",
+            )

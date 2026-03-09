@@ -10,7 +10,7 @@ import tempfile
 from typing import Optional
 
 import pythoncom
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.com_wrapper import ppt
 from ppt_com.constants import (
@@ -80,8 +80,14 @@ class ExportImagesInput(BaseModel):
     )
     file_name: Optional[str] = Field(
         default=None,
-        description="Custom filename for single-slide export (e.g. 'cover.png'). If omitted, defaults to 'Slide{N}.{format}'. Only used with slide_index.",
+        description="Custom filename for single-slide export (e.g. 'cover.png'). If omitted, defaults to 'Slide{N}.{format}'. Requires slide_index.",
     )
+
+    @model_validator(mode="after")
+    def file_name_requires_slide_index(self):
+        if self.file_name is not None and self.slide_index is None:
+            raise ValueError("file_name requires slide_index to be set")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -227,9 +233,10 @@ def _export_images_impl(
             os.makedirs(abs_dir, exist_ok=True)
 
         if file_name:
-            # Ensure correct extension
-            if not file_name.lower().endswith(f".{fmt_key}"):
-                file_name = f"{file_name}.{fmt_key}"
+            # Ensure correct extension (strip wrong extension to avoid double ext)
+            base, ext = os.path.splitext(file_name)
+            if ext.lower() != f".{fmt_key}":
+                file_name = f"{base}.{fmt_key}"
         else:
             file_name = f"Slide{slide_index}.{fmt_key}"
         abs_file_path = os.path.join(abs_dir, file_name)
