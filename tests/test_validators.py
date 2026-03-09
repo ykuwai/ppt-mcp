@@ -1938,3 +1938,40 @@ class TestOneDriveResolver:
                 # The outer try/except in resolve_local_path catches this
                 result = resolve_local_path("https://d.docs.live.net/ABC/file.pptx")
                 assert result is None
+
+
+# ============================================================================
+# export.py — ExportImagesInput (file_name)
+# ============================================================================
+from ppt_com.export import ExportImagesInput
+
+
+class TestExportImagesInputFileName:
+    """Tests for ExportImagesInput file_name field."""
+
+    def test_file_name_default_none(self):
+        """file_name defaults to None."""
+        inp = ExportImagesInput(output_dir="C:/tmp")
+        assert inp.file_name is None
+
+    def test_file_name_with_slide_index(self):
+        """file_name is accepted alongside slide_index."""
+        inp = ExportImagesInput(
+            output_dir="C:/tmp", slide_index=1, file_name="cover.png",
+        )
+        assert inp.file_name == "cover.png"
+        assert inp.slide_index == 1
+
+    def test_file_name_without_extension(self):
+        """file_name without extension is accepted (extension added at runtime)."""
+        inp = ExportImagesInput(
+            output_dir="C:/tmp", slide_index=1, file_name="cover",
+        )
+        assert inp.file_name == "cover"
+
+    def test_file_name_without_slide_index_raises(self):
+        """file_name without slide_index raises ValidationError."""
+        with pytest.raises(ValidationError, match="file_name requires slide_index"):
+            ExportImagesInput(
+                output_dir="C:/tmp", file_name="cover.png",
+            )
