@@ -1975,3 +1975,46 @@ class TestExportImagesInputFileName:
             ExportImagesInput(
                 output_dir="C:/tmp", file_name="cover.png",
             )
+
+
+# ============================================================================
+# text.py — FormatTextInput / FormatTextRangeInput (highlight_color)
+# ============================================================================
+from ppt_com.text import FormatTextInput, FormatTextRangeInput
+
+
+class TestFormatTextHighlightColor:
+    """Tests for highlight_color field on FormatTextInput."""
+
+    def test_highlight_color_default_none(self):
+        """highlight_color defaults to None."""
+        inp = FormatTextInput(slide_index=1, shape_name_or_index=1, bold=True)
+        assert inp.highlight_color is None
+
+    def test_highlight_color_valid(self):
+        """highlight_color accepts hex string."""
+        inp = FormatTextInput(
+            slide_index=1, shape_name_or_index=1,
+            highlight_color="#FFFF00",
+        )
+        assert inp.highlight_color == "#FFFF00"
+
+
+class TestFormatTextRangeHighlightColor:
+    """Tests for highlight_color field on FormatTextRangeInput."""
+
+    def test_highlight_color_default_none(self):
+        """highlight_color defaults to None."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            start=1, length=5, bold=True,
+        )
+        assert inp.highlight_color is None
+
+    def test_highlight_color_valid(self):
+        """highlight_color accepts hex string."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            start=1, length=5, highlight_color="#00FF00",
+        )
+        assert inp.highlight_color == "#00FF00"

@@ -137,6 +137,10 @@ class FormatTextInput(BaseModel):
         default=None,
         description="Theme color name (e.g. 'accent1', 'dark1')"
     )
+    highlight_color: Optional[str] = Field(
+        default=None,
+        description="Text highlight (marker) color as '#RRGGBB' hex string. Requires Office 2019+. Cannot be cleared via COM — use Undo or manually remove in the UI.",
+    )
 
 
 class FormatTextRangeInput(BaseModel):
@@ -159,6 +163,10 @@ class FormatTextRangeInput(BaseModel):
     font_color_theme: Optional[str] = Field(
         default=None,
         description="Theme color name (e.g. 'accent1', 'dark1')"
+    )
+    highlight_color: Optional[str] = Field(
+        default=None,
+        description="Text highlight (marker) color as '#RRGGBB' hex string. Requires Office 2019+. Cannot be cleared via COM — use Undo or manually remove in the UI.",
     )
 
 
@@ -849,6 +857,39 @@ def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
     return result
 
 
+def _apply_highlight(shape, highlight_color, start=None, length=None):
+    """Apply text highlight color via TextFrame2.
+
+    Args:
+        shape: PowerPoint Shape COM object.
+        highlight_color: Hex color string (e.g. '#FFFF00').
+        start: 1-based start position (None for full range).
+        length: Number of characters (None for full range).
+    """
+    # Imported locally — only available on Windows where COM is used
+    import win32com.client
+    tr2 = shape.TextFrame2.TextRange
+    if start is not None and length is not None:
+        # TextRange2.Characters(start, length) requires InvokeTypes because
+        # pywin32 late-binding dispatches it incorrectly as Item(start, length).
+        oleobj = tr2._oleobj_
+        dispid = oleobj.GetIDsOfNames('Characters')
+        # InvokeTypes args:
+        #   2 = DISPATCH_PROPERTYGET
+        #   (9, 0) = return type VT_DISPATCH, no flags
+        #   (12, 17) = VT_VARIANT, PARAMFLAG_FIN|PARAMFLAG_FHASDEFAULT (optional input)
+        result = oleobj.InvokeTypes(
+            dispid, 0, 2,
+            (9, 0),
+            ((12, 17), (12, 17)),
+            start, length,
+        )
+        target = win32com.client.Dispatch(result)
+    else:
+        target = tr2
+    target.Font.Highlight.RGB = hex_to_int(highlight_color)
+
+
 def _apply_font_props(font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme):
     """Apply font properties to a Font COM object."""
     if font_name is not None:
@@ -872,7 +913,7 @@ def _apply_font_props(font, font_name, font_name_fareast, font_size, bold, itali
 
 def _format_text_impl(slide_index, shape_name_or_index,
                        font_name, font_name_fareast, font_size, bold, italic, underline,
-                       color, font_color_theme) -> dict:
+                       color, font_color_theme, highlight_color) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -885,6 +926,9 @@ def _format_text_impl(slide_index, shape_name_or_index,
     tr = shape.TextFrame.TextRange
     _apply_font_props(tr.Font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme)
 
+    if highlight_color is not None:
+        _apply_highlight(shape, highlight_color)
+
     return {
         "status": "success",
         "shape_name": shape.Name,
@@ -896,7 +940,7 @@ def _format_text_impl(slide_index, shape_name_or_index,
 
 def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
                               font_name, font_name_fareast, font_size, bold, italic, underline,
-                              color, font_color_theme) -> dict:
+                              color, font_color_theme, highlight_color) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -909,6 +953,9 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
     tr = shape.TextFrame.TextRange
     target = tr.Characters(Start=start, Length=length)
     _apply_font_props(target.Font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme)
+
+    if highlight_color is not None:
+        _apply_highlight(shape, highlight_color, start, length)
 
     return {
         "status": "success",
@@ -1162,6 +1209,7 @@ def format_text(params: FormatTextInput) -> str:
             params.font_name, params.font_name_fareast,
             params.font_size, params.bold, params.italic,
             params.underline, params.color, params.font_color_theme,
+            params.highlight_color,
         )
         warn = font_size_warning(params.font_size)
         if warn:
@@ -1181,6 +1229,7 @@ def format_text_range(params: FormatTextRangeInput) -> str:
             params.font_name, params.font_name_fareast,
             params.font_size, params.bold, params.italic,
             params.underline, params.color, params.font_color_theme,
+            params.highlight_color,
         )
         warn = font_size_warning(params.font_size)
         if warn:
