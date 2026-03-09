@@ -3,9 +3,11 @@
 import json
 import logging
 import os
+import re
+import time
 from typing import List, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
@@ -142,6 +144,17 @@ class FormatTextInput(BaseModel):
         description="Text highlight (marker) color as '#RRGGBB' hex string, or 'clear' to remove highlight. Requires Office 2019+.",
     )
 
+    @field_validator("highlight_color")
+    @classmethod
+    def validate_highlight_color(cls, v):
+        if v is None:
+            return v
+        if v.lower() == "clear":
+            return v
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", v):
+            raise ValueError("highlight_color must be '#RRGGBB' hex string or 'clear'")
+        return v
+
 
 class FormatTextRangeInput(BaseModel):
     """Input for formatting a specific character range within a shape."""
@@ -168,6 +181,17 @@ class FormatTextRangeInput(BaseModel):
         default=None,
         description="Text highlight (marker) color as '#RRGGBB' hex string, or 'clear' to remove highlight. Requires Office 2019+.",
     )
+
+    @field_validator("highlight_color")
+    @classmethod
+    def validate_highlight_color(cls, v):
+        if v is None:
+            return v
+        if v.lower() == "clear":
+            return v
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", v):
+            raise ValueError("highlight_color must be '#RRGGBB' hex string or 'clear'")
+        return v
 
 
 class SetParagraphFormatInput(BaseModel):
@@ -909,9 +933,10 @@ def _clear_highlight(shape, start=None, length=None):
     1. Saves per-run font formatting of the target range.
     2. Selects the text and executes ClearFormatting (clears highlight + all formatting).
     3. Restores the saved formatting so only the highlight is removed.
-    """
-    import time
 
+    Note: Requires the PowerPoint window to be visible and active, because
+    Select() + ExecuteMso("ClearFormatting") operates through the UI layer.
+    """
     app = shape.Application
     tr = shape.TextFrame.TextRange
 
@@ -923,7 +948,10 @@ def _clear_highlight(shape, start=None, length=None):
     # Step 1: Save per-run formatting
     runs = _save_run_formatting(target)
 
-    # Step 2: Select text and clear formatting (removes highlight + all formatting)
+    # Step 2: Select text and clear formatting (removes highlight + all formatting).
+    # Sleep durations give the COM/UI layer time to process the selection and
+    # ribbon command. These are empirically chosen minimums that work reliably
+    # on typical hardware; very slow machines may need longer.
     target.Select()
     time.sleep(0.15)
     app.CommandBars.ExecuteMso("ClearFormatting")
@@ -964,23 +992,29 @@ def _save_run_formatting(text_range):
         }
         try:
             fmt['name_far_east'] = font.NameFarEast
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("NameFarEast unavailable at char %d: %s", i, e)
 
         # Extend run while formatting matches
         j = i + 1
         while j <= total:
             ch2 = text_range.Characters(j, 1)
             f2 = ch2.Font
-            if (f2.Bold == fmt['bold'] and
+            if not (f2.Bold == fmt['bold'] and
                     f2.Italic == fmt['italic'] and
                     f2.Underline == fmt['underline'] and
                     f2.Size == fmt['size'] and
                     f2.Color.RGB == fmt['color_rgb'] and
                     f2.Name == fmt['name']):
-                j += 1
-            else:
                 break
+            # Compare NameFarEast if available
+            if 'name_far_east' in fmt:
+                try:
+                    if f2.NameFarEast != fmt['name_far_east']:
+                        break
+                except Exception:
+                    break
+            j += 1
 
         fmt['length'] = j - i
         runs.append(fmt)
@@ -1003,8 +1037,8 @@ def _restore_run_formatting(text_range, runs):
         if 'name_far_east' in r:
             try:
                 font.NameFarEast = r['name_far_east']
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to restore NameFarEast: %s", e)
 
 
 def _apply_font_props(font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme):
