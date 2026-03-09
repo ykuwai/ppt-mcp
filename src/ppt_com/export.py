@@ -78,6 +78,10 @@ class ExportImagesInput(BaseModel):
         default=None,
         description="Image height in pixels (for single slide export).",
     )
+    file_name: Optional[str] = Field(
+        default=None,
+        description="Custom filename for single-slide export (e.g. 'cover.png'). If omitted, defaults to 'Slide{N}.{format}'. Only used with slide_index.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +196,7 @@ def _export_images_impl(
     slide_index: Optional[int],
     width: Optional[int],
     height: Optional[int],
+    file_name: Optional[str],
 ) -> dict:
     app = ppt._get_app_impl()
     if app.Presentations.Count == 0:
@@ -221,7 +226,12 @@ def _export_images_impl(
         if not os.path.exists(abs_dir):
             os.makedirs(abs_dir, exist_ok=True)
 
-        file_name = f"Slide{slide_index}.{fmt_key}"
+        if file_name:
+            # Ensure correct extension
+            if not file_name.lower().endswith(f".{fmt_key}"):
+                file_name = f"{file_name}.{fmt_key}"
+        else:
+            file_name = f"Slide{slide_index}.{fmt_key}"
         abs_file_path = os.path.join(abs_dir, file_name)
 
         # Slide.Export positional args: FileName, FilterName, ScaleWidth, ScaleHeight
@@ -289,6 +299,7 @@ def export_images(params: ExportImagesInput) -> str:
             params.slide_index,
             params.width,
             params.height,
+            params.file_name,
         )
         return json.dumps(result)
     except Exception as e:
