@@ -866,16 +866,22 @@ def _apply_highlight(shape, highlight_color, start=None, length=None):
         start: 1-based start position (None for full range).
         length: Number of characters (None for full range).
     """
+    # Imported locally — only available on Windows where COM is used
     import win32com.client
     tr2 = shape.TextFrame2.TextRange
     if start is not None and length is not None:
-        # TextRange2.Characters(start, length) requires InvokeTypes
+        # TextRange2.Characters(start, length) requires InvokeTypes because
+        # pywin32 late-binding dispatches it incorrectly as Item(start, length).
         oleobj = tr2._oleobj_
-        pakra = oleobj.GetIDsOfNames('Characters')
+        dispid = oleobj.GetIDsOfNames('Characters')
+        # InvokeTypes args:
+        #   2 = DISPATCH_PROPERTYGET
+        #   (9, 0) = return type VT_DISPATCH, no flags
+        #   (12, 17) = VT_VARIANT, PARAMFLAG_FIN|PARAMFLAG_FHASDEFAULT (optional input)
         result = oleobj.InvokeTypes(
-            pakra, 0, 2,  # PAKRA_PROPERTYGET
-            (9, 0),  # return: IDispatch
-            ((12, 17), (12, 17)),  # Two optional VARIANT params
+            dispid, 0, 2,
+            (9, 0),
+            ((12, 17), (12, 17)),
             start, length,
         )
         target = win32com.client.Dispatch(result)
