@@ -1012,7 +1012,8 @@ def _save_run_formatting(text_range):
                 try:
                     if f2.NameFarEast != fmt['name_far_east']:
                         break
-                except Exception:
+                except Exception as e:
+                    logger.debug("NameFarEast comparison failed at char %d: %s", j, e)
                     break
             j += 1
 
