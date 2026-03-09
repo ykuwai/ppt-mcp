@@ -1999,6 +1999,30 @@ class TestFormatTextHighlightColor:
         )
         assert inp.highlight_color == "#FFFF00"
 
+    def test_highlight_color_clear(self):
+        """highlight_color accepts 'clear' to remove highlight."""
+        inp = FormatTextInput(
+            slide_index=1, shape_name_or_index=1,
+            highlight_color="clear",
+        )
+        assert inp.highlight_color == "clear"
+
+    def test_highlight_color_invalid_rejected(self):
+        """Invalid highlight_color string raises ValidationError."""
+        with pytest.raises(ValidationError, match="highlight_color must be"):
+            FormatTextInput(
+                slide_index=1, shape_name_or_index=1,
+                highlight_color="not-a-color",
+            )
+
+    def test_highlight_color_missing_hash_rejected(self):
+        """Hex without '#' prefix is rejected."""
+        with pytest.raises(ValidationError, match="highlight_color must be"):
+            FormatTextInput(
+                slide_index=1, shape_name_or_index=1,
+                highlight_color="FFFF00",
+            )
+
 
 class TestFormatTextRangeHighlightColor:
     """Tests for highlight_color field on FormatTextRangeInput."""
@@ -2018,3 +2042,19 @@ class TestFormatTextRangeHighlightColor:
             start=1, length=5, highlight_color="#00FF00",
         )
         assert inp.highlight_color == "#00FF00"
+
+    def test_highlight_color_clear(self):
+        """highlight_color accepts 'clear' for range."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            start=1, length=5, highlight_color="clear",
+        )
+        assert inp.highlight_color == "clear"
+
+    def test_highlight_color_invalid_rejected(self):
+        """Invalid highlight_color string raises ValidationError."""
+        with pytest.raises(ValidationError, match="highlight_color must be"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                start=1, length=5, highlight_color="bad",
+            )
