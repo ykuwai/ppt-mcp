@@ -200,6 +200,13 @@ class FormatTextRangeInput(BaseModel):
             raise ValueError("highlight_color must be '#RRGGBB' hex string or 'clear'")
         return v
 
+    @field_validator("search_text")
+    @classmethod
+    def validate_search_text_not_empty(cls, v):
+        if v is not None and v == "":
+            raise ValueError("search_text must not be empty")
+        return v
+
     @model_validator(mode="after")
     def validate_range_specification(self):
         """Ensure either start/length or search_text is provided, not both."""
@@ -217,6 +224,10 @@ class FormatTextRangeInput(BaseModel):
             if not has_start or not has_length:
                 raise ValueError(
                     "Either search_text or both start and length must be provided."
+                )
+            if self.occurrence != 1:
+                raise ValueError(
+                    "occurrence is only valid with search_text, not with start/length."
                 )
         return self
 
@@ -1149,7 +1160,7 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
                         f"search_text '{search_text}' has only {i} occurrence(s) "
                         f"in shape '{shape.Name}', but occurrence={occurrence} was requested"
                     )
-            search_from = pos + 1
+            search_from = pos + len(search_text)
         # COM Characters() is 1-based
         start = pos + 1
         length = len(search_text)

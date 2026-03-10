@@ -2244,4 +2244,20 @@ class TestFormatTextRangeSearchText:
         )
         assert inp.start == 3
         assert inp.length == 5
+
+    def test_empty_search_text_rejected(self):
+        """Empty search_text raises ValidationError."""
+        with pytest.raises(ValidationError, match="search_text must not be empty"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="", bold=True,
+            )
+
+    def test_occurrence_with_start_length_rejected(self):
+        """occurrence != 1 with start/length raises ValidationError."""
+        with pytest.raises(ValidationError, match="occurrence is only valid with search_text"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                start=1, length=5, occurrence=2, bold=True,
+            )
         assert inp.search_text is None
