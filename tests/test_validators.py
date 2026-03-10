@@ -1150,21 +1150,20 @@ class TestAddConnectorInput:
         assert m.end_site == 1
 
     def test_case_insensitive_site_name(self):
-        """Site names with different casing are accepted (stripped/lowered in validator)."""
+        """Site names with different casing are accepted and normalized to lowercase."""
         m = AddConnectorInput(
             slide_index=1, begin_shape="A", end_shape="B",
             begin_site="Top", end_site="RIGHT",
         )
-        # Pydantic stores the original value; validation passes
-        assert m.begin_site == "Top"
-        assert m.end_site == "RIGHT"
+        assert m.begin_site == "top"
+        assert m.end_site == "right"
 
 
 # ============================================================================
 # connectors.py — FormatConnectorInput arrowhead size fields
 # ============================================================================
 class TestFormatConnectorInput:
-    """Tests for FormatConnectorInput arrowhead size parameters."""
+    """Tests for FormatConnectorInput arrowhead size and site name parameters."""
 
     def test_all_defaults_valid(self):
         """Minimal input with only required fields is accepted."""

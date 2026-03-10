@@ -129,6 +129,7 @@ def _resolve_site(shape, site: Union[int, str]) -> int:
             best_dot = dot
             best_index = i
 
+    # If all sites were at the center (best_dot unchanged), fall back to site 1
     return best_index
 
 
@@ -173,11 +174,14 @@ class AddConnectorInput(BaseModel):
             val = getattr(self, field_name)
             if isinstance(val, int) and val < 1:
                 raise ValueError(f"{field_name} must be >= 1 when specified as int")
-            if isinstance(val, str) and val.strip().lower() not in VALID_SITE_NAMES:
-                raise ValueError(
-                    f"Unknown {field_name} name '{val}'. "
-                    f"Valid names: {VALID_SITE_NAMES}"
-                )
+            if isinstance(val, str):
+                normalized = val.strip().lower()
+                if normalized not in VALID_SITE_NAMES:
+                    raise ValueError(
+                        f"Unknown {field_name} name '{val}'. "
+                        f"Valid names: {VALID_SITE_NAMES}"
+                    )
+                setattr(self, field_name, normalized)
         return self
 
 
@@ -260,11 +264,14 @@ class FormatConnectorInput(BaseModel):
                 continue
             if isinstance(val, int) and val < 1:
                 raise ValueError(f"{field_name} must be >= 1 when specified as int")
-            if isinstance(val, str) and val.strip().lower() not in VALID_SITE_NAMES:
-                raise ValueError(
-                    f"Unknown {field_name} name '{val}'. "
-                    f"Valid names: {VALID_SITE_NAMES}"
-                )
+            if isinstance(val, str):
+                normalized = val.strip().lower()
+                if normalized not in VALID_SITE_NAMES:
+                    raise ValueError(
+                        f"Unknown {field_name} name '{val}'. "
+                        f"Valid names: {VALID_SITE_NAMES}"
+                    )
+                setattr(self, field_name, normalized)
         return self
 
 
