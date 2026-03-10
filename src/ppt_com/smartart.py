@@ -21,6 +21,181 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# English alias mapping: SmartArt layout Id (GUID) -> English name
+# ---------------------------------------------------------------------------
+# SmartArt layout names depend on the OS locale (e.g. Japanese Windows shows
+# "基本プロセス" instead of "Basic Process").  The layout Id is a stable URN
+# that does not change across locales.  This dict maps well-known Ids to their
+# canonical English names so that callers can use English names regardless of
+# the Windows display language.
+#
+# The mapping covers the most commonly used layouts.  Layouts not listed here
+# will still work via their locale-specific name or index.
+SMARTART_ENGLISH_ALIASES: dict[str, str] = {
+    # --- List ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList2": "Basic Block List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/list1": "Lined List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList5": "Vertical Box List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList1": "Horizontal Bullet List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList1": "Vertical Bullet List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/default": "Basic List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList4": "Stacked List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList3": "Table List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/lProcess": "Vertical Accent List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/chevron2": "Grouped List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList6": "Square Accent List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy5": "Horizontal Picture List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList6": "Picture Accent List",
+    "urn:microsoft.com/office/officeart/2009/3/layout/PictureAccentBlocks": "Picture Accent Blocks",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList7": "Trapezoid List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList3": "Vertical Arrow List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/target3": "Target List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList4": "Tab List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/chevron1": "Vertical Chevron List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList2": "Horizontal Labeled Hierarchy",
+    # --- Process ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/process1": "Basic Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/process2": "Step Up Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/process3": "Step Down Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/process4": "Accent Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/process5": "Alternating Flow",
+    "urn:microsoft.com/office/officeart/2005/8/layout/chevron3": "Continuous Block Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow2": "Process Arrows",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow6": "Circular Bending Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow1": "Basic Bending Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow3": "Upward Arrow",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow5": "Converging Arrows",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow4": "Diverging Arrows",
+    "urn:microsoft.com/office/officeart/2005/8/layout/chevron4": "Chevron List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vProcess5": "Descending Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/funnel1": "Funnel",
+    "urn:microsoft.com/office/officeart/2005/8/layout/gear1": "Gear",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hChevron3": "Phased Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow7": "Repeating Bending Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/equation1": "Basic Equation",
+    "urn:microsoft.com/office/officeart/2005/8/layout/equation2": "Vertical Equation",
+    # --- Cycle ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle1": "Basic Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle2": "Text Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle3": "Block Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle4": "Nondirectional Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle5": "Continuous Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle6": "Multidirectional Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle7": "Segmented Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial1": "Basic Radial",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial2": "Diverging Radial",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial3": "Radial Venn",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial4": "Radial Cluster",
+    # --- Hierarchy ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1": "Organization Chart",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1": "Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy2": "Labeled Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy4": "Horizontal Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3": "Table Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy6": "Horizontal Organization Chart",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy7": "Horizontal Multi-Level Hierarchy",
+    "urn:microsoft.com/office/officeart/2009/3/layout/HalfCircleOrganizationChart": "Half Circle Organization Chart",
+    "urn:microsoft.com/office/officeart/2005/8/layout/lProcess2": "Lined Hierarchy",
+    # --- Relationship ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/venn1": "Basic Venn",
+    "urn:microsoft.com/office/officeart/2005/8/layout/venn2": "Linear Venn",
+    "urn:microsoft.com/office/officeart/2005/8/layout/venn3": "Stacked Venn",
+    "urn:microsoft.com/office/officeart/2005/8/layout/target1": "Basic Target",
+    "urn:microsoft.com/office/officeart/2005/8/layout/target2": "Nested Target",
+    "urn:microsoft.com/office/officeart/2005/8/layout/balance1": "Balance",
+    "urn:microsoft.com/office/officeart/2005/8/layout/opposingArrows1": "Opposing Arrows",
+    "urn:microsoft.com/office/officeart/2005/8/layout/opposingIdeas1": "Opposing Ideas",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow8": "Counterbalance Arrows",
+    "urn:microsoft.com/office/officeart/2005/8/layout/equation3": "Formula",
+    # --- Matrix ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/matrix1": "Basic Matrix",
+    "urn:microsoft.com/office/officeart/2005/8/layout/matrix2": "Titled Matrix",
+    "urn:microsoft.com/office/officeart/2005/8/layout/matrix3": "Grid Matrix",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle8": "Cycle Matrix",
+    # --- Pyramid ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/pyramid1": "Basic Pyramid",
+    "urn:microsoft.com/office/officeart/2005/8/layout/pyramid2": "Inverted Pyramid",
+    "urn:microsoft.com/office/officeart/2005/8/layout/pyramid3": "Pyramid List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/pyramid4": "Segmented Pyramid",
+    # --- Picture ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList5": "Picture Lineup",
+    "urn:microsoft.com/office/officeart/2005/8/layout/lProcess3": "Continuous Picture List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList7": "Vertical Picture Accent List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList8": "Alternating Picture Blocks",
+    "urn:microsoft.com/office/officeart/2009/3/layout/TitlePictureLineup": "Title Picture Lineup",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess9": "Picture Accent Process",
+    "urn:microsoft.com/office/officeart/2009/3/layout/SnapshotPictureList": "Snapshot Picture List",
+    "urn:microsoft.com/office/officeart/2009/3/layout/BubblePictureList": "Bubble Picture List",
+    "urn:microsoft.com/office/officeart/2009/3/layout/PictureStrips": "Picture Strips",
+    "urn:microsoft.com/office/officeart/2009/3/layout/CirclePictureHierarchy": "Circle Picture Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial6": "Radial Picture List",
+    # --- Other common ones ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess4": "Staggered Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess5": "Process List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess7": "Circle Accent Timeline",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess8": "Basic Timeline",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess11": "Interconnected Block Process",
+    "urn:microsoft.com/office/officeart/2009/3/layout/ArchitectureLayout": "Architecture Layout",
+}
+
+# Build a reverse mapping: lowercase English name -> layout Id
+_ENGLISH_NAME_TO_ID: dict[str, str] = {
+    v.lower(): k for k, v in SMARTART_ENGLISH_ALIASES.items()
+}
+
+
+def _resolve_layout(app, layout_name: str):
+    """Resolve a SmartArt layout by name with English alias support.
+
+    Search order:
+    1. Exact match on locale-specific Name (case-insensitive, contains)
+    2. Match via English alias name -> layout Id lookup
+
+    Returns the SmartArtLayout COM object, or raises ValueError if not found.
+    """
+    name_lower = layout_name.lower()
+    layouts = app.SmartArtLayouts
+
+    # 1) Try locale-specific name (contains match, case-insensitive)
+    for j in range(1, layouts.Count + 1):
+        if name_lower in layouts(j).Name.lower():
+            return layouts(j)
+
+    # 2) Try English alias: check if the search string matches any English name
+    #    and resolve via layout Id
+    matched_ids = set()
+    for eng_name, layout_id in _ENGLISH_NAME_TO_ID.items():
+        if name_lower in eng_name:
+            matched_ids.add(layout_id)
+
+    if matched_ids:
+        found = []
+        for j in range(1, layouts.Count + 1):
+            try:
+                lid = layouts(j).Id
+            except Exception as e:
+                logger.debug("Cannot read SmartArt layout Id at index %d: %s", j, e)
+                continue
+            if lid in matched_ids:
+                found.append(layouts(j))
+        if found:
+            if len(found) > 1:
+                names = [f.Name for f in found]
+                logger.warning(
+                    "Multiple SmartArt layouts matched '%s': %s — returning first",
+                    layout_name, names,
+                )
+            return found[0]
+
+    raise ValueError(
+        f"SmartArt layout '{layout_name}' not found. "
+        "Use ppt_list_smartart_layouts to see available layouts with English names."
+    )
+
+
+
+
+# ---------------------------------------------------------------------------
 # Pydantic input models
 # ---------------------------------------------------------------------------
 class AddSmartArtInput(BaseModel):
@@ -30,7 +205,10 @@ class AddSmartArtInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     layout_name: Optional[str] = Field(
         default=None,
-        description="Partial or full SmartArt layout name to search for (case-insensitive match)",
+        description=(
+            "Partial or full SmartArt layout name to search for (case-insensitive match). "
+            "Accepts English names (e.g. 'Basic Process') regardless of OS locale."
+        ),
     )
     layout_index: Optional[int] = Field(
         default=None, ge=1,
@@ -102,7 +280,11 @@ class ModifySmartArtInput(BaseModel):
     # --- layout change fields ---
     layout_name: Optional[str] = Field(
         default=None,
-        description="Partial/full layout name for 'change_layout' (case-insensitive). Use ppt_list_smartart_layouts to find names.",
+        description=(
+            "Partial/full layout name for 'change_layout' (case-insensitive). "
+            "Accepts English names (e.g. 'Basic Process') regardless of OS locale. "
+            "Use ppt_list_smartart_layouts to find names."
+        ),
     )
     layout_index: Optional[int] = Field(
         default=None, ge=1,
@@ -171,7 +353,10 @@ class ListSmartArtInput(BaseModel):
     )
     keyword: Optional[str] = Field(
         default=None,
-        description="Filter by keyword in name (partial match, case-insensitive). Applies to all list_types.",
+        description=(
+            "Filter by keyword in name (partial match, case-insensitive). "
+            "Also matches English alias names for layouts. Applies to all list_types."
+        ),
     )
     include_description: bool = Field(
         default=False,
@@ -235,13 +420,7 @@ def _add_smartart_impl(slide_index, layout_name, layout_index, left, top, width,
 
     # Resolve the SmartArt layout
     if layout_name:
-        layout = None
-        for j in range(1, app.SmartArtLayouts.Count + 1):
-            if layout_name.lower() in app.SmartArtLayouts(j).Name.lower():
-                layout = app.SmartArtLayouts(j)
-                break
-        if not layout:
-            raise ValueError(f"SmartArt layout '{layout_name}' not found")
+        layout = _resolve_layout(app, layout_name)
     else:
         idx = layout_index if layout_index else 1
         layout = app.SmartArtLayouts(idx)
@@ -328,13 +507,7 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
 
     elif action == "change_layout":
         if layout_name:
-            layout = None
-            for j in range(1, app.SmartArtLayouts.Count + 1):
-                if layout_name.lower() in app.SmartArtLayouts(j).Name.lower():
-                    layout = app.SmartArtLayouts(j)
-                    break
-            if not layout:
-                raise ValueError(f"SmartArt layout '{layout_name}' not found")
+            layout = _resolve_layout(app, layout_name)
         elif layout_index:
             layout = app.SmartArtLayouts(layout_index)
         else:
@@ -372,7 +545,7 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
         raise ValueError(
             f"Unknown action '{action}'. Supported: "
             "'set_text', 'add_node', 'delete_node', "
-            "'change_color', 'change_style', "
+            "'change_color', 'change_style', 'change_layout', "
             "'format_node', 'format_all_nodes'"
         )
 
@@ -428,6 +601,11 @@ def _list_smartart_options_impl(list_type, category, keyword, include_descriptio
         item = collection(i)
         item_name = item.Name
 
+        # For layouts, resolve the English alias name via layout Id
+        english_name = None
+        if list_type == "layouts":
+            english_name = SMARTART_ENGLISH_ALIASES.get(item.Id)
+
         # Category filter (layouts only)
         if cat_lower and list_type == "layouts":
             try:
@@ -437,12 +615,16 @@ def _list_smartart_options_impl(list_type, category, keyword, include_descriptio
             if cat_lower not in item_cat.lower():
                 continue
 
-        # Keyword filter on name only (description excluded to avoid locale expansion)
-        if kw_lower and kw_lower not in item_name.lower():
-            continue
+        # Keyword filter on name — also check English alias name for layouts
+        if kw_lower:
+            name_match = kw_lower in item_name.lower()
+            eng_match = english_name and kw_lower in english_name.lower()
+            if not name_match and not eng_match:
+                continue
 
         entry = {"index": i, "name": item_name}
         if list_type == "layouts":
+            entry["english_name"] = english_name
             try:
                 entry["category"] = item.Category
             except Exception:
@@ -534,6 +716,10 @@ def register_tools(mcp):
         Creates a SmartArt with the specified layout and optionally populates
         node text. Find layouts using ppt_list_smartart_layouts.
 
+        layout_name accepts English names (e.g. 'Basic Process', 'Organization Chart')
+        regardless of OS locale. On non-English Windows, the tool first tries the
+        locale-specific name, then falls back to the English alias mapping.
+
         Styling at creation time:
         - color_index: apply a color scheme (use list_type='colors' to find indices)
         - style_index: apply a quick style template (use list_type='styles')
@@ -562,7 +748,8 @@ def register_tools(mcp):
         - 'add_node': add a new node (optional node_index to insert after, optional text)
         - 'delete_node': remove a node (requires node_index)
         - 'change_layout': switch to a different SmartArt layout (requires layout_index or
-          layout_name). Use ppt_list_smartart_layouts to find layouts. Node texts and
+          layout_name). Accepts English names regardless of OS locale.
+          Use ppt_list_smartart_layouts to find layouts. Node texts and
           count are preserved where the new layout allows.
         - 'change_color': apply a color scheme (requires color_index)
         - 'change_style': apply a quick style (requires style_index; also applies
@@ -590,21 +777,20 @@ def register_tools(mcp):
         """List SmartArt layouts, color schemes, or quick styles.
 
         list_type:
-        - 'layouts' (default): all diagram layout templates
+        - 'layouts' (default): all diagram layout templates.
+          Each layout includes an english_name field (when available) so you can
+          identify layouts regardless of OS locale.
         - 'colors': color schemes — use color_index with ppt_add/modify_smartart
         - 'styles': quick style templates — use style_index with ppt_add/modify_smartart
         - 'categories': distinct category names for the current locale — use these
           values with the category filter to narrow 'layouts' results
 
-        Recommended workflow to find layouts without locale assumptions:
-          1. list_type='categories' → see available category names
-          2. list_type='layouts', category='<name from step 1>' → filtered list
+        keyword: filter by keyword in name (partial match, case-insensitive).
+          Also matches English alias names for layouts.
 
         category: filter layouts by category (partial match, case-insensitive).
-        keyword: filter by keyword in name (partial match, case-insensitive).
         include_description: set True to add verbose description text (off by default).
 
-        Output is compact by default (index + name + category). All 134 layouts
-        fit comfortably without description fields.
+        Output is compact by default (index + name + english_name + category).
         """
         return list_smartart_options(params)
