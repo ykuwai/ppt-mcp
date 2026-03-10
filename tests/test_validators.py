@@ -2154,7 +2154,6 @@ from ppt_com.smartart import (
     SMARTART_ENGLISH_ALIASES,
     _ENGLISH_NAME_TO_ID,
     _resolve_layout,
-    _get_english_name,
 )
 
 
@@ -2189,13 +2188,13 @@ class TestSmartArtEnglishAliases:
         assert _ENGLISH_NAME_TO_ID["basic process"] == "urn:microsoft.com/office/officeart/2005/8/layout/process1"
         assert _ENGLISH_NAME_TO_ID["organization chart"] == "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"
 
-    def test_get_english_name_known(self):
-        """_get_english_name returns the English name for a known Id."""
-        assert _get_english_name("urn:microsoft.com/office/officeart/2005/8/layout/process1") == "Basic Process"
+    def test_alias_lookup_known(self):
+        """SMARTART_ENGLISH_ALIASES.get returns the English name for a known Id."""
+        assert SMARTART_ENGLISH_ALIASES.get("urn:microsoft.com/office/officeart/2005/8/layout/process1") == "Basic Process"
 
-    def test_get_english_name_unknown(self):
-        """_get_english_name returns None for an unknown Id."""
-        assert _get_english_name("urn:unknown/layout") is None
+    def test_alias_lookup_unknown(self):
+        """SMARTART_ENGLISH_ALIASES.get returns None for an unknown Id."""
+        assert SMARTART_ENGLISH_ALIASES.get("urn:unknown/layout") is None
 
     def test_all_ids_are_urns(self):
         """All layout Ids should start with 'urn:microsoft.com/'."""

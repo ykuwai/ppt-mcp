@@ -169,13 +169,23 @@ def _resolve_layout(app, layout_name: str):
             matched_ids.add(layout_id)
 
     if matched_ids:
+        found = []
         for j in range(1, layouts.Count + 1):
             try:
                 lid = layouts(j).Id
-            except Exception:
+            except Exception as e:
+                logger.debug("Cannot read SmartArt layout Id at index %d: %s", j, e)
                 continue
             if lid in matched_ids:
-                return layouts(j)
+                found.append(layouts(j))
+        if found:
+            if len(found) > 1:
+                names = [f.Name for f in found]
+                logger.warning(
+                    "Multiple SmartArt layouts matched '%s': %s — returning first",
+                    layout_name, names,
+                )
+            return found[0]
 
     raise ValueError(
         f"SmartArt layout '{layout_name}' not found. "
@@ -183,9 +193,6 @@ def _resolve_layout(app, layout_name: str):
     )
 
 
-def _get_english_name(layout_id: str) -> Optional[str]:
-    """Return the English alias for a layout Id, or None if not mapped."""
-    return SMARTART_ENGLISH_ALIASES.get(layout_id)
 
 
 # ---------------------------------------------------------------------------
@@ -538,7 +545,7 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
         raise ValueError(
             f"Unknown action '{action}'. Supported: "
             "'set_text', 'add_node', 'delete_node', "
-            "'change_color', 'change_style', "
+            "'change_color', 'change_style', 'change_layout', "
             "'format_node', 'format_all_nodes'"
         )
 
@@ -597,10 +604,7 @@ def _list_smartart_options_impl(list_type, category, keyword, include_descriptio
         # For layouts, resolve the English alias name via layout Id
         english_name = None
         if list_type == "layouts":
-            try:
-                english_name = _get_english_name(item.Id)
-            except Exception:
-                pass
+            english_name = SMARTART_ENGLISH_ALIASES.get(item.Id)
 
         # Category filter (layouts only)
         if cat_lower and list_type == "layouts":
@@ -620,8 +624,7 @@ def _list_smartart_options_impl(list_type, category, keyword, include_descriptio
 
         entry = {"index": i, "name": item_name}
         if list_type == "layouts":
-            if english_name:
-                entry["english_name"] = english_name
+            entry["english_name"] = english_name
             try:
                 entry["category"] = item.Category
             except Exception:
