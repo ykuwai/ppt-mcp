@@ -249,15 +249,8 @@ class SetParagraphFormatInput(BaseModel):
     line_spacing: Optional[float] = Field(default=None, description="Line spacing multiplier")
     space_before: Optional[float] = Field(default=None, description="Space before paragraph in points")
     space_after: Optional[float] = Field(default=None, description="Space after paragraph in points")
-    indent_level: Optional[int] = Field(default=None, description="Indent level (1-9)")
+    indent_level: Optional[int] = Field(default=None, ge=1, le=9, description="Indent level (1-9)")
     first_line_indent: Optional[float] = Field(default=None, description="First line indent in points")
-
-    @field_validator("indent_level")
-    @classmethod
-    def validate_indent_level(cls, v):
-        if v is not None and (v < 1 or v > 9):
-            raise ValueError("indent_level must be between 1 and 9")
-        return v
 
 
 class SetBulletInput(BaseModel):
@@ -281,17 +274,10 @@ class SetBulletInput(BaseModel):
         default=None, description="Starting number for numbered bullets"
     )
     indent_level: Optional[int] = Field(
-        default=None,
+        default=None, ge=1, le=9,
         description="Indent level 1-9. Sets the nesting depth of the bullet. "
         "Level 1 = top-level bullet, level 2 = first sub-bullet, etc.",
     )
-
-    @field_validator("indent_level")
-    @classmethod
-    def validate_indent_level(cls, v):
-        if v is not None and (v < 1 or v > 9):
-            raise ValueError("indent_level must be between 1 and 9")
-        return v
 
 
 class FindReplaceTextInput(BaseModel):
