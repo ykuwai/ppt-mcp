@@ -2145,3 +2145,149 @@ class TestFormatTextRangeHighlightColor:
                 slide_index=1, shape_name_or_index=1,
                 start=1, length=5, highlight_color="bad",
             )
+
+
+# ============================================================================
+# smartart.py — English alias mapping and _resolve_layout
+# ============================================================================
+from ppt_com.smartart import (
+    SMARTART_ENGLISH_ALIASES,
+    _ENGLISH_NAME_TO_ID,
+    _resolve_layout,
+)
+
+
+class TestSmartArtEnglishAliases:
+    """Tests for the SMARTART_ENGLISH_ALIASES mapping and reverse mapping."""
+
+    def test_alias_dict_not_empty(self):
+        """The alias mapping should have a substantial number of entries."""
+        assert len(SMARTART_ENGLISH_ALIASES) >= 80
+
+    def test_reverse_mapping_same_size(self):
+        """The reverse mapping should have the same number of entries (no duplicate English names)."""
+        assert len(_ENGLISH_NAME_TO_ID) == len(SMARTART_ENGLISH_ALIASES)
+
+    def test_reverse_mapping_lowercase_keys(self):
+        """All keys in the reverse mapping should be lowercase."""
+        for key in _ENGLISH_NAME_TO_ID:
+            assert key == key.lower(), f"Key '{key}' is not lowercase"
+
+    def test_known_aliases(self):
+        """Spot-check some well-known layout aliases."""
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/process1"] == "Basic Process"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"] == "Organization Chart"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/venn1"] == "Basic Venn"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/matrix1"] == "Basic Matrix"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/pyramid1"] == "Basic Pyramid"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/cycle1"] == "Basic Cycle"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1"] == "Hierarchy"
+
+    def test_reverse_lookup(self):
+        """Reverse mapping should return the correct Id for English names."""
+        assert _ENGLISH_NAME_TO_ID["basic process"] == "urn:microsoft.com/office/officeart/2005/8/layout/process1"
+        assert _ENGLISH_NAME_TO_ID["organization chart"] == "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"
+
+    def test_alias_lookup_known(self):
+        """SMARTART_ENGLISH_ALIASES.get returns the English name for a known Id."""
+        assert SMARTART_ENGLISH_ALIASES.get("urn:microsoft.com/office/officeart/2005/8/layout/process1") == "Basic Process"
+
+    def test_alias_lookup_unknown(self):
+        """SMARTART_ENGLISH_ALIASES.get returns None for an unknown Id."""
+        assert SMARTART_ENGLISH_ALIASES.get("urn:unknown/layout") is None
+
+    def test_all_ids_are_urns(self):
+        """All layout Ids should start with 'urn:microsoft.com/'."""
+        for layout_id in SMARTART_ENGLISH_ALIASES:
+            assert layout_id.startswith("urn:microsoft.com/"), f"Invalid URN: {layout_id}"
+
+    def test_all_english_names_non_empty(self):
+        """All English names should be non-empty strings."""
+        for layout_id, name in SMARTART_ENGLISH_ALIASES.items():
+            assert isinstance(name, str) and len(name) > 0, f"Empty name for {layout_id}"
+
+
+class TestResolveLayout:
+    """Tests for _resolve_layout with mock COM objects."""
+
+    def _make_mock_app(self, layouts):
+        """Create a mock app with SmartArtLayouts collection.
+
+        layouts: list of (Name, Id) tuples
+        """
+        app = MagicMock()
+        app.SmartArtLayouts.Count = len(layouts)
+
+        def layout_getter(idx):
+            mock_layout = MagicMock()
+            mock_layout.Name = layouts[idx - 1][0]
+            mock_layout.Id = layouts[idx - 1][1]
+            return mock_layout
+
+        app.SmartArtLayouts.side_effect = layout_getter
+        return app
+
+    def test_locale_name_match(self):
+        """Should match by locale-specific name first."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "基本プロセス")
+        assert result.Name == "基本プロセス"
+
+    def test_locale_name_partial_match(self):
+        """Should match partial locale name (contains)."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "プロセス")
+        assert result.Name == "基本プロセス"
+
+    def test_english_alias_exact_match(self):
+        """Should match English alias when locale name doesn't match."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "Basic Process")
+        assert result.Name == "基本プロセス"
+
+    def test_english_alias_partial_match(self):
+        """Should match partial English alias (contains)."""
+        app = self._make_mock_app([
+            ("組織図", "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"),
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "Organization")
+        assert result.Id == "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"
+
+    def test_english_alias_case_insensitive(self):
+        """English alias matching should be case-insensitive."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "basic process")
+        assert result.Name == "基本プロセス"
+
+    def test_not_found_raises_error(self):
+        """Should raise ValueError when no layout matches."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        with pytest.raises(ValueError, match="not found"):
+            _resolve_layout(app, "NonexistentLayout")
+
+    def test_locale_name_takes_priority(self):
+        """Locale name match should take priority over English alias."""
+        app = self._make_mock_app([
+            ("Basic Process", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "Basic Process")
+        assert result.Name == "Basic Process"
+
+    def test_english_alias_with_unmapped_layout_id(self):
+        """Layout with unmapped Id should not match English alias search."""
+        app = self._make_mock_app([
+            ("カスタムレイアウト", "urn:custom/unknown-layout"),
+        ])
+        with pytest.raises(ValueError, match="not found"):
+            _resolve_layout(app, "Basic Process")
