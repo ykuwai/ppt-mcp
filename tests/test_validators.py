@@ -7,7 +7,7 @@ Covers all model_validator decorated methods in:
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
 - text.py: GetAllTextInput
-- connectors.py: FormatConnectorInput
+- connectors.py: AddConnectorInput, FormatConnectorInput
 
 These are pure Python tests — no COM or PowerPoint required.
 """
@@ -33,7 +33,7 @@ from ppt_com.tables import (
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput, SetPictureFormatInput
 from ppt_com.shapes import AddShapeInput, UpdateShapeInput
 from ppt_com.animation import AddAnimationInput, RemoveAnimationInput, UpdateAnimationInput
-from ppt_com.connectors import FormatConnectorInput
+from ppt_com.connectors import AddConnectorInput, FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.text import GetAllTextInput
 from utils.validation import font_size_warning
@@ -1068,6 +1068,99 @@ class TestUpdateShapeInput:
 
 
 # ============================================================================
+# connectors.py — AddConnectorInput friendly site names
+# ============================================================================
+class TestAddConnectorInput:
+    """Tests for AddConnectorInput connection site friendly names."""
+
+    def test_int_site_accepted(self):
+        """Integer begin_site / end_site work as before."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="Rect 1", end_shape="Rect 2",
+            begin_site=2, end_site=4,
+        )
+        assert m.begin_site == 2
+        assert m.end_site == 4
+
+    def test_string_site_accepted(self):
+        """Direction names are accepted for begin_site / end_site."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="Rect 1", end_shape="Rect 2",
+            begin_site="right", end_site="left",
+        )
+        assert m.begin_site == "right"
+        assert m.end_site == "left"
+
+    def test_all_direction_names(self):
+        """All four direction names are valid."""
+        for name in ("top", "bottom", "left", "right"):
+            m = AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                begin_site=name, end_site=name,
+            )
+            assert m.begin_site == name
+
+    def test_invalid_site_name_rejected(self):
+        """An unrecognised site name raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                begin_site="middle",
+            )
+
+    def test_invalid_end_site_name_rejected(self):
+        """An unrecognised end_site name raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                end_site="center",
+            )
+
+    def test_zero_int_site_rejected(self):
+        """begin_site=0 (int) raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                begin_site=0,
+            )
+
+    def test_negative_int_site_rejected(self):
+        """Negative int site raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                end_site=-1,
+            )
+
+    def test_mixed_int_and_string(self):
+        """begin_site as int and end_site as string is valid."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="A", end_shape="B",
+            begin_site=3, end_site="top",
+        )
+        assert m.begin_site == 3
+        assert m.end_site == "top"
+
+    def test_default_sites(self):
+        """Sites default to 1 when omitted."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="A", end_shape="B",
+        )
+        assert m.begin_site == 1
+        assert m.end_site == 1
+
+    def test_case_insensitive_site_name(self):
+        """Site names with different casing are accepted (stripped/lowered in validator)."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="A", end_shape="B",
+            begin_site="Top", end_site="RIGHT",
+        )
+        # Pydantic stores the original value; validation passes
+        assert m.begin_site == "Top"
+        assert m.end_site == "RIGHT"
+
+
+# ============================================================================
 # connectors.py — FormatConnectorInput arrowhead size fields
 # ============================================================================
 class TestFormatConnectorInput:
@@ -1200,6 +1293,32 @@ class TestFormatConnectorInput:
             FormatConnectorInput(
                 slide_index=1, shape_name_or_index="c1",
                 end_site=3,
+            )
+
+    def test_string_site_accepted(self):
+        """Direction names are accepted for begin_site / end_site."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="c1",
+            begin_shape="Rect 1", begin_site="left",
+            end_shape="Rect 2", end_site="right",
+        )
+        assert m.begin_site == "left"
+        assert m.end_site == "right"
+
+    def test_invalid_site_name_rejected(self):
+        """Invalid direction name raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_shape="Rect 1", begin_site="middle",
+            )
+
+    def test_string_end_site_without_shape_rejected(self):
+        """String end_site still requires end_shape."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                end_site="top",
             )
 
 
