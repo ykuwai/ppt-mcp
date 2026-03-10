@@ -173,7 +173,11 @@ class AddShapeInput(BaseModel):
     top: float = Field(..., description="Top position in points")
     width: float = Field(..., description="Width in points")
     height: float = Field(..., description="Height in points")
-    text: Optional[str] = Field(default=None, description="Optional text content")
+    text: Optional[str] = Field(
+        default=None,
+        description="Optional text content. "
+        "\\n = paragraph break (Enter), \\v = line break (Shift+Enter) within the same paragraph.",
+    )
     # --- inline text formatting (optional — avoids a separate ppt_format_text call) ---
     font_name: Optional[str] = Field(
         default=None,
@@ -275,7 +279,11 @@ class AddTextboxInput(BaseModel):
     top: float = Field(..., description="Top position in points")
     width: float = Field(..., description="Width in points")
     height: float = Field(..., description="Height in points")
-    text: Optional[str] = Field(default=None, description="Optional initial text content")
+    text: Optional[str] = Field(
+        default=None,
+        description="Optional initial text content. "
+        "\\n = paragraph break (Enter), \\v = line break (Shift+Enter) within the same paragraph.",
+    )
     # --- inline font (optional — avoids a separate ppt_format_text call) ---
     font_name: Optional[str] = Field(
         default=None,
@@ -451,6 +459,8 @@ def _add_shape_impl(
         Type=shape_type_int, Left=left, Top=top, Width=width, Height=height
     )
     if text:
+        text = text.replace('\n', '\r')  # \n -> paragraph break (Enter)
+        # \v (vertical tab) -> line break (Shift+Enter) — passed through as-is
         shape.TextFrame.TextRange.Text = text
 
         # Inline text formatting (same pattern as _add_textbox_impl)
@@ -546,6 +556,8 @@ def _add_textbox_impl(
         Left=left, Top=top, Width=width, Height=height,
     )
     if text:
+        text = text.replace('\n', '\r')  # \n -> paragraph break (Enter)
+        # \v (vertical tab) -> line break (Shift+Enter) — passed through as-is
         textbox.TextFrame.TextRange.Text = text
 
     # Inline font — avoids a follow-up ppt_format_text call
@@ -1227,6 +1239,10 @@ def register_tools(mcp):
 
         Creates a horizontal text box. Optionally set initial text content.
         All positions and sizes are in points (72 points = 1 inch).
+
+        Text line-break behaviour (same as ppt_set_text):
+        - \\n = paragraph break (Enter) — starts a new paragraph.
+        - \\v = line break (Shift+Enter) — soft return within the same paragraph.
 
         Optionally apply font styling in the same call via font_name, font_size, bold,
         italic, font_color, and align — avoids a separate ppt_format_text call.

@@ -157,15 +157,22 @@ class FormatTextInput(BaseModel):
 
 
 class FormatTextRangeInput(BaseModel):
-    """Input for formatting a specific character range within a shape."""
+    """Input for formatting a specific character range within a shape.
+
+    Range can be specified either by start/length or by search_text.
+    When search_text is provided, the matching text position is used
+    automatically (start and length must not be set).
+    """
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
         ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
-    start: int = Field(..., description="1-based character start position")
-    length: int = Field(..., description="Number of characters to format")
+    start: Optional[int] = Field(default=None, description="1-based character start position (mutually exclusive with search_text)")
+    length: Optional[int] = Field(default=None, description="Number of characters to format (mutually exclusive with search_text)")
+    search_text: Optional[str] = Field(default=None, description="Text to search for in the shape. The matching range is formatted automatically. Mutually exclusive with start/length.")
+    occurrence: int = Field(default=1, description="Which occurrence of search_text to target (1 = first). Only used with search_text.", ge=1)
     font_name: Optional[str] = Field(default=None, description="Latin font name. Also sets the East Asian font unless font_name_fareast is provided.")
     font_name_fareast: Optional[str] = Field(default=None, description="East Asian (CJK) font name (e.g. 'BIZ UDPゴシック'). Overrides the Far East font independently of font_name.")
     font_size: Optional[float] = Field(default=None, description="Font size in points")
@@ -193,6 +200,37 @@ class FormatTextRangeInput(BaseModel):
             raise ValueError("highlight_color must be '#RRGGBB' hex string or 'clear'")
         return v
 
+    @field_validator("search_text")
+    @classmethod
+    def validate_search_text_not_empty(cls, v):
+        if v is not None and v == "":
+            raise ValueError("search_text must not be empty")
+        return v
+
+    @model_validator(mode="after")
+    def validate_range_specification(self):
+        """Ensure either start/length or search_text is provided, not both."""
+        has_start = self.start is not None
+        has_length = self.length is not None
+        has_search = self.search_text is not None
+
+        if has_search:
+            if has_start or has_length:
+                raise ValueError(
+                    "search_text is mutually exclusive with start/length. "
+                    "Use either search_text or start+length, not both."
+                )
+        else:
+            if not has_start or not has_length:
+                raise ValueError(
+                    "Either search_text or both start and length must be provided."
+                )
+            if self.occurrence != 1:
+                raise ValueError(
+                    "occurrence is only valid with search_text, not with start/length."
+                )
+        return self
+
 
 class SetParagraphFormatInput(BaseModel):
     """Input for setting paragraph formatting."""
@@ -211,7 +249,7 @@ class SetParagraphFormatInput(BaseModel):
     line_spacing: Optional[float] = Field(default=None, description="Line spacing multiplier")
     space_before: Optional[float] = Field(default=None, description="Space before paragraph in points")
     space_after: Optional[float] = Field(default=None, description="Space after paragraph in points")
-    indent_level: Optional[int] = Field(default=None, description="Indent level (1-9)")
+    indent_level: Optional[int] = Field(default=None, ge=1, le=9, description="Indent level (1-9)")
     first_line_indent: Optional[float] = Field(default=None, description="First line indent in points")
 
 
@@ -234,6 +272,11 @@ class SetBulletInput(BaseModel):
     )
     bullet_start_value: Optional[int] = Field(
         default=None, description="Starting number for numbered bullets"
+    )
+    indent_level: Optional[int] = Field(
+        default=None, ge=1, le=9,
+        description="Indent level 1-9. Sets the nesting depth of the bullet. "
+        "Level 1 = top-level bullet, level 2 = first sub-bullet, etc.",
     )
 
 
@@ -1091,6 +1134,7 @@ def _format_text_impl(slide_index, shape_name_or_index,
 
 
 def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
+                              search_text, occurrence,
                               font_name, font_name_fareast, font_size, bold, italic, underline,
                               color, font_color_theme, highlight_color) -> dict:
     app = ppt._get_app_impl()
@@ -1103,6 +1147,29 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
         raise ValueError(f"Shape '{shape.Name}' does not have a text frame")
 
     tr = shape.TextFrame.TextRange
+
+    # Resolve search_text to start/length if provided
+    if search_text is not None:
+        full_text = tr.Text
+        pos = -1
+        search_from = 0
+        for i in range(occurrence):
+            pos = full_text.find(search_text, search_from)
+            if pos == -1:
+                if i == 0:
+                    raise ValueError(
+                        f"search_text '{search_text}' not found in shape '{shape.Name}'"
+                    )
+                else:
+                    raise ValueError(
+                        f"search_text '{search_text}' has only {i} occurrence(s) "
+                        f"in shape '{shape.Name}', but occurrence={occurrence} was requested"
+                    )
+            search_from = pos + len(search_text)
+        # COM Characters() is 1-based
+        start = pos + 1
+        length = len(search_text)
+
     target = tr.Characters(Start=start, Length=length)
     _apply_font_props(target.Font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme)
 
@@ -1174,7 +1241,8 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
 
 
 def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
-                       bullet_type, bullet_char, bullet_start_value) -> dict:
+                       bullet_type, bullet_char, bullet_start_value,
+                       indent_level) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1198,7 +1266,8 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
             f"Valid values: {list(BULLET_TYPE_MAP.keys())}"
         )
 
-    bullet = target.ParagraphFormat.Bullet
+    pf = target.ParagraphFormat
+    bullet = pf.Bullet
 
     if bullet_type_val == ppBulletNone:
         bullet.Visible = msoFalse
@@ -1212,11 +1281,15 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
     if bullet_start_value is not None:
         bullet.StartValue = bullet_start_value
 
+    if indent_level is not None:
+        target.IndentLevel = indent_level
+
     return {
         "status": "success",
         "shape_name": shape.Name,
         "paragraph_index": paragraph_index or "all",
         "bullet_type": bullet_type,
+        "indent_level": indent_level,
     }
 
 
@@ -1378,6 +1451,7 @@ def format_text_range(params: FormatTextRangeInput) -> str:
             _format_text_range_impl,
             params.slide_index, params.shape_name_or_index,
             params.start, params.length,
+            params.search_text, params.occurrence,
             params.font_name, params.font_name_fareast,
             params.font_size, params.bold, params.italic,
             params.underline, params.color, params.font_color_theme,
@@ -1412,6 +1486,7 @@ def set_bullet(params: SetBulletInput) -> str:
             _set_bullet_impl,
             params.slide_index, params.shape_name_or_index, params.paragraph_index,
             params.bullet_type, params.bullet_char, params.bullet_start_value,
+            params.indent_level,
         )
         return json.dumps(result)
     except Exception as e:
@@ -1560,10 +1635,11 @@ def register_tools(mcp):
     async def tool_ppt_format_text_range(params: FormatTextRangeInput) -> str:
         """Format a specific character range within a shape's text.
 
-        This is the KEY feature for partial text formatting. Uses
-        Characters(start, length) to target specific characters.
-        Start is 1-based. For example, to bold characters 3 through 7,
-        use start=3, length=5.
+        Target range can be specified in two ways (mutually exclusive):
+        1. **start + length**: Characters(start, length) — start is 1-based.
+           Example: to bold characters 3 through 7, use start=3, length=5.
+        2. **search_text**: Search for the text and format the matching range.
+           Use occurrence to target the Nth match (default: 1st).
         """
         return format_text_range(params)
 
@@ -1601,6 +1677,14 @@ def register_tools(mcp):
         bullet_type can be 'none', 'unnumbered', or 'numbered'.
         Use bullet_char for custom bullet characters (e.g. '●').
         Use bullet_start_value to set the starting number.
+        Use indent_level (1-9) to set nesting depth in one call.
+
+        Nested bullet example — first use ppt_set_text to create paragraphs
+        separated by \\n, then call ppt_set_bullet per paragraph
+        (slide_index and shape_name_or_index required on each call):
+          ppt_set_bullet(..., paragraph_index=1, bullet_type='unnumbered', indent_level=1)
+          ppt_set_bullet(..., paragraph_index=2, bullet_type='unnumbered', indent_level=2)
+          ppt_set_bullet(..., paragraph_index=3, bullet_type='unnumbered', indent_level=3)
         """
         return set_bullet(params)
 

@@ -2,12 +2,12 @@
 
 Covers all model_validator decorated methods in:
 - freeform.py: NodeSpec, BuildFreeformInput, InsertNodeInput
-- tables.py: MergeTableCellsInput, SetTableBordersInput
+- tables.py: MergeTableCellsInput, SetTableBordersInput, SetTableDataInput
 - advanced_ops.py: SetDefaultShapeStyleInput, CropPictureInput
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
-- text.py: GetAllTextInput
-- connectors.py: FormatConnectorInput
+- text.py: GetAllTextInput, SetBulletInput, SetParagraphFormatInput
+- connectors.py: AddConnectorInput, FormatConnectorInput
 
 These are pure Python tests — no COM or PowerPoint required.
 """
@@ -28,13 +28,14 @@ from ppt_com.freeform import (
 from ppt_com.tables import (
     MergeTableCellsInput,
     SetTableBordersInput,
+    SetTableDataInput,
 )
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput, SetPictureFormatInput
 from ppt_com.shapes import AddShapeInput, UpdateShapeInput
 from ppt_com.animation import AddAnimationInput, RemoveAnimationInput, UpdateAnimationInput
-from ppt_com.connectors import FormatConnectorInput
+from ppt_com.connectors import AddConnectorInput, FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
-from ppt_com.text import GetAllTextInput
+from ppt_com.text import GetAllTextInput, SetBulletInput, SetParagraphFormatInput
 from utils.validation import font_size_warning
 
 
@@ -352,6 +353,92 @@ class TestInsertNodeInput:
                 slide_index=0, shape_name="s1", after_index=1,
                 segment_type="line", x1=10, y1=20,
             )
+
+
+# ============================================================================
+# tables.py — SetTableDataInput
+# ============================================================================
+
+class TestSetTableDataInput:
+    """Tests for SetTableDataInput validators."""
+
+    def test_valid_basic(self):
+        """Basic 2D data array is accepted."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index="Table1",
+            data=[["A", "B"], ["C", "D"]],
+        )
+        assert inp.data == [["A", "B"], ["C", "D"]]
+        assert inp.start_row == 1
+        assert inp.start_col == 1
+        assert inp.bold_first_row is False
+
+    def test_custom_start_position(self):
+        """Custom start_row and start_col are accepted."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index="Table1",
+            data=[["X"]], start_row=3, start_col=2,
+        )
+        assert inp.start_row == 3
+        assert inp.start_col == 2
+
+    def test_bold_first_row(self):
+        """bold_first_row=True is accepted."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index="Table1",
+            data=[["Header1", "Header2"], ["Data1", "Data2"]],
+            bold_first_row=True,
+        )
+        assert inp.bold_first_row is True
+
+    def test_empty_data_rejected(self):
+        """Empty data list raises ValidationError."""
+        with pytest.raises(ValidationError, match="data must contain at least one row"):
+            SetTableDataInput(
+                slide_index=1, shape_name_or_index="Table1",
+                data=[],
+            )
+
+    def test_empty_first_row_rejected(self):
+        """Data with empty first row raises ValidationError."""
+        with pytest.raises(ValidationError, match="data rows must contain at least one value"):
+            SetTableDataInput(
+                slide_index=1, shape_name_or_index="Table1",
+                data=[[]],
+            )
+
+    def test_zero_start_row_rejected(self):
+        """start_row=0 is rejected (ge=1)."""
+        with pytest.raises(ValidationError):
+            SetTableDataInput(
+                slide_index=1, shape_name_or_index="Table1",
+                data=[["A"]], start_row=0,
+            )
+
+    def test_zero_start_col_rejected(self):
+        """start_col=0 is rejected (ge=1)."""
+        with pytest.raises(ValidationError):
+            SetTableDataInput(
+                slide_index=1, shape_name_or_index="Table1",
+                data=[["A"]], start_col=0,
+            )
+
+    def test_shape_name_or_index_accepts_int(self):
+        """shape_name_or_index accepts an integer."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index=5,
+            data=[["A"]],
+        )
+        assert inp.shape_name_or_index == 5
+
+    def test_single_row_data(self):
+        """Single row data is accepted."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index="T",
+            data=[["Q1", "$1.2M", "+12%"]],
+        )
+        assert len(inp.data) == 1
+        assert len(inp.data[0]) == 3
 
 
 # ============================================================================
@@ -981,10 +1068,102 @@ class TestUpdateShapeInput:
 
 
 # ============================================================================
+# connectors.py — AddConnectorInput friendly site names
+# ============================================================================
+class TestAddConnectorInput:
+    """Tests for AddConnectorInput connection site friendly names."""
+
+    def test_int_site_accepted(self):
+        """Integer begin_site / end_site work as before."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="Rect 1", end_shape="Rect 2",
+            begin_site=2, end_site=4,
+        )
+        assert m.begin_site == 2
+        assert m.end_site == 4
+
+    def test_string_site_accepted(self):
+        """Direction names are accepted for begin_site / end_site."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="Rect 1", end_shape="Rect 2",
+            begin_site="right", end_site="left",
+        )
+        assert m.begin_site == "right"
+        assert m.end_site == "left"
+
+    def test_all_direction_names(self):
+        """All four direction names are valid."""
+        for name in ("top", "bottom", "left", "right"):
+            m = AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                begin_site=name, end_site=name,
+            )
+            assert m.begin_site == name
+
+    def test_invalid_site_name_rejected(self):
+        """An unrecognised site name raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                begin_site="middle",
+            )
+
+    def test_invalid_end_site_name_rejected(self):
+        """An unrecognised end_site name raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                end_site="center",
+            )
+
+    def test_zero_int_site_rejected(self):
+        """begin_site=0 (int) raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                begin_site=0,
+            )
+
+    def test_negative_int_site_rejected(self):
+        """Negative int site raises ValidationError."""
+        with pytest.raises(ValidationError):
+            AddConnectorInput(
+                slide_index=1, begin_shape="A", end_shape="B",
+                end_site=-1,
+            )
+
+    def test_mixed_int_and_string(self):
+        """begin_site as int and end_site as string is valid."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="A", end_shape="B",
+            begin_site=3, end_site="top",
+        )
+        assert m.begin_site == 3
+        assert m.end_site == "top"
+
+    def test_default_sites(self):
+        """Sites default to 1 when omitted."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="A", end_shape="B",
+        )
+        assert m.begin_site == 1
+        assert m.end_site == 1
+
+    def test_case_insensitive_site_name(self):
+        """Site names with different casing are accepted and normalized to lowercase."""
+        m = AddConnectorInput(
+            slide_index=1, begin_shape="A", end_shape="B",
+            begin_site="Top", end_site="RIGHT",
+        )
+        assert m.begin_site == "top"
+        assert m.end_site == "right"
+
+
+# ============================================================================
 # connectors.py — FormatConnectorInput arrowhead size fields
 # ============================================================================
 class TestFormatConnectorInput:
-    """Tests for FormatConnectorInput arrowhead size parameters."""
+    """Tests for FormatConnectorInput arrowhead size and site name parameters."""
 
     def test_all_defaults_valid(self):
         """Minimal input with only required fields is accepted."""
@@ -1113,6 +1292,32 @@ class TestFormatConnectorInput:
             FormatConnectorInput(
                 slide_index=1, shape_name_or_index="c1",
                 end_site=3,
+            )
+
+    def test_string_site_accepted(self):
+        """Direction names are accepted for begin_site / end_site."""
+        m = FormatConnectorInput(
+            slide_index=1, shape_name_or_index="c1",
+            begin_shape="Rect 1", begin_site="left",
+            end_shape="Rect 2", end_site="right",
+        )
+        assert m.begin_site == "left"
+        assert m.end_site == "right"
+
+    def test_invalid_site_name_rejected(self):
+        """Invalid direction name raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                begin_shape="Rect 1", begin_site="middle",
+            )
+
+    def test_string_end_site_without_shape_rejected(self):
+        """String end_site still requires end_shape."""
+        with pytest.raises(ValidationError):
+            FormatConnectorInput(
+                slide_index=1, shape_name_or_index="c1",
+                end_site="top",
             )
 
 
@@ -2057,4 +2262,360 @@ class TestFormatTextRangeHighlightColor:
             FormatTextRangeInput(
                 slide_index=1, shape_name_or_index=1,
                 start=1, length=5, highlight_color="bad",
+            )
+
+
+# ============================================================================
+# text.py — FormatTextRangeInput (search_text / occurrence)
+# ============================================================================
+class TestFormatTextRangeSearchText:
+    """Tests for search_text / occurrence on FormatTextRangeInput."""
+
+    def test_search_text_only(self):
+        """search_text alone is valid (start/length not required)."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            search_text="hello", bold=True,
+        )
+        assert inp.search_text == "hello"
+        assert inp.start is None
+        assert inp.length is None
+
+    def test_search_text_with_occurrence(self):
+        """search_text + occurrence is valid."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            search_text="world", occurrence=3, italic=True,
+        )
+        assert inp.search_text == "world"
+        assert inp.occurrence == 3
+
+    def test_search_text_with_start_rejected(self):
+        """search_text + start raises ValidationError."""
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="hello", start=1, bold=True,
+            )
+
+    def test_search_text_with_length_rejected(self):
+        """search_text + length raises ValidationError."""
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="hello", length=5, bold=True,
+            )
+
+    def test_search_text_with_start_and_length_rejected(self):
+        """search_text + start + length raises ValidationError."""
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="hello", start=1, length=5, bold=True,
+            )
+
+    def test_no_search_text_no_start_length_rejected(self):
+        """Neither search_text nor start/length raises ValidationError."""
+        with pytest.raises(ValidationError, match="search_text or both start and length"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                bold=True,
+            )
+
+    def test_start_without_length_rejected(self):
+        """start without length raises ValidationError."""
+        with pytest.raises(ValidationError, match="search_text or both start and length"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                start=1, bold=True,
+            )
+
+    def test_length_without_start_rejected(self):
+        """length without start raises ValidationError."""
+        with pytest.raises(ValidationError, match="search_text or both start and length"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                length=5, bold=True,
+            )
+
+    def test_occurrence_default(self):
+        """occurrence defaults to 1."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            search_text="test",
+        )
+        assert inp.occurrence == 1
+
+    def test_occurrence_zero_rejected(self):
+        """occurrence < 1 raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="test", occurrence=0,
+            )
+
+    def test_start_length_still_works(self):
+        """Traditional start/length mode still works."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            start=3, length=5, bold=True,
+        )
+        assert inp.start == 3
+        assert inp.length == 5
+
+    def test_empty_search_text_rejected(self):
+        """Empty search_text raises ValidationError."""
+        with pytest.raises(ValidationError, match="search_text must not be empty"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="", bold=True,
+            )
+
+    def test_occurrence_with_start_length_rejected(self):
+        """occurrence != 1 with start/length raises ValidationError."""
+        with pytest.raises(ValidationError, match="occurrence is only valid with search_text"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                start=1, length=5, occurrence=2, bold=True,
+            )
+
+
+# ============================================================================
+# smartart.py — English alias mapping and _resolve_layout
+# ============================================================================
+from ppt_com.smartart import (
+    SMARTART_ENGLISH_ALIASES,
+    _ENGLISH_NAME_TO_ID,
+    _resolve_layout,
+)
+
+
+class TestSmartArtEnglishAliases:
+    """Tests for the SMARTART_ENGLISH_ALIASES mapping and reverse mapping."""
+
+    def test_alias_dict_not_empty(self):
+        """The alias mapping should have a substantial number of entries."""
+        assert len(SMARTART_ENGLISH_ALIASES) >= 80
+
+    def test_reverse_mapping_same_size(self):
+        """The reverse mapping should have the same number of entries (no duplicate English names)."""
+        assert len(_ENGLISH_NAME_TO_ID) == len(SMARTART_ENGLISH_ALIASES)
+
+    def test_reverse_mapping_lowercase_keys(self):
+        """All keys in the reverse mapping should be lowercase."""
+        for key in _ENGLISH_NAME_TO_ID:
+            assert key == key.lower(), f"Key '{key}' is not lowercase"
+
+    def test_known_aliases(self):
+        """Spot-check some well-known layout aliases."""
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/process1"] == "Basic Process"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"] == "Organization Chart"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/venn1"] == "Basic Venn"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/matrix1"] == "Basic Matrix"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/pyramid1"] == "Basic Pyramid"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/cycle1"] == "Basic Cycle"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1"] == "Hierarchy"
+
+    def test_reverse_lookup(self):
+        """Reverse mapping should return the correct Id for English names."""
+        assert _ENGLISH_NAME_TO_ID["basic process"] == "urn:microsoft.com/office/officeart/2005/8/layout/process1"
+        assert _ENGLISH_NAME_TO_ID["organization chart"] == "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"
+
+    def test_alias_lookup_known(self):
+        """SMARTART_ENGLISH_ALIASES.get returns the English name for a known Id."""
+        assert SMARTART_ENGLISH_ALIASES.get("urn:microsoft.com/office/officeart/2005/8/layout/process1") == "Basic Process"
+
+    def test_alias_lookup_unknown(self):
+        """SMARTART_ENGLISH_ALIASES.get returns None for an unknown Id."""
+        assert SMARTART_ENGLISH_ALIASES.get("urn:unknown/layout") is None
+
+    def test_all_ids_are_urns(self):
+        """All layout Ids should start with 'urn:microsoft.com/'."""
+        for layout_id in SMARTART_ENGLISH_ALIASES:
+            assert layout_id.startswith("urn:microsoft.com/"), f"Invalid URN: {layout_id}"
+
+    def test_all_english_names_non_empty(self):
+        """All English names should be non-empty strings."""
+        for layout_id, name in SMARTART_ENGLISH_ALIASES.items():
+            assert isinstance(name, str) and len(name) > 0, f"Empty name for {layout_id}"
+
+
+class TestResolveLayout:
+    """Tests for _resolve_layout with mock COM objects."""
+
+    def _make_mock_app(self, layouts):
+        """Create a mock app with SmartArtLayouts collection.
+
+        layouts: list of (Name, Id) tuples
+        """
+        app = MagicMock()
+        app.SmartArtLayouts.Count = len(layouts)
+
+        def layout_getter(idx):
+            mock_layout = MagicMock()
+            mock_layout.Name = layouts[idx - 1][0]
+            mock_layout.Id = layouts[idx - 1][1]
+            return mock_layout
+
+        app.SmartArtLayouts.side_effect = layout_getter
+        return app
+
+    def test_locale_name_match(self):
+        """Should match by locale-specific name first."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "基本プロセス")
+        assert result.Name == "基本プロセス"
+
+    def test_locale_name_partial_match(self):
+        """Should match partial locale name (contains)."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "プロセス")
+        assert result.Name == "基本プロセス"
+
+    def test_english_alias_exact_match(self):
+        """Should match English alias when locale name doesn't match."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "Basic Process")
+        assert result.Name == "基本プロセス"
+
+    def test_english_alias_partial_match(self):
+        """Should match partial English alias (contains)."""
+        app = self._make_mock_app([
+            ("組織図", "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"),
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "Organization")
+        assert result.Id == "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"
+
+    def test_english_alias_case_insensitive(self):
+        """English alias matching should be case-insensitive."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "basic process")
+        assert result.Name == "基本プロセス"
+
+    def test_not_found_raises_error(self):
+        """Should raise ValueError when no layout matches."""
+        app = self._make_mock_app([
+            ("基本プロセス", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        with pytest.raises(ValueError, match="not found"):
+            _resolve_layout(app, "NonexistentLayout")
+
+    def test_locale_name_takes_priority(self):
+        """Locale name match should take priority over English alias."""
+        app = self._make_mock_app([
+            ("Basic Process", "urn:microsoft.com/office/officeart/2005/8/layout/process1"),
+        ])
+        result = _resolve_layout(app, "Basic Process")
+        assert result.Name == "Basic Process"
+
+    def test_english_alias_with_unmapped_layout_id(self):
+        """Layout with unmapped Id should not match English alias search."""
+        app = self._make_mock_app([
+            ("カスタムレイアウト", "urn:custom/unknown-layout"),
+        ])
+        with pytest.raises(ValueError, match="not found"):
+            _resolve_layout(app, "Basic Process")
+
+
+# ============================================================================
+# text.py — SetBulletInput
+# ============================================================================
+
+class TestSetBulletInput:
+    """Tests for SetBulletInput indent_level validator."""
+
+    def test_indent_level_valid_min(self):
+        """indent_level=1 is accepted."""
+        inp = SetBulletInput(
+            slide_index=1, shape_name_or_index="Shape1",
+            bullet_type="unnumbered", indent_level=1,
+        )
+        assert inp.indent_level == 1
+
+    def test_indent_level_valid_max(self):
+        """indent_level=9 is accepted."""
+        inp = SetBulletInput(
+            slide_index=1, shape_name_or_index="Shape1",
+            bullet_type="unnumbered", indent_level=9,
+        )
+        assert inp.indent_level == 9
+
+    def test_indent_level_none_accepted(self):
+        """indent_level=None (omitted) is accepted."""
+        inp = SetBulletInput(
+            slide_index=1, shape_name_or_index="Shape1",
+            bullet_type="unnumbered",
+        )
+        assert inp.indent_level is None
+
+    def test_indent_level_zero_rejected(self):
+        """indent_level=0 is rejected."""
+        with pytest.raises(ValidationError, match="indent_level"):
+            SetBulletInput(
+                slide_index=1, shape_name_or_index="Shape1",
+                bullet_type="unnumbered", indent_level=0,
+            )
+
+    def test_indent_level_ten_rejected(self):
+        """indent_level=10 is rejected."""
+        with pytest.raises(ValidationError, match="indent_level"):
+            SetBulletInput(
+                slide_index=1, shape_name_or_index="Shape1",
+                bullet_type="unnumbered", indent_level=10,
+            )
+
+    def test_indent_level_negative_rejected(self):
+        """indent_level=-1 is rejected."""
+        with pytest.raises(ValidationError, match="indent_level"):
+            SetBulletInput(
+                slide_index=1, shape_name_or_index="Shape1",
+                bullet_type="unnumbered", indent_level=-1,
+            )
+
+
+# ============================================================================
+# text.py — SetParagraphFormatInput
+# ============================================================================
+
+class TestSetParagraphFormatInput:
+    """Tests for SetParagraphFormatInput indent_level validator."""
+
+    def test_indent_level_valid(self):
+        """indent_level=5 is accepted."""
+        inp = SetParagraphFormatInput(
+            slide_index=1, shape_name_or_index="Shape1",
+            indent_level=5,
+        )
+        assert inp.indent_level == 5
+
+    def test_indent_level_none_accepted(self):
+        """indent_level=None (omitted) is accepted."""
+        inp = SetParagraphFormatInput(
+            slide_index=1, shape_name_or_index="Shape1",
+        )
+        assert inp.indent_level is None
+
+    def test_indent_level_zero_rejected(self):
+        """indent_level=0 is rejected."""
+        with pytest.raises(ValidationError, match="indent_level"):
+            SetParagraphFormatInput(
+                slide_index=1, shape_name_or_index="Shape1",
+                indent_level=0,
+            )
+
+    def test_indent_level_ten_rejected(self):
+        """indent_level=10 is rejected."""
+        with pytest.raises(ValidationError, match="indent_level"):
+            SetParagraphFormatInput(
+                slide_index=1, shape_name_or_index="Shape1",
+                indent_level=10,
             )

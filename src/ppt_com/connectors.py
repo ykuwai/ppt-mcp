@@ -61,6 +61,77 @@ DASH_STYLE_MAP: dict[str, int] = {
     "long_dash": msoLineLongDash,
 }
 
+# Friendly names for connection sites.
+# Maps a direction name to a unit vector (dx, dy) used to find the closest
+# connection site on a shape.  Coordinates grow right (+x) and down (+y).
+SITE_DIRECTION_VECTORS: dict[str, tuple[float, float]] = {
+    "top": (0, -1),
+    "bottom": (0, 1),
+    "left": (-1, 0),
+    "right": (1, 0),
+}
+
+VALID_SITE_NAMES = list(SITE_DIRECTION_VECTORS.keys())
+
+
+def _resolve_site(shape, site: Union[int, str]) -> int:
+    """Resolve a connection site value to a 1-based integer index.
+
+    If *site* is already an int it is returned as-is.  If it is a string
+    (e.g. "top", "right"), the function inspects the shape's ConnectionSites
+    and returns the index of the site closest to the named direction relative
+    to the shape's centre.
+
+    Args:
+        shape: COM Shape object that has ConnectionSites.
+        site: 1-based index (int) or direction name (str).
+
+    Returns:
+        1-based connection site index.
+
+    Raises:
+        ValueError: If the name is unrecognised or the shape has no sites.
+    """
+    if isinstance(site, int):
+        return site
+
+    name = site.strip().lower()
+    vec = SITE_DIRECTION_VECTORS.get(name)
+    if vec is None:
+        raise ValueError(
+            f"Unknown connection site name '{site}'. "
+            f"Valid names: {VALID_SITE_NAMES}"
+        )
+
+    # Shape centre in slide coordinates
+    cx = shape.Left + shape.Width / 2
+    cy = shape.Top + shape.Height / 2
+
+    count = shape.ConnectionSites.Count
+    if count == 0:
+        raise ValueError(
+            f"Shape '{shape.Name}' has no connection sites"
+        )
+
+    best_index = 1
+    best_dot = float("-inf")
+    for i in range(1, count + 1):
+        # ConnectionSites(i) returns (x, y) tuple in slide coordinates
+        pt = shape.ConnectionSites(i)
+        dx = pt[0] - cx
+        dy = pt[1] - cy
+        # Normalise to avoid bias towards distant sites
+        length = (dx * dx + dy * dy) ** 0.5
+        if length == 0:
+            continue
+        dot = (dx / length) * vec[0] + (dy / length) * vec[1]
+        if dot > best_dot:
+            best_dot = dot
+            best_index = i
+
+    # If all sites were at the center (best_dot unchanged), fall back to site 1
+    return best_index
+
 
 # ---------------------------------------------------------------------------
 # Pydantic input models
@@ -77,17 +148,41 @@ class AddConnectorInput(BaseModel):
     begin_shape: str = Field(
         ..., description="Name of the shape where the connector begins"
     )
-    begin_site: int = Field(
-        default=1, ge=1,
-        description="1-based connection site index on the begin shape",
+    begin_site: Union[int, str] = Field(
+        default=1,
+        description=(
+            "Connection site on the begin shape. "
+            "Either a 1-based index (int) or a direction name: "
+            "'top', 'bottom', 'left', 'right'"
+        ),
     )
     end_shape: str = Field(
         ..., description="Name of the shape where the connector ends"
     )
-    end_site: int = Field(
-        default=1, ge=1,
-        description="1-based connection site index on the end shape",
+    end_site: Union[int, str] = Field(
+        default=1,
+        description=(
+            "Connection site on the end shape. "
+            "Either a 1-based index (int) or a direction name: "
+            "'top', 'bottom', 'left', 'right'"
+        ),
     )
+
+    @model_validator(mode="after")
+    def validate_sites(self) -> "AddConnectorInput":
+        for field_name in ("begin_site", "end_site"):
+            val = getattr(self, field_name)
+            if isinstance(val, int) and val < 1:
+                raise ValueError(f"{field_name} must be >= 1 when specified as int")
+            if isinstance(val, str):
+                normalized = val.strip().lower()
+                if normalized not in VALID_SITE_NAMES:
+                    raise ValueError(
+                        f"Unknown {field_name} name '{val}'. "
+                        f"Valid names: {VALID_SITE_NAMES}"
+                    )
+                setattr(self, field_name, normalized)
+        return self
 
 
 class FormatConnectorInput(BaseModel):
@@ -136,17 +231,25 @@ class FormatConnectorInput(BaseModel):
         default=None,
         description="Reconnect the start to this shape (by name)",
     )
-    begin_site: Optional[int] = Field(
-        default=None, ge=1,
-        description="1-based connection site on the new begin shape. Defaults to 1 if omitted",
+    begin_site: Optional[Union[int, str]] = Field(
+        default=None,
+        description=(
+            "Connection site on the new begin shape. "
+            "Either a 1-based index (int) or a direction name: "
+            "'top', 'bottom', 'left', 'right'. Defaults to 1 if omitted"
+        ),
     )
     end_shape: Optional[str] = Field(
         default=None,
         description="Reconnect the end to this shape (by name)",
     )
-    end_site: Optional[int] = Field(
-        default=None, ge=1,
-        description="1-based connection site on the new end shape. Defaults to 1 if omitted",
+    end_site: Optional[Union[int, str]] = Field(
+        default=None,
+        description=(
+            "Connection site on the new end shape. "
+            "Either a 1-based index (int) or a direction name: "
+            "'top', 'bottom', 'left', 'right'. Defaults to 1 if omitted"
+        ),
     )
 
     @model_validator(mode="after")
@@ -155,6 +258,20 @@ class FormatConnectorInput(BaseModel):
             raise ValueError("begin_site requires begin_shape to be set")
         if self.end_site is not None and self.end_shape is None:
             raise ValueError("end_site requires end_shape to be set")
+        for field_name in ("begin_site", "end_site"):
+            val = getattr(self, field_name)
+            if val is None:
+                continue
+            if isinstance(val, int) and val < 1:
+                raise ValueError(f"{field_name} must be >= 1 when specified as int")
+            if isinstance(val, str):
+                normalized = val.strip().lower()
+                if normalized not in VALID_SITE_NAMES:
+                    raise ValueError(
+                        f"Unknown {field_name} name '{val}'. "
+                        f"Valid names: {VALID_SITE_NAMES}"
+                    )
+                setattr(self, field_name, normalized)
         return self
 
 
@@ -214,9 +331,13 @@ def _add_connector_impl(slide_index, connector_type, begin_shape, begin_site,
     begin = _get_shape(slide, begin_shape)
     end = _get_shape(slide, end_shape)
 
+    # Resolve friendly site names to 1-based indices
+    resolved_begin = _resolve_site(begin, begin_site)
+    resolved_end = _resolve_site(end, end_site)
+
     # Connect using positional args (keyword args unreliable with late binding)
-    connector.ConnectorFormat.BeginConnect(begin, begin_site)
-    connector.ConnectorFormat.EndConnect(end, end_site)
+    connector.ConnectorFormat.BeginConnect(begin, resolved_begin)
+    connector.ConnectorFormat.EndConnect(end, resolved_end)
     connector.RerouteConnections()
 
     return {
@@ -313,13 +434,13 @@ def _format_connector_impl(slide_index, shape_name_or_index,
     reroute = False
     if begin_shape is not None:
         target = _get_shape(slide, begin_shape)
-        site = begin_site if begin_site is not None else 1
+        site = _resolve_site(target, begin_site) if begin_site is not None else 1
         shape.ConnectorFormat.BeginConnect(target, site)
         reroute = True
 
     if end_shape is not None:
         target = _get_shape(slide, end_shape)
-        site = end_site if end_site is not None else 1
+        site = _resolve_site(target, end_site) if end_site is not None else 1
         shape.ConnectorFormat.EndConnect(target, site)
         reroute = True
 
@@ -401,7 +522,8 @@ def register_tools(mcp):
 
         Creates a connector of the specified type (straight, elbow, or curve)
         and attaches it to connection sites on the begin and end shapes.
-        Connection sites are 1-based indices on the shape perimeter.
+        Connection sites can be specified as 1-based indices or direction
+        names: 'top', 'bottom', 'left', 'right'.
         """
         return add_connector(params)
 
@@ -420,6 +542,8 @@ def register_tools(mcp):
 
         Configure color, weight, dash style, arrowheads, and arrowhead size.
         Reconnect begin/end to different shapes via begin_shape/end_shape.
+        Connection sites accept 1-based indices or direction names
+        ('top', 'bottom', 'left', 'right').
         Identify the connector by shape name or 1-based shape index.
         """
         return format_connector(params)
