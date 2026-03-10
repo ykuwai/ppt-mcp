@@ -2267,6 +2267,121 @@ class TestFormatTextRangeHighlightColor:
 
 
 # ============================================================================
+# text.py — FormatTextRangeInput (search_text / occurrence)
+# ============================================================================
+class TestFormatTextRangeSearchText:
+    """Tests for search_text / occurrence on FormatTextRangeInput."""
+
+    def test_search_text_only(self):
+        """search_text alone is valid (start/length not required)."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            search_text="hello", bold=True,
+        )
+        assert inp.search_text == "hello"
+        assert inp.start is None
+        assert inp.length is None
+
+    def test_search_text_with_occurrence(self):
+        """search_text + occurrence is valid."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            search_text="world", occurrence=3, italic=True,
+        )
+        assert inp.search_text == "world"
+        assert inp.occurrence == 3
+
+    def test_search_text_with_start_rejected(self):
+        """search_text + start raises ValidationError."""
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="hello", start=1, bold=True,
+            )
+
+    def test_search_text_with_length_rejected(self):
+        """search_text + length raises ValidationError."""
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="hello", length=5, bold=True,
+            )
+
+    def test_search_text_with_start_and_length_rejected(self):
+        """search_text + start + length raises ValidationError."""
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="hello", start=1, length=5, bold=True,
+            )
+
+    def test_no_search_text_no_start_length_rejected(self):
+        """Neither search_text nor start/length raises ValidationError."""
+        with pytest.raises(ValidationError, match="search_text or both start and length"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                bold=True,
+            )
+
+    def test_start_without_length_rejected(self):
+        """start without length raises ValidationError."""
+        with pytest.raises(ValidationError, match="search_text or both start and length"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                start=1, bold=True,
+            )
+
+    def test_length_without_start_rejected(self):
+        """length without start raises ValidationError."""
+        with pytest.raises(ValidationError, match="search_text or both start and length"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                length=5, bold=True,
+            )
+
+    def test_occurrence_default(self):
+        """occurrence defaults to 1."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            search_text="test",
+        )
+        assert inp.occurrence == 1
+
+    def test_occurrence_zero_rejected(self):
+        """occurrence < 1 raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="test", occurrence=0,
+            )
+
+    def test_start_length_still_works(self):
+        """Traditional start/length mode still works."""
+        inp = FormatTextRangeInput(
+            slide_index=1, shape_name_or_index=1,
+            start=3, length=5, bold=True,
+        )
+        assert inp.start == 3
+        assert inp.length == 5
+
+    def test_empty_search_text_rejected(self):
+        """Empty search_text raises ValidationError."""
+        with pytest.raises(ValidationError, match="search_text must not be empty"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                search_text="", bold=True,
+            )
+
+    def test_occurrence_with_start_length_rejected(self):
+        """occurrence != 1 with start/length raises ValidationError."""
+        with pytest.raises(ValidationError, match="occurrence is only valid with search_text"):
+            FormatTextRangeInput(
+                slide_index=1, shape_name_or_index=1,
+                start=1, length=5, occurrence=2, bold=True,
+            )
+
+
+# ============================================================================
 # smartart.py — English alias mapping and _resolve_layout
 # ============================================================================
 from ppt_com.smartart import (
