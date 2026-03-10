@@ -2,7 +2,7 @@
 
 Covers all model_validator decorated methods in:
 - freeform.py: NodeSpec, BuildFreeformInput, InsertNodeInput
-- tables.py: MergeTableCellsInput, SetTableBordersInput
+- tables.py: MergeTableCellsInput, SetTableBordersInput, SetTableDataInput
 - advanced_ops.py: SetDefaultShapeStyleInput, CropPictureInput
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
@@ -28,6 +28,7 @@ from ppt_com.freeform import (
 from ppt_com.tables import (
     MergeTableCellsInput,
     SetTableBordersInput,
+    SetTableDataInput,
 )
 from ppt_com.advanced_ops import SetDefaultShapeStyleInput, CropPictureInput, SetPictureFormatInput
 from ppt_com.shapes import AddShapeInput, UpdateShapeInput
@@ -352,6 +353,92 @@ class TestInsertNodeInput:
                 slide_index=0, shape_name="s1", after_index=1,
                 segment_type="line", x1=10, y1=20,
             )
+
+
+# ============================================================================
+# tables.py — SetTableDataInput
+# ============================================================================
+
+class TestSetTableDataInput:
+    """Tests for SetTableDataInput validators."""
+
+    def test_valid_basic(self):
+        """Basic 2D data array is accepted."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index="Table1",
+            data=[["A", "B"], ["C", "D"]],
+        )
+        assert inp.data == [["A", "B"], ["C", "D"]]
+        assert inp.start_row == 1
+        assert inp.start_col == 1
+        assert inp.bold_first_row is False
+
+    def test_custom_start_position(self):
+        """Custom start_row and start_col are accepted."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index="Table1",
+            data=[["X"]], start_row=3, start_col=2,
+        )
+        assert inp.start_row == 3
+        assert inp.start_col == 2
+
+    def test_bold_first_row(self):
+        """bold_first_row=True is accepted."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index="Table1",
+            data=[["Header1", "Header2"], ["Data1", "Data2"]],
+            bold_first_row=True,
+        )
+        assert inp.bold_first_row is True
+
+    def test_empty_data_rejected(self):
+        """Empty data list raises ValidationError."""
+        with pytest.raises(ValidationError, match="data must contain at least one row"):
+            SetTableDataInput(
+                slide_index=1, shape_name_or_index="Table1",
+                data=[],
+            )
+
+    def test_empty_first_row_rejected(self):
+        """Data with empty first row raises ValidationError."""
+        with pytest.raises(ValidationError, match="data rows must contain at least one value"):
+            SetTableDataInput(
+                slide_index=1, shape_name_or_index="Table1",
+                data=[[]],
+            )
+
+    def test_zero_start_row_rejected(self):
+        """start_row=0 is rejected (ge=1)."""
+        with pytest.raises(ValidationError):
+            SetTableDataInput(
+                slide_index=1, shape_name_or_index="Table1",
+                data=[["A"]], start_row=0,
+            )
+
+    def test_zero_start_col_rejected(self):
+        """start_col=0 is rejected (ge=1)."""
+        with pytest.raises(ValidationError):
+            SetTableDataInput(
+                slide_index=1, shape_name_or_index="Table1",
+                data=[["A"]], start_col=0,
+            )
+
+    def test_shape_name_or_index_accepts_int(self):
+        """shape_name_or_index accepts an integer."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index=5,
+            data=[["A"]],
+        )
+        assert inp.shape_name_or_index == 5
+
+    def test_single_row_data(self):
+        """Single row data is accepted."""
+        inp = SetTableDataInput(
+            slide_index=1, shape_name_or_index="T",
+            data=[["Q1", "$1.2M", "+12%"]],
+        )
+        assert len(inp.data) == 1
+        assert len(inp.data[0]) == 3
 
 
 # ============================================================================
