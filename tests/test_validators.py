@@ -6,7 +6,7 @@ Covers all model_validator decorated methods in:
 - advanced_ops.py: SetDefaultShapeStyleInput, CropPictureInput
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
-- text.py: GetAllTextInput, SetBulletInput, SetParagraphFormatInput
+- text.py: GetAllTextInput, SetBulletInput, SetParagraphFormatInput, CheckTypographyInput
 - connectors.py: AddConnectorInput, FormatConnectorInput
 
 These are pure Python tests — no COM or PowerPoint required.
@@ -35,7 +35,10 @@ from ppt_com.shapes import AddShapeInput, UpdateShapeInput
 from ppt_com.animation import AddAnimationInput, RemoveAnimationInput, UpdateAnimationInput
 from ppt_com.connectors import AddConnectorInput, FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
-from ppt_com.text import GetAllTextInput, SetBulletInput, SetParagraphFormatInput
+from ppt_com.text import (
+    GetAllTextInput, SetBulletInput, SetParagraphFormatInput,
+    CheckTypographyInput, _is_latin, _char_type, _find_best_vbreak,
+)
 from utils.validation import font_size_warning
 
 
@@ -2619,3 +2622,169 @@ class TestSetParagraphFormatInput:
                 slide_index=1, shape_name_or_index="Shape1",
                 indent_level=10,
             )
+
+
+# ============================================================================
+# text.py — CheckTypographyInput
+# ============================================================================
+
+class TestCheckTypographyInput:
+    """Tests for CheckTypographyInput validators."""
+
+    def test_defaults(self):
+        """Default values are accepted."""
+        inp = CheckTypographyInput()
+        assert inp.slide_index is None
+        assert inp.max_chars == 3
+        assert inp.max_words == 2
+        assert inp.fix is False
+        assert inp.max_expand_pt == 20.0
+
+    def test_slide_index_valid(self):
+        inp = CheckTypographyInput(slide_index=5)
+        assert inp.slide_index == 5
+
+    def test_slide_index_zero_rejected(self):
+        with pytest.raises(ValidationError, match="slide_index"):
+            CheckTypographyInput(slide_index=0)
+
+    def test_max_chars_range(self):
+        inp = CheckTypographyInput(max_chars=1)
+        assert inp.max_chars == 1
+        inp = CheckTypographyInput(max_chars=10)
+        assert inp.max_chars == 10
+
+    def test_max_chars_out_of_range(self):
+        with pytest.raises(ValidationError):
+            CheckTypographyInput(max_chars=0)
+        with pytest.raises(ValidationError):
+            CheckTypographyInput(max_chars=11)
+
+    def test_max_words_range(self):
+        inp = CheckTypographyInput(max_words=1)
+        assert inp.max_words == 1
+        inp = CheckTypographyInput(max_words=5)
+        assert inp.max_words == 5
+
+    def test_max_expand_pt_range(self):
+        inp = CheckTypographyInput(fix=True, max_expand_pt=50)
+        assert inp.max_expand_pt == 50.0
+
+    def test_max_expand_pt_out_of_range(self):
+        with pytest.raises(ValidationError):
+            CheckTypographyInput(max_expand_pt=0)
+        with pytest.raises(ValidationError):
+            CheckTypographyInput(max_expand_pt=51)
+
+
+# ============================================================================
+# text.py — _is_latin helper
+# ============================================================================
+
+class TestIsLatin:
+    """Tests for _is_latin helper function."""
+
+    def test_english_text(self):
+        assert _is_latin("hello world") is True
+
+    def test_japanese_text(self):
+        assert _is_latin("サーバー") is False
+
+    def test_mixed_mostly_latin(self):
+        assert _is_latin("Claude Desktop") is True
+
+    def test_mixed_mostly_japanese(self):
+        assert _is_latin("操作結果が画面に即座に反映") is False
+
+    def test_empty_string(self):
+        # No alpha chars => latin count 0, len 0 => 0 > 0 is False
+        assert _is_latin("") is False
+
+    def test_digits_only(self):
+        assert _is_latin("12345") is False
+
+
+# ============================================================================
+# text.py — _char_type helper
+# ============================================================================
+
+class TestCharType:
+    """Tests for _char_type character classification."""
+
+    def test_hiragana(self):
+        assert _char_type("し") == "hiragana"
+        assert _char_type("た") == "hiragana"
+
+    def test_katakana(self):
+        assert _char_type("サ") == "katakana"
+        assert _char_type("ー") == "katakana"
+
+    def test_kanji(self):
+        assert _char_type("仕") == "kanji"
+        assert _char_type("組") == "kanji"
+
+    def test_latin(self):
+        assert _char_type("A") == "latin"
+        assert _char_type("z") == "latin"
+
+    def test_digit(self):
+        assert _char_type("5") == "digit"
+
+    def test_punct_close(self):
+        assert _char_type("」") == "punct_close"
+        assert _char_type("。") == "punct_close"
+
+    def test_punct_open(self):
+        assert _char_type("「") == "punct_open"
+        assert _char_type("（") == "punct_open"
+
+
+# ============================================================================
+# text.py — _find_best_vbreak helper
+# ============================================================================
+
+class TestFindBestVbreak:
+    """Tests for _find_best_vbreak word-boundary detection."""
+
+    def test_hiragana_to_katakana(self):
+        """Break before katakana word (e.g., サーバー)."""
+        result = _find_best_vbreak("MCPの仕様に準拠したサー", "バー")
+        assert result is not None
+        pos, before, after = result
+        assert before == "MCPの仕様に準拠した"
+        assert after == "サーバー"
+
+    def test_hiragana_to_kanji(self):
+        """Break before kanji word (e.g., 仕組み)."""
+        result = _find_best_vbreak("「アプリを外から操作する仕", "組み」")
+        assert result is not None
+        pos, before, after = result
+        assert "仕組み」" in after
+
+    def test_punct_close_break(self):
+        """Break after closing punctuation (highest score)."""
+        result = _find_best_vbreak("Claude Code、Claude ", "Desktop、")
+        assert result is not None
+        pos, before, after = result
+        assert before == "Claude Code、"
+        assert "Claude Desktop" in after
+
+    def test_latin_to_japanese(self):
+        """Break at Latin-to-Japanese boundary."""
+        result = _find_best_vbreak("起動中のPowerPointを直", "接制御")
+        assert result is not None
+        pos, before, after = result
+        assert "直接制御" in after
+
+    def test_no_candidates(self):
+        """Return None when no good break point exists."""
+        # Single character type, no transitions
+        result = _find_best_vbreak("ああ", "い")
+        assert result is None
+
+    def test_short_prev_line(self):
+        """Very short prev_line still finds a break if possible."""
+        result = _find_best_vbreak("操作する仕", "組み")
+        assert result is not None
+        pos, before, after = result
+        assert "仕組み" in after
