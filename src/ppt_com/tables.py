@@ -124,6 +124,30 @@ class SetTableCellInput(BaseModel):
     )
 
 
+class SetTableDataInput(BaseModel):
+    """Input for batch-setting table cell text from a 2D array."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    shape_name_or_index: Union[str, int] = Field(
+        ..., description="Table shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
+    )
+    data: List[List[str]] = Field(
+        ..., description="2D array of cell text values. Each inner list is a row, e.g. [['Q1','$1.2M','+12%'],['Q2','$1.5M','+25%']]"
+    )
+    start_row: int = Field(default=1, ge=1, description="1-based row to start writing at (default 1)")
+    start_col: int = Field(default=1, ge=1, description="1-based column to start writing at (default 1)")
+    bold_first_row: bool = Field(default=False, description="If True, apply bold formatting to the first row of data")
+
+    @model_validator(mode="after")
+    def _check_data_not_empty(self) -> "SetTableDataInput":
+        if not self.data:
+            raise ValueError("data must contain at least one row")
+        if not self.data[0]:
+            raise ValueError("data rows must contain at least one value")
+        return self
+
+
 class MergeTableCellsInput(BaseModel):
     """Input for merging table cells."""
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -484,6 +508,50 @@ def _set_table_cell_impl(
     }
 
 
+def _set_table_data_impl(
+    slide_index, shape_name_or_index, data,
+    start_row, start_col, bold_first_row,
+):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.Slides(slide_index)
+    shape = _get_table_shape(slide, shape_name_or_index)
+    table = shape.Table
+
+    rows_count = table.Rows.Count
+    cols_count = table.Columns.Count
+
+    cells_set = 0
+    rows_written = 0
+    for r_idx, row_data in enumerate(data):
+        target_row = start_row + r_idx
+        if target_row > rows_count:
+            break
+        cols_written = 0
+        for c_idx, cell_text in enumerate(row_data):
+            target_col = start_col + c_idx
+            if target_col > cols_count:
+                break
+            cell = table.Cell(target_row, target_col)
+            cell.Shape.TextFrame.TextRange.Text = str(cell_text).replace("\n", "\r")
+            if bold_first_row and r_idx == 0:
+                cell.Shape.TextFrame.TextRange.Font.Bold = msoTrue
+            cells_set += 1
+            cols_written += 1
+        if cols_written > 0:
+            rows_written += 1
+
+    return {
+        "success": True,
+        "shape_name": shape.Name,
+        "cells_set": cells_set,
+        "rows_written": rows_written,
+        "table_rows": rows_count,
+        "table_columns": cols_count,
+    }
+
+
 def _merge_table_cells_impl(slide_index, shape_name_or_index, start_row, start_col, end_row, end_col):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -805,6 +873,27 @@ def set_table_cell(params: SetTableCellInput) -> str:
         return json.dumps({"error": f"Failed to set table cell: {str(e)}"})
 
 
+def set_table_data(params: SetTableDataInput) -> str:
+    """Batch-set table cell text from a 2D array.
+
+    Args:
+        params: Table location, 2D data array, and optional start position/formatting.
+
+    Returns:
+        JSON confirming the number of cells set.
+    """
+    try:
+        result = ppt.execute(
+            _set_table_data_impl,
+            params.slide_index, params.shape_name_or_index,
+            params.data, params.start_row, params.start_col,
+            params.bold_first_row,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to set table data: {str(e)}"})
+
+
 def merge_table_cells(params: MergeTableCellsInput) -> str:
     """Merge a range of table cells.
 
@@ -1052,6 +1141,26 @@ def register_tools(mcp):
         text alignment, and cell background color.
         """
         return set_table_cell(params)
+
+    @mcp.tool(
+        name="ppt_set_table_data",
+        annotations={
+            "title": "Set Table Data (Batch)",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_set_table_data(params: SetTableDataInput) -> str:
+        """Batch-set table cell text from a 2D array.
+
+        Writes multiple cells at once: data=[["Q1","$1.2M"],["Q2","$1.5M"]]
+        sets 2 rows x 2 cols starting from (start_row, start_col).
+        Cells beyond the table boundary are silently skipped.
+        Use bold_first_row=True to auto-bold the header row.
+        """
+        return set_table_data(params)
 
     @mcp.tool(
         name="ppt_merge_table_cells",
