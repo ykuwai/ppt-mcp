@@ -1701,6 +1701,51 @@ def _get_widows(shape, max_chars, max_words):
     return widows
 
 
+def _get_short_vbreaks(shape, max_chars, max_words):
+    """Return list of lines after an explicit \\v that are too short.
+
+    These are the opposite of widows — explicit breaks that leave the
+    following line unnecessarily sparse. Removing the \\v would let text
+    flow naturally.
+    """
+    tr = shape.TextFrame.TextRange
+    lines_count = tr.Lines().Count
+    if lines_count < 2:
+        return []
+
+    short_breaks = []
+    for li in range(2, lines_count + 1):
+        prev_line = tr.Lines(li - 1)
+        prev_text = prev_line.Text
+        # Only flag lines after an explicit \v (shows as \n in COM).
+        # Skip \r (paragraph break) — those are intentional structural breaks.
+        if not prev_text.endswith("\n"):
+            continue
+
+        cur_line = tr.Lines(li)
+        cur_text = cur_line.Text.rstrip("\r\n")
+        if not cur_text:
+            continue
+
+        is_short = False
+        if _is_latin(cur_text):
+            if len(cur_text.split()) <= max_words:
+                is_short = True
+        else:
+            if len(cur_text) <= max_chars:
+                is_short = True
+
+        if is_short:
+            short_breaks.append({
+                "line_index": li,
+                "line_text": cur_text,
+                "char_count": len(cur_text),
+                "prev_line_text": prev_text.rstrip("\r\n"),
+                "issue_type": "short_after_vbreak",
+            })
+    return short_breaks
+
+
 def _right_neighbor_gap(shape, slide):
     """Find the gap (pt) to the nearest shape on the right that vertically overlaps."""
     s_right = shape.Left + shape.Width
@@ -1747,6 +1792,17 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                 continue
 
             widows = _get_widows(shape, max_chars, max_words)
+
+            # Also detect short lines after explicit \v breaks
+            vbreak_shorts = _get_short_vbreaks(shape, max_chars, max_words)
+            for vb in vbreak_shorts:
+                issues.append({
+                    "slide_index": si,
+                    "shape_name": shape.Name,
+                    "shape_width": round(shape.Width, 2),
+                    **vb,
+                })
+
             if not widows:
                 continue
 
