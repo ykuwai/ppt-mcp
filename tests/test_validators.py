@@ -2,7 +2,7 @@
 
 Covers all model_validator decorated methods in:
 - freeform.py: NodeSpec, BuildFreeformInput, InsertNodeInput
-- tables.py: MergeTableCellsInput, SetTableBordersInput
+- tables.py: MergeTableCellsInput, SetTableBordersInput, SetTableDataInput
 - advanced_ops.py: SetDefaultShapeStyleInput, CropPictureInput
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
@@ -354,10 +354,6 @@ class TestInsertNodeInput:
                 segment_type="line", x1=10, y1=20,
             )
 
-
-# ============================================================================
-# tables.py — MergeTableCellsInput
-# ============================================================================
 
 # ============================================================================
 # tables.py — SetTableDataInput

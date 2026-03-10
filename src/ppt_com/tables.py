@@ -528,7 +528,7 @@ def _set_table_data_impl(
         target_row = start_row + r_idx
         if target_row > rows_count:
             break
-        cols_written = 0
+        row_had_writes = False
         for c_idx, cell_text in enumerate(row_data):
             target_col = start_col + c_idx
             if target_col > cols_count:
@@ -538,8 +538,8 @@ def _set_table_data_impl(
             if bold_first_row and r_idx == 0:
                 cell.Shape.TextFrame.TextRange.Font.Bold = msoTrue
             cells_set += 1
-            cols_written += 1
-        if cols_written > 0:
+            row_had_writes = True
+        if row_had_writes:
             rows_written += 1
 
     return {
