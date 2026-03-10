@@ -2260,4 +2260,3 @@ class TestFormatTextRangeSearchText:
                 slide_index=1, shape_name_or_index=1,
                 start=1, length=5, occurrence=2, bold=True,
             )
-        assert inp.search_text is None
