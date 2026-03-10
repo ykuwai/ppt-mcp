@@ -6,7 +6,7 @@ Covers all model_validator decorated methods in:
 - advanced_ops.py: SetDefaultShapeStyleInput, CropPictureInput
 - shapes.py: AddShapeInput
 - layout.py: SetSlideBackgroundInput
-- text.py: GetAllTextInput
+- text.py: GetAllTextInput, SetBulletInput
 - connectors.py: FormatConnectorInput
 
 These are pure Python tests — no COM or PowerPoint required.
@@ -35,7 +35,7 @@ from ppt_com.shapes import AddShapeInput, UpdateShapeInput
 from ppt_com.animation import AddAnimationInput, RemoveAnimationInput, UpdateAnimationInput
 from ppt_com.connectors import FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
-from ppt_com.text import GetAllTextInput
+from ppt_com.text import GetAllTextInput, SetBulletInput
 from utils.validation import font_size_warning
 
 
@@ -2406,3 +2406,59 @@ class TestResolveLayout:
         ])
         with pytest.raises(ValueError, match="not found"):
             _resolve_layout(app, "Basic Process")
+
+
+# ============================================================================
+# text.py — SetBulletInput
+# ============================================================================
+
+class TestSetBulletInput:
+    """Tests for SetBulletInput indent_level validator."""
+
+    def test_indent_level_valid_min(self):
+        """indent_level=1 is accepted."""
+        inp = SetBulletInput(
+            slide_index=1, shape_name_or_index="Shape1",
+            bullet_type="unnumbered", indent_level=1,
+        )
+        assert inp.indent_level == 1
+
+    def test_indent_level_valid_max(self):
+        """indent_level=9 is accepted."""
+        inp = SetBulletInput(
+            slide_index=1, shape_name_or_index="Shape1",
+            bullet_type="unnumbered", indent_level=9,
+        )
+        assert inp.indent_level == 9
+
+    def test_indent_level_none_accepted(self):
+        """indent_level=None (omitted) is accepted."""
+        inp = SetBulletInput(
+            slide_index=1, shape_name_or_index="Shape1",
+            bullet_type="unnumbered",
+        )
+        assert inp.indent_level is None
+
+    def test_indent_level_zero_rejected(self):
+        """indent_level=0 is rejected."""
+        with pytest.raises(ValidationError, match="indent_level"):
+            SetBulletInput(
+                slide_index=1, shape_name_or_index="Shape1",
+                bullet_type="unnumbered", indent_level=0,
+            )
+
+    def test_indent_level_ten_rejected(self):
+        """indent_level=10 is rejected."""
+        with pytest.raises(ValidationError, match="indent_level"):
+            SetBulletInput(
+                slide_index=1, shape_name_or_index="Shape1",
+                bullet_type="unnumbered", indent_level=10,
+            )
+
+    def test_indent_level_negative_rejected(self):
+        """indent_level=-1 is rejected."""
+        with pytest.raises(ValidationError, match="indent_level"):
+            SetBulletInput(
+                slide_index=1, shape_name_or_index="Shape1",
+                bullet_type="unnumbered", indent_level=-1,
+            )

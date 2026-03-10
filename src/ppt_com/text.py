@@ -273,6 +273,18 @@ class SetBulletInput(BaseModel):
     bullet_start_value: Optional[int] = Field(
         default=None, description="Starting number for numbered bullets"
     )
+    indent_level: Optional[int] = Field(
+        default=None,
+        description="Indent level 1-9. Sets the nesting depth of the bullet. "
+        "Level 1 = top-level bullet, level 2 = first sub-bullet, etc.",
+    )
+
+    @field_validator("indent_level")
+    @classmethod
+    def validate_indent_level(cls, v):
+        if v is not None and (v < 1 or v > 9):
+            raise ValueError("indent_level must be between 1 and 9")
+        return v
 
 
 class FindReplaceTextInput(BaseModel):
@@ -1236,7 +1248,8 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
 
 
 def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
-                       bullet_type, bullet_char, bullet_start_value) -> dict:
+                       bullet_type, bullet_char, bullet_start_value,
+                       indent_level) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1260,7 +1273,8 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
             f"Valid values: {list(BULLET_TYPE_MAP.keys())}"
         )
 
-    bullet = target.ParagraphFormat.Bullet
+    pf = target.ParagraphFormat
+    bullet = pf.Bullet
 
     if bullet_type_val == ppBulletNone:
         bullet.Visible = msoFalse
@@ -1274,11 +1288,15 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
     if bullet_start_value is not None:
         bullet.StartValue = bullet_start_value
 
+    if indent_level is not None:
+        pf.Level = indent_level
+
     return {
         "status": "success",
         "shape_name": shape.Name,
         "paragraph_index": paragraph_index or "all",
         "bullet_type": bullet_type,
+        "indent_level": indent_level,
     }
 
 
@@ -1475,6 +1493,7 @@ def set_bullet(params: SetBulletInput) -> str:
             _set_bullet_impl,
             params.slide_index, params.shape_name_or_index, params.paragraph_index,
             params.bullet_type, params.bullet_char, params.bullet_start_value,
+            params.indent_level,
         )
         return json.dumps(result)
     except Exception as e:
@@ -1665,6 +1684,13 @@ def register_tools(mcp):
         bullet_type can be 'none', 'unnumbered', or 'numbered'.
         Use bullet_char for custom bullet characters (e.g. '●').
         Use bullet_start_value to set the starting number.
+        Use indent_level (1-9) to set nesting depth in one call.
+
+        Nested bullet example — first use ppt_set_text to create paragraphs
+        separated by \\n, then call ppt_set_bullet per paragraph:
+          ppt_set_bullet(paragraph_index=1, bullet_type='unnumbered', indent_level=1)
+          ppt_set_bullet(paragraph_index=2, bullet_type='unnumbered', indent_level=2)
+          ppt_set_bullet(paragraph_index=3, bullet_type='unnumbered', indent_level=3)
         """
         return set_bullet(params)
 
