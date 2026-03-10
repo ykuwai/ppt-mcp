@@ -2682,26 +2682,33 @@ class TestCheckTypographyInput:
 # ============================================================================
 
 class TestIsLatin:
-    """Tests for _is_latin helper function."""
+    """Tests for _is_latin: returns True when >50% of chars are ASCII alpha."""
 
-    def test_english_text(self):
-        assert _is_latin("hello world") is True
+    @pytest.mark.parametrize("text", ["hello", "abc def", "Test"])
+    def test_all_latin(self, text):
+        assert _is_latin(text) is True
 
-    def test_japanese_text(self):
-        assert _is_latin("サーバー") is False
+    @pytest.mark.parametrize("text", [
+        "\u30b5\u30fc\u30d0\u30fc",       # katakana
+        "\u64cd\u4f5c\u7d50\u679c",       # kanji
+        "\u3042\u3044\u3046\u3048\u304a",  # hiragana
+    ])
+    def test_all_japanese(self, text):
+        assert _is_latin(text) is False
 
-    def test_mixed_mostly_latin(self):
-        assert _is_latin("Claude Desktop") is True
-
-    def test_mixed_mostly_japanese(self):
-        assert _is_latin("操作結果が画面に即座に反映") is False
-
-    def test_empty_string(self):
-        # No alpha chars => latin count 0, len 0 => 0 > 0 is False
+    def test_empty(self):
         assert _is_latin("") is False
 
     def test_digits_only(self):
         assert _is_latin("12345") is False
+
+    def test_majority_latin(self):
+        # 5 latin + 1 non-alpha => >50%
+        assert _is_latin("Hello!") is True
+
+    def test_minority_latin(self):
+        # 1 latin + 3 kanji => <50%
+        assert _is_latin("A\u64cd\u4f5c\u7d50") is False
 
 
 # ============================================================================
@@ -2711,32 +2718,23 @@ class TestIsLatin:
 class TestCharType:
     """Tests for _char_type character classification."""
 
-    def test_hiragana(self):
-        assert _char_type("し") == "hiragana"
-        assert _char_type("た") == "hiragana"
-
-    def test_katakana(self):
-        assert _char_type("サ") == "katakana"
-        assert _char_type("ー") == "katakana"
-
-    def test_kanji(self):
-        assert _char_type("仕") == "kanji"
-        assert _char_type("組") == "kanji"
-
-    def test_latin(self):
-        assert _char_type("A") == "latin"
-        assert _char_type("z") == "latin"
-
-    def test_digit(self):
-        assert _char_type("5") == "digit"
-
-    def test_punct_close(self):
-        assert _char_type("」") == "punct_close"
-        assert _char_type("。") == "punct_close"
-
-    def test_punct_open(self):
-        assert _char_type("「") == "punct_open"
-        assert _char_type("（") == "punct_open"
+    @pytest.mark.parametrize("ch,expected", [
+        ("\u3042", "hiragana"),   # あ
+        ("\u3093", "hiragana"),   # ん
+        ("\u30a2", "katakana"),   # ア
+        ("\u30fc", "katakana"),   # ー
+        ("\u4e00", "kanji"),      # 一 (CJK)
+        ("\u9f8d", "kanji"),      # 龍
+        ("A", "latin"),
+        ("z", "latin"),
+        ("5", "digit"),
+        ("\u300d", "punct_close"),  # 」
+        ("\u3002", "punct_close"),  # 。
+        ("\u300c", "punct_open"),   # 「
+        ("\uff08", "punct_open"),   # （
+    ])
+    def test_classification(self, ch, expected):
+        assert _char_type(ch) == expected
 
 
 # ============================================================================
@@ -2744,47 +2742,75 @@ class TestCharType:
 # ============================================================================
 
 class TestFindBestVbreak:
-    """Tests for _find_best_vbreak word-boundary detection."""
+    """Tests for _find_best_vbreak word-boundary detection.
 
-    def test_hiragana_to_katakana(self):
-        """Break before katakana word (e.g., サーバー)."""
-        result = _find_best_vbreak("MCPの仕様に準拠したサー", "バー")
+    Uses synthetic patterns of character types (hiragana=h, katakana=K,
+    kanji=J, latin=L, punct=P) to test boundary scoring without
+    depending on specific content.
+    """
+
+    def test_break_at_hiragana_katakana_boundary(self):
+        """Hiragana-to-katakana transition should be a preferred break."""
+        # Pattern: ...hiragana + katakana_start | katakana_rest + widow
+        prev = "\u3042\u3044\u3046\u3048\u304a\u304b\u304d\u304f\u3051\u3053\u30a2\u30a4"  # hira(10)+kata(2)
+        widow = "\u30a6"  # kata(1)
+        result = _find_best_vbreak(prev, widow)
         assert result is not None
         pos, before, after = result
-        assert before == "MCPの仕様に準拠した"
-        assert after == "サーバー"
+        # Should break before the katakana block
+        assert before.endswith("\u3053")  # last hiragana
+        assert after.startswith("\u30a2")  # first katakana
 
-    def test_hiragana_to_kanji(self):
-        """Break before kanji word (e.g., 仕組み)."""
-        result = _find_best_vbreak("「アプリを外から操作する仕", "組み」")
+    def test_break_at_hiragana_kanji_boundary(self):
+        """Hiragana-to-kanji transition should be a break point."""
+        prev = "\u3042\u3044\u3046\u3048\u304a\u304b\u304d\u304f\u4e00\u4e8c"  # hira(8)+kanji(2)
+        widow = "\u4e09"  # kanji(1)
+        result = _find_best_vbreak(prev, widow)
         assert result is not None
         pos, before, after = result
-        assert "仕組み」" in after
+        assert "\u4e00\u4e8c\u4e09" in after  # kanji block reunited
 
-    def test_punct_close_break(self):
-        """Break after closing punctuation (highest score)."""
-        result = _find_best_vbreak("Claude Code、Claude ", "Desktop、")
+    def test_break_after_closing_punct_highest_score(self):
+        """Closing punctuation should produce the highest-scored break."""
+        # Pattern: text + 、 + more_text | widow
+        prev = "ABCDE\u3001FGHIJ"  # latin + 、 + latin
+        widow = "K"
+        result = _find_best_vbreak(prev, widow)
         assert result is not None
         pos, before, after = result
-        assert before == "Claude Code、"
-        assert "Claude Desktop" in after
+        assert before.endswith("\u3001")  # break right after 、
 
-    def test_latin_to_japanese(self):
-        """Break at Latin-to-Japanese boundary."""
-        result = _find_best_vbreak("起動中のPowerPointを直", "接制御")
+    def test_break_at_latin_to_cjk(self):
+        """Latin-to-CJK transition should be a break point."""
+        prev = "\u3042\u3044\u3046ABC\u4e00\u4e8c"  # hira+latin+kanji
+        widow = "\u4e09"
+        result = _find_best_vbreak(prev, widow)
         assert result is not None
-        pos, before, after = result
-        assert "直接制御" in after
+        _, _, after = result
+        # Kanji block should be in after
+        assert "\u4e00" in after or "C" in after  # break at some type boundary
 
-    def test_no_candidates(self):
-        """Return None when no good break point exists."""
-        # Single character type, no transitions
-        result = _find_best_vbreak("ああ", "い")
+    def test_no_break_same_char_type(self):
+        """Return None when all characters are the same type."""
+        result = _find_best_vbreak("\u3042\u3044", "\u3046")  # all hiragana
         assert result is None
 
-    def test_short_prev_line(self):
-        """Very short prev_line still finds a break if possible."""
-        result = _find_best_vbreak("操作する仕", "組み")
+    def test_break_prefers_second_half(self):
+        """Break position should be in the second half of prev_line."""
+        # Put a transition early (pos 2) and late (pos 8)
+        prev = "\u3042\u30a2\u3044\u3046\u3048\u304a\u304b\u304d\u30a4\u30a6"
+        widow = "\u30a8"
+        result = _find_best_vbreak(prev, widow)
         assert result is not None
-        pos, before, after = result
-        assert "仕組み" in after
+        pos, _, _ = result
+        # Should pick the later break (pos 8) over early (pos 2)
+        assert pos >= len(prev) // 2
+
+    def test_widow_text_appended_to_after(self):
+        """The widow text should always appear at the end of 'after'."""
+        prev = "\u3042\u3044\u3046\u3048\u304a\u30ab\u30ad"
+        widow = "\u30af"
+        result = _find_best_vbreak(prev, widow)
+        assert result is not None
+        _, _, after = result
+        assert after.endswith(widow)

@@ -1880,6 +1880,7 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                             "after": after,
                         })
                     # After \v insertions, re-check for remaining widows
+                    # and new short_after_vbreak issues
                     if vbreak_applied:
                         still_remaining = _get_widows(
                             shape, max_chars, max_words,
@@ -1891,6 +1892,16 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                                 "shape_width": round(shape.Width, 2),
                                 "fix_status": "remaining",
                                 **w,
+                            })
+                        new_vbreak_shorts = _get_short_vbreaks(
+                            shape, max_chars, max_words,
+                        )
+                        for vb in new_vbreak_shorts:
+                            issues.append({
+                                "slide_index": si,
+                                "shape_name": shape.Name,
+                                "shape_width": round(shape.Width, 2),
+                                **vb,
                             })
             else:
                 for w in widows:
