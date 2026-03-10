@@ -360,6 +360,33 @@ class GetAllTextInput(BaseModel):
         return self
 
 
+class CheckTypographyInput(BaseModel):
+    """Input for checking typographic issues (widow lines) on slides."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: Optional[int] = Field(
+        default=None, ge=1,
+        description="1-based slide index to check. Omit to check all slides.",
+    )
+    max_chars: int = Field(
+        default=3, ge=1, le=10,
+        description="Max characters for a line to be flagged as a widow (default 3).",
+    )
+    max_words: int = Field(
+        default=2, ge=1, le=5,
+        description="Max words for an English line to be flagged as a widow (default 2).",
+    )
+    fix: bool = Field(
+        default=False,
+        description="If true, attempt to fix widows by widening shapes to the right. "
+        "Left edge stays fixed. Expansion is limited by neighboring shapes.",
+    )
+    max_expand_pt: float = Field(
+        default=20.0, ge=1, le=50,
+        description="Max points to expand shape width when fix=true (default 20).",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Placeholder types to skip (non-content)
 # ---------------------------------------------------------------------------
@@ -1559,6 +1586,294 @@ def get_all_text(params: GetAllTextInput) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Typography check (widow line detection)
+# ---------------------------------------------------------------------------
+
+def _is_latin(text: str) -> bool:
+    """Return True if text is primarily Latin characters."""
+    latin = sum(1 for c in text if c.isascii() and c.isalpha())
+    return latin > len(text) * 0.5
+
+
+def _char_type(c):
+    """Classify a character for word-boundary detection."""
+    if c in "\u3001\u3002\uff0c\uff0e\uff01\uff1f\uff09\u300d\u300f\u3011\u3009\u300b\u30fb":
+        return "punct_close"
+    if c in "\uff08\u300c\u300e\u3010\u3008\u300a":
+        return "punct_open"
+    cp = ord(c)
+    if cp < 0x80:
+        return "latin" if c.isalpha() else ("digit" if c.isdigit() else "ascii")
+    if 0x30A0 <= cp <= 0x30FF or 0x31F0 <= cp <= 0x31FF:
+        return "katakana"
+    if 0x3040 <= cp <= 0x309F:
+        return "hiragana"
+    import unicodedata
+    if unicodedata.category(c).startswith("Lo"):
+        return "kanji"
+    return "other"
+
+
+def _find_best_vbreak(prev_line_text, widow_text):
+    """Find the best position in prev_line_text to insert \\v.
+
+    Returns (break_pos, before, after) or None.
+    The break is chosen at a character-type transition in the second half
+    of prev_line_text, preferring punctuation > type changes.
+    """
+    candidates = []
+    for i in range(1, len(prev_line_text)):
+        pt = _char_type(prev_line_text[i - 1])
+        ct = _char_type(prev_line_text[i])
+        score = 0
+        if pt == "punct_close":
+            score = 5
+        elif ct == "punct_open":
+            score = 5
+        elif pt != ct:
+            if pt == "hiragana" and ct == "katakana":
+                score = 4
+            elif pt == "hiragana" and ct == "kanji":
+                score = 3
+            elif pt == "katakana" and ct in ("hiragana", "kanji"):
+                score = 3
+            elif pt == "kanji" and ct == "hiragana":
+                score = 2
+            elif pt == "latin" and ct in ("hiragana", "katakana", "kanji"):
+                score = 3
+            elif pt in ("hiragana", "katakana", "kanji") and ct == "latin":
+                score = 3
+            else:
+                score = 1
+        if score > 0:
+            candidates.append((i, score))
+
+    if not candidates:
+        return None
+
+    min_pos = len(prev_line_text) // 2
+    valid = [(p, s) for p, s in candidates if p >= min_pos]
+    if not valid:
+        valid = [(p, s) for p, s in candidates if p >= len(prev_line_text) // 3]
+    if not valid:
+        return None
+
+    valid.sort(key=lambda x: (x[1], x[0]), reverse=True)
+    pos = valid[0][0]
+    return pos, prev_line_text[:pos], prev_line_text[pos:] + widow_text
+
+
+def _get_widows(shape, max_chars, max_words):
+    """Return list of widow issues for a single shape."""
+    tr = shape.TextFrame.TextRange
+    lines_count = tr.Lines().Count
+    if lines_count < 2:
+        return []
+
+    widows = []
+    for li in range(2, lines_count + 1):
+        prev_line = tr.Lines(li - 1)
+        prev_text = prev_line.Text
+        # Explicit break (\r = paragraph, \n = soft return) — not a widow.
+        if prev_text.endswith("\r") or prev_text.endswith("\n"):
+            continue
+
+        cur_line = tr.Lines(li)
+        cur_text = cur_line.Text.rstrip("\r\n")
+        if not cur_text:
+            continue
+
+        is_widow = False
+        if _is_latin(cur_text):
+            if len(cur_text.split()) <= max_words:
+                is_widow = True
+        else:
+            if len(cur_text) <= max_chars:
+                is_widow = True
+
+        if is_widow:
+            widows.append({
+                "line_index": li,
+                "line_text": cur_text,
+                "char_count": len(cur_text),
+                "prev_line_text": prev_text.rstrip("\r\n"),
+            })
+    return widows
+
+
+def _right_neighbor_gap(shape, slide):
+    """Find the gap (pt) to the nearest shape on the right that vertically overlaps."""
+    s_right = shape.Left + shape.Width
+    s_top = shape.Top
+    s_bottom = shape.Top + shape.Height
+    min_gap = float("inf")
+
+    for j in range(1, slide.Shapes.Count + 1):
+        other = slide.Shapes(j)
+        if other.Name == shape.Name:
+            continue
+        # Must vertically overlap
+        if other.Top + other.Height <= s_top or other.Top >= s_bottom:
+            continue
+        # Must be to the right
+        if other.Left > s_right - 1:
+            gap = other.Left - s_right
+            if gap < min_gap:
+                min_gap = gap
+
+    return min_gap
+
+
+def _check_typography_impl(slide_indices, max_chars, max_words,
+                           fix, max_expand_pt):
+    """Scan shapes for widow lines; optionally fix by widening."""
+    app = ppt._get_app_impl()
+    pres = ppt._get_pres_impl()
+    issues = []
+    fixed = []
+
+    for si in slide_indices:
+        if si < 1 or si > pres.Slides.Count:
+            continue
+        goto_slide(app, si)
+        slide = pres.Slides(si)
+
+        for j in range(1, slide.Shapes.Count + 1):
+            shape = slide.Shapes(j)
+            if not shape.HasTextFrame:
+                continue
+            tr = shape.TextFrame.TextRange
+            if not tr.Text.strip():
+                continue
+
+            widows = _get_widows(shape, max_chars, max_words)
+            if not widows:
+                continue
+
+            if fix:
+                # Calculate safe expansion room
+                gap = _right_neighbor_gap(shape, slide)
+                room = min(gap - 2, max_expand_pt)  # 2pt margin
+                if room < 1:
+                    room = 0  # skip widen step, go straight to \v
+
+                original_width = shape.Width
+                resolved = False
+                for step in range(1, int(room) + 1):
+                    shape.Width = original_width + step
+                    remaining = _get_widows(shape, max_chars, max_words)
+                    if not remaining:
+                        fixed.append({
+                            "slide_index": si,
+                            "shape_name": shape.Name,
+                            "old_width": round(original_width, 2),
+                            "new_width": round(shape.Width, 2),
+                            "expanded_by": step,
+                        })
+                        resolved = True
+                        break
+
+                if not resolved:
+                    # Revert width — try soft-return insertion instead
+                    shape.Width = original_width
+                    remaining = _get_widows(shape, max_chars, max_words)
+                    # Strategy 2: insert \v at word boundary
+                    # Process widows in reverse order (later positions first)
+                    # so that earlier character positions remain valid.
+                    remaining.sort(
+                        key=lambda w: w["line_index"], reverse=True,
+                    )
+                    vbreak_applied = False
+                    for w in remaining:
+                        brk = _find_best_vbreak(
+                            w["prev_line_text"], w["line_text"],
+                        )
+                        if brk is None:
+                            issues.append({
+                                "slide_index": si,
+                                "shape_name": shape.Name,
+                                "shape_width": round(original_width, 2),
+                                "fix_status": "no_break_point",
+                                **w,
+                            })
+                            continue
+                        # Find the fragment in the full text and get
+                        # the COM character position for insertion.
+                        brk_pos, before, after = brk
+                        old_frag = w["prev_line_text"] + w["line_text"]
+                        full_text = tr.Text
+                        idx = full_text.find(old_frag)
+                        if idx == -1:
+                            issues.append({
+                                "slide_index": si,
+                                "shape_name": shape.Name,
+                                "shape_width": round(original_width, 2),
+                                "fix_status": "text_not_found",
+                                **w,
+                            })
+                            continue
+                        # COM position (1-based) for the break point
+                        com_pos = idx + brk_pos + 1
+                        tr.Characters(com_pos, 0).InsertBefore("\v")
+                        vbreak_applied = True
+                        fixed.append({
+                            "slide_index": si,
+                            "shape_name": shape.Name,
+                            "fix_method": "soft_return",
+                            "before": before,
+                            "after": after,
+                        })
+                    # After \v insertions, re-check for remaining widows
+                    if vbreak_applied:
+                        still_remaining = _get_widows(
+                            shape, max_chars, max_words,
+                        )
+                        for w in still_remaining:
+                            issues.append({
+                                "slide_index": si,
+                                "shape_name": shape.Name,
+                                "shape_width": round(shape.Width, 2),
+                                "fix_status": "remaining",
+                                **w,
+                            })
+            else:
+                for w in widows:
+                    issues.append({
+                        "slide_index": si,
+                        "shape_name": shape.Name,
+                        "shape_width": round(shape.Width, 2),
+                        **w,
+                    })
+
+    result = {"issues": issues, "remaining": len(issues)}
+    if fix:
+        result["fixed"] = fixed
+        result["fixed_count"] = len(fixed)
+    else:
+        result["total"] = len(issues)
+    return result
+
+
+def check_typography(params: CheckTypographyInput) -> str:
+    """Check slides for typographic widow lines."""
+    try:
+        if params.slide_index is not None:
+            indices = [params.slide_index]
+        else:
+            total = ppt.execute(lambda: ppt._get_pres_impl().Slides.Count)
+            indices = list(range(1, total + 1))
+
+        result = ppt.execute(
+            _check_typography_impl, indices,
+            params.max_chars, params.max_words,
+            params.fix, params.max_expand_pt,
+        )
+        return json.dumps(result, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+# ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
 def register_tools(mcp):
@@ -1759,3 +2074,27 @@ def register_tools(mcp):
         Omit slide_indices to get all slides.
         """
         return get_all_text(params)
+
+    @mcp.tool(
+        name="ppt_check_typography",
+        annotations={
+            "title": "Check Typography (Widow Lines)",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_ppt_check_typography(params: CheckTypographyInput) -> str:
+        """Detect widow lines — short text fragments caused by word wrapping.
+
+        Scans shapes for lines where text wrapping pushed only a few
+        characters (≤ max_chars, default 3) or words (≤ max_words for
+        English text, default 2) to the next visual line.
+
+        Set fix=true to auto-fix by widening shapes to the right.
+        Left edge stays fixed; expansion stops at neighboring shapes
+        (2pt safety margin). Shapes that cannot be fixed are reported
+        with fix_status='no_room' or 'insufficient'.
+        """
+        return check_typography(params)
