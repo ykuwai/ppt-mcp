@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
@@ -1608,7 +1609,6 @@ def _char_type(c):
         return "katakana"
     if 0x3040 <= cp <= 0x309F:
         return "hiragana"
-    import unicodedata
     if unicodedata.category(c).startswith("Lo"):
         return "kanji"
     return "other"
@@ -1793,15 +1793,17 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
 
             widows = _get_widows(shape, max_chars, max_words)
 
-            # Also detect short lines after explicit \v breaks
-            vbreak_shorts = _get_short_vbreaks(shape, max_chars, max_words)
-            for vb in vbreak_shorts:
-                issues.append({
-                    "slide_index": si,
-                    "shape_name": shape.Name,
-                    "shape_width": round(shape.Width, 2),
-                    **vb,
-                })
+            # Detect short lines after explicit \v breaks
+            # (when fix=True, we re-check after fix and report then)
+            if not fix:
+                vbreak_shorts = _get_short_vbreaks(shape, max_chars, max_words)
+                for vb in vbreak_shorts:
+                    issues.append({
+                        "slide_index": si,
+                        "shape_name": shape.Name,
+                        "shape_width": round(shape.Width, 2),
+                        **vb,
+                    })
 
             if not widows:
                 continue
@@ -1832,7 +1834,7 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                 if not resolved:
                     # Revert width — try soft-return insertion instead
                     shape.Width = original_width
-                    remaining = _get_widows(shape, max_chars, max_words)
+                    remaining = widows
                     # Strategy 2: insert \v at word boundary
                     # Process widows in reverse order (later positions first)
                     # so that earlier character positions remain valid.
@@ -2162,6 +2164,8 @@ def register_tools(mcp):
         Set fix=true to auto-fix by widening shapes to the right.
         Left edge stays fixed; expansion stops at neighboring shapes
         (2pt safety margin). Shapes that cannot be fixed are reported
-        with fix_status='no_room' or 'insufficient'.
+        with fix_status='no_break_point' or 'text_not_found'.
+        When fix=True, any short_after_vbreak issues (including newly
+        created ones) are reported in the results.
         """
         return check_typography(params)
