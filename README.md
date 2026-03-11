@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 151 tools for AI agents and developers.</strong>
+  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 152 tools for AI agents and developers.</strong>
 </p>
 
 ---
@@ -24,7 +24,7 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
-- **151 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
+- **152 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
@@ -124,7 +124,7 @@ uv sync
 | **Presentation** | 8 | Create (with templates), open, save, close, info, activate target, list templates |
 | **Slides** | 9 | Add, delete, duplicate, move, list, info, notes, navigation |
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines, list, info, update, delete, z-order |
-| **Text** | 9 | Set/get text, format text ranges, paragraph format, bullets, find/replace, textframe, extract all text as Markdown |
+| **Text** | 10 | Set/get text, format text ranges, paragraph format, bullets, find/replace, textframe, extract all text as Markdown, typography check |
 | **Placeholders** | 6 | List, get, set placeholder content |
 | **Formatting** | 3 | Fill, line, shadow |
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
@@ -146,7 +146,7 @@ uv sync
 | **Comments** | 3 | Add, list, delete |
 | **Advanced** | 19 | Tags, fonts (set defaults + bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
-| | **151** | |
+| | **152** | |
 
 ## 💡 Example Prompts
 
