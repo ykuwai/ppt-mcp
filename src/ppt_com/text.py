@@ -1800,10 +1800,11 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                         "shape_name": shape.Name,
                         "shape_width": round(shape.Width, 2),
                         "type": "auto_shrink",
-                        "auto_size": "shrink_to_fit",
+                        "fixable": False,
                     })
             except Exception:
-                pass
+                logger.debug("Cannot read AutoSize for shape '%s'",
+                             shape.Name, exc_info=True)
 
             widows = _get_widows(shape, max_chars, max_words)
 
@@ -2177,13 +2178,16 @@ def register_tools(mcp):
         """Detect typography issues: widow lines and auto-shrunk text.
 
         Scans shapes for: (1) widow lines where text wrapping pushed only
-        a few characters (≤ max_chars, default 3) to the next visual line,
-        (2) auto-shrunk text where shrink_to_fit compresses text to fit.
+        a few characters (≤ max_chars, default 3) or words (≤ max_words,
+        default 2 for English text) to the next visual line,
+        (2) auto-shrunk text where shrink_to_fit compresses text to fit
+        (reported with fixable=false — no auto-fix available).
 
         With fix=false (default), detection is read-only — no changes
-        are made. Set fix=true to auto-fix: first tries widening shapes
-        (left edge fixed, stops at neighbors with 2pt margin), then
-        inserts soft returns (\\v) at word boundaries. Unfixable shapes
-        are reported with fix_status='no_break_point' or 'text_not_found'.
+        are made. Set fix=true to auto-fix widows: first tries widening
+        shapes (left edge fixed, stops at neighbors with 2pt margin),
+        then inserts soft returns (\\v) at word boundaries. Unfixable
+        shapes are reported with fix_status='no_break_point' or
+        'text_not_found'.
         """
         return check_typography(params)
