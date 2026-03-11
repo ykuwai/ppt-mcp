@@ -1857,6 +1857,9 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                             continue
                         # Find the fragment in the full text and get
                         # the COM character position for insertion.
+                        # NOTE: find() returns the first occurrence of old_frag.
+                        # If identical text appears multiple times in the shape,
+                        # the wrong position may be used. This is rare in practice.
                         brk_pos, before, after = brk
                         old_frag = w["prev_line_text"] + w["line_text"]
                         full_text = tr.Text
@@ -1895,16 +1898,19 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                                 "fix_status": "remaining",
                                 **w,
                             })
-                        new_vbreak_shorts = _get_short_vbreaks(
-                            shape, max_chars, max_words,
-                        )
-                        for vb in new_vbreak_shorts:
-                            issues.append({
-                                "slide_index": si,
-                                "shape_name": shape.Name,
-                                "shape_width": round(shape.Width, 2),
-                                **vb,
-                            })
+
+                # Always report short_after_vbreak in fix mode
+                # (covers both width-expanded and \v-inserted shapes)
+                post_fix_vbreaks = _get_short_vbreaks(
+                    shape, max_chars, max_words,
+                )
+                for vb in post_fix_vbreaks:
+                    issues.append({
+                        "slide_index": si,
+                        "shape_name": shape.Name,
+                        "shape_width": round(shape.Width, 2),
+                        **vb,
+                    })
             else:
                 for w in widows:
                     issues.append({
@@ -1914,12 +1920,11 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                         **w,
                     })
 
-    result = {"issues": issues, "remaining": len(issues)}
+    result = {"issues": issues, "total": len(issues)}
     if fix:
         result["fixed"] = fixed
         result["fixed_count"] = len(fixed)
-    else:
-        result["total"] = len(issues)
+        result["remaining"] = len(issues)
     return result
 
 
@@ -2161,11 +2166,10 @@ def register_tools(mcp):
         characters (≤ max_chars, default 3) or words (≤ max_words for
         English text, default 2) to the next visual line.
 
-        Set fix=true to auto-fix by widening shapes to the right.
-        Left edge stays fixed; expansion stops at neighboring shapes
-        (2pt safety margin). Shapes that cannot be fixed are reported
-        with fix_status='no_break_point' or 'text_not_found'.
-        When fix=True, any short_after_vbreak issues (including newly
-        created ones) are reported in the results.
+        With fix=false (default), detection is read-only — no changes
+        are made. Set fix=true to auto-fix: first tries widening shapes
+        (left edge fixed, stops at neighbors with 2pt margin), then
+        inserts soft returns (\\v) at word boundaries. Unfixable shapes
+        are reported with fix_status='no_break_point' or 'text_not_found'.
         """
         return check_typography(params)
