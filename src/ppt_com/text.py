@@ -1791,19 +1791,27 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
             if not tr.Text.strip():
                 continue
 
-            # Detect auto-shrink (text compressed to fit shape)
+            # Detect auto-shrink — only when text is actually being
+            # compressed (natural height exceeds available space).
             try:
-                auto_size = shape.TextFrame2.AutoSize
-                if auto_size == ppAutoSizeTextToFitShape:
-                    issues.append({
-                        "slide_index": si,
-                        "shape_name": shape.Name,
-                        "shape_width": round(shape.Width, 2),
-                        "type": "auto_shrink",
-                        "fixable": False,
-                    })
+                tf2 = shape.TextFrame2
+                if tf2.AutoSize == ppAutoSizeTextToFitShape:
+                    # Temporarily disable shrink to measure natural height
+                    tf2.AutoSize = ppAutoSizeNone
+                    natural_h = tf2.TextRange.BoundHeight
+                    margin_h = tf2.MarginTop + tf2.MarginBottom
+                    avail_h = shape.Height - margin_h
+                    tf2.AutoSize = ppAutoSizeTextToFitShape  # restore
+                    if natural_h > avail_h:
+                        issues.append({
+                            "slide_index": si,
+                            "shape_name": shape.Name,
+                            "shape_width": round(shape.Width, 2),
+                            "type": "auto_shrink",
+                            "fixable": False,
+                        })
             except Exception:
-                logger.debug("Cannot read AutoSize for shape '%s'",
+                logger.debug("Cannot check AutoSize for shape '%s'",
                              shape.Name, exc_info=True)
 
             widows = _get_widows(shape, max_chars, max_words)
@@ -2175,19 +2183,20 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_check_typography(params: CheckTypographyInput) -> str:
-        """Detect typography issues: widow lines and auto-shrunk text.
+        """Detect and optionally fix typography issues on slides.
 
-        Scans shapes for: (1) widow lines where text wrapping pushed only
-        a few characters (≤ max_chars, default 3) or words (≤ max_words,
-        default 2 for English text) to the next visual line,
-        (2) auto-shrunk text where shrink_to_fit compresses text to fit
-        (reported with fixable=false — no auto-fix available).
+        Detects three issue types:
+        - **widow**: a line with only 1-3 characters caused by word
+          wrapping (e.g. "サー / バー" — "バー" alone on the last line).
+        - **short_after_vbreak**: a line that is too short after an
+          explicit soft return. Often a side-effect of widow fixes.
+        - **auto_shrink**: text silently compressed by PowerPoint's
+          shrink_to_fit setting (reported with fixable=false).
 
-        With fix=false (default), detection is read-only — no changes
-        are made. Set fix=true to auto-fix widows: first tries widening
-        shapes (left edge fixed, stops at neighbors with 2pt margin),
-        then inserts soft returns (\\v) at word boundaries. Unfixable
-        shapes are reported with fix_status='no_break_point' or
-        'text_not_found'.
+        With fix=false (default), detection is read-only. Set fix=true
+        to auto-fix widows: first tries widening shapes (left edge
+        fixed, stops at neighbors with 2pt margin), then inserts soft
+        returns at word boundaries. Unfixable shapes are reported with
+        fix_status='no_break_point' or 'text_not_found'.
         """
         return check_typography(params)
