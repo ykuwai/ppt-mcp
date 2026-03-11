@@ -1791,6 +1791,21 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
             if not tr.Text.strip():
                 continue
 
+            # Detect auto-shrink (text compressed to fit shape)
+            try:
+                auto_size = shape.TextFrame2.AutoSize
+                if auto_size == ppAutoSizeTextToFitShape:
+                    issues.append({
+                        "slide_index": si,
+                        "shape_name": shape.Name,
+                        "shape_width": round(shape.Width, 2),
+                        "type": "auto_shrink",
+                        "fixable": False,
+                    })
+            except Exception:
+                logger.debug("Cannot read AutoSize for shape '%s'",
+                             shape.Name, exc_info=True)
+
             widows = _get_widows(shape, max_chars, max_words)
 
             # Detect short lines after explicit \v breaks
@@ -2160,16 +2175,19 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_check_typography(params: CheckTypographyInput) -> str:
-        """Detect widow lines — short text fragments caused by word wrapping.
+        """Detect typography issues: widow lines and auto-shrunk text.
 
-        Scans shapes for lines where text wrapping pushed only a few
-        characters (≤ max_chars, default 3) or words (≤ max_words for
-        English text, default 2) to the next visual line.
+        Scans shapes for: (1) widow lines where text wrapping pushed only
+        a few characters (≤ max_chars, default 3) or words (≤ max_words,
+        default 2 for English text) to the next visual line,
+        (2) auto-shrunk text where shrink_to_fit compresses text to fit
+        (reported with fixable=false — no auto-fix available).
 
         With fix=false (default), detection is read-only — no changes
-        are made. Set fix=true to auto-fix: first tries widening shapes
-        (left edge fixed, stops at neighbors with 2pt margin), then
-        inserts soft returns (\\v) at word boundaries. Unfixable shapes
-        are reported with fix_status='no_break_point' or 'text_not_found'.
+        are made. Set fix=true to auto-fix widows: first tries widening
+        shapes (left edge fixed, stops at neighbors with 2pt margin),
+        then inserts soft returns (\\v) at word boundaries. Unfixable
+        shapes are reported with fix_status='no_break_point' or
+        'text_not_found'.
         """
         return check_typography(params)
