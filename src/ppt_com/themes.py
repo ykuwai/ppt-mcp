@@ -4,6 +4,7 @@ Handles applying themes, reading theme colors, and setting headers/footers
 across all slides.
 """
 
+import colorsys
 import json
 import logging
 import os
@@ -132,6 +133,97 @@ PRESET_PALETTES: dict[str, dict[str, str]] = {
 
 
 # ---------------------------------------------------------------------------
+# Primary color → palette generation (HSL color harmony + WCAG contrast)
+# ---------------------------------------------------------------------------
+def _relative_luminance(r: int, g: int, b: int) -> float:
+    """Calculate relative luminance per WCAG 2.x definition."""
+    def linearize(c: int) -> float:
+        c_norm = c / 255.0
+        return c_norm / 12.92 if c_norm <= 0.04045 else ((c_norm + 0.055) / 1.055) ** 2.4
+    return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+
+
+def _contrast_ratio(hex1: str, hex2: str) -> float:
+    """Calculate WCAG contrast ratio between two #RRGGBB colors."""
+    def to_rgb(h: str) -> tuple[int, int, int]:
+        h = h.lstrip('#')
+        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    l1 = _relative_luminance(*to_rgb(hex1))
+    l2 = _relative_luminance(*to_rgb(hex2))
+    lighter, darker = max(l1, l2), min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _hsl_to_hex(h: float, s: float, l: float) -> str:
+    """Convert HSL (0-1 range) to #RRGGBB hex string."""
+    r, g, b = colorsys.hls_to_rgb(h, l, s)  # Note: colorsys uses HLS order
+    return f"#{int(r * 255 + 0.5):02X}{int(g * 255 + 0.5):02X}{int(b * 255 + 0.5):02X}"
+
+
+def _hex_to_hsl(hex_color: str) -> tuple[float, float, float]:
+    """Convert #RRGGBB hex string to (h, s, l) tuple in 0-1 range."""
+    hex_color = hex_color.lstrip('#')
+    r, g, b = int(hex_color[0:2], 16) / 255.0, int(hex_color[2:4], 16) / 255.0, int(hex_color[4:6], 16) / 255.0
+    h, l, s = colorsys.rgb_to_hls(r, g, b)  # Note: colorsys returns HLS
+    return h, s, l
+
+
+def _ensure_contrast(hex_color: str, min_ratio: float = 3.0) -> str:
+    """Darken a color until it meets the minimum contrast ratio against white."""
+    if _contrast_ratio(hex_color, "#FFFFFF") >= min_ratio:
+        return hex_color
+    h, s, l = _hex_to_hsl(hex_color)
+    # Progressively reduce lightness until contrast passes
+    while l > 0.0:
+        l = max(0.0, l - 0.01)
+        candidate = _hsl_to_hex(h, s, l)
+        if _contrast_ratio(candidate, "#FFFFFF") >= min_ratio:
+            return candidate
+    return _hsl_to_hex(h, s, 0.0)
+
+
+def generate_palette_from_primary(primary_hex: str) -> dict[str, str]:
+    """Generate a harmonious 10-color theme palette from a single primary color.
+
+    Uses split-complementary + analogous color harmony in HSL space.
+    All generated accent colors are guaranteed WCAG AA Large Text (3:1+)
+    contrast against white.
+
+    Args:
+        primary_hex: Primary color as #RRGGBB hex string.
+
+    Returns:
+        Dict with keys: dark1, light1, dark2, light2, accent1-accent6.
+    """
+    h, s, l = _hex_to_hsl(primary_hex)
+
+    # Clamp primary lightness for WCAG compliance
+    accent_l = max(0.25, min(0.45, l))
+    accent_s = max(0.5, s)  # Ensure enough saturation for vibrant accents
+
+    # Generate 6 accents using color harmony offsets
+    offsets = [0, 30, 120, 180, 210, 330]  # degrees
+    accents = []
+    for offset in offsets:
+        accent_h = (h + offset / 360.0) % 1.0
+        hex_val = _hsl_to_hex(accent_h, accent_s, accent_l)
+        hex_val = _ensure_contrast(hex_val)
+        accents.append(hex_val)
+
+    # Dark/light base colors derived from primary hue
+    dark1 = _hsl_to_hex(h, max(0.3, s * 0.6), 0.12)  # Very dark for text
+    dark2 = _hsl_to_hex(h, max(0.2, s * 0.4), 0.22)  # Slightly lighter
+    light1 = "#FFFFFF"
+    light2 = _hsl_to_hex(h, max(0.1, s * 0.3), 0.95)  # Very light tint
+
+    return {
+        "dark1": dark1, "light1": light1, "dark2": dark2, "light2": light2,
+        "accent1": accents[0], "accent2": accents[1], "accent3": accents[2],
+        "accent4": accents[3], "accent5": accents[4], "accent6": accents[5],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Pydantic input models
 # ---------------------------------------------------------------------------
 class ApplyThemeInput(BaseModel):
@@ -167,6 +259,15 @@ class SetThemeColorsInput(BaseModel):
             "Modern: nord_light, pastel_deep, swiss. "
             "Vibrant: vivid, rainbow, neon_safe. "
             "Individual color fields override preset values."
+        ),
+    )
+    primary: Optional[str] = Field(
+        default=None,
+        description=(
+            "Auto-generate a harmonious 6-color accent palette from a single "
+            "primary color (#RRGGBB). Uses color harmony (split-complementary "
+            "+ analogous). Individual accent fields and preset override "
+            "generated values."
         ),
     )
     dark1: Optional[str] = Field(
@@ -399,7 +500,7 @@ def set_theme_colors(params: SetThemeColorsInput) -> str:
         JSON confirming which colors were changed.
     """
     try:
-        # Resolve preset palette as base, then overlay individual fields
+        # Priority order: preset → primary → individual fields
         merged: dict[str, str] = {}
         preset_name = None
         if params.preset is not None:
@@ -412,7 +513,16 @@ def set_theme_colors(params: SetThemeColorsInput) -> str:
                 })
             merged.update(PRESET_PALETTES[preset_name])
 
-        # Individual fields override preset values
+        # Primary generates palette as base (overridden by preset above,
+        # then individual fields override both)
+        if params.primary is not None:
+            generated = generate_palette_from_primary(params.primary)
+            # Only fill slots not already set by preset
+            for k, v in generated.items():
+                if k not in merged:
+                    merged[k] = v
+
+        # Individual fields override preset and primary values
         for name in THEME_COLOR_MAP:
             val = getattr(params, name, None)
             if val is not None:
@@ -429,6 +539,8 @@ def set_theme_colors(params: SetThemeColorsInput) -> str:
         result = ppt.execute(_set_theme_colors_impl, color_map)
         if preset_name:
             result["preset"] = preset_name
+        if params.primary is not None:
+            result["primary"] = params.primary
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set theme colors: {str(e)}"})
@@ -514,10 +626,15 @@ def register_tools(mcp):
     async def tool_set_theme_colors(params: SetThemeColorsInput) -> str:
         """Set theme colors of the active presentation.
 
-        Three modes:
+        Four modes:
         1. **Preset only**: `preset="tailwind"` applies all colors from a curated palette.
-        2. **Manual**: specify individual color slots (dark1, light1, accent1, etc.).
-        3. **Preset + override**: start from a preset, then override specific slots.
+        2. **Primary only**: `primary="#2B579A"` auto-generates a full harmonious palette
+           from a single color using color harmony (split-complementary + analogous).
+           All generated accents are WCAG AA Large Text accessible (3:1+ on white).
+        3. **Manual**: specify individual color slots (dark1, light1, accent1, etc.).
+        4. **Combined**: preset or primary as base, then override specific slots.
+
+        Priority: preset > primary > individual fields (each layer overrides the previous).
 
         17 WCAG-accessible presets (all accents 3:1+ on white):
         - Classic: corporate_blue, executive, consulting

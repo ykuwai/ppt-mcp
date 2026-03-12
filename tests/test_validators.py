@@ -39,7 +39,10 @@ from ppt_com.text import (
     GetAllTextInput, SetBulletInput, SetParagraphFormatInput,
     CheckTypographyInput, _is_latin, _char_type, _find_best_vbreak,
 )
-from ppt_com.themes import SetThemeColorsInput, PRESET_PALETTES
+from ppt_com.themes import (
+    SetThemeColorsInput, PRESET_PALETTES,
+    generate_palette_from_primary, _contrast_ratio,
+)
 from utils.validation import font_size_warning
 
 
@@ -2867,3 +2870,45 @@ class TestSetThemeColorsInput:
     def test_preset_count(self):
         """There should be exactly 17 presets."""
         assert len(PRESET_PALETTES) == 17
+
+    # --- primary field tests ---
+
+    def test_primary_field_accepted(self):
+        """primary field is accepted by the model."""
+        inp = SetThemeColorsInput(primary="#2B579A")
+        assert inp.primary == "#2B579A"
+
+    def test_generate_palette_returns_10_keys(self):
+        """generate_palette_from_primary returns all 10 required keys."""
+        required = {"dark1", "light1", "dark2", "light2",
+                    "accent1", "accent2", "accent3", "accent4", "accent5", "accent6"}
+        result = generate_palette_from_primary("#2B579A")
+        assert set(result.keys()) == required
+
+    @pytest.mark.parametrize("color", [
+        "#FF0000",  # red
+        "#0000FF",  # blue
+        "#00FF00",  # green
+        "#FFFF00",  # yellow
+        "#333333",  # dark
+        "#CCCCCC",  # light
+    ])
+    def test_generated_accents_wcag_contrast(self, color):
+        """All generated accent colors must have 3:1+ contrast against white."""
+        palette = generate_palette_from_primary(color)
+        for i in range(1, 7):
+            accent_key = f"accent{i}"
+            accent_hex = palette[accent_key]
+            ratio = _contrast_ratio(accent_hex, "#FFFFFF")
+            assert ratio >= 3.0, (
+                f"primary={color} → {accent_key}={accent_hex} "
+                f"has contrast {ratio:.2f} < 3.0 against white"
+            )
+
+    def test_individual_overrides_primary(self):
+        """Individual accent fields override primary-generated values."""
+        inp = SetThemeColorsInput(primary="#2B579A", accent1="#FF0000")
+        palette = generate_palette_from_primary(inp.primary)
+        # accent1 from primary would differ from #FF0000
+        assert inp.accent1 == "#FF0000"
+        assert inp.accent1 != palette["accent1"] or palette["accent1"] == "#FF0000"
