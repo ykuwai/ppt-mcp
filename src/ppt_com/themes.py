@@ -256,7 +256,8 @@ def _get_theme_colors_impl():
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
 
-    theme = pres.SlideMaster.Theme
+    # Read from the first design's slide master
+    theme = pres.Designs(1).SlideMaster.Theme
     color_scheme = theme.ThemeColorScheme
 
     colors = []
@@ -271,23 +272,27 @@ def _get_theme_colors_impl():
     return {
         "success": True,
         "colors": colors,
+        "design_count": pres.Designs.Count,
     }
 
 
 def _set_theme_colors_impl(color_map):
-    """Set individual theme colors.
+    """Set individual theme colors across ALL slide masters.
 
     Args:
         color_map: dict of {theme_color_index: bgr_int} pairs.
     """
     pres = ppt._get_pres_impl()
 
-    theme = pres.SlideMaster.Theme
-    color_scheme = theme.ThemeColorScheme
+    design_count = pres.Designs.Count
+    for d in range(1, design_count + 1):
+        color_scheme = pres.Designs(d).SlideMaster.Theme.ThemeColorScheme
+        for idx, bgr in color_map.items():
+            color_scheme(idx).RGB = bgr
 
+    # Build response from first design
     changed = []
     for idx, bgr in color_map.items():
-        color_scheme(idx).RGB = bgr
         changed.append({
             "name": THEME_COLOR_NAMES[idx],
             "color": int_to_hex(bgr),
@@ -297,6 +302,7 @@ def _set_theme_colors_impl(color_map):
         "success": True,
         "changed": changed,
         "changed_count": len(changed),
+        "designs_updated": design_count,
     }
 
 
