@@ -2909,6 +2909,7 @@ class TestSetThemeColorsInput:
         """Individual accent fields override primary-generated values."""
         inp = SetThemeColorsInput(primary="#2B579A", accent1="#FF0000")
         palette = generate_palette_from_primary(inp.primary)
-        # accent1 from primary would differ from #FF0000
+        # Primary generates a different accent1 than our override
+        assert palette["accent1"] != "#FF0000"
+        # But the model stores our explicit override
         assert inp.accent1 == "#FF0000"
-        assert inp.accent1 != palette["accent1"] or palette["accent1"] == "#FF0000"
