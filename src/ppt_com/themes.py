@@ -12,7 +12,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
-from utils.color import int_to_hex
+from utils.color import int_to_hex, hex_to_int, get_theme_color_index
 from ppt_com.constants import (
     msoTrue, msoFalse,
     msoThemeColorDark1, msoThemeColorLight1,
@@ -54,6 +54,48 @@ class ApplyThemeInput(BaseModel):
 class GetThemeColorsInput(BaseModel):
     """Input for getting theme colors (no parameters required)."""
     model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class SetThemeColorsInput(BaseModel):
+    """Input for setting individual theme colors."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    dark1: Optional[str] = Field(
+        default=None, description="Dark 1 color (main text/heading) as #RRGGBB",
+    )
+    light1: Optional[str] = Field(
+        default=None, description="Light 1 color (main background) as #RRGGBB",
+    )
+    dark2: Optional[str] = Field(
+        default=None, description="Dark 2 color (secondary text) as #RRGGBB",
+    )
+    light2: Optional[str] = Field(
+        default=None, description="Light 2 color (secondary background) as #RRGGBB",
+    )
+    accent1: Optional[str] = Field(
+        default=None, description="Accent 1 color (primary accent) as #RRGGBB",
+    )
+    accent2: Optional[str] = Field(
+        default=None, description="Accent 2 color as #RRGGBB",
+    )
+    accent3: Optional[str] = Field(
+        default=None, description="Accent 3 color as #RRGGBB",
+    )
+    accent4: Optional[str] = Field(
+        default=None, description="Accent 4 color as #RRGGBB",
+    )
+    accent5: Optional[str] = Field(
+        default=None, description="Accent 5 color as #RRGGBB",
+    )
+    accent6: Optional[str] = Field(
+        default=None, description="Accent 6 color as #RRGGBB",
+    )
+    hyperlink: Optional[str] = Field(
+        default=None, description="Hyperlink color as #RRGGBB",
+    )
+    followed_hyperlink: Optional[str] = Field(
+        default=None, description="Followed hyperlink color as #RRGGBB",
+    )
 
 
 class SetHeadersFootersInput(BaseModel):
@@ -123,6 +165,33 @@ def _get_theme_colors_impl():
     return {
         "success": True,
         "colors": colors,
+    }
+
+
+def _set_theme_colors_impl(color_map):
+    """Set individual theme colors.
+
+    Args:
+        color_map: dict of {theme_color_index: bgr_int} pairs.
+    """
+    app = ppt._get_app_impl()
+    pres = ppt._get_pres_impl()
+
+    theme = pres.SlideMaster.Theme
+    color_scheme = theme.ThemeColorScheme
+
+    changed = []
+    for idx, bgr in color_map.items():
+        color_scheme(idx).RGB = bgr
+        changed.append({
+            "name": THEME_COLOR_NAMES[idx],
+            "color": int_to_hex(bgr),
+        })
+
+    return {
+        "success": True,
+        "changed": changed,
+        "changed_count": len(changed),
     }
 
 
@@ -206,6 +275,38 @@ def get_theme_colors(params: GetThemeColorsInput) -> str:
         return json.dumps({"error": f"Failed to get theme colors: {str(e)}"})
 
 
+def set_theme_colors(params: SetThemeColorsInput) -> str:
+    """Set individual theme colors.
+
+    Args:
+        params: Color values for specific theme color slots.
+
+    Returns:
+        JSON confirming which colors were changed.
+    """
+    try:
+        # Build color_map: {theme_color_index: bgr_int}
+        NAME_TO_INDEX = {
+            "dark1": 1, "light1": 2, "dark2": 3, "light2": 4,
+            "accent1": 5, "accent2": 6, "accent3": 7, "accent4": 8,
+            "accent5": 9, "accent6": 10,
+            "hyperlink": 11, "followed_hyperlink": 12,
+        }
+        color_map = {}
+        for name, idx in NAME_TO_INDEX.items():
+            val = getattr(params, name, None)
+            if val is not None:
+                color_map[idx] = hex_to_int(val)
+
+        if not color_map:
+            return json.dumps({"error": "No colors specified"})
+
+        result = ppt.execute(_set_theme_colors_impl, color_map)
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to set theme colors: {str(e)}"})
+
+
 def set_headers_footers(params: SetHeadersFootersInput) -> str:
     """Set headers and footers across all slides.
 
@@ -272,6 +373,26 @@ def register_tools(mcp):
         accent1-6, hyperlink, followed_hyperlink) with their hex values.
         """
         return get_theme_colors(params)
+
+    @mcp.tool(
+        name="ppt_set_theme_colors",
+        annotations={
+            "title": "Set Theme Colors",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_set_theme_colors(params: SetThemeColorsInput) -> str:
+        """Set individual theme colors of the active presentation.
+
+        Specify any combination of the 12 theme color slots:
+        dark1, light1, dark2, light2, accent1–accent6, hyperlink,
+        followed_hyperlink. Only specified colors are changed;
+        omitted colors remain unchanged. Values are #RRGGBB hex strings.
+        """
+        return set_theme_colors(params)
 
     @mcp.tool(
         name="ppt_set_headers_footers",
