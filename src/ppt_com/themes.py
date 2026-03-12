@@ -12,7 +12,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.com_wrapper import ppt
-from utils.color import int_to_hex, hex_to_int, get_theme_color_index
+from utils.color import int_to_hex, hex_to_int, THEME_COLOR_MAP
 from ppt_com.constants import (
     msoTrue, msoFalse,
     msoThemeColorDark1, msoThemeColorLight1,
@@ -174,7 +174,6 @@ def _set_theme_colors_impl(color_map):
     Args:
         color_map: dict of {theme_color_index: bgr_int} pairs.
     """
-    app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
 
     theme = pres.SlideMaster.Theme
@@ -286,14 +285,8 @@ def set_theme_colors(params: SetThemeColorsInput) -> str:
     """
     try:
         # Build color_map: {theme_color_index: bgr_int}
-        NAME_TO_INDEX = {
-            "dark1": 1, "light1": 2, "dark2": 3, "light2": 4,
-            "accent1": 5, "accent2": 6, "accent3": 7, "accent4": 8,
-            "accent5": 9, "accent6": 10,
-            "hyperlink": 11, "followed_hyperlink": 12,
-        }
         color_map = {}
-        for name, idx in NAME_TO_INDEX.items():
+        for name, idx in THEME_COLOR_MAP.items():
             val = getattr(params, name, None)
             if val is not None:
                 color_map[idx] = hex_to_int(val)
