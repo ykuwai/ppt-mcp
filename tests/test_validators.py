@@ -39,6 +39,7 @@ from ppt_com.text import (
     GetAllTextInput, SetBulletInput, SetParagraphFormatInput,
     CheckTypographyInput, _is_latin, _char_type, _find_best_vbreak,
 )
+from ppt_com.themes import SetThemeColorsInput, PRESET_PALETTES
 from utils.validation import font_size_warning
 
 
@@ -2814,3 +2815,55 @@ class TestFindBestVbreak:
         assert result is not None
         _, _, after = result
         assert after.endswith(widow)
+
+
+# ============================================================================
+# themes.py — SetThemeColorsInput + PRESET_PALETTES
+# ============================================================================
+class TestSetThemeColorsInput:
+    """Tests for SetThemeColorsInput model and preset palette data."""
+
+    def test_no_params_valid(self):
+        """No parameters → empty input (error handled in set_theme_colors)."""
+        inp = SetThemeColorsInput()
+        assert inp.preset is None
+        assert inp.accent1 is None
+
+    def test_individual_colors_valid(self):
+        """Individual color fields are accepted."""
+        inp = SetThemeColorsInput(accent1="#FF0000", accent2="#00FF00")
+        assert inp.accent1 == "#FF0000"
+        assert inp.accent2 == "#00FF00"
+
+    def test_preset_valid(self):
+        """Preset name is accepted."""
+        inp = SetThemeColorsInput(preset="nord")
+        assert inp.preset == "nord"
+
+    def test_preset_with_override(self):
+        """Preset + individual override are both accepted."""
+        inp = SetThemeColorsInput(preset="dracula", accent1="#CUSTOM1")
+        assert inp.preset == "dracula"
+        assert inp.accent1 == "#CUSTOM1"
+
+    def test_all_presets_have_10_colors(self):
+        """Every preset must define at least dark1, light1, dark2, light2, accent1-6."""
+        required = {"dark1", "light1", "dark2", "light2",
+                    "accent1", "accent2", "accent3", "accent4", "accent5", "accent6"}
+        for name, palette in PRESET_PALETTES.items():
+            missing = required - set(palette.keys())
+            assert not missing, f"Preset '{name}' missing: {missing}"
+
+    def test_all_presets_have_valid_hex(self):
+        """Every color in every preset must be a valid #RRGGBB hex."""
+        import re
+        hex_re = re.compile(r"^#[0-9A-Fa-f]{6}$")
+        for name, palette in PRESET_PALETTES.items():
+            for slot, color in palette.items():
+                assert hex_re.match(color), (
+                    f"Preset '{name}' slot '{slot}' has invalid hex: {color}"
+                )
+
+    def test_preset_count(self):
+        """There should be exactly 17 presets."""
+        assert len(PRESET_PALETTES) == 17
