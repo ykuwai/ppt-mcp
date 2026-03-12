@@ -35,97 +35,98 @@ THEME_COLOR_NAMES: dict[int, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Preset color palettes
+# Preset color palettes (all accents WCAG AA Large Text 3:1+ on light1)
 # ---------------------------------------------------------------------------
 PRESET_PALETTES: dict[str, dict[str, str]] = {
     # --- Classic / Professional ---
     "corporate_blue": {
         "dark1": "#1B2A4A", "light1": "#FFFFFF", "dark2": "#44546A", "light2": "#F2F2F2",
-        "accent1": "#4472C4", "accent2": "#ED7D31", "accent3": "#A5A5A5",
-        "accent4": "#FFC000", "accent5": "#5B9BD5", "accent6": "#70AD47",
+        "accent1": "#2B579A", "accent2": "#BF4B28", "accent3": "#2E7D32",
+        "accent4": "#7B3FA0", "accent5": "#C4652A", "accent6": "#1A7A8A",
     },
-    "executive_charcoal": {
-        "dark1": "#2D2D2D", "light1": "#FFFFFF", "dark2": "#404040", "light2": "#F5F5F5",
-        "accent1": "#3A7CA5", "accent2": "#D4A84B", "accent3": "#81A88D",
-        "accent4": "#C96B6B", "accent5": "#7B8EB8", "accent6": "#D4896A",
+    "executive": {
+        "dark1": "#1C1C1C", "light1": "#FFFFFF", "dark2": "#3D3D3D", "light2": "#F5F5F0",
+        "accent1": "#2F4858", "accent2": "#6B3A3A", "accent3": "#4A6741",
+        "accent4": "#5B4A6E", "accent5": "#7A5C3E", "accent6": "#3A5F6F",
     },
     "consulting": {
-        "dark1": "#002B49", "light1": "#FFFFFF", "dark2": "#3C3C3C", "light2": "#F0F4F8",
-        "accent1": "#005587", "accent2": "#00A3AD", "accent3": "#6D2077",
-        "accent4": "#E87722", "accent5": "#8DC63F", "accent6": "#C4262E",
+        "dark1": "#0A1628", "light1": "#FFFFFF", "dark2": "#2C3E50", "light2": "#F0F3F7",
+        "accent1": "#003A70", "accent2": "#00796B", "accent3": "#6A1B9A",
+        "accent4": "#B71C1C", "accent5": "#2E5090", "accent6": "#455A64",
     },
-    # --- Tech / Modern ---
-    "nord": {
-        "dark1": "#2E3440", "light1": "#ECEFF4", "dark2": "#3B4252", "light2": "#E5E9F0",
-        "accent1": "#5E81AC", "accent2": "#81A1C1", "accent3": "#88C0D0",
-        "accent4": "#8FBCBB", "accent5": "#A3BE8C", "accent6": "#BF616A",
+    # --- Design System Based ---
+    "tailwind": {
+        "dark1": "#1E293B", "light1": "#FFFFFF", "dark2": "#334155", "light2": "#F1F5F9",
+        "accent1": "#1D4ED8", "accent2": "#B91C1C", "accent3": "#15803D",
+        "accent4": "#7E22CE", "accent5": "#B45309", "accent6": "#0F766E",
     },
-    "dracula": {
-        "dark1": "#282A36", "light1": "#F8F8F2", "dark2": "#44475A", "light2": "#F8F8F2",
-        "accent1": "#BD93F9", "accent2": "#FF79C6", "accent3": "#8BE9FD",
-        "accent4": "#50FA7B", "accent5": "#FFB86C", "accent6": "#FF5555",
+    "chakra": {
+        "dark1": "#1A202C", "light1": "#FFFFFF", "dark2": "#2D3748", "light2": "#EDF2F7",
+        "accent1": "#2C5282", "accent2": "#9B2C2C", "accent3": "#276749",
+        "accent4": "#553C9A", "accent5": "#9C4221", "accent6": "#285E61",
     },
-    "tokyo_night": {
-        "dark1": "#1A1B26", "light1": "#C0CAF5", "dark2": "#16161E", "light2": "#A9B1D6",
-        "accent1": "#7AA2F7", "accent2": "#BB9AF7", "accent3": "#7DCFFF",
-        "accent4": "#9ECE6A", "accent5": "#FF9E64", "accent6": "#F7768E",
+    "open_color": {
+        "dark1": "#212529", "light1": "#FFFFFF", "dark2": "#343A40", "light2": "#F1F3F5",
+        "accent1": "#1864AB", "accent2": "#C92A2A", "accent3": "#2F9E44",
+        "accent4": "#6741D9", "accent5": "#E8590C", "accent6": "#099268",
     },
-    "catppuccin_mocha": {
-        "dark1": "#1E1E2E", "light1": "#CDD6F4", "dark2": "#181825", "light2": "#BAC2DE",
-        "accent1": "#89B4FA", "accent2": "#CBA6F7", "accent3": "#F5C2E7",
-        "accent4": "#A6E3A1", "accent5": "#FAB387", "accent6": "#F38BA8",
+    "radix": {
+        "dark1": "#11181C", "light1": "#FFFFFF", "dark2": "#1C2024", "light2": "#F0F2F4",
+        "accent1": "#006ADC", "accent2": "#D31E66", "accent3": "#18794E",
+        "accent4": "#793AAF", "accent5": "#BD4B00", "accent6": "#067A6F",
     },
-    "catppuccin_latte": {
-        "dark1": "#4C4F69", "light1": "#EFF1F5", "dark2": "#5C5F77", "light2": "#E6E9EF",
-        "accent1": "#1E66F5", "accent2": "#8839EF", "accent3": "#EA76CB",
-        "accent4": "#40A02B", "accent5": "#FE640B", "accent6": "#D20F39",
-    },
-    "solarized_dark": {
-        "dark1": "#002B36", "light1": "#FDF6E3", "dark2": "#073642", "light2": "#EEE8D5",
-        "accent1": "#268BD2", "accent2": "#2AA198", "accent3": "#859900",
-        "accent4": "#B58900", "accent5": "#CB4B16", "accent6": "#DC322F",
-    },
-    "solarized_light": {
-        "dark1": "#657B83", "light1": "#FDF6E3", "dark2": "#586E75", "light2": "#EEE8D5",
-        "accent1": "#268BD2", "accent2": "#2AA198", "accent3": "#859900",
-        "accent4": "#B58900", "accent5": "#CB4B16", "accent6": "#D33682",
-    },
-    "gruvbox_dark": {
-        "dark1": "#282828", "light1": "#FBF1C7", "dark2": "#3C3836", "light2": "#EBDBB2",
-        "accent1": "#458588", "accent2": "#B16286", "accent3": "#689D6A",
-        "accent4": "#D79921", "accent5": "#D65D0E", "accent6": "#CC241D",
-    },
-    "one_dark": {
-        "dark1": "#282C34", "light1": "#ABB2BF", "dark2": "#21252B", "light2": "#D7DAE0",
-        "accent1": "#61AFEF", "accent2": "#C678DD", "accent3": "#56B6C2",
-        "accent4": "#98C379", "accent5": "#E5C07B", "accent6": "#E06C75",
-    },
-    # --- Vibrant / Creative ---
-    "sunset": {
-        "dark1": "#2C1810", "light1": "#FFF8F0", "dark2": "#4A3228", "light2": "#FAEBD7",
-        "accent1": "#FF6B35", "accent2": "#F7C548", "accent3": "#D64045",
-        "accent4": "#7B2D8E", "accent5": "#1B998B", "accent6": "#3185FC",
-    },
+    # --- Nature / Mood ---
     "ocean": {
-        "dark1": "#0B132B", "light1": "#FFFFFF", "dark2": "#1C2541", "light2": "#E8F4F8",
-        "accent1": "#3A86FF", "accent2": "#8338EC", "accent3": "#FF006E",
-        "accent4": "#FB5607", "accent5": "#FFBE0B", "accent6": "#06D6A0",
+        "dark1": "#0A1929", "light1": "#FFFFFF", "dark2": "#132F4C", "light2": "#E3F2FD",
+        "accent1": "#0D47A1", "accent2": "#006064", "accent3": "#01579B",
+        "accent4": "#0277BD", "accent5": "#00695C", "accent6": "#1A237E",
     },
-    # --- Minimal / Clean ---
-    "stone": {
-        "dark1": "#292524", "light1": "#FAFAF9", "dark2": "#44403C", "light2": "#F5F5F4",
-        "accent1": "#78716C", "accent2": "#A8A29E", "accent3": "#B45309",
-        "accent4": "#0F766E", "accent5": "#6D28D9", "accent6": "#BE185D",
+    "forest": {
+        "dark1": "#1B2418", "light1": "#FFFFFF", "dark2": "#33402E", "light2": "#F1F4EC",
+        "accent1": "#2E7D32", "accent2": "#5D4037", "accent3": "#1B5E20",
+        "accent4": "#795548", "accent5": "#827717", "accent6": "#4E342E",
     },
-    "swiss": {
-        "dark1": "#1A1A1A", "light1": "#FFFFFF", "dark2": "#4A4A4A", "light2": "#F0F0F0",
-        "accent1": "#E30613", "accent2": "#2D2D2D", "accent3": "#6B6B6B",
-        "accent4": "#A0A0A0", "accent5": "#D4D4D4", "accent6": "#0055A4",
+    "sunset": {
+        "dark1": "#2C1810", "light1": "#FFFFFF", "dark2": "#4E342E", "light2": "#FFF3E0",
+        "accent1": "#C62828", "accent2": "#BF360C", "accent3": "#AD1457",
+        "accent4": "#880E4F", "accent5": "#6A1B9A", "accent6": "#B71C1C",
     },
     "sage": {
-        "dark1": "#2F3E46", "light1": "#FFFFFF", "dark2": "#354F52", "light2": "#F0F7F4",
-        "accent1": "#52796F", "accent2": "#84A98C", "accent3": "#CAD2C5",
-        "accent4": "#BC6C25", "accent5": "#606C38", "accent6": "#283618",
+        "dark1": "#263238", "light1": "#FFFFFF", "dark2": "#37474F", "light2": "#F1F4EC",
+        "accent1": "#558B2F", "accent2": "#6D4C41", "accent3": "#33691E",
+        "accent4": "#4E6B45", "accent5": "#8D6E63", "accent6": "#5D6B3C",
+    },
+    # --- Modern / Trendy ---
+    "nord_light": {
+        "dark1": "#2E3440", "light1": "#FFFFFF", "dark2": "#3B4252", "light2": "#ECEFF4",
+        "accent1": "#3868A6", "accent2": "#A3394B", "accent3": "#6B5DAD",
+        "accent4": "#2C7A5D", "accent5": "#B06D2F", "accent6": "#2E6C8F",
+    },
+    "pastel_deep": {
+        "dark1": "#2D2D2D", "light1": "#FFFFFF", "dark2": "#4A4A4A", "light2": "#FAF8F5",
+        "accent1": "#5B72A8", "accent2": "#A85B6E", "accent3": "#6B8F5E",
+        "accent4": "#8B6BA8", "accent5": "#B07D4F", "accent6": "#4F8F8B",
+    },
+    "swiss": {
+        "dark1": "#000000", "light1": "#FFFFFF", "dark2": "#1A1A1A", "light2": "#F5F5F5",
+        "accent1": "#CC0000", "accent2": "#000000", "accent3": "#004F9E",
+        "accent4": "#6B6B6B", "accent5": "#8B0000", "accent6": "#2B5B2B",
+    },
+    # --- Vibrant ---
+    "vivid": {
+        "dark1": "#0D0D0D", "light1": "#FFFFFF", "dark2": "#262626", "light2": "#F5F5F5",
+        "accent1": "#0050D0", "accent2": "#C60040", "accent3": "#007A33",
+        "accent4": "#7B00B5", "accent5": "#B85000", "accent6": "#00787C",
+    },
+    "rainbow": {
+        "dark1": "#1A1A1A", "light1": "#FFFFFF", "dark2": "#333333", "light2": "#F7F7F7",
+        "accent1": "#C62828", "accent2": "#C45000", "accent3": "#2E7D32",
+        "accent4": "#1565C0", "accent5": "#6A1B9A", "accent6": "#AD1457",
+    },
+    "neon_safe": {
+        "dark1": "#0F0F1A", "light1": "#FFFFFF", "dark2": "#1A1A2E", "light2": "#F0F0FA",
+        "accent1": "#0055CC", "accent2": "#CC0066", "accent3": "#008844",
+        "accent4": "#7700BB", "accent5": "#CC5500", "accent6": "#007788",
     },
 }
 
@@ -158,11 +159,13 @@ class SetThemeColorsInput(BaseModel):
     preset: Optional[str] = Field(
         default=None,
         description=(
-            "Apply a preset color palette by name. "
-            "Available: corporate_blue, executive_charcoal, consulting, "
-            "nord, dracula, tokyo_night, catppuccin_mocha, catppuccin_latte, "
-            "solarized_dark, solarized_light, gruvbox_dark, one_dark, "
-            "sunset, ocean, stone, swiss, sage. "
+            "Apply a preset color palette by name. All presets are "
+            "WCAG AA accessible (3:1+ contrast on white). "
+            "Classic: corporate_blue, executive, consulting. "
+            "Design systems: tailwind, chakra, open_color, radix. "
+            "Nature: ocean, forest, sunset, sage. "
+            "Modern: nord_light, pastel_deep, swiss. "
+            "Vibrant: vivid, rainbow, neon_safe. "
             "Individual color fields override preset values."
         ),
     )
@@ -512,19 +515,19 @@ def register_tools(mcp):
         """Set theme colors of the active presentation.
 
         Three modes:
-        1. **Preset only**: `preset="nord"` applies all colors from a curated palette.
+        1. **Preset only**: `preset="tailwind"` applies all colors from a curated palette.
         2. **Manual**: specify individual color slots (dark1, light1, accent1, etc.).
         3. **Preset + override**: start from a preset, then override specific slots.
 
-        17 presets available across 4 categories:
-        - Classic: corporate_blue, executive_charcoal, consulting
-        - Tech: nord, dracula, tokyo_night, catppuccin_mocha, catppuccin_latte,
-          solarized_dark, solarized_light, gruvbox_dark, one_dark
-        - Vibrant: sunset, ocean
-        - Minimal: stone, swiss, sage
+        17 WCAG-accessible presets (all accents 3:1+ on white):
+        - Classic: corporate_blue, executive, consulting
+        - Design systems: tailwind, chakra, open_color, radix
+        - Nature: ocean, forest, sunset, sage
+        - Modern: nord_light, pastel_deep, swiss
+        - Vibrant: vivid, rainbow, neon_safe
 
-        Color values are #RRGGBB hex strings. Only specified colors are changed;
-        omitted colors remain unchanged.
+        Colors are applied to ALL slide masters. Values are #RRGGBB hex strings.
+        Only specified colors are changed; omitted colors remain unchanged.
         """
         return set_theme_colors(params)
 
