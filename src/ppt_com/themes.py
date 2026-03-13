@@ -419,7 +419,7 @@ def _set_theme_colors_impl(color_map):
                 view.GotoSlide(i)
             view.GotoSlide(current)
         except Exception:
-            pass
+            logger.debug("GotoSlide refresh skipped (no active window?)")
 
     # Build response from first design
     changed = []
