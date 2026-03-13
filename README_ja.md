@@ -250,6 +250,24 @@ ppt_activate_presentation(presentation_name="demo.pptx")
 - `ppt_format_text_range` で文字単位の書式設定
 - 自動調整: テキストをシェイプに収める、シェイプをリサイズ、またはオーバーフロー
 
+### 🎨 テーマカラーのプリセット・自動生成
+
+`ppt_set_theme_colors` は3つのモードに対応：
+- **17種のプリセット** — WCAG AAアクセシブルなパレット。5カテゴリ: Classic（`corporate_blue`, `executive`, `consulting`）、Design Systems（`tailwind`, `chakra`, `open_color`, `radix`）、Nature（`ocean`, `forest`, `sunset`, `sage`）、Modern（`nord_light`, `pastel_deep`, `swiss`）、Vibrant（`vivid`, `rainbow`, `neon_safe`）
+- **プライマリカラー生成** — ブランドカラー1色（`primary="#2B579A"`）からカラーハーモニー（分割補色 + 類似色）を使って調和のとれた配色を自動生成
+- **手動指定** — 個別のカラースロット（`accent1`, `accent2` など）を直接設定
+
+モードは組み合わせ可能：プリセットをベースに特定のスロットだけ上書きできます。すべてのアクセントカラーは白背景に対して3:1以上のコントラスト比を保証。
+
+### 🔍 組版チェック
+
+`ppt_check_typography` はよくある組版の問題を検出し、自動修正も可能：
+- **ウィドウ行** — 折り返しにより1〜3文字だけの行が発生した状態
+- **改行後の短い行** — 手動改行（`\v`）後の短すぎる行
+- **自動縮小テキスト** — PowerPointの「テキストに合わせて縮小」で暗黙的に圧縮されたテキスト
+
+自動修正はテキストボックスの拡幅やソフトリターン挿入で対応します。
+
 ## ⚙️ 詳細設定
 
 ### PowerPointのモーダルダイアログへの対応

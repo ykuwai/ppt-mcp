@@ -250,6 +250,24 @@ Every write operation automatically navigates PowerPoint to the target slide. Yo
 - Per-character formatting with `ppt_format_text_range`
 - Auto-fit control: shrink text to fit, resize shape, or overflow
 
+### 🎨 Theme Color Presets & Auto-Generation
+
+`ppt_set_theme_colors` supports three modes:
+- **17 curated presets** — WCAG AA accessible palettes across 5 categories: Classic (`corporate_blue`, `executive`, `consulting`), Design Systems (`tailwind`, `chakra`, `open_color`, `radix`), Nature (`ocean`, `forest`, `sunset`, `sage`), Modern (`nord_light`, `pastel_deep`, `swiss`), Vibrant (`vivid`, `rainbow`, `neon_safe`)
+- **Primary color generation** — provide a single brand color (`primary="#2B579A"`) to auto-generate a full harmonious palette using color harmony (split-complementary + analogous)
+- **Manual** — set individual color slots (`accent1`, `accent2`, etc.)
+
+Modes can be combined: use a preset as a base and override specific slots. All accents are guaranteed 3:1+ contrast on white.
+
+### 🔍 Typography Check
+
+`ppt_check_typography` detects and optionally auto-fixes common typography issues:
+- **Widow lines** — isolated 1-3 character lines caused by word wrapping
+- **Short lines after soft returns** — side effects of manual line breaks (`\v`)
+- **Auto-shrunk text** — text silently compressed by PowerPoint's shrink-to-fit feature
+
+Auto-fix strategies include widening text boxes and inserting soft returns.
+
 ## ⚙️ Advanced Configuration
 
 ### Handling PowerPoint Modal Dialogs
