@@ -35,6 +35,7 @@ from ppt_com.shapes import AddShapeInput, UpdateShapeInput
 from ppt_com.animation import AddAnimationInput, RemoveAnimationInput, UpdateAnimationInput
 from ppt_com.connectors import AddConnectorInput, FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
+from ppt_com.slides import SetSlideNotesInput
 from ppt_com.text import (
     GetAllTextInput, SetBulletInput, SetParagraphFormatInput,
     CheckTypographyInput, _is_latin, _char_type, _find_best_vbreak,
@@ -2913,3 +2914,57 @@ class TestSetThemeColorsInput:
         assert palette["accent1"] != "#FF0000"
         # But the model stores our explicit override
         assert inp.accent1 == "#FF0000"
+
+
+# ============================================================================
+# SetSlideNotesInput
+# ============================================================================
+
+class TestSetSlideNotesInput:
+    """Tests for SetSlideNotesInput formatting parameters."""
+
+    def test_text_only(self):
+        """Text-only usage (original behavior)."""
+        inp = SetSlideNotesInput(slide_index=1, notes_text="Hello")
+        assert inp.notes_text == "Hello"
+        assert inp.font_name is None
+        assert inp.font_size is None
+
+    def test_formatting_only(self):
+        """Formatting without text (notes_text omitted)."""
+        inp = SetSlideNotesInput(slide_index=1, font_size=14.0, bold=True)
+        assert inp.notes_text is None
+        assert inp.font_size == 14.0
+        assert inp.bold is True
+
+    def test_text_with_formatting(self):
+        """Text plus formatting together."""
+        inp = SetSlideNotesInput(
+            slide_index=1,
+            notes_text="Notes",
+            font_name="Arial",
+            font_name_fareast="BIZ UDPゴシック",
+            font_size=12.0,
+            bold=False,
+            italic=True,
+            color="#FF0000",
+        )
+        assert inp.notes_text == "Notes"
+        assert inp.font_name == "Arial"
+        assert inp.font_name_fareast == "BIZ UDPゴシック"
+        assert inp.font_size == 12.0
+        assert inp.bold is False
+        assert inp.italic is True
+        assert inp.color == "#FF0000"
+
+    def test_all_defaults(self):
+        """Only slide_index is required."""
+        inp = SetSlideNotesInput(slide_index=3)
+        assert inp.slide_index == 3
+        assert inp.notes_text is None
+        assert inp.font_name is None
+        assert inp.font_name_fareast is None
+        assert inp.font_size is None
+        assert inp.bold is None
+        assert inp.italic is None
+        assert inp.color is None
