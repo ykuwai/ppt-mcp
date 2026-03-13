@@ -9,6 +9,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.color import hex_to_int
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide as nav_goto_slide
 from ppt_com.constants import ppLayoutBlank
@@ -150,9 +151,33 @@ class SetSlideNotesInput(BaseModel):
         ...,
         description="1-based index of the slide.",
     )
-    notes_text: str = Field(
-        ...,
-        description="The speaker notes text to set.",
+    notes_text: Optional[str] = Field(
+        default=None,
+        description="The speaker notes text to set. If omitted, only formatting is applied to existing notes.",
+    )
+    font_name: Optional[str] = Field(
+        default=None,
+        description="Latin font name (e.g. 'Arial'). Also sets the East Asian font unless font_name_fareast is provided.",
+    )
+    font_name_fareast: Optional[str] = Field(
+        default=None,
+        description="East Asian (CJK) font name (e.g. 'BIZ UDPゴシック'). Overrides the Far East font independently of font_name.",
+    )
+    font_size: Optional[float] = Field(
+        default=None,
+        description="Font size in points.",
+    )
+    bold: Optional[bool] = Field(
+        default=None,
+        description="Bold on/off.",
+    )
+    italic: Optional[bool] = Field(
+        default=None,
+        description="Italic on/off.",
+    )
+    color: Optional[str] = Field(
+        default=None,
+        description="Font color as '#RRGGBB' hex string.",
     )
 
 
@@ -517,7 +542,16 @@ def _get_slide_info_impl(slide_index: int) -> dict:
     }
 
 
-def _set_slide_notes_impl(slide_index: int, notes_text: str) -> dict:
+def _set_slide_notes_impl(
+    slide_index: int,
+    notes_text: Optional[str],
+    font_name: Optional[str],
+    font_name_fareast: Optional[str],
+    font_size: Optional[float],
+    bold: Optional[bool],
+    italic: Optional[bool],
+    color: Optional[str],
+) -> dict:
     app = ppt._get_app_impl()
     nav_goto_slide(app, slide_index)
     pres = _resolve_presentation(app)
@@ -528,7 +562,28 @@ def _set_slide_notes_impl(slide_index: int, notes_text: str) -> dict:
         )
 
     slide = pres.Slides(slide_index)
-    slide.NotesPage.Shapes.Placeholders(2).TextFrame.TextRange.Text = notes_text
+    text_range = slide.NotesPage.Shapes.Placeholders(2).TextFrame.TextRange
+
+    if notes_text is not None:
+        text_range.Text = notes_text
+
+    # Apply formatting to entire notes text range
+    font = text_range.Font
+    if font_name is not None:
+        font.Name = font_name
+        if font_name_fareast is None:
+            font.NameFarEast = font_name
+    if font_name_fareast is not None:
+        font.NameFarEast = font_name_fareast
+    if font_size is not None:
+        font.Size = font_size
+    if bold is not None:
+        font.Bold = bold
+    if italic is not None:
+        font.Italic = italic
+    if color is not None:
+        font.Color.RGB = hex_to_int(color)
+
     return {"success": True}
 
 
@@ -620,7 +675,15 @@ def set_slide_notes(params: SetSlideNotesInput) -> str:
     """Set speaker notes for a slide."""
     try:
         result = ppt.execute(
-            _set_slide_notes_impl, params.slide_index, params.notes_text
+            _set_slide_notes_impl,
+            params.slide_index,
+            params.notes_text,
+            params.font_name,
+            params.font_name_fareast,
+            params.font_size,
+            params.bold,
+            params.italic,
+            params.color,
         )
         return json.dumps(result)
     except Exception as e:
@@ -799,9 +862,11 @@ def register_tools(mcp):
         },
     )
     async def tool_set_slide_notes(params: SetSlideNotesInput) -> str:
-        """Set the speaker notes text for a slide.
+        """Set the speaker notes text and/or formatting for a slide.
 
-        Replaces any existing notes with the provided text.
+        Replaces any existing notes with the provided text. Optionally applies
+        font formatting (font_name, font_size, bold, italic, color).
+        If notes_text is omitted, only formatting is applied to existing notes.
         """
         return set_slide_notes(params)
 
