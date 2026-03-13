@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 152 tools for AI agents and developers.</strong>
+  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 153 tools for AI agents and developers.</strong>
 </p>
 
 ---
@@ -24,7 +24,7 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
-- **152 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
+- **153 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
@@ -132,7 +132,7 @@ uv sync
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
 | **Charts** | 6 | Add charts, set/get data, format, series, change type |
 | **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
-| **Themes** | 3 | Apply themes, get theme colors, headers/footers |
+| **Themes** | 4 | Apply themes, get/set theme colors, headers/footers |
 | **Groups** | 3 | Group, ungroup, get group items |
 | **Connectors** | 2 | Add, format |
 | **Hyperlinks** | 3 | Add, get, remove |
@@ -146,7 +146,7 @@ uv sync
 | **Comments** | 3 | Add, list, delete |
 | **Advanced** | 19 | Tags, fonts (set defaults + bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
-| | **152** | |
+| | **153** | |
 
 ## 💡 Example Prompts
 
@@ -249,6 +249,24 @@ Every write operation automatically navigates PowerPoint to the target slide. Yo
 - `\v` — Line break (Shift+Enter). Stays in the same paragraph, preserving formatting.
 - Per-character formatting with `ppt_format_text_range`
 - Auto-fit control: shrink text to fit, resize shape, or overflow
+
+### 🎨 Theme Color Presets & Auto-Generation
+
+`ppt_set_theme_colors` supports three modes:
+- **17 curated presets** — WCAG AA accessible palettes across 5 categories: Classic (`corporate_blue`, `executive`, `consulting`), Design Systems (`tailwind`, `chakra`, `open_color`, `radix`), Nature (`ocean`, `forest`, `sunset`, `sage`), Modern (`nord_light`, `pastel_deep`, `swiss`), Vibrant (`vivid`, `rainbow`, `neon_safe`)
+- **Primary color generation** — provide a single brand color (`primary="#2B579A"`) to auto-generate a full harmonious palette using color harmony (split-complementary + analogous)
+- **Manual** — set individual color slots (`accent1`, `accent2`, etc.)
+
+Modes can be combined: use a preset as a base and override specific slots. All accents are guaranteed 3:1+ contrast on white.
+
+### 🔍 Typography Check
+
+`ppt_check_typography` detects and optionally auto-fixes common typography issues:
+- **Widow lines** — isolated 1-3 character lines caused by word wrapping
+- **Short lines after soft returns** — side effects of manual line breaks (`\v`)
+- **Auto-shrunk text** — text silently compressed by PowerPoint's shrink-to-fit feature
+
+Auto-fix strategies include widening text boxes and inserting soft returns.
 
 ## ⚙️ Advanced Configuration
 
