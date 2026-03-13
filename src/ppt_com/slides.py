@@ -13,7 +13,6 @@ from utils.color import hex_to_int
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide as nav_goto_slide
 from ppt_com.constants import ppLayoutBlank, msoTrue, msoFalse
-from utils.validation import font_size_warning
 
 logger = logging.getLogger(__name__)
 
@@ -686,9 +685,6 @@ def set_slide_notes(params: SetSlideNotesInput) -> str:
             params.italic,
             params.color,
         )
-        warn = font_size_warning(params.font_size)
-        if warn:
-            result["warning"] = warn
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
