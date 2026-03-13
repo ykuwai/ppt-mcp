@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field, ConfigDict
 from utils.color import hex_to_int
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide as nav_goto_slide
-from ppt_com.constants import ppLayoutBlank
+from ppt_com.constants import ppLayoutBlank, msoTrue, msoFalse
+from utils.validation import font_size_warning
 
 logger = logging.getLogger(__name__)
 
@@ -578,9 +579,9 @@ def _set_slide_notes_impl(
     if font_size is not None:
         font.Size = font_size
     if bold is not None:
-        font.Bold = bold
+        font.Bold = msoTrue if bold else msoFalse
     if italic is not None:
-        font.Italic = italic
+        font.Italic = msoTrue if italic else msoFalse
     if color is not None:
         font.Color.RGB = hex_to_int(color)
 
@@ -685,6 +686,9 @@ def set_slide_notes(params: SetSlideNotesInput) -> str:
             params.italic,
             params.color,
         )
+        warn = font_size_warning(params.font_size)
+        if warn:
+            result["warning"] = warn
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
