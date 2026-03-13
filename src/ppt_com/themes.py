@@ -386,6 +386,7 @@ def _set_theme_colors_impl(color_map):
     Args:
         color_map: dict of {theme_color_index: bgr_int} pairs.
     """
+    app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
 
     design_count = pres.Designs.Count
@@ -393,6 +394,22 @@ def _set_theme_colors_impl(color_map):
         color_scheme = pres.Designs(d).SlideMaster.Theme.ThemeColorScheme
         for idx, bgr in color_map.items():
             color_scheme(idx).RGB = bgr
+
+    # Force visual refresh by cycling through all slides.
+    # PowerPoint doesn't auto-repaint after COM theme color changes;
+    # visiting each slide triggers a re-render of theme color references.
+    # NOTE: CustomLayout reassignment was tested but resets placeholder
+    # sizes/positions (destructive), so we avoid it.
+    slide_count = pres.Slides.Count
+    if slide_count > 0:
+        try:
+            view = app.ActiveWindow.View
+            current = view.Slide.SlideIndex
+            for i in range(1, slide_count + 1):
+                view.GotoSlide(i)
+            view.GotoSlide(current)
+        except Exception:
+            pass
 
     # Build response from first design
     changed = []
