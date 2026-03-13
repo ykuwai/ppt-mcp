@@ -251,23 +251,33 @@ class SetThemeColorsInput(BaseModel):
     preset: Optional[str] = Field(
         default=None,
         description=(
-            "Apply a preset color palette by name. All presets are "
-            "WCAG AA accessible (3:1+ contrast on white). "
-            "Classic: corporate_blue, executive, consulting. "
-            "Design systems: tailwind, chakra, open_color, radix. "
-            "Nature: ocean, forest, sunset, sage. "
-            "Modern: nord_light, pastel_deep, swiss. "
-            "Vibrant: vivid, rainbow, neon_safe. "
+            "Apply a curated color palette by name. All 17 presets are "
+            "WCAG AA Large Text accessible (3:1+ contrast on white). "
+            "Classic (business/formal): corporate_blue (blue+warm accents), "
+            "executive (muted charcoal tones), consulting (deep blue+teal+purple). "
+            "Design systems (web-dev inspired): tailwind (Tailwind CSS 700 shades), "
+            "chakra (Chakra UI 700), open_color (Open Color 9), radix (Radix UI step 11). "
+            "Nature/mood: ocean (blues+cyans), forest (greens+browns), "
+            "sunset (reds+oranges+magentas), sage (olive+earth tones). "
+            "Modern: nord_light (Nord-inspired pastels darkened for contrast), "
+            "pastel_deep (dusty muted tones), swiss (Bauhaus bold red+black). "
+            "Vibrant (high saturation): vivid (maximum saturation primaries), "
+            "rainbow (full spectrum), neon_safe (neon-inspired, darkened). "
             "Individual color fields override preset values."
         ),
     )
     primary: Optional[str] = Field(
         default=None,
         description=(
-            "Auto-generate a harmonious 6-color accent palette from a single "
-            "primary color (#RRGGBB). Uses color harmony (split-complementary "
-            "+ analogous). Individual accent fields and preset override "
-            "generated values."
+            "Auto-generate a full theme palette from a single brand/key color "
+            "(#RRGGBB). Provide one color (e.g. your brand color) and 6 harmonious "
+            "accent colors + dark/light base colors are generated automatically "
+            "using split-complementary + analogous color harmony in HSL space. "
+            "All generated accents meet WCAG AA Large Text contrast (3:1+ on white). "
+            "Example: primary=\"#2B579A\" generates a blue-based palette with "
+            "complementary orange, teal, and analogous purple accents. "
+            "Preset values take priority over generated values; individual "
+            "color fields override both."
         ),
     )
     dark1: Optional[str] = Field(
@@ -646,7 +656,7 @@ def register_tools(mcp):
         Four modes:
         1. **Preset only**: `preset="tailwind"` applies all colors from a curated palette.
         2. **Primary only**: `primary="#2B579A"` auto-generates a full harmonious palette
-           from a single color using color harmony (split-complementary + analogous).
+           from a single brand/key color using color harmony (split-complementary + analogous).
            All generated accents are WCAG AA Large Text accessible (3:1+ on white).
         3. **Manual**: specify individual color slots (dark1, light1, accent1, etc.).
         4. **Combined**: preset or primary as base, then override specific slots.
@@ -654,11 +664,11 @@ def register_tools(mcp):
         Priority: preset > primary > individual fields (each layer overrides the previous).
 
         17 WCAG-accessible presets (all accents 3:1+ on white):
-        - Classic: corporate_blue, executive, consulting
-        - Design systems: tailwind, chakra, open_color, radix
-        - Nature: ocean, forest, sunset, sage
-        - Modern: nord_light, pastel_deep, swiss
-        - Vibrant: vivid, rainbow, neon_safe
+        - Classic (business/formal): corporate_blue, executive, consulting
+        - Design systems (web-dev palettes): tailwind, chakra, open_color, radix
+        - Nature/mood: ocean (blues), forest (greens), sunset (reds), sage (olive)
+        - Modern: nord_light (soft pastels), pastel_deep (dusty), swiss (Bauhaus bold)
+        - Vibrant (high saturation): vivid, rainbow, neon_safe
 
         Colors are applied to ALL slide masters. Values are #RRGGBB hex strings.
         Only specified colors are changed; omitted colors remain unchanged.
