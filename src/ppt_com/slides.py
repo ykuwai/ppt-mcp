@@ -165,7 +165,7 @@ class SetSlideNotesInput(BaseModel):
     )
     font_size: Optional[float] = Field(
         default=None,
-        description="Font size in points.",
+        description="Font size in points. Note: formatting affects printed notes and PDF export only — the Notes pane and Presenter View ignore font size (Presenter View has its own A+/A- zoom).",
     )
     bold: Optional[bool] = Field(
         default=None,
@@ -867,6 +867,10 @@ def register_tools(mcp):
         Replaces any existing notes with the provided text. Optionally applies
         font formatting (font_name, font_size, bold, italic, color).
         If notes_text is omitted, only formatting is applied to existing notes.
+
+        **Important**: Font formatting affects printed notes pages and PDF
+        export only. The Notes pane and Presenter View ignore these settings
+        (Presenter View has its own A+/A- zoom controls).
         """
         return set_slide_notes(params)
 
