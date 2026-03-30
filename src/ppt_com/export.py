@@ -397,7 +397,6 @@ def _png_to_dib(png_path: str) -> bytes:
                     ("biClrImportant", ctypes.wintypes.DWORD),
                 ]
 
-            # Get bitmap info
             class BITMAP(ctypes.Structure):
                 _fields_ = [
                     ("bmType", ctypes.wintypes.LONG),
@@ -409,33 +408,35 @@ def _png_to_dib(png_path: str) -> bytes:
                     ("bmBits", c_void_p),
                 ]
 
-            bm = BITMAP()
-            gdi32.GetObjectW(hbitmap, ctypes.sizeof(BITMAP), byref(bm))
+            try:
+                bm = BITMAP()
+                gdi32.GetObjectW(hbitmap, ctypes.sizeof(BITMAP), byref(bm))
 
-            bih = BITMAPINFOHEADER()
-            bih.biSize = ctypes.sizeof(BITMAPINFOHEADER)
-            bih.biWidth = bm.bmWidth
-            bih.biHeight = bm.bmHeight  # positive = bottom-up
-            bih.biPlanes = 1
-            bih.biBitCount = 32
-            bih.biCompression = 0  # BI_RGB
+                bih = BITMAPINFOHEADER()
+                bih.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+                bih.biWidth = bm.bmWidth
+                bih.biHeight = bm.bmHeight  # positive = bottom-up
+                bih.biPlanes = 1
+                bih.biBitCount = 32
+                bih.biCompression = 0  # BI_RGB
 
-            row_size = ((bm.bmWidth * 32 + 31) // 32) * 4
-            bih.biSizeImage = row_size * bm.bmHeight
+                row_size = ((bm.bmWidth * 32 + 31) // 32) * 4
+                bih.biSizeImage = row_size * bm.bmHeight
 
-            # Allocate pixel buffer
-            pixel_buf = (ctypes.c_byte * bih.biSizeImage)()
+                # Allocate pixel buffer
+                pixel_buf = (ctypes.c_byte * bih.biSizeImage)()
 
-            hdc = user32.GetDC(0)
-            gdi32.GetDIBits(
-                hdc, hbitmap, 0, bm.bmHeight,
-                pixel_buf, byref(bih), 0  # DIB_RGB_COLORS
-            )
-            user32.ReleaseDC(0, hdc)
-            gdi32.DeleteObject(hbitmap)
+                hdc = user32.GetDC(0)
+                gdi32.GetDIBits(
+                    hdc, hbitmap, 0, bm.bmHeight,
+                    pixel_buf, byref(bih), 0  # DIB_RGB_COLORS
+                )
+                user32.ReleaseDC(0, hdc)
 
-            # DIB = BITMAPINFOHEADER + pixel data
-            return bytes(bih) + bytes(pixel_buf)
+                # DIB = BITMAPINFOHEADER + pixel data
+                return bytes(bih) + bytes(pixel_buf)
+            finally:
+                gdi32.DeleteObject(hbitmap)
 
         finally:
             gdiplus.GdipDisposeImage(bitmap)
