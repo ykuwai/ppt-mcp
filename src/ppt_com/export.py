@@ -3,12 +3,13 @@
 Export presentations to PDF, images (PNG/JPG), or copy slides to clipboard.
 """
 
+import atexit
 import ctypes
 import ctypes.wintypes
-import io
 import json
 import logging
 import os
+import shutil
 import struct
 import tempfile
 from typing import List, Optional
@@ -370,9 +371,13 @@ def _png_to_dib(png_path: str) -> bytes:
             # Get HBITMAP
             hbitmap = ctypes.wintypes.HBITMAP()
             # Background color: ARGB white
-            gdiplus.GdipCreateHBITMAPFromBitmap(
+            status = gdiplus.GdipCreateHBITMAPFromBitmap(
                 bitmap, byref(hbitmap), 0xFFFFFFFF
             )
+            if status != 0:
+                raise RuntimeError(
+                    f"GdipCreateHBITMAPFromBitmap failed: status {status}"
+                )
 
             # Convert HBITMAP to DIB bytes via GetDIBits
             gdi32 = ctypes.windll.gdi32
@@ -567,15 +572,15 @@ def _copy_to_clipboard_impl(
 
     except Exception:
         # Clean up temp files on error
-        import shutil
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise
 
-    # Note: for single image, temp files can be cleaned up immediately
-    # For HDROP, temp files must persist until paste completes
+    # Single image: temp files can be cleaned up immediately
+    # HDROP: temp files must persist until paste; register atexit cleanup
     if len(exported_files) == 1:
-        import shutil
         shutil.rmtree(tmp_dir, ignore_errors=True)
+    else:
+        atexit.register(shutil.rmtree, tmp_dir, True)
 
     return {
         "success": True,
@@ -681,7 +686,7 @@ def register_tools(mcp):
         name="ppt_copy_to_clipboard",
         annotations={
             "title": "Copy Slides to Clipboard",
-            "readOnlyHint": True,
+            "readOnlyHint": False,
             "destructiveHint": False,
             "idempotentHint": True,
             "openWorldHint": False,

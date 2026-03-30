@@ -128,7 +128,7 @@ uv sync
 | **Placeholders** | 6 | List, get, set placeholder content |
 | **Formatting** | 3 | Fill, line, shadow |
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
-| **Export** | 3 | PDF, images, slide preview, clipboard copy |
+| **Export** | 4 | PDF, images, slide preview, clipboard copy |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
 | **Charts** | 6 | Add charts, set/get data, format, series, change type |
 | **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
