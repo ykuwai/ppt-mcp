@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 153 tools for AI agents and developers.</strong>
+  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 154 tools for AI agents and developers.</strong>
 </p>
 
 ---
@@ -24,7 +24,7 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
-- **153 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
+- **154 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
@@ -128,7 +128,7 @@ uv sync
 | **Placeholders** | 6 | List, get, set placeholder content |
 | **Formatting** | 3 | Fill, line, shadow |
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
-| **Export** | 3 | PDF, images, slide preview |
+| **Export** | 3 | PDF, images, slide preview, clipboard copy |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
 | **Charts** | 6 | Add charts, set/get data, format, series, change type |
 | **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
@@ -146,7 +146,7 @@ uv sync
 | **Comments** | 3 | Add, list, delete |
 | **Advanced** | 19 | Tags, fonts (set defaults + bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
-| | **153** | |
+| | **154** | |
 
 ## 💡 Example Prompts
 
