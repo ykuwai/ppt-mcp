@@ -1,13 +1,18 @@
 """Export tools for PowerPoint COM automation.
 
-Export presentations to PDF or images (PNG/JPG).
+Export presentations to PDF, images (PNG/JPG), or copy slides to clipboard.
 """
 
+import atexit
+import ctypes
+import ctypes.wintypes
 import json
 import logging
 import os
+import shutil
+import struct
 import tempfile
-from typing import Optional
+from typing import List, Optional
 
 import pythoncom
 from pydantic import BaseModel, Field, ConfigDict, model_validator
@@ -88,6 +93,27 @@ class ExportImagesInput(BaseModel):
         if self.file_name is not None and self.slide_index is None:
             raise ValueError("file_name requires slide_index to be set")
         return self
+
+
+class CopyToClipboardInput(BaseModel):
+    """Input for copying slides as images to the clipboard."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_indices: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "1-based slide indices to copy. "
+            "If omitted, copies the currently viewed slide."
+        ),
+    )
+    width: Optional[int] = Field(
+        default=None,
+        description="Image width in pixels. If omitted, uses default resolution.",
+    )
+    height: Optional[int] = Field(
+        default=None,
+        description="Image height in pixels. If omitted, uses default resolution.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +306,293 @@ def _export_images_impl(
 
 
 # ---------------------------------------------------------------------------
+# Clipboard helpers (Windows only)
+# ---------------------------------------------------------------------------
+CF_DIB = 8
+CF_HDROP = 15
+GHND = 0x0042  # GMEM_MOVEABLE | GMEM_ZEROINIT
+
+user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
+ole32 = ctypes.windll.ole32
+
+OpenClipboard = user32.OpenClipboard
+CloseClipboard = user32.CloseClipboard
+EmptyClipboard = user32.EmptyClipboard
+SetClipboardData = user32.SetClipboardData
+SetClipboardData.argtypes = [ctypes.wintypes.UINT, ctypes.wintypes.HANDLE]
+SetClipboardData.restype = ctypes.wintypes.HANDLE
+GlobalAlloc = kernel32.GlobalAlloc
+GlobalAlloc.argtypes = [ctypes.wintypes.UINT, ctypes.c_size_t]
+GlobalAlloc.restype = ctypes.wintypes.HGLOBAL
+GlobalLock = kernel32.GlobalLock
+GlobalLock.argtypes = [ctypes.wintypes.HGLOBAL]
+GlobalLock.restype = ctypes.c_void_p
+GlobalUnlock = kernel32.GlobalUnlock
+GlobalUnlock.argtypes = [ctypes.wintypes.HGLOBAL]
+GlobalFree = kernel32.GlobalFree
+GlobalFree.argtypes = [ctypes.wintypes.HGLOBAL]
+
+
+def _png_to_dib(png_path: str) -> bytes:
+    """Convert a PNG file to DIB (Device Independent Bitmap) bytes.
+
+    Reads the PNG via COM-free WIC (Windows Imaging Component) is overkill;
+    instead, we simply load with the ``PIL``-free BMP approach: export as BMP
+    from PowerPoint is not available, so we use a minimal PNG→BMP decoder
+    via ctypes GDI+.
+    """
+    # Use GDI+ to load PNG and convert to DIB
+    from ctypes import byref, c_int, c_uint, c_void_p, POINTER
+
+    gdiplus = ctypes.windll.gdiplus
+
+    # GDI+ startup
+    class GdiplusStartupInput(ctypes.Structure):
+        _fields_ = [
+            ("GdiplusVersion", c_uint),
+            ("DebugEventCallback", c_void_p),
+            ("SuppressBackgroundThread", c_int),
+            ("SuppressExternalCodecs", c_int),
+        ]
+
+    token = ctypes.c_ulong()
+    startup_input = GdiplusStartupInput(1, None, 0, 0)
+    gdiplus.GdiplusStartup(byref(token), byref(startup_input), None)
+
+    try:
+        # Load image from file
+        bitmap = c_void_p()
+        status = gdiplus.GdipCreateBitmapFromFile(png_path, byref(bitmap))
+        if status != 0:
+            raise RuntimeError(f"GDI+ failed to load image: status {status}")
+
+        try:
+            # Get HBITMAP
+            hbitmap = ctypes.wintypes.HBITMAP()
+            # Background color: ARGB white
+            status = gdiplus.GdipCreateHBITMAPFromBitmap(
+                bitmap, byref(hbitmap), 0xFFFFFFFF
+            )
+            if status != 0:
+                raise RuntimeError(
+                    f"GdipCreateHBITMAPFromBitmap failed: status {status}"
+                )
+
+            # Convert HBITMAP to DIB bytes via GetDIBits
+            gdi32 = ctypes.windll.gdi32
+
+            class BITMAPINFOHEADER(ctypes.Structure):
+                _fields_ = [
+                    ("biSize", ctypes.wintypes.DWORD),
+                    ("biWidth", ctypes.wintypes.LONG),
+                    ("biHeight", ctypes.wintypes.LONG),
+                    ("biPlanes", ctypes.wintypes.WORD),
+                    ("biBitCount", ctypes.wintypes.WORD),
+                    ("biCompression", ctypes.wintypes.DWORD),
+                    ("biSizeImage", ctypes.wintypes.DWORD),
+                    ("biXPelsPerMeter", ctypes.wintypes.LONG),
+                    ("biYPelsPerMeter", ctypes.wintypes.LONG),
+                    ("biClrUsed", ctypes.wintypes.DWORD),
+                    ("biClrImportant", ctypes.wintypes.DWORD),
+                ]
+
+            class BITMAP(ctypes.Structure):
+                _fields_ = [
+                    ("bmType", ctypes.wintypes.LONG),
+                    ("bmWidth", ctypes.wintypes.LONG),
+                    ("bmHeight", ctypes.wintypes.LONG),
+                    ("bmWidthBytes", ctypes.wintypes.LONG),
+                    ("bmPlanes", ctypes.wintypes.WORD),
+                    ("bmBitsPixel", ctypes.wintypes.WORD),
+                    ("bmBits", c_void_p),
+                ]
+
+            try:
+                bm = BITMAP()
+                gdi32.GetObjectW(hbitmap, ctypes.sizeof(BITMAP), byref(bm))
+
+                bih = BITMAPINFOHEADER()
+                bih.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+                bih.biWidth = bm.bmWidth
+                bih.biHeight = bm.bmHeight  # positive = bottom-up
+                bih.biPlanes = 1
+                bih.biBitCount = 32
+                bih.biCompression = 0  # BI_RGB
+
+                row_size = ((bm.bmWidth * 32 + 31) // 32) * 4
+                bih.biSizeImage = row_size * bm.bmHeight
+
+                # Allocate pixel buffer
+                pixel_buf = (ctypes.c_byte * bih.biSizeImage)()
+
+                hdc = user32.GetDC(0)
+                gdi32.GetDIBits(
+                    hdc, hbitmap, 0, bm.bmHeight,
+                    pixel_buf, byref(bih), 0  # DIB_RGB_COLORS
+                )
+                user32.ReleaseDC(0, hdc)
+
+                # DIB = BITMAPINFOHEADER + pixel data
+                return bytes(bih) + bytes(pixel_buf)
+            finally:
+                gdi32.DeleteObject(hbitmap)
+
+        finally:
+            gdiplus.GdipDisposeImage(bitmap)
+    finally:
+        gdiplus.GdiplusShutdown(token)
+
+
+def _set_clipboard_dib(dib_data: bytes) -> None:
+    """Place DIB data on the clipboard (single image)."""
+    hglob = GlobalAlloc(GHND, len(dib_data))
+    if not hglob:
+        raise RuntimeError("GlobalAlloc failed")
+    ptr = GlobalLock(hglob)
+    ctypes.memmove(ptr, dib_data, len(dib_data))
+    GlobalUnlock(hglob)
+
+    if not OpenClipboard(0):
+        GlobalFree(hglob)
+        raise RuntimeError("Cannot open clipboard")
+    try:
+        EmptyClipboard()
+        if not SetClipboardData(CF_DIB, hglob):
+            GlobalFree(hglob)
+            raise RuntimeError("SetClipboardData failed")
+        # After successful SetClipboardData, system owns the memory
+    finally:
+        CloseClipboard()
+
+
+def _set_clipboard_hdrop(file_paths: list[str]) -> None:
+    """Place file paths on the clipboard as HDROP (file drop list).
+
+    This allows pasting multiple images into Word, PowerPoint, etc.
+    """
+    # DROPFILES structure:
+    #   DWORD pFiles (offset to file list)
+    #   POINT pt (unused, 0,0)
+    #   BOOL  fNC (FALSE)
+    #   BOOL  fWide (TRUE for Unicode)
+    # Followed by double-null-terminated wide-char file list
+    offset = 20  # sizeof(DROPFILES)
+
+    # Build the file list: each path null-terminated, extra null at end
+    file_list = ""
+    for p in file_paths:
+        file_list += p + "\0"
+    file_list += "\0"  # double-null terminator
+
+    file_list_bytes = file_list.encode("utf-16-le")
+    total_size = offset + len(file_list_bytes)
+
+    # Pack DROPFILES header
+    header = struct.pack("IiiII", offset, 0, 0, 0, 1)  # fWide=1
+
+    hglob = GlobalAlloc(GHND, total_size)
+    if not hglob:
+        raise RuntimeError("GlobalAlloc failed")
+    ptr = GlobalLock(hglob)
+    ctypes.memmove(ptr, header, len(header))
+    ctypes.memmove(ptr + offset, file_list_bytes, len(file_list_bytes))
+    GlobalUnlock(hglob)
+
+    if not OpenClipboard(0):
+        GlobalFree(hglob)
+        raise RuntimeError("Cannot open clipboard")
+    try:
+        EmptyClipboard()
+        if not SetClipboardData(CF_HDROP, hglob):
+            GlobalFree(hglob)
+            raise RuntimeError("SetClipboardData failed")
+    finally:
+        CloseClipboard()
+
+
+def _copy_to_clipboard_impl(
+    slide_indices: Optional[List[int]],
+    width: Optional[int],
+    height: Optional[int],
+) -> dict:
+    """Export slide(s) as PNG to temp files, then copy to clipboard."""
+    from utils.navigation import goto_slide
+
+    app = ppt._get_app_impl()
+    if app.Presentations.Count == 0:
+        raise RuntimeError(
+            "No presentation is open. "
+            "Use ppt_create_presentation or ppt_open_presentation first."
+        )
+    pres = ppt._get_pres_impl()
+    total_slides = pres.Slides.Count
+
+    # Resolve slide indices
+    if slide_indices is None or len(slide_indices) == 0:
+        # Default: currently viewed slide
+        try:
+            current = app.ActiveWindow.View.Slide.SlideIndex
+        except Exception:
+            current = 1
+        slide_indices = [current]
+
+    # Validate indices
+    for idx in slide_indices:
+        if idx < 1 or idx > total_slides:
+            raise ValueError(
+                f"Slide index {idx} out of range (1-{total_slides})"
+            )
+
+    # Navigate to the last slide being copied so the user can see it
+    goto_slide(app, slide_indices[-1])
+
+    # Export to temp directory
+    tmp_dir = tempfile.mkdtemp(prefix="ppt_clipboard_")
+    exported_files = []
+    try:
+        for idx in slide_indices:
+            fname = os.path.join(tmp_dir, f"Slide{idx}.png")
+            slide = pres.Slides(idx)
+            if width is not None and height is not None:
+                slide.Export(fname, "PNG", width, height)
+            elif width is not None:
+                slide.Export(fname, "PNG", width)
+            else:
+                slide.Export(fname, "PNG")
+            exported_files.append(fname)
+
+        # Copy to clipboard
+        if len(exported_files) == 1:
+            # Single image: use CF_DIB for direct paste as image
+            dib_data = _png_to_dib(exported_files[0])
+            _set_clipboard_dib(dib_data)
+        else:
+            # Multiple images: use CF_HDROP for file drop
+            _set_clipboard_hdrop(exported_files)
+
+    except Exception:
+        # Clean up temp files on error
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+
+    # Single image: temp files can be cleaned up immediately
+    # HDROP: temp files must persist until paste; register atexit cleanup
+    if len(exported_files) == 1:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    else:
+        atexit.register(shutil.rmtree, tmp_dir, True)
+
+    return {
+        "success": True,
+        "slide_indices": slide_indices,
+        "count": len(slide_indices),
+        "method": "CF_DIB" if len(slide_indices) == 1 else "CF_HDROP",
+        "temp_dir": tmp_dir if len(exported_files) > 1 else None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # MCP tool functions (return JSON strings)
 # ---------------------------------------------------------------------------
 def export_pdf(params: ExportPDFInput) -> str:
@@ -307,6 +620,20 @@ def export_images(params: ExportImagesInput) -> str:
             params.width,
             params.height,
             params.file_name,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def copy_to_clipboard(params: CopyToClipboardInput) -> str:
+    """Copy slides as PNG images to the clipboard."""
+    try:
+        result = ppt.execute(
+            _copy_to_clipboard_impl,
+            params.slide_indices,
+            params.width,
+            params.height,
         )
         return json.dumps(result)
     except Exception as e:
@@ -355,3 +682,23 @@ def register_tools(mcp):
         For all slides, PowerPoint creates a folder of individual images.
         """
         return export_images(params)
+
+    @mcp.tool(
+        name="ppt_copy_to_clipboard",
+        annotations={
+            "title": "Copy Slides to Clipboard",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_copy_to_clipboard(params: CopyToClipboardInput) -> str:
+        """Copy slides as PNG images to the Windows clipboard.
+
+        By default, copies the currently viewed slide.
+        Specify slide_indices to copy specific slides.
+        Single slide is placed as a bitmap (paste directly as image).
+        Multiple slides are placed as file drop (paste inserts all images).
+        """
+        return copy_to_clipboard(params)
