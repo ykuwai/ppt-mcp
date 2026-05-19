@@ -162,20 +162,30 @@ class PowerPointCOMWrapper:
         self._queue.put((func, args, kwargs, future))
         return future.result(timeout=30.0)
 
-    def connect(self, visible: Optional[bool] = None) -> Any:
+    def connect(self, visible: Optional[bool] = None, allow_launch: bool = True) -> Any:
         """Connect to PowerPoint (runs on COM thread).
 
         Args:
             visible: If True, make PowerPoint visible. If False, headless mode.
                     If None, don't change visibility (keep current state).
+            allow_launch: If True (default for the public API), launch a new
+                    PowerPoint instance when none is running. If False, only
+                    attach to a running instance and raise ConnectionError
+                    otherwise. Internal callers from generic tools pass False
+                    so that read-only operations don't accidentally spawn
+                    PowerPoint.
 
         Returns:
             PowerPoint.Application COM object
         """
-        return self.execute(self._connect_impl, visible)
+        return self.execute(self._connect_impl, visible, allow_launch)
 
-    def _connect_impl(self, visible: Optional[bool] = None) -> Any:
-        """Internal: connect to PowerPoint on the COM thread."""
+    def _connect_impl(self, visible: Optional[bool] = None, allow_launch: bool = True) -> Any:
+        """Internal: connect to PowerPoint on the COM thread.
+
+        When allow_launch is False, this only attaches to an already-running
+        PowerPoint instance; if none is running, ConnectionError is raised.
+        """
         if self._app is not None:
             try:
                 _ = self._app.Name
@@ -192,17 +202,24 @@ class PowerPointCOMWrapper:
                 self._app = None
 
         # Try existing instance first
+        launched_new = False
         try:
             self._app = win32com.client.GetActiveObject("PowerPoint.Application")
-            logger.info("Connected to existing PowerPoint instance")
+            logger.info("Attached to existing PowerPoint instance")
         except pywintypes.com_error as e:
             if e.hresult in _BUSY_HRESULTS:
                 # PowerPoint is running but busy (modal dialog). Re-raise as
                 # pywintypes.com_error so _com_worker's retry loop handles it.
                 raise
+            if not allow_launch:
+                raise ConnectionError(
+                    "PowerPoint is not running. Call ppt_connect, "
+                    "ppt_create_presentation, or ppt_open_presentation first."
+                ) from e
             try:
                 self._app = win32com.client.Dispatch("PowerPoint.Application")
-                logger.info("Created new PowerPoint instance via Dispatch")
+                logger.info("Launched new PowerPoint instance via Dispatch")
+                launched_new = True
             except pywintypes.com_error as e2:
                 if e2.hresult in _BUSY_HRESULTS:
                     raise  # Let _com_worker retry loop handle it
@@ -212,20 +229,30 @@ class PowerPointCOMWrapper:
 
         if visible is not None:
             self._app.Visible = visible
-        elif not self._app.Visible:
-            # Default: make visible if launching new
+        elif launched_new and not self._app.Visible:
+            # Only force visibility when we ourselves started PowerPoint.
+            # Don't yank a user-hidden running instance to the foreground.
             self._app.Visible = True
 
         return self._app
 
-    def get_app(self) -> Any:
-        """Get the Application object, reconnecting if needed."""
-        return self.execute(self._get_app_impl)
+    def get_app(self, allow_launch: bool = False) -> Any:
+        """Get the Application object, reconnecting if needed.
 
-    def _get_app_impl(self) -> Any:
-        """Internal: get app on COM thread."""
+        Defaults to attach-only; pass allow_launch=True only from tools that
+        legitimately need to start PowerPoint (e.g. create/open presentation).
+        """
+        return self.execute(self._get_app_impl, allow_launch)
+
+    def _get_app_impl(self, allow_launch: bool = False) -> Any:
+        """Internal: get app on COM thread.
+
+        By default refuses to launch PowerPoint — the vast majority of tools
+        operate on an already-open presentation and should fail fast if
+        PowerPoint is not running, instead of silently spawning it.
+        """
         if self._app is None:
-            return self._connect_impl()
+            return self._connect_impl(allow_launch=allow_launch)
         try:
             _ = self._app.Name
             return self._app
@@ -234,11 +261,11 @@ class PowerPointCOMWrapper:
                 raise  # PowerPoint busy — let _com_worker retry loop handle it
             logger.warning("COM connection lost, reconnecting...")
             self._app = None
-            return self._connect_impl()
+            return self._connect_impl(allow_launch=allow_launch)
         except AttributeError:
             logger.warning("COM connection lost, reconnecting...")
             self._app = None
-            return self._connect_impl()
+            return self._connect_impl(allow_launch=allow_launch)
 
     def _get_pres_impl(self) -> Any:
         """Internal: get target presentation on COM thread.

@@ -51,7 +51,9 @@ class SetWindowStateInput(BaseModel):
 # Implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
 def _connect_impl(visible: Optional[bool]) -> dict:
-    app = ppt._connect_impl(visible)
+    # ppt_connect is the user's explicit request to start/attach PowerPoint,
+    # so launching a new instance is allowed here.
+    app = ppt._connect_impl(visible, allow_launch=True)
     return {
         "success": True,
         "name": app.Name,
