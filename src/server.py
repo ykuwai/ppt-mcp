@@ -40,10 +40,11 @@ async def app_lifespan(server: FastMCP):
     logger.info("AUTO_DISMISS_DIALOG=%s (set PPT_AUTO_DISMISS_DIALOG=true to enable)", AUTO_DISMISS_DIALOG)
     logger.info("Starting PowerPoint COM worker thread...")
     ppt.start()
+    # Do NOT connect to PowerPoint here. Connecting at startup would launch
+    # PowerPoint.exe the moment the MCP client boots, even when the user never
+    # invokes a ppt_* tool. The COM connection is established lazily on the
+    # first tool call instead (see PowerPointCOMWrapper._get_app_impl).
     try:
-        # Connect to PowerPoint at startup
-        ppt.connect()
-        logger.info("PowerPoint COM connection established")
         yield {}
     finally:
         logger.info("Shutting down PowerPoint COM worker thread...")
