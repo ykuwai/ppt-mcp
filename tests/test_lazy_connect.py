@@ -135,6 +135,35 @@ def test_open_presentation_forces_visible_when_powerpoint_running_hidden():
     )
 
 
+def test_open_presentation_preserves_hidden_when_with_window_false():
+    """ppt_open_presentation with with_window=False is the headless workflow.
+    The caller explicitly asked not to surface a window, so don't override
+    Visible. (PR #149 review nit.)
+    """
+    import os
+    from ppt_com import presentation
+
+    fake_app = MagicMock()
+    fake_app.Visible = False
+    fake_pres = MagicMock()
+    fake_pres.Name = "X.pptx"
+    fake_pres.FullName = "C:\\X.pptx"
+    fake_pres.Slides.Count = 1
+    fake_pres.ReadOnly = 0
+    fake_app.Presentations.Open.return_value = fake_pres
+    fake_app.Presentations.Count = 1
+    fake_app.Presentations.return_value = fake_pres
+
+    with patch("ppt_com.presentation.ppt._get_app_impl", return_value=fake_app), \
+         patch.object(os.path, "exists", return_value=True):
+        presentation._open_presentation_impl(
+            file_path="C:\\X.pptx", read_only=False, with_window=False
+        )
+    assert fake_app.Visible is False, (
+        "with_window=False is the headless workflow — Visible must not be forced."
+    )
+
+
 def test_create_presentation_forces_visible_when_powerpoint_running_hidden():
     """Same as above for ppt_create_presentation."""
     from ppt_com import presentation
