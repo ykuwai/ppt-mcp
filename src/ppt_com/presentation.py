@@ -320,6 +320,10 @@ def _create_presentation_impl(
     # Creating a new presentation legitimately needs PowerPoint, so launch it
     # if it isn't already running.
     app = ppt._get_app_impl(allow_launch=True)
+    # The user just asked to create a deck — make sure it's actually visible
+    # to them, even if PowerPoint was running hidden.
+    if not app.Visible:
+        app.Visible = True
 
     if template_path:
         # Create from template using Open + Untitled=msoTrue
@@ -381,6 +385,10 @@ def _open_presentation_impl(
 
     # Opening a file legitimately needs PowerPoint, so launch it if not running.
     app = ppt._get_app_impl(allow_launch=True)
+    # The user just asked to open a deck — make sure it's actually visible
+    # to them, even if PowerPoint was running hidden.
+    if not app.Visible:
+        app.Visible = True
     pres = app.Presentations.Open(
         FileName=file_path,
         ReadOnly=msoTrue if read_only else msoFalse,
