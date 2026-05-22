@@ -285,11 +285,47 @@ class FindReplaceTextInput(BaseModel):
     """Input for find and replace text."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    find_text: str = Field(..., description="Text to find")
-    replace_text: str = Field(..., description="Replacement text")
-    slide_index: Optional[int] = Field(
-        default=None, description="1-based slide index. Omit to search all slides."
+    find_text: str = Field(..., min_length=1, description="Text to find")
+    replace_text: Optional[str] = Field(
+        default=None,
+        description="Replacement text. Omit (or use dry_run) to run in find-only mode.",
     )
+    dry_run: bool = Field(
+        default=False,
+        description="If true, find matches without writing — even when replace_text is provided.",
+    )
+    match_case: bool = Field(
+        default=False, description="If true, match is case-sensitive (COM MatchCase)."
+    )
+    whole_words: bool = Field(
+        default=False, description="If true, match whole words only (COM WholeWords)."
+    )
+    slide_indices: Optional[List[int]] = Field(
+        default=None,
+        description="1-based slide indices to search. Omit to search all slides.",
+    )
+    shape_name: Optional[str] = Field(
+        default=None,
+        description="Limit search to a shape with this Name. Applied within each targeted slide.",
+    )
+    context_chars: int = Field(
+        default=0,
+        ge=0,
+        le=500,
+        description="Include N characters of context before/after each hit in the result.",
+    )
+
+    @field_validator("slide_indices")
+    @classmethod
+    def _validate_slide_indices(cls, v):
+        if v is None:
+            return v
+        if len(v) == 0:
+            raise ValueError("slide_indices must not be empty if provided")
+        for i in v:
+            if i < 1:
+                raise ValueError(f"slide_indices entries must be >= 1 (got {i})")
+        return v
 
 
 class SetTextframeInput(BaseModel):
@@ -1321,47 +1357,100 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
     }
 
 
-def _find_replace_text_impl(find_text, replace_text, slide_index) -> dict:
-    app = ppt._get_app_impl()
+def _find_replace_text_impl(
+    find_text,
+    replace_text,
+    dry_run,
+    match_case,
+    whole_words,
+    slide_indices,
+    shape_name,
+    context_chars,
+) -> dict:
     pres = ppt._get_pres_impl()
+    find_only = replace_text is None or dry_run
 
-    replacements = []
+    match_case_flag = msoTrue if match_case else msoFalse
+    whole_words_flag = msoTrue if whole_words else msoFalse
 
-    if slide_index is not None:
-        slides_to_search = [pres.Slides(slide_index)]
+    if slide_indices is not None:
+        max_index = pres.Slides.Count
+        for i in slide_indices:
+            if i > max_index:
+                raise ValueError(
+                    f"slide_indices entry {i} out of range (1-{max_index})"
+                )
+        slides_to_search = [pres.Slides(i) for i in slide_indices]
     else:
         slides_to_search = [pres.Slides(i) for i in range(1, pres.Slides.Count + 1)]
 
+    hits = []
     for slide in slides_to_search:
         for si in range(1, slide.Shapes.Count + 1):
             shape = slide.Shapes(si)
+            if shape_name is not None and shape.Name != shape_name:
+                continue
             if not shape.HasTextFrame:
                 continue
             tr = shape.TextFrame.TextRange
-            while True:
-                result = tr.Replace(
-                    FindWhat=find_text,
-                    ReplaceWhat=replace_text,
-                    After=0,
-                    MatchCase=msoFalse,
-                    WholeWords=msoFalse,
-                )
-                if result is None:
-                    break
-                replacements.append({
-                    "slide_index": slide.SlideIndex,
-                    "shape_name": shape.Name,
-                    "start": result.Start,
-                    "length": result.Length,
-                })
+
+            if find_only:
+                after = 0
+                while True:
+                    match = tr.Find(find_text, after, match_case_flag, whole_words_flag)
+                    if match is None:
+                        break
+                    hit = {
+                        "slide_index": slide.SlideIndex,
+                        "shape_name": shape.Name,
+                        "start": match.Start,
+                        "length": match.Length,
+                    }
+                    if context_chars > 0:
+                        hit["context"] = _build_context(tr.Text, match.Start, match.Length, context_chars)
+                    hits.append(hit)
+                    after = match.Start + match.Length - 1
+            else:
+                while True:
+                    match = tr.Replace(
+                        find_text, replace_text, 0, match_case_flag, whole_words_flag
+                    )
+                    if match is None:
+                        break
+                    hit = {
+                        "slide_index": slide.SlideIndex,
+                        "shape_name": shape.Name,
+                        "start": match.Start,
+                        "length": match.Length,
+                    }
+                    if context_chars > 0:
+                        hit["context"] = _build_context(tr.Text, match.Start, match.Length, context_chars)
+                    hits.append(hit)
 
     return {
         "status": "success",
+        "mode": "find" if find_only else "replace",
         "find_text": find_text,
         "replace_text": replace_text,
-        "replacement_count": len(replacements),
-        "replacements": replacements,
+        "match_count": len(hits),
+        "matches": hits,
     }
+
+
+def _build_context(full_text, start, length, n):
+    """Build a context string around a match.
+
+    PowerPoint TextRange uses 1-based Start; convert to Python 0-based slicing.
+    """
+    s0 = max(0, start - 1 - n)
+    e0 = min(len(full_text), start - 1 + length + n)
+    match_start = start - 1
+    match_end = start - 1 + length
+    return (
+        full_text[s0:match_start]
+        + "[" + full_text[match_start:match_end] + "]"
+        + full_text[match_end:e0]
+    )
 
 
 def _set_textframe_impl(slide_index, shape_name_or_index,
@@ -1522,11 +1611,29 @@ def set_bullet(params: SetBulletInput) -> str:
 
 
 def find_replace_text(params: FindReplaceTextInput) -> str:
-    """Find and replace text across all slides or a specific slide."""
+    """Find (and optionally replace) text across slides.
+
+    Modes:
+    - Omit `replace_text`, or set `dry_run=True`, to run in find-only mode.
+    - Provide `replace_text` to perform replacement.
+
+    Filters:
+    - `slide_indices`: limit to specific slides.
+    - `shape_name`: limit to a single named shape per slide.
+    - `match_case` / `whole_words`: surfaces COM Find/Replace flags.
+    - `context_chars`: include surrounding text in the result for each hit.
+    """
     try:
         result = ppt.execute(
             _find_replace_text_impl,
-            params.find_text, params.replace_text, params.slide_index,
+            params.find_text,
+            params.replace_text,
+            params.dry_run,
+            params.match_case,
+            params.whole_words,
+            params.slide_indices,
+            params.shape_name,
+            params.context_chars,
         )
         return json.dumps(result)
     except Exception as e:
@@ -2103,7 +2210,7 @@ def register_tools(mcp):
     @mcp.tool(
         name="ppt_find_replace_text",
         annotations={
-            "title": "Find and Replace Text",
+            "title": "Find or Replace Text",
             "readOnlyHint": False,
             "destructiveHint": False,
             "idempotentHint": True,
@@ -2111,10 +2218,26 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_find_replace_text(params: FindReplaceTextInput) -> str:
-        """Find and replace text across all slides or a specific slide.
+        """Find (and optionally replace) text in shapes that have a text frame.
 
-        Searches all text-containing shapes. If slide_index is omitted,
-        searches the entire presentation.
+        Modes:
+        - Find-only: omit `replace_text`, or pass `dry_run=True`.
+        - Replace: pass `replace_text` (and leave `dry_run=False`).
+
+        Targeting:
+        - `slide_indices` (list of 1-based indices) — omit to search every slide.
+        - `shape_name` — limit to a shape with this exact Name on each targeted slide.
+
+        Match options surfaced from COM Find/Replace:
+        - `match_case` — case-sensitive match.
+        - `whole_words` — whole-word match.
+
+        Output:
+        - `match_count` and `matches` (each with `slide_index`, `shape_name`,
+          `start`, `length`, and `context` when `context_chars > 0`).
+
+        Targets only shapes where `HasTextFrame` is true. Table cells, grouped
+        shapes, speaker notes, and SmartArt are not searched.
         """
         return find_replace_text(params)
 

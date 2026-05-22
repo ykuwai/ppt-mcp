@@ -38,7 +38,8 @@ from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.slides import SetSlideNotesInput
 from ppt_com.text import (
     GetAllTextInput, SetBulletInput, SetParagraphFormatInput,
-    CheckTypographyInput, _is_latin, _char_type, _find_best_vbreak,
+    CheckTypographyInput, FindReplaceTextInput,
+    _is_latin, _char_type, _find_best_vbreak, _build_context,
 )
 from ppt_com.themes import (
     SetThemeColorsInput, PRESET_PALETTES,
@@ -2968,3 +2969,105 @@ class TestSetSlideNotesInput:
         assert inp.bold is None
         assert inp.italic is None
         assert inp.color is None
+
+
+# ============================================================================
+# FindReplaceTextInput
+# ============================================================================
+
+class TestFindReplaceTextInput:
+    """Tests for the enhanced ppt_find_replace_text input (issue #151)."""
+
+    def test_defaults(self):
+        inp = FindReplaceTextInput(find_text="hello")
+        assert inp.find_text == "hello"
+        assert inp.replace_text is None
+        assert inp.dry_run is False
+        assert inp.match_case is False
+        assert inp.whole_words is False
+        assert inp.slide_indices is None
+        assert inp.shape_name is None
+        assert inp.context_chars == 0
+
+    def test_find_text_required_and_nonempty(self):
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput()
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="")
+
+    def test_replace_text_optional(self):
+        inp = FindReplaceTextInput(find_text="x", replace_text="y")
+        assert inp.replace_text == "y"
+        inp = FindReplaceTextInput(find_text="x", replace_text="")
+        assert inp.replace_text == ""
+
+    def test_dry_run_with_replace_text(self):
+        """dry_run can coexist with replace_text; impl treats it as find-only."""
+        inp = FindReplaceTextInput(find_text="x", replace_text="y", dry_run=True)
+        assert inp.dry_run is True
+        assert inp.replace_text == "y"
+
+    def test_match_flags(self):
+        inp = FindReplaceTextInput(find_text="x", match_case=True, whole_words=True)
+        assert inp.match_case is True
+        assert inp.whole_words is True
+
+    def test_slide_indices_valid(self):
+        inp = FindReplaceTextInput(find_text="x", slide_indices=[1, 3, 5])
+        assert inp.slide_indices == [1, 3, 5]
+
+    def test_slide_indices_empty_rejected(self):
+        with pytest.raises(ValidationError, match="empty"):
+            FindReplaceTextInput(find_text="x", slide_indices=[])
+
+    def test_slide_indices_zero_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            FindReplaceTextInput(find_text="x", slide_indices=[1, 0, 2])
+
+    def test_slide_indices_negative_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            FindReplaceTextInput(find_text="x", slide_indices=[-1])
+
+    def test_shape_name(self):
+        inp = FindReplaceTextInput(find_text="x", shape_name="Title 1")
+        assert inp.shape_name == "Title 1"
+
+    def test_context_chars_range(self):
+        inp = FindReplaceTextInput(find_text="x", context_chars=20)
+        assert inp.context_chars == 20
+        inp = FindReplaceTextInput(find_text="x", context_chars=500)
+        assert inp.context_chars == 500
+
+    def test_context_chars_out_of_range(self):
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="x", context_chars=-1)
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="x", context_chars=501)
+
+    def test_slide_index_old_field_removed(self):
+        """slide_index (singular) is no longer accepted — must use slide_indices."""
+        # pydantic ignores unknown fields by default unless model_config extra='forbid',
+        # so this asserts that passing the old field has no effect (slide_indices stays None).
+        inp = FindReplaceTextInput(find_text="x", slide_index=5)
+        assert inp.slide_indices is None
+
+
+class TestBuildContext:
+    """Tests for the _build_context helper used in match results."""
+
+    def test_basic_context(self):
+        # full_text = "abcdEFGhij", match "EFG" at 1-based start=5, length=3
+        ctx = _build_context("abcdEFGhij", start=5, length=3, n=2)
+        assert ctx == "cd[EFG]hi"
+
+    def test_clamps_to_start(self):
+        ctx = _build_context("hello world", start=1, length=5, n=10)
+        assert ctx == "[hello] world"
+
+    def test_clamps_to_end(self):
+        ctx = _build_context("hello world", start=7, length=5, n=10)
+        assert ctx == "hello [world]"
+
+    def test_zero_context_just_brackets(self):
+        ctx = _build_context("hello world", start=7, length=5, n=0)
+        assert ctx == "[world]"
