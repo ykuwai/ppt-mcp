@@ -187,6 +187,93 @@ def test_create_presentation_forces_visible_when_powerpoint_running_hidden():
     assert fake_app.Visible is True
 
 
+def test_create_presentation_activate_false_does_not_set_target():
+    """activate=False must not overwrite an existing session target.
+
+    Issue #155 review: the Pydantic tests cover the schema, but the
+    behavioral guarantee that opt-out preserves the target needs its own test.
+    """
+    from ppt_com import presentation
+
+    fake_app = MagicMock()
+    fake_app.Visible = True
+    fake_pres = MagicMock()
+    fake_pres.Name = "New.pptx"
+    fake_pres.FullName = "C:\\New.pptx"
+    fake_pres.Slides.Count = 0
+    fake_pres.PageSetup.SlideWidth = 960
+    fake_pres.PageSetup.SlideHeight = 540
+    fake_pres.TemplateName = ""
+    fake_app.Presentations.Add.return_value = fake_pres
+    fake_app.Presentations.Count = 1
+    fake_app.Presentations.return_value = fake_pres
+
+    sentinel = "C:\\Existing.pptx"
+    with patch("ppt_com.presentation.ppt._get_app_impl", return_value=fake_app), \
+         patch.object(presentation.ppt, "_target_pres_full_name", sentinel):
+        presentation._create_presentation_impl(
+            template_path=None, slide_width=None, slide_height=None,
+            preset=None, activate=False,
+        )
+        assert presentation.ppt._target_pres_full_name == sentinel, (
+            "activate=False must leave the existing session target untouched"
+        )
+
+
+def test_open_presentation_activate_false_does_not_set_target():
+    """Parallel test for ppt_open_presentation."""
+    import os
+    from ppt_com import presentation
+
+    fake_app = MagicMock()
+    fake_app.Visible = True
+    fake_pres = MagicMock()
+    fake_pres.Name = "X.pptx"
+    fake_pres.FullName = "C:\\X.pptx"
+    fake_pres.Slides.Count = 1
+    fake_pres.ReadOnly = 0
+    fake_app.Presentations.Open.return_value = fake_pres
+    fake_app.Presentations.Count = 1
+    fake_app.Presentations.return_value = fake_pres
+
+    sentinel = "C:\\Existing.pptx"
+    with patch("ppt_com.presentation.ppt._get_app_impl", return_value=fake_app), \
+         patch.object(os.path, "exists", return_value=True), \
+         patch.object(presentation.ppt, "_target_pres_full_name", sentinel):
+        presentation._open_presentation_impl(
+            file_path="C:\\X.pptx", read_only=False, with_window=True, activate=False
+        )
+        assert presentation.ppt._target_pres_full_name == sentinel, (
+            "activate=False must leave the existing session target untouched"
+        )
+
+
+def test_create_presentation_activate_true_sets_target():
+    """Confirms activate=True sets _target_pres_full_name to the new deck's FullName."""
+    from ppt_com import presentation
+
+    fake_app = MagicMock()
+    fake_app.Visible = True
+    fake_pres = MagicMock()
+    fake_pres.Name = "New.pptx"
+    fake_pres.FullName = "C:\\New.pptx"
+    fake_pres.Slides.Count = 0
+    fake_pres.PageSetup.SlideWidth = 960
+    fake_pres.PageSetup.SlideHeight = 540
+    fake_pres.TemplateName = ""
+    fake_app.Presentations.Add.return_value = fake_pres
+    fake_app.Presentations.Count = 1
+    fake_app.Presentations.return_value = fake_pres
+
+    with patch("ppt_com.presentation.ppt._get_app_impl", return_value=fake_app), \
+         patch.object(presentation.ppt, "_target_pres_full_name", None):
+        presentation._create_presentation_impl(
+            template_path=None, slide_width=None, slide_height=None,
+            preset=None, activate=True,
+        )
+        assert presentation.ppt._target_pres_full_name == "C:\\New.pptx"
+
+
 def test_server_lifespan_does_not_eager_connect():
     """Sanity check: server.app_lifespan must not call ppt.connect/_connect_impl."""
     from pathlib import Path
