@@ -38,7 +38,8 @@ from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.slides import SetSlideNotesInput
 from ppt_com.text import (
     GetAllTextInput, SetBulletInput, SetParagraphFormatInput,
-    CheckTypographyInput, _is_latin, _char_type, _find_best_vbreak,
+    CheckTypographyInput, FindReplaceTextInput,
+    _is_latin, _char_type, _find_best_vbreak, _build_context,
 )
 from ppt_com.themes import (
     SetThemeColorsInput, PRESET_PALETTES,
@@ -2968,3 +2969,209 @@ class TestSetSlideNotesInput:
         assert inp.bold is None
         assert inp.italic is None
         assert inp.color is None
+
+
+# ============================================================================
+# FindReplaceTextInput
+# ============================================================================
+
+class TestFindReplaceTextInput:
+    """Tests for the enhanced ppt_find_replace_text input (issue #151)."""
+
+    def test_defaults(self):
+        inp = FindReplaceTextInput(find_text="hello")
+        assert inp.find_text == "hello"
+        assert inp.replace_text is None
+        assert inp.dry_run is False
+        assert inp.match_case is False
+        assert inp.whole_words is False
+        assert inp.slide_indices is None
+        assert inp.shape_name is None
+        assert inp.context_chars == 0
+
+    def test_find_text_required_and_nonempty(self):
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput()
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="")
+
+    def test_replace_text_optional(self):
+        inp = FindReplaceTextInput(find_text="x", replace_text="y")
+        assert inp.replace_text == "y"
+        inp = FindReplaceTextInput(find_text="x", replace_text="")
+        assert inp.replace_text == ""
+
+    def test_dry_run_with_replace_text(self):
+        """dry_run can coexist with replace_text; impl treats it as find-only."""
+        inp = FindReplaceTextInput(find_text="x", replace_text="y", dry_run=True)
+        assert inp.dry_run is True
+        assert inp.replace_text == "y"
+
+    def test_match_flags(self):
+        inp = FindReplaceTextInput(find_text="x", match_case=True, whole_words=True)
+        assert inp.match_case is True
+        assert inp.whole_words is True
+
+    def test_slide_indices_valid(self):
+        inp = FindReplaceTextInput(find_text="x", slide_indices=[1, 3, 5])
+        assert inp.slide_indices == [1, 3, 5]
+
+    def test_slide_indices_empty_rejected(self):
+        with pytest.raises(ValidationError, match="empty"):
+            FindReplaceTextInput(find_text="x", slide_indices=[])
+
+    def test_slide_indices_zero_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            FindReplaceTextInput(find_text="x", slide_indices=[1, 0, 2])
+
+    def test_slide_indices_negative_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            FindReplaceTextInput(find_text="x", slide_indices=[-1])
+
+    def test_shape_name(self):
+        inp = FindReplaceTextInput(find_text="x", shape_name="Title 1")
+        assert inp.shape_name == "Title 1"
+
+    def test_context_chars_range(self):
+        inp = FindReplaceTextInput(find_text="x", context_chars=20)
+        assert inp.context_chars == 20
+        inp = FindReplaceTextInput(find_text="x", context_chars=500)
+        assert inp.context_chars == 500
+
+    def test_context_chars_out_of_range(self):
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="x", context_chars=-1)
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="x", context_chars=501)
+
+    def test_slide_index_old_field_rejected(self):
+        """The legacy singular `slide_index` must be rejected loudly.
+
+        Silently ignoring it would let a caller intend to limit the search
+        to one slide and instead get a presentation-wide replace.
+        """
+        with pytest.raises(ValidationError, match="slide_index"):
+            FindReplaceTextInput(find_text="x", slide_index=5)
+
+    def test_unknown_field_rejected(self):
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="x", foobar=True)
+
+
+class TestBuildContext:
+    """Tests for the _build_context helper used in match results."""
+
+    def test_basic_context(self):
+        # full_text = "abcdEFGhij", match "EFG" at 1-based start=5, length=3
+        ctx = _build_context("abcdEFGhij", start=5, length=3, n=2)
+        assert ctx == "cd[EFG]hi"
+
+    def test_clamps_to_start(self):
+        ctx = _build_context("hello world", start=1, length=5, n=10)
+        assert ctx == "[hello] world"
+
+    def test_clamps_to_end(self):
+        ctx = _build_context("hello world", start=7, length=5, n=10)
+        assert ctx == "hello [world]"
+
+    def test_zero_context_just_brackets(self):
+        ctx = _build_context("hello world", start=7, length=5, n=0)
+        assert ctx == "[world]"
+
+
+class TestFindReplaceTextShapeNameEmpty:
+    def test_shape_name_empty_rejected(self):
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="x", shape_name="")
+
+
+class TestFindReplaceReplaceLoopCursor:
+    """Regression: Replace loop must advance the After cursor (issue #151 review).
+
+    With the previous code that always passed After=0, a call such as
+    find_text='foo' + replace_text='foobar' would re-find 'foo' inside the
+    newly inserted 'foobar' on every iteration and loop forever.
+    """
+
+    def _build_mock_pres(self, replace_returns, text="foobar"):
+        """Build a mock pres.Slides(i).Shapes(j) chain with a single shape."""
+        replace_calls = []
+
+        def fake_replace(find_what, replace_what, after, match_case, whole_words):
+            idx = len(replace_calls)
+            replace_calls.append(after)
+            if idx < len(replace_returns):
+                spec = replace_returns[idx]
+                if spec is None:
+                    return None
+                m = MagicMock()
+                m.Start = spec["Start"]
+                m.Length = spec["Length"]
+                return m
+            return None
+
+        tr = MagicMock()
+        tr.Replace = fake_replace
+        tr.Text = text
+
+        shape = MagicMock()
+        shape.HasTextFrame = True
+        shape.Name = "TB"
+        shape.TextFrame.TextRange = tr
+
+        slide = MagicMock()
+        slide.SlideIndex = 1
+        slide.Shapes.Count = 1
+        slide.Shapes.return_value = shape
+
+        pres = MagicMock()
+        pres.Slides.Count = 1
+        pres.Slides.return_value = slide
+        return pres, replace_calls
+
+    def test_after_cursor_advances_between_iterations(self):
+        from ppt_com import text as text_mod
+
+        pres, replace_calls = self._build_mock_pres(
+            replace_returns=[
+                {"Start": 1, "Length": 6},   # first hit replaced
+                {"Start": 10, "Length": 6},  # second hit replaced
+                None,                         # no more matches
+            ]
+        )
+
+        with patch.object(text_mod.ppt, "_get_pres_impl", return_value=pres):
+            result = text_mod._find_replace_text_impl(
+                find_text="foo", replace_text="foobar",
+                dry_run=False, match_case=False, whole_words=False,
+                slide_indices=None, shape_name=None, context_chars=0,
+            )
+
+        assert result["match_count"] == 2
+        assert len(replace_calls) == 3
+        assert replace_calls[0] == 0, "First call must start from After=0"
+        assert replace_calls[1] == 6, "Second call must advance to past first match"
+        assert replace_calls[2] == 15, "Third call must advance to past second match"
+
+    def test_deletion_makes_forward_progress(self):
+        """When replace_text is empty, match.Length=0 — the cursor must still advance."""
+        from ppt_com import text as text_mod
+
+        pres, replace_calls = self._build_mock_pres(
+            replace_returns=[
+                {"Start": 1, "Length": 0},  # deletion at start
+                None,
+            ]
+        )
+        with patch.object(text_mod.ppt, "_get_pres_impl", return_value=pres):
+            result = text_mod._find_replace_text_impl(
+                find_text="foo", replace_text="",
+                dry_run=False, match_case=False, whole_words=False,
+                slide_indices=None, shape_name=None, context_chars=0,
+            )
+
+        assert result["match_count"] == 1
+        assert replace_calls[0] == 0
+        assert replace_calls[1] >= 1, (
+            "After deletion (Length=0), cursor must still advance past Start"
+        )
