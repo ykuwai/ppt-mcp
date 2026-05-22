@@ -292,6 +292,10 @@ class SetParagraphFormatInput(BaseModel):
 
 class SetBulletInput(BaseModel):
     """Input for setting bullet/numbering on paragraphs."""
+    # extra='forbid' so typos like `font_nme` fail loudly at the MCP
+    # boundary instead of being silently dropped. Silent drops would mask
+    # the appearance change the caller intended and ship a bullet that
+    # doesn't match expectations.
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
@@ -318,7 +322,11 @@ class SetBulletInput(BaseModel):
     )
     color: Optional[str] = Field(
         default=None,
-        description="Bullet color as hex (e.g. '#FF0000'). Setting this implicitly disables UseTextColor.",
+        description=(
+            "Bullet color as hex, with or without leading '#' "
+            "(e.g. '#FF0000' or 'FF0000'). Setting this implicitly disables "
+            "UseTextColor."
+        ),
     )
     size: Optional[float] = Field(
         default=None, ge=0.25, le=4.0,
@@ -378,6 +386,16 @@ class SetBulletInput(BaseModel):
                 f"Invalid numbered_style {v!r}. Allowed: {sorted(NUMBERED_STYLE_MAP)}"
             )
         return v
+
+    @model_validator(mode="after")
+    def _coerce_bullet_type_when_numbered_style_set(self):
+        """numbered_style implies a numbered list — coerce here so the
+        returned schema reflects the actual effect instead of having
+        _set_bullet_impl silently override the caller's bullet_type.
+        """
+        if self.numbered_style is not None and self.bullet_type != "numbered":
+            self.bullet_type = "numbered"
+        return self
 
 
 class FindReplaceTextInput(BaseModel):
@@ -1429,9 +1447,9 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
     else:
         target = tr
 
-    # numbered_style implies numbered type.
-    effective_type = "numbered" if numbered_style is not None else bullet_type
-    bullet_type_val = BULLET_TYPE_MAP[effective_type]
+    # bullet_type has already been coerced to "numbered" at the Pydantic
+    # layer when numbered_style is set, so we can trust it here.
+    bullet_type_val = BULLET_TYPE_MAP[bullet_type]
 
     pf = target.ParagraphFormat
     bullet = pf.Bullet
@@ -1471,18 +1489,25 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
     if font_name is not None:
         bullet.Font.Name = font_name
 
+    # When an explicit color or font_name is provided, COM flips the
+    # corresponding UseText* flag back to False. Reflect that effective state
+    # in the response so callers see what COM actually applied, not what
+    # they asked for.
+    effective_use_text_color = False if color is not None else use_text_color
+    effective_use_text_font = False if font_name is not None else use_text_font
+
     return {
         "status": "success",
         "shape_name": shape.Name,
         "paragraph_index": paragraph_index or "all",
-        "bullet_type": effective_type,
+        "bullet_type": bullet_type,
         "numbered_style": numbered_style,
         "indent_level": indent_level,
         "color": color,
         "size": size,
         "font_name": font_name,
-        "use_text_color": use_text_color,
-        "use_text_font": use_text_font,
+        "use_text_color": effective_use_text_color,
+        "use_text_font": effective_use_text_font,
     }
 
 

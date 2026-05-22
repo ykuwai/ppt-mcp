@@ -2669,6 +2669,23 @@ class TestSetBulletAppearance:
         with pytest.raises(ValidationError):
             self._ok(definitely_not_a_field=True)
 
+    def test_bullet_char_empty_rejected(self):
+        """bullet_char has min_length=1 — empty string must be rejected."""
+        with pytest.raises(ValidationError):
+            self._ok(bullet_char="")
+
+    def test_numbered_style_coerces_bullet_type_to_numbered(self):
+        """numbered_style is meaningless without numbered type — coerce at
+        the Pydantic layer so the response reflects the actual effect."""
+        inp = self._ok(bullet_type="none", numbered_style="arabic_period")
+        assert inp.bullet_type == "numbered"
+        assert inp.numbered_style == "arabic_period"
+
+    def test_numbered_style_leaves_explicit_numbered_alone(self):
+        inp = self._ok(bullet_type="numbered", numbered_style="roman_lc_period")
+        assert inp.bullet_type == "numbered"
+        assert inp.numbered_style == "roman_lc_period"
+
 
 # ============================================================================
 # text.py — SetParagraphFormatInput
