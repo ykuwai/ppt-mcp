@@ -274,6 +274,31 @@ def test_create_presentation_activate_true_sets_target():
         assert presentation.ppt._target_pres_full_name == "C:\\New.pptx"
 
 
+def test_open_presentation_activate_true_sets_target():
+    """Parallel positive-path test for ppt_open_presentation."""
+    import os
+    from ppt_com import presentation
+
+    fake_app = MagicMock()
+    fake_app.Visible = True
+    fake_pres = MagicMock()
+    fake_pres.Name = "Opened.pptx"
+    fake_pres.FullName = "C:\\Opened.pptx"
+    fake_pres.Slides.Count = 1
+    fake_pres.ReadOnly = 0
+    fake_app.Presentations.Open.return_value = fake_pres
+    fake_app.Presentations.Count = 1
+    fake_app.Presentations.return_value = fake_pres
+
+    with patch("ppt_com.presentation.ppt._get_app_impl", return_value=fake_app), \
+         patch.object(os.path, "exists", return_value=True), \
+         patch.object(presentation.ppt, "_target_pres_full_name", None):
+        presentation._open_presentation_impl(
+            file_path="C:\\Opened.pptx", read_only=False, with_window=True, activate=True
+        )
+        assert presentation.ppt._target_pres_full_name == "C:\\Opened.pptx"
+
+
 def test_server_lifespan_does_not_eager_connect():
     """Sanity check: server.app_lifespan must not call ppt.connect/_connect_impl."""
     from pathlib import Path
