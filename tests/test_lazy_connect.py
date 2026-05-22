@@ -127,7 +127,7 @@ def test_open_presentation_forces_visible_when_powerpoint_running_hidden():
     with patch("ppt_com.presentation.ppt._get_app_impl", return_value=fake_app), \
          patch.object(os.path, "exists", return_value=True):
         presentation._open_presentation_impl(
-            file_path="C:\\X.pptx", read_only=False, with_window=True
+            file_path="C:\\X.pptx", read_only=False, with_window=True, activate=True
         )
     assert fake_app.Visible is True, (
         "ppt_open_presentation must make PowerPoint visible — "
@@ -157,7 +157,7 @@ def test_open_presentation_preserves_hidden_when_with_window_false():
     with patch("ppt_com.presentation.ppt._get_app_impl", return_value=fake_app), \
          patch.object(os.path, "exists", return_value=True):
         presentation._open_presentation_impl(
-            file_path="C:\\X.pptx", read_only=False, with_window=False
+            file_path="C:\\X.pptx", read_only=False, with_window=False, activate=True
         )
     assert fake_app.Visible is False, (
         "with_window=False is the headless workflow — Visible must not be forced."
@@ -182,7 +182,7 @@ def test_create_presentation_forces_visible_when_powerpoint_running_hidden():
 
     with patch("ppt_com.presentation.ppt._get_app_impl", return_value=fake_app):
         presentation._create_presentation_impl(
-            template_path=None, slide_width=None, slide_height=None, preset=None
+            template_path=None, slide_width=None, slide_height=None, preset=None, activate=True
         )
     assert fake_app.Visible is True
 
