@@ -283,7 +283,12 @@ class SetBulletInput(BaseModel):
 
 class FindReplaceTextInput(BaseModel):
     """Input for find and replace text."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    # extra='forbid' rejects unknown fields. This matters for the breaking
+    # rename `slide_index` → `slide_indices`: without it, a caller still
+    # passing the old `slide_index=5` would have the field silently dropped
+    # and the search would fall back to ALL slides — disastrous in replace
+    # mode. With forbid, the legacy field raises a clear ValidationError.
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     find_text: str = Field(..., min_length=1, description="Text to find")
     replace_text: Optional[str] = Field(

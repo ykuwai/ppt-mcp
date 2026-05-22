@@ -3044,12 +3044,18 @@ class TestFindReplaceTextInput:
         with pytest.raises(ValidationError):
             FindReplaceTextInput(find_text="x", context_chars=501)
 
-    def test_slide_index_old_field_removed(self):
-        """slide_index (singular) is no longer accepted — must use slide_indices."""
-        # pydantic ignores unknown fields by default unless model_config extra='forbid',
-        # so this asserts that passing the old field has no effect (slide_indices stays None).
-        inp = FindReplaceTextInput(find_text="x", slide_index=5)
-        assert inp.slide_indices is None
+    def test_slide_index_old_field_rejected(self):
+        """The legacy singular `slide_index` must be rejected loudly.
+
+        Silently ignoring it would let a caller intend to limit the search
+        to one slide and instead get a presentation-wide replace.
+        """
+        with pytest.raises(ValidationError, match="slide_index"):
+            FindReplaceTextInput(find_text="x", slide_index=5)
+
+    def test_unknown_field_rejected(self):
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="x", foobar=True)
 
 
 class TestBuildContext:
