@@ -35,6 +35,7 @@ from ppt_com.shapes import AddShapeInput, UpdateShapeInput
 from ppt_com.animation import AddAnimationInput, RemoveAnimationInput, UpdateAnimationInput
 from ppt_com.connectors import AddConnectorInput, FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
+from ppt_com.presentation import CreatePresentationInput, OpenPresentationInput
 from ppt_com.slides import SetSlideNotesInput
 from ppt_com.text import (
     GetAllTextInput, SetBulletInput, SetParagraphFormatInput,
@@ -3253,3 +3254,35 @@ class TestFindReplaceReplaceLoopCursor:
         assert replace_calls[1] >= 1, (
             "After deletion (Length=0), cursor must still advance past Start"
         )
+
+
+# ============================================================================
+# presentation.py — CreatePresentationInput / OpenPresentationInput (issue #155)
+# ============================================================================
+
+class TestCreatePresentationInputActivate:
+    def test_activate_default_true(self):
+        inp = CreatePresentationInput()
+        assert inp.activate is True
+
+    def test_activate_explicit_false(self):
+        inp = CreatePresentationInput(activate=False)
+        assert inp.activate is False
+
+    def test_unknown_field_rejected(self):
+        with pytest.raises(ValidationError):
+            CreatePresentationInput(activte=True)  # typo
+
+
+class TestOpenPresentationInputActivate:
+    def test_activate_default_true(self):
+        inp = OpenPresentationInput(file_path="C:/x.pptx")
+        assert inp.activate is True
+
+    def test_activate_explicit_false(self):
+        inp = OpenPresentationInput(file_path="C:/x.pptx", activate=False)
+        assert inp.activate is False
+
+    def test_unknown_field_rejected(self):
+        with pytest.raises(ValidationError):
+            OpenPresentationInput(file_path="C:/x.pptx", activte=True)  # typo

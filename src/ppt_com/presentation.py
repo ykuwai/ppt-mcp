@@ -54,7 +54,7 @@ SLIDE_SIZE_PRESETS = {
 # ---------------------------------------------------------------------------
 class CreatePresentationInput(BaseModel):
     """Input for creating a new presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     template_path: Optional[str] = Field(
         default=None,
@@ -88,11 +88,20 @@ class CreatePresentationInput(BaseModel):
             "Ignored if template_path is provided."
         ),
     )
+    activate: bool = Field(
+        default=True,
+        description=(
+            "If true (default), the newly created presentation becomes the "
+            "session target — subsequent tool calls operate on it regardless "
+            "of which window the user clicks into. Set false to keep an "
+            "existing session target."
+        ),
+    )
 
 
 class OpenPresentationInput(BaseModel):
     """Input for opening an existing presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     file_path: str = Field(
         ...,
@@ -105,6 +114,15 @@ class OpenPresentationInput(BaseModel):
     with_window: bool = Field(
         default=True,
         description="If true, open with a visible window. Set false for background processing.",
+    )
+    activate: bool = Field(
+        default=True,
+        description=(
+            "If true (default), the opened presentation becomes the session "
+            "target — subsequent tool calls operate on it regardless of which "
+            "window the user clicks into. Set false to keep an existing "
+            "session target."
+        ),
     )
 
 
@@ -316,6 +334,7 @@ def _create_presentation_impl(
     slide_width: Optional[float],
     slide_height: Optional[float],
     preset: Optional[str],
+    activate: bool,
 ) -> dict:
     # Creating a new presentation legitimately needs PowerPoint, so launch it
     # if it isn't already running.
@@ -364,6 +383,13 @@ def _create_presentation_impl(
             pres_index = i
             break
 
+    if activate:
+        try:
+            pres.Windows(1).Activate()
+        except Exception as e:
+            logger.warning("Could not activate new presentation window: %s", e)
+        ppt._target_pres_full_name = pres.FullName
+
     return {
         "success": True,
         "presentation_index": pres_index,
@@ -372,6 +398,7 @@ def _create_presentation_impl(
         "slide_width": pres.PageSetup.SlideWidth,
         "slide_height": pres.PageSetup.SlideHeight,
         "template_name": template_name,
+        "activated": activate,
     }
 
 
@@ -379,6 +406,7 @@ def _open_presentation_impl(
     file_path: str,
     read_only: bool,
     with_window: bool,
+    activate: bool,
 ) -> dict:
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
@@ -404,6 +432,17 @@ def _open_presentation_impl(
             pres_index = i
             break
 
+    if activate and with_window:
+        try:
+            pres.Windows(1).Activate()
+        except Exception as e:
+            logger.warning("Could not activate opened presentation window: %s", e)
+        ppt._target_pres_full_name = pres.FullName
+    elif activate and not with_window:
+        # Headless open — no window to activate but still set the session
+        # target so subsequent tool calls land on this deck.
+        ppt._target_pres_full_name = pres.FullName
+
     return {
         "success": True,
         "presentation_index": pres_index,
@@ -411,6 +450,7 @@ def _open_presentation_impl(
         "full_name": pres.FullName,
         "slides_count": pres.Slides.Count,
         "read_only": int(pres.ReadOnly) == -1,  # msoTrue=-1; bool() misidentifies msoCTrue(1)
+        "activated": activate,
     }
 
 
@@ -671,6 +711,7 @@ def create_presentation(params: CreatePresentationInput) -> str:
             params.slide_width,
             params.slide_height,
             params.preset,
+            params.activate,
         )
         return json.dumps(result)
     except Exception as e:
@@ -685,6 +726,7 @@ def open_presentation(params: OpenPresentationInput) -> str:
             params.file_path,
             params.read_only,
             params.with_window,
+            params.activate,
         )
         return json.dumps(result)
     except Exception as e:
@@ -794,6 +836,11 @@ def register_tools(mcp):
         For blank presentations, set slide dimensions via a preset ('16:9'
         or '4:3') or explicit width/height in points (72 pt = 1 inch).
         Size parameters are ignored when a template is used.
+
+        By default the newly created presentation becomes the MCP session
+        target, so subsequent tool calls operate on it even if the user
+        clicks into another window. Pass `activate=false` to keep the
+        existing target.
         """
         return create_presentation(params)
 
@@ -813,6 +860,10 @@ def register_tools(mcp):
         Supports .pptx, .pptm, .ppt, .potx, .ppsx and other PowerPoint formats.
         Set read_only=true to prevent accidental edits.
         Set with_window=false for background processing.
+
+        By default the opened presentation becomes the MCP session target,
+        so subsequent tool calls operate on it even if the user clicks into
+        another window. Pass `activate=false` to keep the existing target.
         """
         return open_presentation(params)
 
