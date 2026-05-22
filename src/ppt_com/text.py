@@ -20,6 +20,16 @@ from ppt_com.constants import (
     ppAlignLeft, ppAlignCenter, ppAlignRight, ppAlignJustify, ppAlignDistribute,
     ppAutoSizeNone, ppAutoSizeShapeToFitText, ppAutoSizeTextToFitShape,
     ppBulletNone, ppBulletUnnumbered, ppBulletNumbered,
+    ppBulletAlphaLCPeriod, ppBulletAlphaUCPeriod,
+    ppBulletArabicParenRight, ppBulletArabicPeriod,
+    ppBulletRomanLCParenBoth, ppBulletRomanLCParenRight,
+    ppBulletRomanLCPeriod, ppBulletRomanUCPeriod,
+    ppBulletAlphaLCParenBoth, ppBulletAlphaLCParenRight,
+    ppBulletAlphaUCParenBoth, ppBulletAlphaUCParenRight,
+    ppBulletArabicParenBoth, ppBulletArabicPlain,
+    ppBulletRomanUCParenBoth, ppBulletRomanUCParenRight,
+    ppBulletKanjiKoreanPlain, ppBulletKanjiKoreanPeriod,
+    ppBulletArabicDBPlain, ppBulletArabicDBPeriod,
     msoTextOrientationHorizontal, msoTextOrientationVertical,
     msoTextOrientationUpward, msoTextOrientationDownward,
 )
@@ -86,6 +96,32 @@ BULLET_TYPE_MAP = {
     "none": ppBulletNone,
     "unnumbered": ppBulletUnnumbered,
     "numbered": ppBulletNumbered,
+}
+
+# Curated subset of PpNumberedBulletStyle. CJK/Hindi/Hebrew/Thai variants are
+# omitted; they require corresponding language support in Office and add no
+# value for an LLM-facing API. Add more here if a use case appears.
+NUMBERED_STYLE_MAP = {
+    "arabic_plain":          ppBulletArabicPlain,        # 1 2 3
+    "arabic_period":         ppBulletArabicPeriod,       # 1. 2. 3.
+    "arabic_paren_right":    ppBulletArabicParenRight,   # 1) 2) 3)
+    "arabic_paren_both":     ppBulletArabicParenBoth,    # (1) (2) (3)
+    "arabic_db_plain":       ppBulletArabicDBPlain,      # full-width 1 2 3
+    "arabic_db_period":      ppBulletArabicDBPeriod,     # full-width 1. 2. 3.
+    "alpha_lc_period":       ppBulletAlphaLCPeriod,      # a. b. c.
+    "alpha_uc_period":       ppBulletAlphaUCPeriod,      # A. B. C.
+    "alpha_lc_paren_right":  ppBulletAlphaLCParenRight,  # a) b) c)
+    "alpha_uc_paren_right":  ppBulletAlphaUCParenRight,  # A) B) C)
+    "alpha_lc_paren_both":   ppBulletAlphaLCParenBoth,   # (a) (b) (c)
+    "alpha_uc_paren_both":   ppBulletAlphaUCParenBoth,   # (A) (B) (C)
+    "roman_lc_period":       ppBulletRomanLCPeriod,      # i. ii. iii.
+    "roman_uc_period":       ppBulletRomanUCPeriod,      # I. II. III.
+    "roman_lc_paren_right":  ppBulletRomanLCParenRight,  # i) ii) iii)
+    "roman_uc_paren_right":  ppBulletRomanUCParenRight,  # I) II) III)
+    "roman_lc_paren_both":   ppBulletRomanLCParenBoth,   # (i) (ii) (iii)
+    "roman_uc_paren_both":   ppBulletRomanUCParenBoth,   # (I) (II) (III)
+    "kanji_korean_plain":    ppBulletKanjiKoreanPlain,   # 一 二 三
+    "kanji_korean_period":   ppBulletKanjiKoreanPeriod,  # 一. 二. 三.
 }
 
 
@@ -256,7 +292,7 @@ class SetParagraphFormatInput(BaseModel):
 
 class SetBulletInput(BaseModel):
     """Input for setting bullet/numbering on paragraphs."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -269,7 +305,8 @@ class SetBulletInput(BaseModel):
         ..., description="'none', 'unnumbered', or 'numbered'"
     )
     bullet_char: Optional[str] = Field(
-        default=None, description="Bullet character (e.g. '●', '■')"
+        default=None, min_length=1,
+        description="Bullet character (e.g. '●', '■')"
     )
     bullet_start_value: Optional[int] = Field(
         default=None, description="Starting number for numbered bullets"
@@ -279,6 +316,68 @@ class SetBulletInput(BaseModel):
         description="Indent level 1-9. Sets the nesting depth of the bullet. "
         "Level 1 = top-level bullet, level 2 = first sub-bullet, etc.",
     )
+    color: Optional[str] = Field(
+        default=None,
+        description="Bullet color as hex (e.g. '#FF0000'). Setting this implicitly disables UseTextColor.",
+    )
+    size: Optional[float] = Field(
+        default=None, ge=0.25, le=4.0,
+        description="Bullet size relative to paragraph text (RelativeSize). 0.25 – 4.0.",
+    )
+    font_name: Optional[str] = Field(
+        default=None, min_length=1,
+        description="Font used to render the bullet glyph (e.g. 'Wingdings'). Setting this implicitly disables UseTextFont.",
+    )
+    numbered_style: Optional[str] = Field(
+        default=None,
+        description=(
+            "Numbered list style alias (PpNumberedBulletStyle). "
+            "When set, bullet_type is forced to 'numbered'. "
+            f"Allowed: {sorted(NUMBERED_STYLE_MAP)}"
+        ),
+    )
+    use_text_color: Optional[bool] = Field(
+        default=None,
+        description="If true, bullet inherits the paragraph text color. Overridden by an explicit color.",
+    )
+    use_text_font: Optional[bool] = Field(
+        default=None,
+        description="If true, bullet inherits the paragraph text font. Overridden by an explicit font_name.",
+    )
+
+    @field_validator("bullet_type")
+    @classmethod
+    def _validate_bullet_type(cls, v):
+        if v not in BULLET_TYPE_MAP:
+            raise ValueError(
+                f"Invalid bullet_type {v!r}. Allowed: {sorted(BULLET_TYPE_MAP)}"
+            )
+        return v
+
+    @field_validator("color")
+    @classmethod
+    def _validate_color(cls, v):
+        if v is None:
+            return v
+        s = v.lstrip("#")
+        if len(s) != 6:
+            raise ValueError(f"color must be a 6-digit hex (got {v!r})")
+        try:
+            int(s, 16)
+        except ValueError as e:
+            raise ValueError(f"color is not valid hex: {v!r}") from e
+        return v
+
+    @field_validator("numbered_style")
+    @classmethod
+    def _validate_numbered_style(cls, v):
+        if v is None:
+            return v
+        if v not in NUMBERED_STYLE_MAP:
+            raise ValueError(
+                f"Invalid numbered_style {v!r}. Allowed: {sorted(NUMBERED_STYLE_MAP)}"
+            )
+        return v
 
 
 class FindReplaceTextInput(BaseModel):
@@ -1312,7 +1411,8 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
 
 def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
                        bullet_type, bullet_char, bullet_start_value,
-                       indent_level) -> dict:
+                       indent_level, color, size, font_name,
+                       numbered_style, use_text_color, use_text_font) -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1329,12 +1429,9 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
     else:
         target = tr
 
-    bullet_type_val = BULLET_TYPE_MAP.get(bullet_type)
-    if bullet_type_val is None:
-        raise ValueError(
-            f"Invalid bullet_type '{bullet_type}'. "
-            f"Valid values: {list(BULLET_TYPE_MAP.keys())}"
-        )
+    # numbered_style implies numbered type.
+    effective_type = "numbered" if numbered_style is not None else bullet_type
+    bullet_type_val = BULLET_TYPE_MAP[effective_type]
 
     pf = target.ParagraphFormat
     bullet = pf.Bullet
@@ -1354,12 +1451,38 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
     if indent_level is not None:
         target.IndentLevel = indent_level
 
+    if numbered_style is not None:
+        bullet.Style = NUMBERED_STYLE_MAP[numbered_style]
+
+    if size is not None:
+        bullet.RelativeSize = size
+
+    # Apply UseText* toggles first; an explicit color/font_name below
+    # supersedes them (setting Font.Color flips UseTextColor to False
+    # automatically per the COM spec).
+    if use_text_color is not None:
+        bullet.UseTextColor = msoTrue if use_text_color else msoFalse
+    if use_text_font is not None:
+        bullet.UseTextFont = msoTrue if use_text_font else msoFalse
+
+    if color is not None:
+        bullet.Font.Color.RGB = hex_to_int(color)
+
+    if font_name is not None:
+        bullet.Font.Name = font_name
+
     return {
         "status": "success",
         "shape_name": shape.Name,
         "paragraph_index": paragraph_index or "all",
-        "bullet_type": bullet_type,
+        "bullet_type": effective_type,
+        "numbered_style": numbered_style,
         "indent_level": indent_level,
+        "color": color,
+        "size": size,
+        "font_name": font_name,
+        "use_text_color": use_text_color,
+        "use_text_font": use_text_font,
     }
 
 
@@ -1610,13 +1733,14 @@ def set_paragraph_format(params: SetParagraphFormatInput) -> str:
 
 
 def set_bullet(params: SetBulletInput) -> str:
-    """Set bullet/numbering for paragraphs in a shape."""
+    """Set bullet/numbering and appearance for paragraphs in a shape."""
     try:
         result = ppt.execute(
             _set_bullet_impl,
             params.slide_index, params.shape_name_or_index, params.paragraph_index,
             params.bullet_type, params.bullet_char, params.bullet_start_value,
-            params.indent_level,
+            params.indent_level, params.color, params.size, params.font_name,
+            params.numbered_style, params.use_text_color, params.use_text_font,
         )
         return json.dumps(result)
     except Exception as e:
@@ -2204,19 +2328,27 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_set_bullet(params: SetBulletInput) -> str:
-        """Set bullet or numbering for paragraphs in a shape.
+        """Set bullet/numbering and appearance for paragraphs in a shape.
 
-        bullet_type can be 'none', 'unnumbered', or 'numbered'.
-        Use bullet_char for custom bullet characters (e.g. '●').
-        Use bullet_start_value to set the starting number.
-        Use indent_level (1-9) to set nesting depth in one call.
+        Core:
+        - bullet_type: 'none', 'unnumbered', or 'numbered'.
+        - bullet_char: custom symbol (e.g. '●').
+        - bullet_start_value: starting number for numbered lists.
+        - indent_level (1-9): nesting depth.
+
+        Appearance:
+        - color: hex like '#FF0000'. Setting this flips UseTextColor to False
+          automatically (COM behavior).
+        - size: RelativeSize 0.25–4.0 (text-size ratio).
+        - font_name: glyph font (e.g. 'Wingdings').
+        - numbered_style: PpNumberedBulletStyle alias such as 'arabic_period',
+          'roman_uc_period', 'kanji_korean_period'. Implies bullet_type='numbered'.
+        - use_text_color / use_text_font: inherit the paragraph's color/font.
 
         Nested bullet example — first use ppt_set_text to create paragraphs
-        separated by \\n, then call ppt_set_bullet per paragraph
-        (slide_index and shape_name_or_index required on each call):
+        separated by \\n, then call ppt_set_bullet per paragraph:
           ppt_set_bullet(..., paragraph_index=1, bullet_type='unnumbered', indent_level=1)
           ppt_set_bullet(..., paragraph_index=2, bullet_type='unnumbered', indent_level=2)
-          ppt_set_bullet(..., paragraph_index=3, bullet_type='unnumbered', indent_level=3)
         """
         return set_bullet(params)
 
