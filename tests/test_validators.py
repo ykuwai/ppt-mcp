@@ -3071,3 +3071,101 @@ class TestBuildContext:
     def test_zero_context_just_brackets(self):
         ctx = _build_context("hello world", start=7, length=5, n=0)
         assert ctx == "[world]"
+
+
+class TestFindReplaceTextShapeNameEmpty:
+    def test_shape_name_empty_rejected(self):
+        with pytest.raises(ValidationError):
+            FindReplaceTextInput(find_text="x", shape_name="")
+
+
+class TestFindReplaceReplaceLoopCursor:
+    """Regression: Replace loop must advance the After cursor (issue #151 review).
+
+    With the previous code that always passed After=0, a call such as
+    find_text='foo' + replace_text='foobar' would re-find 'foo' inside the
+    newly inserted 'foobar' on every iteration and loop forever.
+    """
+
+    def _build_mock_pres(self, replace_returns, text="foobar"):
+        """Build a mock pres.Slides(i).Shapes(j) chain with a single shape."""
+        replace_calls = []
+
+        def fake_replace(find_what, replace_what, after, match_case, whole_words):
+            idx = len(replace_calls)
+            replace_calls.append(after)
+            if idx < len(replace_returns):
+                spec = replace_returns[idx]
+                if spec is None:
+                    return None
+                m = MagicMock()
+                m.Start = spec["Start"]
+                m.Length = spec["Length"]
+                return m
+            return None
+
+        tr = MagicMock()
+        tr.Replace = fake_replace
+        tr.Text = text
+
+        shape = MagicMock()
+        shape.HasTextFrame = True
+        shape.Name = "TB"
+        shape.TextFrame.TextRange = tr
+
+        slide = MagicMock()
+        slide.SlideIndex = 1
+        slide.Shapes.Count = 1
+        slide.Shapes.return_value = shape
+
+        pres = MagicMock()
+        pres.Slides.Count = 1
+        pres.Slides.return_value = slide
+        return pres, replace_calls
+
+    def test_after_cursor_advances_between_iterations(self):
+        from ppt_com import text as text_mod
+
+        pres, replace_calls = self._build_mock_pres(
+            replace_returns=[
+                {"Start": 1, "Length": 6},   # first hit replaced
+                {"Start": 10, "Length": 6},  # second hit replaced
+                None,                         # no more matches
+            ]
+        )
+
+        with patch.object(text_mod.ppt, "_get_pres_impl", return_value=pres):
+            result = text_mod._find_replace_text_impl(
+                find_text="foo", replace_text="foobar",
+                dry_run=False, match_case=False, whole_words=False,
+                slide_indices=None, shape_name=None, context_chars=0,
+            )
+
+        assert result["match_count"] == 2
+        assert len(replace_calls) == 3
+        assert replace_calls[0] == 0, "First call must start from After=0"
+        assert replace_calls[1] == 6, "Second call must advance to past first match"
+        assert replace_calls[2] == 15, "Third call must advance to past second match"
+
+    def test_deletion_makes_forward_progress(self):
+        """When replace_text is empty, match.Length=0 — the cursor must still advance."""
+        from ppt_com import text as text_mod
+
+        pres, replace_calls = self._build_mock_pres(
+            replace_returns=[
+                {"Start": 1, "Length": 0},  # deletion at start
+                None,
+            ]
+        )
+        with patch.object(text_mod.ppt, "_get_pres_impl", return_value=pres):
+            result = text_mod._find_replace_text_impl(
+                find_text="foo", replace_text="",
+                dry_run=False, match_case=False, whole_words=False,
+                slide_indices=None, shape_name=None, context_chars=0,
+            )
+
+        assert result["match_count"] == 1
+        assert replace_calls[0] == 0
+        assert replace_calls[1] >= 1, (
+            "After deletion (Length=0), cursor must still advance past Start"
+        )

@@ -306,6 +306,7 @@ class FindReplaceTextInput(BaseModel):
     )
     shape_name: Optional[str] = Field(
         default=None,
+        min_length=1,
         description="Limit search to a shape with this Name. Applied within each targeted slide.",
     )
     context_chars: int = Field(
@@ -1411,9 +1412,15 @@ def _find_replace_text_impl(
                     hits.append(hit)
                     after = match.Start + match.Length - 1
             else:
+                # Track cursor with `after` so the search advances past each
+                # replacement. With `after=0` fixed we would loop forever when
+                # `replace_text` contains `find_text` (e.g. "foo" -> "foobar").
+                # `max(match.Length, 1)` guarantees forward progress even for
+                # deletions where the replacement length is 0.
+                after = 0
                 while True:
                     match = tr.Replace(
-                        find_text, replace_text, 0, match_case_flag, whole_words_flag
+                        find_text, replace_text, after, match_case_flag, whole_words_flag
                     )
                     if match is None:
                         break
@@ -1426,6 +1433,7 @@ def _find_replace_text_impl(
                     if context_chars > 0:
                         hit["context"] = _build_context(tr.Text, match.Start, match.Length, context_chars)
                     hits.append(hit)
+                    after = match.Start + max(match.Length, 1) - 1
 
     return {
         "status": "success",
@@ -2235,9 +2243,17 @@ def register_tools(mcp):
         Output:
         - `match_count` and `matches` (each with `slide_index`, `shape_name`,
           `start`, `length`, and `context` when `context_chars > 0`).
+        - In replace mode, `length` and the bracketed segment in `context`
+          reflect the replacement text (i.e. what is now in the slide), not
+          the original `find_text`.
 
         Targets only shapes where `HasTextFrame` is true. Table cells, grouped
         shapes, speaker notes, and SmartArt are not searched.
+
+        Note: `readOnlyHint` is `False` because the tool can write. In
+        find-only / dry-run mode the tool performs no writes, but the hint is
+        not adjusted dynamically — clients that gate on the hint may prompt
+        unnecessarily for find-only calls.
         """
         return find_replace_text(params)
 
