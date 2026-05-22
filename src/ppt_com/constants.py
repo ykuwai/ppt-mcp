@@ -306,6 +306,30 @@ ppBulletNumbered = 2
 ppBulletPicture = 3
 
 # ==============================================================================
+# PpNumberedBulletStyle (subset commonly used outside CJK/Hindi/Hebrew/Thai)
+# ==============================================================================
+ppBulletAlphaLCPeriod = 0
+ppBulletAlphaUCPeriod = 1
+ppBulletArabicParenRight = 2
+ppBulletArabicPeriod = 3
+ppBulletRomanLCParenBoth = 4
+ppBulletRomanLCParenRight = 5
+ppBulletRomanLCPeriod = 6
+ppBulletRomanUCPeriod = 7
+ppBulletAlphaLCParenBoth = 8
+ppBulletAlphaLCParenRight = 9
+ppBulletAlphaUCParenBoth = 10
+ppBulletAlphaUCParenRight = 11
+ppBulletArabicParenBoth = 12
+ppBulletArabicPlain = 13
+ppBulletRomanUCParenBoth = 14
+ppBulletRomanUCParenRight = 15
+ppBulletKanjiKoreanPlain = 26
+ppBulletKanjiKoreanPeriod = 27
+ppBulletArabicDBPlain = 28
+ppBulletArabicDBPeriod = 29
+
+# ==============================================================================
 # PpSelectionType
 # ==============================================================================
 ppSelectionNone = 0

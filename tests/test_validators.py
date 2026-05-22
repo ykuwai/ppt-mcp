@@ -2592,6 +2592,101 @@ class TestSetBulletInput:
             )
 
 
+class TestSetBulletAppearance:
+    """Tests for the appearance fields added in issue #154."""
+
+    def _ok(self, **overrides):
+        kwargs = dict(slide_index=1, shape_name_or_index="Shape1", bullet_type="unnumbered")
+        kwargs.update(overrides)
+        return SetBulletInput(**kwargs)
+
+    def test_defaults_are_none(self):
+        inp = self._ok()
+        assert inp.color is None
+        assert inp.size is None
+        assert inp.font_name is None
+        assert inp.numbered_style is None
+        assert inp.use_text_color is None
+        assert inp.use_text_font is None
+
+    def test_bullet_type_invalid_rejected(self):
+        with pytest.raises(ValidationError, match="Invalid bullet_type"):
+            self._ok(bullet_type="bogus")
+
+    def test_color_hex_with_hash(self):
+        inp = self._ok(color="#FF0080")
+        assert inp.color == "#FF0080"
+
+    def test_color_hex_without_hash(self):
+        inp = self._ok(color="FF0080")
+        assert inp.color == "FF0080"
+
+    def test_color_invalid_length_rejected(self):
+        with pytest.raises(ValidationError, match="6-digit hex"):
+            self._ok(color="#FFF")
+
+    def test_color_invalid_chars_rejected(self):
+        with pytest.raises(ValidationError, match="not valid hex"):
+            self._ok(color="#ZZZZZZ")
+
+    def test_size_in_range(self):
+        assert self._ok(size=0.25).size == 0.25
+        assert self._ok(size=4.0).size == 4.0
+        assert self._ok(size=1.5).size == 1.5
+
+    def test_size_out_of_range_rejected(self):
+        with pytest.raises(ValidationError):
+            self._ok(size=0.1)
+        with pytest.raises(ValidationError):
+            self._ok(size=4.5)
+
+    def test_font_name_min_length(self):
+        with pytest.raises(ValidationError):
+            self._ok(font_name="")
+
+    def test_numbered_style_valid(self):
+        inp = self._ok(numbered_style="arabic_period")
+        assert inp.numbered_style == "arabic_period"
+
+    def test_numbered_style_invalid_rejected(self):
+        with pytest.raises(ValidationError, match="Invalid numbered_style"):
+            self._ok(numbered_style="not_a_style")
+
+    def test_numbered_style_alias_coverage(self):
+        """Spot-check that the 4 most useful aliases are accepted."""
+        for alias in ("arabic_period", "alpha_uc_period", "roman_lc_period", "kanji_korean_period"):
+            assert self._ok(numbered_style=alias).numbered_style == alias
+
+    def test_use_text_color_bool(self):
+        assert self._ok(use_text_color=True).use_text_color is True
+        assert self._ok(use_text_color=False).use_text_color is False
+
+    def test_use_text_font_bool(self):
+        assert self._ok(use_text_font=True).use_text_font is True
+        assert self._ok(use_text_font=False).use_text_font is False
+
+    def test_unknown_field_rejected(self):
+        with pytest.raises(ValidationError):
+            self._ok(definitely_not_a_field=True)
+
+    def test_bullet_char_empty_rejected(self):
+        """bullet_char has min_length=1 — empty string must be rejected."""
+        with pytest.raises(ValidationError):
+            self._ok(bullet_char="")
+
+    def test_numbered_style_coerces_bullet_type_to_numbered(self):
+        """numbered_style is meaningless without numbered type — coerce at
+        the Pydantic layer so the response reflects the actual effect."""
+        inp = self._ok(bullet_type="none", numbered_style="arabic_period")
+        assert inp.bullet_type == "numbered"
+        assert inp.numbered_style == "arabic_period"
+
+    def test_numbered_style_leaves_explicit_numbered_alone(self):
+        inp = self._ok(bullet_type="numbered", numbered_style="roman_lc_period")
+        assert inp.bullet_type == "numbered"
+        assert inp.numbered_style == "roman_lc_period"
+
+
 # ============================================================================
 # text.py — SetParagraphFormatInput
 # ============================================================================
