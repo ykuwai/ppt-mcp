@@ -205,11 +205,17 @@ class FormatChartAxisInput(BaseModel):
     )
     major_unit: Optional[float] = Field(
         default=None, gt=0,
-        description="Distance between major tick marks / gridlines (in axis units).",
+        description=(
+            "Distance between major tick marks / gridlines (in axis units). "
+            "Value-axis only; raises an error on category or series axes."
+        ),
     )
     minor_unit: Optional[float] = Field(
         default=None, gt=0,
-        description="Distance between minor tick marks (in axis units).",
+        description=(
+            "Distance between minor tick marks (in axis units). "
+            "Value-axis only; raises an error on category or series axes."
+        ),
     )
     tick_label_spacing: Optional[int] = Field(
         default=None, ge=1,
@@ -648,6 +654,7 @@ def _format_chart_axis_impl(
         )
     is_category = axis_key == "category"
     is_secondary = axis_key == "secondary_value"
+    is_value_axis = axis_key in {"value", "secondary_value"}
     axis_type = AXIS_TYPE_MAP[axis_key]
     axis_group = AXIS_GROUP_SECONDARY if is_secondary else AXIS_GROUP_PRIMARY
 
@@ -667,10 +674,12 @@ def _format_chart_axis_impl(
             raise ValueError("tick_label_spacing is only valid for axis='category'.")
         if tick_mark_spacing is not None:
             raise ValueError("tick_mark_spacing is only valid for axis='category'.")
-    # Value-axis-only guards
-    if is_category:
+    # Value-axis-only guards (category and 3D series axes don't support these)
+    if not is_value_axis:
         if min_scale is not None or max_scale is not None:
             raise ValueError("min_scale/max_scale are only valid for value axes.")
+        if major_unit is not None or minor_unit is not None:
+            raise ValueError("major_unit/minor_unit are only valid for value axes.")
         if log_scale is not None:
             raise ValueError("log_scale is only valid for value axes.")
     if log_base is not None and log_scale is not True:
@@ -1052,8 +1061,8 @@ def register_tools(mcp):
         for example, on a 0–60 day axis, `tick_label_spacing=3` renders
         labels at 0, 3, 6, …, 60.
 
-        `min_scale` / `max_scale` / `log_scale` are value-axis only.
-        `log_base` requires `log_scale=true`.
+        `min_scale` / `max_scale` / `major_unit` / `minor_unit` / `log_scale`
+        are value-axis only. `log_base` requires `log_scale=true`.
         """
         return format_chart_axis(params)
 
