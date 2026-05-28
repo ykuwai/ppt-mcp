@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>COM自動化によるPowerPointのリアルタイム制御 —<br>AIエージェントと開発者のための154ツールを備えたMCPサーバー</strong>
+  <strong>COM自動化によるPowerPointのリアルタイム制御 —<br>AIエージェントと開発者のための155ツールを備えたMCPサーバー</strong>
 </p>
 
 ---
