@@ -41,6 +41,30 @@ LEGEND_POSITION_MAP: dict[str, int] = {
     "bottom": -4107, "left": -4131, "right": -4152, "top": -4160, "corner": 2,
 }
 
+# XlAxisType constants
+AXIS_TYPE_MAP: dict[str, int] = {
+    "category": 1,         # xlCategory
+    "value": 2,            # xlValue
+    "secondary_value": 2,  # xlValue with xlSecondary group
+    "series": 3,           # xlSeriesAxis (3D charts only)
+}
+
+# XlAxisGroup constants
+AXIS_GROUP_PRIMARY = 1    # xlPrimary
+AXIS_GROUP_SECONDARY = 2  # xlSecondary
+
+# XlTickMark constants
+TICK_MARK_MAP: dict[str, int] = {
+    "none": -4142,    # xlTickMarkNone
+    "inside": 2,      # xlTickMarkInside
+    "outside": 3,     # xlTickMarkOutside
+    "cross": 4,       # xlTickMarkCross
+}
+
+# XlScaleType constants
+SCALE_LINEAR = -4132       # xlLinear
+SCALE_LOGARITHMIC = -4133  # xlLogarithmic
+
 # Reverse map for chart type display
 CHART_TYPE_NAMES: dict[int, str] = {v: k for k, v in CHART_TYPE_MAP.items()}
 
@@ -149,6 +173,84 @@ class FormatChartInput(BaseModel):
     title_left: Optional[float] = Field(
         default=None, ge=0,
         description="Chart title left position in points (relative to chart area). Overrides title_position."
+    )
+
+
+class FormatChartAxisInput(BaseModel):
+    """Input for formatting a chart axis (scale, ticks, labels, title)."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    shape_name_or_index: Union[str, int] = Field(
+        ..., description="Chart shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
+    )
+    axis: Literal["category", "value", "secondary_value", "series"] = Field(
+        default="category",
+        description=(
+            "Which axis to format. 'category' = horizontal x-axis on column/line/bar; "
+            "'value' = primary y-axis; 'secondary_value' = secondary y-axis; "
+            "'series' = 3D charts only."
+        ),
+    )
+    title: Optional[str] = Field(
+        default=None, description="Axis title text (sets HasTitle=True automatically)"
+    )
+    min_scale: Optional[float] = Field(
+        default=None,
+        description="MinimumScale. Value-axis only; raises an error if set on a category axis.",
+    )
+    max_scale: Optional[float] = Field(
+        default=None,
+        description="MaximumScale. Value-axis only; raises an error if set on a category axis.",
+    )
+    major_unit: Optional[float] = Field(
+        default=None, gt=0,
+        description="Distance between major tick marks / gridlines (in axis units).",
+    )
+    minor_unit: Optional[float] = Field(
+        default=None, gt=0,
+        description="Distance between minor tick marks (in axis units).",
+    )
+    tick_label_spacing: Optional[int] = Field(
+        default=None, ge=1,
+        description=(
+            "TickLabelSpacing — show every Nth category label. "
+            "Category-axis only; raises an error otherwise. Example: 3 on a 0–60 day axis "
+            "renders labels at 0, 3, 6, … 60."
+        ),
+    )
+    tick_mark_spacing: Optional[int] = Field(
+        default=None, ge=1,
+        description="TickMarkSpacing — draw a tick every Nth category. Category-axis only.",
+    )
+    major_tick_mark: Optional[Literal["none", "inside", "outside", "cross"]] = Field(
+        default=None, description="MajorTickMark style."
+    )
+    minor_tick_mark: Optional[Literal["none", "inside", "outside", "cross"]] = Field(
+        default=None, description="MinorTickMark style."
+    )
+    reverse_order: Optional[bool] = Field(
+        default=None,
+        description="ReversePlotOrder — reverse the direction of the axis.",
+    )
+    log_scale: Optional[bool] = Field(
+        default=None,
+        description="Switch the axis between linear and logarithmic scale. Value-axis only.",
+    )
+    log_base: Optional[float] = Field(
+        default=None, gt=1,
+        description="LogBase (default 10). Only meaningful when log_scale=true.",
+    )
+    tick_label_font_size: Optional[float] = Field(
+        default=None, gt=0,
+        description="Font size of the axis tick labels, in points.",
+    )
+    number_format: Optional[str] = Field(
+        default=None,
+        description=(
+            "Excel-style number format for tick labels (e.g. '0', '0.0%', '#,##0', "
+            "'yyyy/m/d'). Applied to TickLabels.NumberFormat."
+        ),
     )
 
 
@@ -523,6 +625,115 @@ def _format_chart_impl(
     }
 
 
+def _format_chart_axis_impl(
+    slide_index, shape_name_or_index, axis,
+    title,
+    min_scale, max_scale, major_unit, minor_unit,
+    tick_label_spacing, tick_mark_spacing,
+    major_tick_mark, minor_tick_mark,
+    reverse_order, log_scale, log_base,
+    tick_label_font_size, number_format,
+):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.Slides(slide_index)
+    shape = _get_chart_shape(slide, shape_name_or_index)
+    chart = shape.Chart
+
+    axis_key = axis.strip().lower()
+    if axis_key not in AXIS_TYPE_MAP:
+        raise ValueError(
+            f"Unknown axis '{axis}'. Valid: {', '.join(AXIS_TYPE_MAP.keys())}"
+        )
+    is_category = axis_key == "category"
+    is_secondary = axis_key == "secondary_value"
+    axis_type = AXIS_TYPE_MAP[axis_key]
+    axis_group = AXIS_GROUP_SECONDARY if is_secondary else AXIS_GROUP_PRIMARY
+
+    try:
+        ax = chart.Axes(axis_type, axis_group)
+    except Exception as e:
+        raise ValueError(
+            f"Axis '{axis}' is not available on this chart type "
+            f"(e.g. pie/doughnut charts have no axes). Underlying error: {e}"
+        )
+
+    applied: list[str] = []
+
+    # Category-axis-only guards
+    if not is_category:
+        if tick_label_spacing is not None:
+            raise ValueError("tick_label_spacing is only valid for axis='category'.")
+        if tick_mark_spacing is not None:
+            raise ValueError("tick_mark_spacing is only valid for axis='category'.")
+    # Value-axis-only guards
+    if is_category:
+        if min_scale is not None or max_scale is not None:
+            raise ValueError("min_scale/max_scale are only valid for value axes.")
+        if log_scale is not None:
+            raise ValueError("log_scale is only valid for value axes.")
+    if log_base is not None and log_scale is not True:
+        raise ValueError("log_base requires log_scale=true.")
+
+    if title is not None:
+        ax.HasTitle = True
+        ax.AxisTitle.Text = title
+        applied.append("title")
+
+    if min_scale is not None:
+        ax.MinimumScale = min_scale
+        applied.append("min_scale")
+    if max_scale is not None:
+        ax.MaximumScale = max_scale
+        applied.append("max_scale")
+    if major_unit is not None:
+        ax.MajorUnit = major_unit
+        applied.append("major_unit")
+    if minor_unit is not None:
+        ax.MinorUnit = minor_unit
+        applied.append("minor_unit")
+
+    if tick_label_spacing is not None:
+        ax.TickLabelSpacing = tick_label_spacing
+        applied.append("tick_label_spacing")
+    if tick_mark_spacing is not None:
+        ax.TickMarkSpacing = tick_mark_spacing
+        applied.append("tick_mark_spacing")
+
+    if major_tick_mark is not None:
+        ax.MajorTickMark = TICK_MARK_MAP[major_tick_mark]
+        applied.append("major_tick_mark")
+    if minor_tick_mark is not None:
+        ax.MinorTickMark = TICK_MARK_MAP[minor_tick_mark]
+        applied.append("minor_tick_mark")
+
+    if reverse_order is not None:
+        ax.ReversePlotOrder = reverse_order
+        applied.append("reverse_order")
+
+    if log_scale is not None:
+        ax.ScaleType = SCALE_LOGARITHMIC if log_scale else SCALE_LINEAR
+        applied.append("log_scale")
+    if log_base is not None:
+        ax.LogBase = log_base
+        applied.append("log_base")
+
+    if tick_label_font_size is not None:
+        ax.TickLabels.Font.Size = tick_label_font_size
+        applied.append("tick_label_font_size")
+    if number_format is not None:
+        ax.TickLabels.NumberFormat = number_format
+        applied.append("number_format")
+
+    return {
+        "success": True,
+        "shape_name": shape.Name,
+        "axis": axis_key,
+        "applied": applied,
+    }
+
+
 def _set_chart_series_impl(
     slide_index, shape_name_or_index,
     series_index, color, show_data_labels, line_weight,
@@ -658,6 +869,32 @@ def format_chart(params: FormatChartInput) -> str:
         return json.dumps({"error": f"Failed to format chart: {str(e)}"})
 
 
+def format_chart_axis(params: FormatChartAxisInput) -> str:
+    """Format axis properties: scale, ticks, labels, axis title.
+
+    Args:
+        params: Axis identifier and optional formatting properties.
+
+    Returns:
+        JSON listing which properties were applied.
+    """
+    try:
+        result = ppt.execute(
+            _format_chart_axis_impl,
+            params.slide_index, params.shape_name_or_index, params.axis,
+            params.title,
+            params.min_scale, params.max_scale,
+            params.major_unit, params.minor_unit,
+            params.tick_label_spacing, params.tick_mark_spacing,
+            params.major_tick_mark, params.minor_tick_mark,
+            params.reverse_order, params.log_scale, params.log_base,
+            params.tick_label_font_size, params.number_format,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to format chart axis: {str(e)}"})
+
+
 def set_chart_series(params: SetChartSeriesInput) -> str:
     """Format an individual chart series (color, data labels, line weight).
 
@@ -789,6 +1026,36 @@ def register_tools(mcp):
         'center') or explicit title_top/title_left coordinates in points.
         """
         return format_chart(params)
+
+    @mcp.tool(
+        name="ppt_format_chart_axis",
+        annotations={
+            "title": "Format Chart Axis",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_format_chart_axis(params: FormatChartAxisInput) -> str:
+        """Format an axis: scale (min/max/major_unit/minor_unit), tick spacing,
+        tick marks, log scale, reverse order, tick-label font size, number
+        format, and axis title.
+
+        Select the axis via the `axis` parameter:
+        - 'category' — horizontal x-axis on column/line/bar charts (default)
+        - 'value' — primary y-axis
+        - 'secondary_value' — secondary y-axis
+        - 'series' — 3D charts only
+
+        `tick_label_spacing` / `tick_mark_spacing` are category-axis only:
+        for example, on a 0–60 day axis, `tick_label_spacing=3` renders
+        labels at 0, 3, 6, …, 60.
+
+        `min_scale` / `max_scale` / `log_scale` are value-axis only.
+        `log_base` requires `log_scale=true`.
+        """
+        return format_chart_axis(params)
 
     @mcp.tool(
         name="ppt_set_chart_series",
