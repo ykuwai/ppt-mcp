@@ -455,9 +455,46 @@ def _add_shape_impl(
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
-    shape = slide.Shapes.AddShape(
-        Type=shape_type_int, Left=left, Top=top, Width=width, Height=height
-    )
+    # Avoid the brief flash of the default (theme accent) shape before our
+    # fill/line are applied. PowerPoint's Application.ScreenUpdating does not
+    # reliably suppress this repaint, so instead we create the shape just off
+    # the bottom-right of the slide canvas, style it there, and only then move
+    # it to its target position — by which point it is already fully styled.
+    # The off-slide offset is kept just past the slide edge (rather than far
+    # away) so the editor's scroll extents barely change, which prevents the
+    # whole canvas from visibly shifting/flickering. ScreenUpdating is also
+    # toggled and restored in the finally block so a mid-formatting failure
+    # never leaves the editor frozen.
+    page = pres.PageSetup
+    off_left = page.SlideWidth + width
+    off_top = page.SlideHeight + height
+    app.ScreenUpdating = False
+    try:
+        shape = slide.Shapes.AddShape(
+            Type=shape_type_int, Left=off_left, Top=off_top,
+            Width=width, Height=height,
+        )
+        result = _apply_shape_attrs(
+            shape, text, font_name, font_size, bold, italic, font_color, align,
+            fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
+            line_visible, line_color, line_weight, corner_radius, corner_radius_pt,
+            width, height,
+        )
+        # Move into place last, already styled — the target location never
+        # shows the unstyled default.
+        shape.Left = left
+        shape.Top = top
+        return result
+    finally:
+        app.ScreenUpdating = True
+
+
+def _apply_shape_attrs(
+    shape, text, font_name, font_size, bold, italic, font_color, align,
+    fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
+    line_visible, line_color, line_weight, corner_radius, corner_radius_pt,
+    width, height,
+):
     if text:
         text = text.replace('\n', '\r')  # \n -> paragraph break (Enter)
         # \v (vertical tab) -> line break (Shift+Enter) — passed through as-is
