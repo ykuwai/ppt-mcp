@@ -46,7 +46,7 @@ def _find_ppt_hwnd():
         return 0
 
 
-class frozen_redraw:
+class FrozenRedraw:
     """Context manager that suppresses PowerPoint window painting.
 
     Locks the frame window on enter (``LockWindowUpdate``) and releases it on
@@ -59,11 +59,15 @@ class frozen_redraw:
     """
 
     def __init__(self):
-        self.hwnd = _find_ppt_hwnd()
+        self.hwnd = 0
         self._locked = False
 
     def __enter__(self):
-        if self.hwnd:
+        # Resolve the window at enter time (not construction) so a PowerPoint
+        # launched between construction and use is still found.
+        if _WIN32_AVAILABLE:
+            self.hwnd = _find_ppt_hwnd()
+        if self.hwnd and _WIN32_AVAILABLE:
             try:
                 # Returns nonzero on success. Only one window can be locked
                 # system-wide; if another lock is active this fails and we

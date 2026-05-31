@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 from utils.color import hex_to_int, int_to_hex
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
-from utils.redraw import frozen_redraw
+from utils.redraw import FrozenRedraw
 from utils.validation import font_size_warning
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
@@ -459,8 +459,8 @@ def _add_shape_impl(
     # are never drawn — only the finished, fully-styled shape is painted, in a
     # single clean repaint on exit. PowerPoint has no working
     # Application.ScreenUpdating, so the freeze is done at the Win32 level
-    # (see utils.redraw.frozen_redraw).
-    with frozen_redraw():
+    # (see utils.redraw.FrozenRedraw).
+    with FrozenRedraw():
         goto_slide(app, slide_index)
         slide = pres.Slides(slide_index)
         shape = slide.Shapes.AddShape(
