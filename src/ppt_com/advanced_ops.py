@@ -1527,7 +1527,7 @@ def _set_picture_format_impl(slide_index, shape_name_or_index, brightness,
         "color_type": cur_color_type,
         "color_type_name": color_type_name,
         "transparent_background": bool(pf.TransparentBackground),
-        "transparent_color": int_to_hex(pf.TransparencyColor),
+        "transparent_color_hex": int_to_hex(pf.TransparencyColor),
     }
     return result
 

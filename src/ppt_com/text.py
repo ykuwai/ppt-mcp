@@ -1103,7 +1103,7 @@ def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
             "bold": font.Bold == msoTrue,
             "italic": font.Italic == msoTrue,
             "underline": font.Underline == msoTrue,
-            "color_rgb": int_to_hex(color_int),
+            "color_hex": int_to_hex(color_int),
         }
         runs.append(run_info)
     result["runs"] = runs
@@ -1503,7 +1503,7 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
         "bullet_type": bullet_type,
         "numbered_style": numbered_style,
         "indent_level": indent_level,
-        "color": color,
+        "color_hex": color,
         "size": size,
         "font_name": font_name,
         "use_text_color": effective_use_text_color,
