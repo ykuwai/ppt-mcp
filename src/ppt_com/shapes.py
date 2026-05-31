@@ -10,9 +10,10 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
-from utils.color import hex_to_int
+from utils.color import hex_to_int, int_to_hex
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
+from utils.redraw import FrozenRedraw
 from utils.validation import font_size_warning
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
@@ -452,12 +453,33 @@ def _add_shape_impl(
     corner_radius, corner_radius_pt,
 ):
     app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
-    slide = pres.Slides(slide_index)
-    shape = slide.Shapes.AddShape(
-        Type=shape_type_int, Left=left, Top=top, Width=width, Height=height
-    )
+    # Freeze the PowerPoint frame window's painting for the whole operation so
+    # the intermediate default (theme accent) fill and any scroll-to-selection
+    # are never drawn — only the finished, fully-styled shape is painted, in a
+    # single clean repaint on exit. PowerPoint has no working
+    # Application.ScreenUpdating, so the freeze is done at the Win32 level
+    # (see utils.redraw.FrozenRedraw).
+    with FrozenRedraw():
+        goto_slide(app, slide_index)
+        slide = pres.Slides(slide_index)
+        shape = slide.Shapes.AddShape(
+            Type=shape_type_int, Left=left, Top=top, Width=width, Height=height,
+        )
+        return _apply_shape_attrs(
+            shape, text, font_name, font_size, bold, italic, font_color, align,
+            fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
+            line_visible, line_color, line_weight, corner_radius, corner_radius_pt,
+            width, height,
+        )
+
+
+def _apply_shape_attrs(
+    shape, text, font_name, font_size, bold, italic, font_color, align,
+    fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
+    line_visible, line_color, line_weight, corner_radius, corner_radius_pt,
+    width, height,
+):
     if text:
         text = text.replace('\n', '\r')  # \n -> paragraph break (Enter)
         # \v (vertical tab) -> line break (Shift+Enter) — passed through as-is
@@ -749,7 +771,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
             "visible": bool(fill.Visible),
         }
         try:
-            info["fill"]["fore_color_rgb"] = fill.ForeColor.RGB
+            info["fill"]["color_hex"] = int_to_hex(fill.ForeColor.RGB)
         except Exception:
             pass
         try:
@@ -770,7 +792,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         except Exception:
             pass
         try:
-            info["line"]["fore_color_rgb"] = line.ForeColor.RGB
+            info["line"]["color_hex"] = int_to_hex(line.ForeColor.RGB)
         except Exception:
             pass
         try:
