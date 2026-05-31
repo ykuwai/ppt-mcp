@@ -1103,7 +1103,7 @@ def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
             "bold": font.Bold == msoTrue,
             "italic": font.Italic == msoTrue,
             "underline": font.Underline == msoTrue,
-            "color_rgb": int_to_hex(color_int),
+            "color_hex": int_to_hex(color_int),
         }
         runs.append(run_info)
     result["runs"] = runs

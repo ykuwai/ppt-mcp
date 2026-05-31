@@ -376,7 +376,7 @@ def _get_slide_master_info_impl(design_index) -> dict:
             colors.append({
                 "index": i,
                 "name": theme_color_names[i - 1] if i <= 12 else f"Color{i}",
-                "rgb": hex_color,
+                "color_hex": hex_color,
             })
     except Exception:
         pass

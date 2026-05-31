@@ -380,7 +380,7 @@ def _get_theme_colors_impl():
         colors.append({
             "index": i,
             "name": THEME_COLOR_NAMES[i],
-            "color": int_to_hex(rgb_int),
+            "color_hex": int_to_hex(rgb_int),
         })
 
     return {

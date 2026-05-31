@@ -371,9 +371,9 @@ def _get_cell_format(cell) -> dict:
     font = tr.Font
     result = {}
     try:
-        result["fill_color"] = int_to_hex(cell.Shape.Fill.ForeColor.RGB)
+        result["fill_color_hex"] = int_to_hex(cell.Shape.Fill.ForeColor.RGB)
     except Exception:
-        result["fill_color"] = None
+        result["fill_color_hex"] = None
     try:
         result["font_name"] = font.Name
     except Exception:
@@ -395,9 +395,9 @@ def _get_cell_format(cell) -> dict:
     except Exception:
         result["italic"] = None
     try:
-        result["color"] = int_to_hex(font.Color.RGB)
+        result["font_color_hex"] = int_to_hex(font.Color.RGB)
     except Exception:
-        result["color"] = None
+        result["font_color_hex"] = None
     try:
         result["alignment"] = ALIGNMENT_NAMES.get(tr.ParagraphFormat.Alignment)
     except Exception:
