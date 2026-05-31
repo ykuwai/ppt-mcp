@@ -9,8 +9,6 @@ import sys
 
 sys.path.insert(0, "src")
 
-import pytest
-
 from ppt_com.slides import AddSlideInput, _find_layout_matches
 
 
@@ -64,6 +62,13 @@ def test_like_slide_index_accepted():
 def test_like_slide_index_defaults_none():
     m = AddSlideInput()
     assert m.like_slide_index is None
+
+
+def test_like_slide_index_zero_accepted_by_model():
+    # The model intentionally has no ge=1 constraint — the 1-based bounds
+    # check is enforced at runtime in _add_slide_impl, not at the model level.
+    m = AddSlideInput(like_slide_index=0)
+    assert m.like_slide_index == 0
 
 
 # --- _find_layout_matches --------------------------------------------------

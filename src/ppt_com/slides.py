@@ -5,7 +5,7 @@ Add, delete, duplicate, move, list, and query slides. Manage speaker notes.
 
 import json
 import logging
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -278,12 +278,19 @@ def _resolve_presentation(
 # ---------------------------------------------------------------------------
 # Implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
+class _LayoutMatch(NamedTuple):
+    """One design that contains a custom layout with the requested name."""
+    design_index: int
+    design_name: str
+    custom_layout: object
+
+
 def _find_layout_matches(pres, layout_name: str, design_index: Optional[int]):
     """Find custom layouts matching ``layout_name`` across designs.
 
-    Returns a list of (design_index, design_name, custom_layout) tuples — one
-    per design that contains a layout with that exact name. When design_index
-    is given, only that design is searched.
+    Returns a list of _LayoutMatch (design_index, design_name, custom_layout) —
+    one per design that contains a layout with that exact name. When
+    design_index is given, only that design is searched.
     """
     if design_index is not None:
         search = [design_index]
@@ -297,7 +304,7 @@ def _find_layout_matches(pres, layout_name: str, design_index: Optional[int]):
         for i in range(1, master.CustomLayouts.Count + 1):
             lay = master.CustomLayouts(i)
             if lay.Name == layout_name:
-                matches.append((d, design.Name, lay))
+                matches.append(_LayoutMatch(d, design.Name, lay))
                 break  # at most one layout of a given name per design
     return matches
 
@@ -381,21 +388,25 @@ def _add_slide_impl(
 
             # Prefer the default master's design when the name is ambiguous,
             # matching the historical selection order (default master first).
+            # Tiebreak is by master name; in the rare case two designs share a
+            # master name the pick may differ, but the ambiguity warning below
+            # lists every candidate so the caller can override with
+            # design_index or like_slide_index.
             chosen = matches[0]
             if len(matches) > 1:
                 try:
                     default_master_name = pres.SlideMaster.Name
                     for mt in matches:
-                        if pres.Designs(mt[0]).SlideMaster.Name == default_master_name:
+                        if pres.Designs(mt.design_index).SlideMaster.Name == default_master_name:
                             chosen = mt
                             break
                 except Exception:
                     pass
                 layout_ambiguous = True
-                ambiguous_designs = [m[1] for m in matches]
+                ambiguous_designs = [m.design_name for m in matches]
 
-            custom_layout = chosen[2]
-            resolved_design_name = chosen[1]
+            custom_layout = chosen.custom_layout
+            resolved_design_name = chosen.design_name
             use_custom_layout = True
             resolved_layout_name = custom_layout.Name
     else:
@@ -421,7 +432,6 @@ def _add_slide_impl(
 
     # Read actual layout from the first created slide
     first_slide = pres.Slides(created_slides[0]["slide_index"])
-    resp_layout = resolved_layout_name if resolved_layout_name else first_slide.Layout
 
     # Resolve the actually-applied layout/design names for caller verification.
     final_layout_name = resolved_layout_name
@@ -438,7 +448,9 @@ def _add_slide_impl(
         "success": True,
         "slides_created": len(created_slides),
         "slides": created_slides,
-        "layout": resp_layout,
+        # "layout" is always the PpSlideLayout integer constant; the
+        # human-readable custom layout name is in "layout_name".
+        "layout": first_slide.Layout,
         "layout_name": final_layout_name,
         "design_name": final_design_name,
     }
