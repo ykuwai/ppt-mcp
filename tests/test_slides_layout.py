@@ -83,13 +83,15 @@ def _pres():
 
 def test_single_match_returns_one():
     matches = _find_layout_matches(_pres(), "Content", None)
-    assert [(m[0], m[1]) for m in matches] == [(1, "Design A")]
+    assert [(m.design_index, m.design_name) for m in matches] == [(1, "Design A")]
 
 
 def test_ambiguous_match_across_designs():
     matches = _find_layout_matches(_pres(), "Title Only", None)
     # Present in Design A (1) and Design B (2)
-    assert [(m[0], m[1]) for m in matches] == [(1, "Design A"), (2, "Design B")]
+    assert [(m.design_index, m.design_name) for m in matches] == [
+        (1, "Design A"), (2, "Design B")
+    ]
     assert len(matches) > 1  # caller flags this as ambiguous
 
 
@@ -100,7 +102,7 @@ def test_no_match_returns_empty():
 def test_design_index_restricts_search():
     # "Title Only" exists in both A and B, but searching only design 2 -> B
     matches = _find_layout_matches(_pres(), "Title Only", 2)
-    assert [(m[0], m[1]) for m in matches] == [(2, "Design B")]
+    assert [(m.design_index, m.design_name) for m in matches] == [(2, "Design B")]
 
 
 def test_design_index_no_match_in_that_design():
@@ -113,4 +115,4 @@ def test_at_most_one_match_per_design():
     pres = _FakePres([("Dup", ["X", "X", "Y"])])
     matches = _find_layout_matches(pres, "X", None)
     assert len(matches) == 1
-    assert matches[0][1] == "Dup"
+    assert matches[0].design_name == "Dup"

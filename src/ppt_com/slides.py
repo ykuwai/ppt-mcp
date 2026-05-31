@@ -372,9 +372,17 @@ def _add_slide_impl(
             matches = _find_layout_matches(pres, layout_name, design_index)
 
             if not matches:
-                # Collect available layouts for error message
+                # Collect available layouts for the error message, scoped to
+                # the same designs that were actually searched — otherwise a
+                # design_index lookup would list layouts from unrelated designs
+                # (including the one where the name does exist), contradicting
+                # the "not found" message.
+                error_search = (
+                    [design_index] if design_index is not None
+                    else range(1, pres.Designs.Count + 1)
+                )
                 available = {}
-                for d in range(1, pres.Designs.Count + 1):
+                for d in error_search:
                     design = pres.Designs(d)
                     m = design.SlideMaster
                     names = []
