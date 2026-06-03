@@ -5,7 +5,7 @@ Add, delete, duplicate, move, list, and query slides. Manage speaker notes.
 
 import json
 import logging
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -69,6 +69,18 @@ class AddSlideInput(BaseModel):
             "1-based design (slide master) index to search for the layout_name. "
             "If omitted, searches the active presentation's default master first, "
             "then all designs."
+        ),
+    )
+    like_slide_index: Optional[int] = Field(
+        default=None,
+        description=(
+            "1-based index of an existing slide to copy the design + layout from. "
+            "Inherits that slide's exact CustomLayout (design/master AND layout), "
+            "so the new slide looks like it without any layout-name ambiguity. "
+            "This is the most reliable way to 'add a slide like this one'. "
+            "Takes precedence over layout, layout_name, and design_index. "
+            "Note: this inherits the look only — it does NOT copy the slide's "
+            "content/shapes (use ppt_duplicate_slide for a full copy)."
         ),
     )
     count: int = Field(
@@ -266,12 +278,44 @@ def _resolve_presentation(
 # ---------------------------------------------------------------------------
 # Implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
+class _LayoutMatch(NamedTuple):
+    """One design that contains a custom layout with the requested name."""
+    design_index: int
+    design_name: str
+    custom_layout: object
+
+
+def _find_layout_matches(pres, layout_name: str, design_index: Optional[int]):
+    """Find custom layouts matching ``layout_name`` across designs.
+
+    Returns a list of _LayoutMatch (design_index, design_name, custom_layout) —
+    one per design that contains a layout with that exact name. When
+    design_index is given, only that design is searched.
+    """
+    if design_index is not None:
+        search = [design_index]
+    else:
+        search = range(1, pres.Designs.Count + 1)
+
+    matches = []
+    for d in search:
+        design = pres.Designs(d)
+        master = design.SlideMaster
+        for i in range(1, master.CustomLayouts.Count + 1):
+            lay = master.CustomLayouts(i)
+            if lay.Name == layout_name:
+                matches.append(_LayoutMatch(d, design.Name, lay))
+                break  # at most one layout of a given name per design
+    return matches
+
+
 def _add_slide_impl(
     position: Optional[int],
     layout: Optional[int],
     layout_name: Optional[str],
     design_index: Optional[int] = None,
     count: int = 1,
+    like_slide_index: Optional[int] = None,
 ) -> dict:
     app = ppt._get_app_impl()
     pres = _resolve_presentation(app)
@@ -290,47 +334,55 @@ def _add_slide_impl(
     friendly_layout = None
     layout_val = None
     resolved_layout_name = None
+    resolved_design_name = None
+    layout_ambiguous = False
+    ambiguous_designs = None
 
-    if layout_name:
+    if like_slide_index is not None:
+        # Highest precedence: inherit the exact CustomLayout (design + layout)
+        # of an existing slide. Using the object reference directly means there
+        # is no layout-name ambiguity across designs.
+        if like_slide_index < 1 or like_slide_index > pres.Slides.Count:
+            raise ValueError(
+                f"like_slide_index {like_slide_index} out of range "
+                f"(1-{pres.Slides.Count})"
+            )
+        src_slide = pres.Slides(like_slide_index)
+        custom_layout = src_slide.CustomLayout
+        use_custom_layout = True
+        resolved_layout_name = custom_layout.Name
+        try:
+            resolved_design_name = src_slide.Design.Name
+        except Exception:
+            resolved_design_name = None
+    elif layout_name:
         # Check friendly name map first
         friendly_key = layout_name.lower().strip().replace(" ", "_")
         if friendly_key in LAYOUT_NAME_MAP:
             friendly_layout = LAYOUT_NAME_MAP[friendly_key]
         else:
-            if design_index is not None:
-                # Search in the specified design
-                if design_index < 1 or design_index > pres.Designs.Count:
-                    raise ValueError(
-                        f"Design index {design_index} out of range "
-                        f"(1-{pres.Designs.Count})"
-                    )
-                master = pres.Designs(design_index).SlideMaster
-                for i in range(1, master.CustomLayouts.Count + 1):
-                    if master.CustomLayouts(i).Name == layout_name:
-                        custom_layout = master.CustomLayouts(i)
-                        break
-            else:
-                # Search default master first, then all designs
-                master = pres.SlideMaster
-                for i in range(1, master.CustomLayouts.Count + 1):
-                    if master.CustomLayouts(i).Name == layout_name:
-                        custom_layout = master.CustomLayouts(i)
-                        break
+            if design_index is not None and (
+                design_index < 1 or design_index > pres.Designs.Count
+            ):
+                raise ValueError(
+                    f"Design index {design_index} out of range "
+                    f"(1-{pres.Designs.Count})"
+                )
 
-                if custom_layout is None:
-                    for d in range(1, pres.Designs.Count + 1):
-                        m = pres.Designs(d).SlideMaster
-                        for i in range(1, m.CustomLayouts.Count + 1):
-                            if m.CustomLayouts(i).Name == layout_name:
-                                custom_layout = m.CustomLayouts(i)
-                                break
-                        if custom_layout is not None:
-                            break
+            matches = _find_layout_matches(pres, layout_name, design_index)
 
-            if custom_layout is None:
-                # Collect available layouts for error message
+            if not matches:
+                # Collect available layouts for the error message, scoped to
+                # the same designs that were actually searched — otherwise a
+                # design_index lookup would list layouts from unrelated designs
+                # (including the one where the name does exist), contradicting
+                # the "not found" message.
+                error_search = (
+                    [design_index] if design_index is not None
+                    else range(1, pres.Designs.Count + 1)
+                )
                 available = {}
-                for d in range(1, pres.Designs.Count + 1):
+                for d in error_search:
                     design = pres.Designs(d)
                     m = design.SlideMaster
                     names = []
@@ -341,6 +393,28 @@ def _add_slide_impl(
                     f"Layout '{layout_name}' not found. "
                     f"Available custom layouts by design: {available}"
                 )
+
+            # Prefer the default master's design when the name is ambiguous,
+            # matching the historical selection order (default master first).
+            # Tiebreak is by master name; in the rare case two designs share a
+            # master name the pick may differ, but the ambiguity warning below
+            # lists every candidate so the caller can override with
+            # design_index or like_slide_index.
+            chosen = matches[0]
+            if len(matches) > 1:
+                try:
+                    default_master_name = pres.SlideMaster.Name
+                    for mt in matches:
+                        if pres.Designs(mt.design_index).SlideMaster.Name == default_master_name:
+                            chosen = mt
+                            break
+                except Exception:
+                    pass
+                layout_ambiguous = True
+                ambiguous_designs = [m.design_name for m in matches]
+
+            custom_layout = chosen.custom_layout
+            resolved_design_name = chosen.design_name
             use_custom_layout = True
             resolved_layout_name = custom_layout.Name
     else:
@@ -366,14 +440,39 @@ def _add_slide_impl(
 
     # Read actual layout from the first created slide
     first_slide = pres.Slides(created_slides[0]["slide_index"])
-    resp_layout = resolved_layout_name if resolved_layout_name else first_slide.Layout
+
+    # Resolve the actually-applied layout/design names for caller verification.
+    final_layout_name = resolved_layout_name
+    final_design_name = resolved_design_name
+    try:
+        if final_layout_name is None:
+            final_layout_name = first_slide.CustomLayout.Name
+        if final_design_name is None:
+            final_design_name = first_slide.Design.Name
+    except Exception:
+        pass
 
     result = {
         "success": True,
         "slides_created": len(created_slides),
         "slides": created_slides,
-        "layout": resp_layout,
+        # "layout" is always the PpSlideLayout integer constant; the
+        # human-readable custom layout name is in "layout_name".
+        "layout": first_slide.Layout,
+        "layout_name": final_layout_name,
+        "design_name": final_design_name,
     }
+
+    # Surface ambiguous layout-name matches so callers can detect a possible
+    # wrong-design selection (the issue's core failure mode).
+    if layout_ambiguous:
+        result["layout_ambiguous"] = True
+        result["warning"] = (
+            f"Layout '{layout_name}' exists in multiple designs "
+            f"({', '.join(ambiguous_designs)}); used design "
+            f"'{final_design_name}'. Pass design_index or like_slide_index "
+            f"to select a specific one."
+        )
 
     # Backward compatibility: include top-level slide_index/slide_id for count=1
     if count == 1:
@@ -614,6 +713,7 @@ def add_slide(params: AddSlideInput) -> str:
         result = ppt.execute(
             _add_slide_impl, params.position, params.layout,
             params.layout_name, params.design_index, params.count,
+            params.like_slide_index,
         )
         return json.dumps(result)
     except Exception as e:
@@ -752,13 +852,22 @@ def register_tools(mcp):
     async def tool_add_slide(params: AddSlideInput) -> str:
         """Add a new slide to the active presentation.
 
-        Specify a layout by name (e.g. 'blank', 'title', 'title_only') or
-        by PpSlideLayout integer constant. You can also provide a custom
+        To add a slide that looks just like an existing one, pass
+        like_slide_index — it inherits that slide's exact design + layout with
+        no layout-name ambiguity (this only copies the look, not the content;
+        use ppt_duplicate_slide for a full copy). This is the recommended path.
+
+        Otherwise specify a layout by name (e.g. 'blank', 'title', 'title_only')
+        or by PpSlideLayout integer constant. You can also provide a custom
         layout_name to match a layout from the slide master.
         Position is 1-based; omit to append at the end.
         Use design_index to pick a layout from a specific slide master/design.
         Use count to create multiple slides at once; when count > 1, returns
         a slides list instead of a single slide_index.
+
+        The response includes the actually-applied layout_name and design_name.
+        If layout_name matched layouts in multiple designs, the response also
+        includes layout_ambiguous=true and a warning naming the candidates.
         """
         return add_slide(params)
 
