@@ -143,13 +143,20 @@ class DeleteSlideInput(BaseModel):
                 "Provide only one of: slide_index, slide_indices, or "
                 "from_index+to_index (not a combination)"
             )
-        if listed and len(self.slide_indices) == 0:
-            raise ValueError("slide_indices must not be empty")
+        if listed:
+            if len(self.slide_indices) == 0:
+                raise ValueError("slide_indices must not be empty")
+            if any(i < 1 for i in self.slide_indices):
+                raise ValueError("slide_indices must all be >= 1")
+        if single and self.slide_index < 1:
+            raise ValueError("slide_index must be >= 1")
         if ranged:
             if self.from_index is None or self.to_index is None:
                 raise ValueError(
                     "Both from_index and to_index are required for a range"
                 )
+            if self.from_index < 1:
+                raise ValueError("from_index must be >= 1")
             if self.from_index > self.to_index:
                 raise ValueError(
                     f"from_index ({self.from_index}) must be <= to_index "
@@ -183,6 +190,14 @@ class DuplicateSlideInput(BaseModel):
             "consecutively starting at the target position."
         ),
     )
+
+    @model_validator(mode="after")
+    def _check_insert_at(self):
+        if self.insert_at is not None and self.insert_at != -1 and self.insert_at < 1:
+            raise ValueError(
+                "insert_at must be a positive 1-based position or -1 (end)"
+            )
+        return self
 
 
 class MoveSlideInput(BaseModel):
@@ -220,8 +235,15 @@ class MoveSlideInput(BaseModel):
             raise ValueError(
                 "Provide exactly one of slide_index or slide_indices"
             )
-        if listed and len(self.slide_indices) == 0:
-            raise ValueError("slide_indices must not be empty")
+        if listed:
+            if len(self.slide_indices) == 0:
+                raise ValueError("slide_indices must not be empty")
+            if any(i < 1 for i in self.slide_indices):
+                raise ValueError("slide_indices must all be >= 1")
+        if single and self.slide_index < 1:
+            raise ValueError("slide_index must be >= 1")
+        if self.new_position < 1:
+            raise ValueError("new_position must be >= 1")
         return self
 
 
@@ -284,8 +306,17 @@ class CopySlideInput(BaseModel):
             raise ValueError(
                 "Provide exactly one of slide_index or slide_indices"
             )
-        if listed and len(self.slide_indices) == 0:
-            raise ValueError("slide_indices must not be empty")
+        if listed:
+            if len(self.slide_indices) == 0:
+                raise ValueError("slide_indices must not be empty")
+            if any(i < 1 for i in self.slide_indices):
+                raise ValueError("slide_indices must all be >= 1")
+        if single and self.slide_index < 1:
+            raise ValueError("slide_index must be >= 1")
+        if self.insert_at is not None and self.insert_at != -1 and self.insert_at < 1:
+            raise ValueError(
+                "insert_at must be a positive 1-based position or -1 (end)"
+            )
         if (
             self.source_presentation_index is not None
             and self.source_presentation_name is not None
@@ -720,13 +751,14 @@ def _duplicate_slide_impl(
     count: int = 1,
 ) -> dict:
     app = ppt._get_app_impl()
-    nav_goto_slide(app, slide_index)
     pres = _resolve_presentation(app)
 
     if slide_index < 1 or slide_index > pres.Slides.Count:
         raise ValueError(
             f"Slide index {slide_index} out of range (1-{pres.Slides.Count})"
         )
+
+    nav_goto_slide(app, slide_index)
 
     # Track the source by SlideID — once we start moving copies around, its
     # index can shift (e.g. inserting a copy before it), so a fixed index is

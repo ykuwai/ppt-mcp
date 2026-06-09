@@ -2729,9 +2729,21 @@ class TestDeleteSlideInput:
         with pytest.raises(ValidationError, match="Both from_index and to_index"):
             DeleteSlideInput(from_index=2)
 
+    def test_range_missing_start_rejected(self):
+        with pytest.raises(ValidationError, match="Both from_index and to_index"):
+            DeleteSlideInput(to_index=5)
+
     def test_range_reversed_rejected(self):
         with pytest.raises(ValidationError, match="must be <="):
             DeleteSlideInput(from_index=5, to_index=2)
+
+    def test_list_with_zero_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            DeleteSlideInput(slide_indices=[1, 0, 3])
+
+    def test_range_from_zero_rejected(self):
+        with pytest.raises(ValidationError, match="from_index must be >= 1"):
+            DeleteSlideInput(from_index=0, to_index=3)
 
 
 class TestDuplicateSlideInput:
@@ -2750,6 +2762,13 @@ class TestDuplicateSlideInput:
     def test_count_zero_rejected(self):
         with pytest.raises(ValidationError):
             DuplicateSlideInput(slide_index=2, count=0)
+
+    def test_insert_at_minus_one_allowed(self):
+        assert DuplicateSlideInput(slide_index=2, insert_at=-1).insert_at == -1
+
+    def test_insert_at_zero_rejected(self):
+        with pytest.raises(ValidationError, match="positive 1-based position or -1"):
+            DuplicateSlideInput(slide_index=2, insert_at=0)
 
 
 class TestMoveSlideInput:
@@ -2774,6 +2793,14 @@ class TestMoveSlideInput:
     def test_empty_list_rejected(self):
         with pytest.raises(ValidationError, match="must not be empty"):
             MoveSlideInput(slide_indices=[], new_position=1)
+
+    def test_list_with_zero_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            MoveSlideInput(slide_indices=[1, 0], new_position=1)
+
+    def test_new_position_zero_rejected(self):
+        with pytest.raises(ValidationError, match="new_position must be >= 1"):
+            MoveSlideInput(slide_index=2, new_position=0)
 
     def test_new_position_required(self):
         with pytest.raises(ValidationError):
@@ -2806,6 +2833,17 @@ class TestCopySlideInput:
     def test_empty_list_rejected(self):
         with pytest.raises(ValidationError, match="must not be empty"):
             CopySlideInput(slide_indices=[])
+
+    def test_list_with_zero_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            CopySlideInput(slide_indices=[1, 0])
+
+    def test_insert_at_zero_rejected(self):
+        with pytest.raises(ValidationError, match="positive 1-based position or -1"):
+            CopySlideInput(slide_index=1, insert_at=0)
+
+    def test_insert_at_minus_one_allowed(self):
+        assert CopySlideInput(slide_index=1, insert_at=-1).insert_at == -1
 
     def test_source_index_and_name_rejected(self):
         with pytest.raises(ValidationError, match="source_presentation"):
