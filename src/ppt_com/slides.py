@@ -758,6 +758,14 @@ def _duplicate_slide_impl(
             f"Slide index {slide_index} out of range (1-{pres.Slides.Count})"
         )
 
+    # Validate an explicit insert_at up front (raise rather than silently clamp,
+    # consistent with ppt_copy_slide). Up to one past the end is allowed.
+    if insert_at is not None and insert_at != -1 and insert_at > pres.Slides.Count + 1:
+        raise ValueError(
+            f"insert_at {insert_at} out of range "
+            f"(1-{pres.Slides.Count + 1})"
+        )
+
     nav_goto_slide(app, slide_index)
 
     # Track the source by SlideID — once we start moving copies around, its
@@ -772,17 +780,15 @@ def _duplicate_slide_impl(
         new_slide = pres.Slides(cur_src_idx).Duplicate()(1)
         new_id = new_slide.SlideID
 
-        # Resolve the desired FINAL 1-based position of this copy.
+        # Resolve the desired FINAL 1-based position of this copy. insert_at was
+        # validated above, so each target lands in a valid range as the deck
+        # grows; min() is a defensive cap, not a silent correctness clamp.
         if insert_at is None:
             target = cur_src_idx + 1 + i          # right after the source, in order
         elif insert_at == -1:
             target = pres.Slides.Count             # append (count includes the copy)
         else:
-            target = insert_at + i
-
-        # Clamp to a valid range.
-        cnt = pres.Slides.Count
-        target = max(1, min(target, cnt))
+            target = min(insert_at + i, pres.Slides.Count)
 
         if new_slide.SlideIndex != target:
             new_slide.MoveTo(target)
