@@ -811,6 +811,20 @@ def _duplicate_slide_impl(
     return result
 
 
+def _compute_final_order(all_ids: list, src_ids: list, new_position: int) -> list:
+    """Compute the desired final order of slide IDs for a bulk move.
+
+    ``all_ids`` is every slide ID in current order; ``src_ids`` is the selected
+    IDs in their original relative order. The selected slides occupy positions
+    ``new_position .. new_position + len(src_ids) - 1`` and the unselected slides
+    keep their relative order around them. Pure function (no COM) so the
+    order-building logic is unit-testable without PowerPoint.
+    """
+    selected = set(src_ids)
+    others = [sid for sid in all_ids if sid not in selected]
+    return others[: new_position - 1] + list(src_ids) + others[new_position - 1:]
+
+
 def _move_slide_impl(
     new_position: int,
     slide_index: Optional[int] = None,
@@ -843,20 +857,12 @@ def _move_slide_impl(
     # Build the FULL desired final order of slide IDs, then realize it. A
     # direction heuristic based on sources[0] is not enough: a non-contiguous
     # selection that straddles the target can leave a member outside the block
-    # (e.g. [1,4,5] -> position 2). Instead, lay out the final order explicitly —
-    # the selected slides (in original order) occupy positions
-    # new_position .. new_position+k-1, and the unselected slides keep their
-    # relative order around them.
-    src_ids = [pres.Slides(i).SlideID for i in sources]
-    selected = set(src_ids)
-    others = [
-        pres.Slides(i).SlideID
-        for i in range(1, total + 1)
-        if pres.Slides(i).SlideID not in selected
-    ]
-    final_ids = (
-        others[: new_position - 1] + src_ids + others[new_position - 1:]
-    )
+    # (e.g. [1,4,5] -> position 2). Instead, lay out the final order explicitly
+    # via _compute_final_order. Read every ID once (total COM calls) and derive
+    # src_ids from that list rather than re-crossing the COM boundary per slide.
+    all_ids = [pres.Slides(i).SlideID for i in range(1, total + 1)]
+    src_ids = [all_ids[i - 1] for i in sources]
+    final_ids = _compute_final_order(all_ids, src_ids, new_position)
 
     # Realize the target order left-to-right. Invariant: once we reach position
     # f, positions 1..f-1 already hold their final slide, so the slide wanted at
