@@ -862,19 +862,26 @@ def _copy_slide_impl(
 
     append = insert_at is None or insert_at == -1
     if not append:
-        dst_total = dst_pres.Slides.Count
         # Allow inserting anywhere from the front up to one past the end.
-        if insert_at < 1 or insert_at > dst_total + 1:
+        if insert_at < 1 or insert_at > dst_pres.Slides.Count + 1:
             raise ValueError(
-                f"insert_at {insert_at} out of range (1-{dst_total + 1})"
+                f"insert_at {insert_at} out of range "
+                f"(1-{dst_pres.Slides.Count + 1})"
             )
+
+    # Capture source SlideIDs up front. For a same-presentation copy each paste
+    # shifts the numbering, so a fixed src_i would select the wrong slide on
+    # later iterations — resolve by SlideID each time instead.
+    src_ids = [src_pres.Slides(i).SlideID for i in sources]
 
     # Copy each source slide via the clipboard, which preserves formatting and
     # carries the source design across presentations.
     new_indices = []
-    for j, src_i in enumerate(sources):
-        src_pres.Slides(src_i).Copy()
-        if append:
+    for j, sid in enumerate(src_ids):
+        src_pres.Slides.FindBySlideID(sid).Copy()
+        # Paste(Index) inserts before slide Index; there is no slide one past
+        # the end to paste before, so fall back to append in that case.
+        if append or (insert_at + j) > dst_pres.Slides.Count:
             rng = dst_pres.Slides.Paste()
         else:
             rng = dst_pres.Slides.Paste(insert_at + j)
