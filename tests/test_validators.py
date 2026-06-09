@@ -42,6 +42,7 @@ from ppt_com.slides import (
     DuplicateSlideInput,
     MoveSlideInput,
     CopySlideInput,
+    _compute_final_order,
 )
 from ppt_com.text import (
     GetAllTextInput, SetBulletInput, SetParagraphFormatInput,
@@ -2805,6 +2806,49 @@ class TestMoveSlideInput:
     def test_new_position_required(self):
         with pytest.raises(ValidationError):
             MoveSlideInput(slide_index=2)
+
+
+class TestComputeFinalOrder:
+    """Regression tests for the bulk-move order computation (issue #169).
+
+    Uses 1-based position indices as stand-in slide IDs so the pure ordering
+    logic is exercised without COM. ``sources`` must be passed in original
+    (sorted) order, matching how _move_slide_impl derives src_ids.
+    """
+
+    @staticmethod
+    def _order(sources, total, new_position):
+        all_ids = list(range(1, total + 1))
+        src_ids = [all_ids[i - 1] for i in sources]
+        return _compute_final_order(all_ids, src_ids, new_position)
+
+    def test_noncontiguous_straddling_target(self):
+        # The Codex-reported bug: [1,4,5] -> 2 must yield [B,A,D,E,C] = 2,1,4,5,3.
+        assert self._order([1, 4, 5], 5, 2) == [2, 1, 4, 5, 3]
+
+    def test_contiguous_block_to_front(self):
+        # [D,E] -> front of a fresh 5-slide deck gives [D,E,A,B,C] = [4,5,1,2,3].
+        assert self._order([4, 5], 5, 1) == [4, 5, 1, 2, 3]
+
+    def test_single_to_front(self):
+        assert self._order([5], 5, 1) == [5, 1, 2, 3, 4]
+
+    def test_forward_move(self):
+        # Move slide 1 to position 4 in a 5-slide deck.
+        assert self._order([1], 5, 4) == [2, 3, 4, 1, 5]
+
+    def test_noop_position(self):
+        # Moving a contiguous block to where it already is leaves order intact.
+        assert self._order([2, 3], 5, 2) == [1, 2, 3, 4, 5]
+
+    def test_move_to_end(self):
+        assert self._order([1, 2], 5, 4) == [3, 4, 5, 1, 2]
+
+    def test_result_is_permutation(self):
+        result = self._order([1, 3, 5], 6, 2)
+        assert sorted(result) == [1, 2, 3, 4, 5, 6]
+        # Selected slides land contiguously at positions 2,3,4 in original order.
+        assert result[1:4] == [1, 3, 5]
 
 
 class TestCopySlideInput:
