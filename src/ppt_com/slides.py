@@ -7,7 +7,7 @@ import json
 import logging
 from typing import NamedTuple, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.color import hex_to_int
 from utils.com_wrapper import ppt
@@ -92,37 +92,248 @@ class AddSlideInput(BaseModel):
 
 
 class DeleteSlideInput(BaseModel):
-    """Input for deleting a slide."""
+    """Input for deleting one or more slides.
+
+    Provide exactly ONE of:
+      - slide_index (single slide), or
+      - slide_indices (an explicit list), or
+      - from_index + to_index (an inclusive range).
+    """
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    slide_index: int = Field(
-        ...,
-        description="1-based index of the slide to delete.",
+    slide_index: Optional[int] = Field(
+        default=None,
+        description="1-based index of a single slide to delete.",
     )
+    slide_indices: Optional[list[int]] = Field(
+        default=None,
+        description=(
+            "List of 1-based slide indices to delete in one call. "
+            "Deleted from highest index first internally, so the indices you "
+            "pass all refer to the CURRENT numbering (no manual bookkeeping)."
+        ),
+    )
+    from_index: Optional[int] = Field(
+        default=None,
+        description=(
+            "Start of an inclusive 1-based range to delete (used with to_index)."
+        ),
+    )
+    to_index: Optional[int] = Field(
+        default=None,
+        description=(
+            "End of an inclusive 1-based range to delete (used with from_index)."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _check_exactly_one_form(self):
+        single = self.slide_index is not None
+        listed = self.slide_indices is not None
+        ranged = self.from_index is not None or self.to_index is not None
+
+        forms = [single, listed, ranged]
+        if sum(forms) == 0:
+            raise ValueError(
+                "Provide one of: slide_index, slide_indices, or "
+                "from_index+to_index"
+            )
+        if sum(forms) > 1:
+            raise ValueError(
+                "Provide only one of: slide_index, slide_indices, or "
+                "from_index+to_index (not a combination)"
+            )
+        if listed:
+            if len(self.slide_indices) == 0:
+                raise ValueError("slide_indices must not be empty")
+            if any(i < 1 for i in self.slide_indices):
+                raise ValueError("slide_indices must all be >= 1")
+        if single and self.slide_index < 1:
+            raise ValueError("slide_index must be >= 1")
+        if ranged:
+            if self.from_index is None or self.to_index is None:
+                raise ValueError(
+                    "Both from_index and to_index are required for a range"
+                )
+            if self.from_index < 1:
+                raise ValueError("from_index must be >= 1")
+            if self.from_index > self.to_index:
+                raise ValueError(
+                    f"from_index ({self.from_index}) must be <= to_index "
+                    f"({self.to_index})"
+                )
+        return self
 
 
 class DuplicateSlideInput(BaseModel):
-    """Input for duplicating a slide."""
+    """Input for duplicating a slide (optionally to a target position, N times)."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
     slide_index: int = Field(
         ...,
         description="1-based index of the slide to duplicate.",
     )
+    insert_at: Optional[int] = Field(
+        default=None,
+        description=(
+            "1-based target position for the copies. "
+            "If omitted, copies are inserted immediately after the source "
+            "(the historical behavior). Use -1 to append at the end. "
+            "Collapses the old duplicate+move dance into one call."
+        ),
+    )
+    count: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Number of copies to make. When > 1, copies are placed "
+            "consecutively starting at the target position."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _check_insert_at(self):
+        if self.insert_at is not None and self.insert_at != -1 and self.insert_at < 1:
+            raise ValueError(
+                "insert_at must be a positive 1-based position or -1 (end)"
+            )
+        return self
 
 
 class MoveSlideInput(BaseModel):
-    """Input for moving a slide."""
+    """Input for moving one or more slides.
+
+    Provide exactly ONE of slide_index (single) or slide_indices (a block).
+    """
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    slide_index: int = Field(
-        ...,
-        description="Current 1-based index of the slide to move.",
+    slide_index: Optional[int] = Field(
+        default=None,
+        description="Current 1-based index of a single slide to move.",
+    )
+    slide_indices: Optional[list[int]] = Field(
+        default=None,
+        description=(
+            "List of current 1-based slide indices to move as a block. "
+            "Their relative order is preserved; they end up contiguous "
+            "starting at new_position. Indices refer to the CURRENT numbering."
+        ),
     )
     new_position: int = Field(
         ...,
-        description="Target 1-based position to move the slide to.",
+        description=(
+            "Target 1-based position. For a single slide it is the destination "
+            "index; for a block it is the index of the first moved slide."
+        ),
     )
+
+    @model_validator(mode="after")
+    def _check_exactly_one_form(self):
+        single = self.slide_index is not None
+        listed = self.slide_indices is not None
+        if single == listed:  # both set or both unset
+            raise ValueError(
+                "Provide exactly one of slide_index or slide_indices"
+            )
+        if listed:
+            if len(self.slide_indices) == 0:
+                raise ValueError("slide_indices must not be empty")
+            if any(i < 1 for i in self.slide_indices):
+                raise ValueError("slide_indices must all be >= 1")
+        if single and self.slide_index < 1:
+            raise ValueError("slide_index must be >= 1")
+        if self.new_position < 1:
+            raise ValueError("new_position must be >= 1")
+        return self
+
+
+class CopySlideInput(BaseModel):
+    """Input for copying slides, optionally to another open presentation."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    slide_index: Optional[int] = Field(
+        default=None,
+        description="1-based index of a single source slide to copy.",
+    )
+    slide_indices: Optional[list[int]] = Field(
+        default=None,
+        description=(
+            "List of 1-based source slide indices to copy in one call. "
+            "Copied in the given order."
+        ),
+    )
+    source_presentation_index: Optional[int] = Field(
+        default=None,
+        description=(
+            "1-based index of the source presentation. "
+            "If omitted, uses the active presentation."
+        ),
+    )
+    source_presentation_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "File name of the source presentation (e.g. 'Template.pptx'). "
+            "Alternative to source_presentation_index."
+        ),
+    )
+    to_presentation_index: Optional[int] = Field(
+        default=None,
+        description=(
+            "1-based index of the destination presentation. "
+            "If omitted, copies into the active presentation."
+        ),
+    )
+    to_presentation_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "File name of the destination presentation (e.g. 'Deck.pptx'). "
+            "Alternative to to_presentation_index."
+        ),
+    )
+    insert_at: Optional[int] = Field(
+        default=None,
+        description=(
+            "1-based position in the destination where the copies are inserted. "
+            "If omitted or -1, copies are appended at the end."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _check_source(self):
+        single = self.slide_index is not None
+        listed = self.slide_indices is not None
+        if single == listed:  # both set or both unset
+            raise ValueError(
+                "Provide exactly one of slide_index or slide_indices"
+            )
+        if listed:
+            if len(self.slide_indices) == 0:
+                raise ValueError("slide_indices must not be empty")
+            if any(i < 1 for i in self.slide_indices):
+                raise ValueError("slide_indices must all be >= 1")
+        if single and self.slide_index < 1:
+            raise ValueError("slide_index must be >= 1")
+        if self.insert_at is not None and self.insert_at != -1 and self.insert_at < 1:
+            raise ValueError(
+                "insert_at must be a positive 1-based position or -1 (end)"
+            )
+        if (
+            self.source_presentation_index is not None
+            and self.source_presentation_name is not None
+        ):
+            raise ValueError(
+                "Specify either source_presentation_index or "
+                "source_presentation_name, not both"
+            )
+        if (
+            self.to_presentation_index is not None
+            and self.to_presentation_name is not None
+        ):
+            raise ValueError(
+                "Specify either to_presentation_index or "
+                "to_presentation_name, not both"
+            )
+        return self
 
 
 class ListSlidesInput(BaseModel):
@@ -482,27 +693,64 @@ def _add_slide_impl(
     return result
 
 
-def _delete_slide_impl(slide_index: int) -> dict:
+def _delete_slide_impl(
+    slide_index: Optional[int] = None,
+    slide_indices: Optional[list] = None,
+    from_index: Optional[int] = None,
+    to_index: Optional[int] = None,
+) -> dict:
     app = ppt._get_app_impl()
-    nav_goto_slide(app, slide_index)
     pres = _resolve_presentation(app)
+    total = pres.Slides.Count
 
-    if slide_index < 1 or slide_index > pres.Slides.Count:
+    # Normalize the three input forms into a sorted, de-duplicated index set.
+    if slide_index is not None:
+        targets = [slide_index]
+    elif slide_indices is not None:
+        targets = list(slide_indices)
+    else:
+        targets = list(range(from_index, to_index + 1))
+
+    targets = sorted(set(targets))
+    if not targets:
+        raise ValueError("No slides to delete")
+
+    out_of_range = [i for i in targets if i < 1 or i > total]
+    if out_of_range:
         raise ValueError(
-            f"Slide index {slide_index} out of range (1-{pres.Slides.Count})"
+            f"Slide index(es) {out_of_range} out of range (1-{total})"
+        )
+    if len(targets) >= total:
+        raise ValueError(
+            "Cannot delete every slide — a presentation must keep at least "
+            f"one slide (requested {len(targets)} of {total})"
         )
 
-    pres.Slides(slide_index).Delete()
-    return {
+    # Navigate to the lowest target before deleting so the editor follows.
+    nav_goto_slide(app, targets[0])
+
+    # Delete from the highest index first so earlier indices stay valid.
+    for idx in sorted(targets, reverse=True):
+        pres.Slides(idx).Delete()
+
+    result = {
         "success": True,
-        "deleted_index": slide_index,
+        "deleted_indices": targets,
+        "deleted_count": len(targets),
         "remaining_count": pres.Slides.Count,
     }
+    # Backward compatibility for single-slide callers.
+    if slide_index is not None:
+        result["deleted_index"] = slide_index
+    return result
 
 
-def _duplicate_slide_impl(slide_index: int) -> dict:
+def _duplicate_slide_impl(
+    slide_index: int,
+    insert_at: Optional[int] = None,
+    count: int = 1,
+) -> dict:
     app = ppt._get_app_impl()
-    nav_goto_slide(app, slide_index)
     pres = _resolve_presentation(app)
 
     if slide_index < 1 or slide_index > pres.Slides.Count:
@@ -510,35 +758,185 @@ def _duplicate_slide_impl(slide_index: int) -> dict:
             f"Slide index {slide_index} out of range (1-{pres.Slides.Count})"
         )
 
-    dup_range = pres.Slides(slide_index).Duplicate()
-    new_slide = dup_range(1)
-    return {
-        "success": True,
-        "new_slide_index": new_slide.SlideIndex,
-        "new_slide_id": new_slide.SlideID,
-    }
+    # Validate an explicit insert_at up front (raise rather than silently clamp,
+    # consistent with ppt_copy_slide). Up to one past the end is allowed.
+    if insert_at is not None and insert_at != -1 and insert_at > pres.Slides.Count + 1:
+        raise ValueError(
+            f"insert_at {insert_at} out of range "
+            f"(1-{pres.Slides.Count + 1})"
+        )
 
-
-def _move_slide_impl(slide_index: int, new_position: int) -> dict:
-    app = ppt._get_app_impl()
     nav_goto_slide(app, slide_index)
+
+    # Track the source by SlideID — once we start moving copies around, its
+    # index can shift (e.g. inserting a copy before it), so a fixed index is
+    # unsafe across iterations.
+    src_id = pres.Slides(slide_index).SlideID
+
+    new_indices = []
+    new_ids = []
+    for i in range(count):
+        cur_src_idx = pres.Slides.FindBySlideID(src_id).SlideIndex
+        new_slide = pres.Slides(cur_src_idx).Duplicate()(1)
+        new_id = new_slide.SlideID
+
+        # Resolve the desired FINAL 1-based position of this copy. insert_at was
+        # validated above, so each target lands in a valid range as the deck
+        # grows; min() is a defensive cap, not a silent correctness clamp.
+        if insert_at is None:
+            target = cur_src_idx + 1 + i          # right after the source, in order
+        elif insert_at == -1:
+            target = pres.Slides.Count             # append (count includes the copy)
+        else:
+            target = min(insert_at + i, pres.Slides.Count)
+
+        if new_slide.SlideIndex != target:
+            new_slide.MoveTo(target)
+
+        new_indices.append(new_slide.SlideIndex)
+        new_ids.append(new_id)
+
+    nav_goto_slide(app, new_indices[-1])
+
+    result = {
+        "success": True,
+        "count": len(new_indices),
+        "new_slide_indices": new_indices,
+        "new_slide_ids": new_ids,
+    }
+    # Backward compatibility for single-copy callers.
+    if count == 1:
+        result["new_slide_index"] = new_indices[0]
+        result["new_slide_id"] = new_ids[0]
+    return result
+
+
+def _move_slide_impl(
+    new_position: int,
+    slide_index: Optional[int] = None,
+    slide_indices: Optional[list] = None,
+) -> dict:
+    app = ppt._get_app_impl()
     pres = _resolve_presentation(app)
+    total = pres.Slides.Count
 
-    count = pres.Slides.Count
-    if slide_index < 1 or slide_index > count:
+    # Normalize to a sorted, de-duplicated list of source indices.
+    sources = [slide_index] if slide_index is not None else list(slide_indices)
+    sources = sorted(set(sources))
+
+    out_of_range = [i for i in sources if i < 1 or i > total]
+    if out_of_range:
         raise ValueError(
-            f"Slide index {slide_index} out of range (1-{count})"
-        )
-    if new_position < 1 or new_position > count:
-        raise ValueError(
-            f"New position {new_position} out of range (1-{count})"
+            f"Slide index(es) {out_of_range} out of range (1-{total})"
         )
 
-    pres.Slides(slide_index).MoveTo(toPos=new_position)
+    k = len(sources)
+    max_start = total - k + 1
+    if new_position < 1 or new_position > max_start:
+        raise ValueError(
+            f"new_position {new_position} out of range (1-{max_start}) "
+            f"for a block of {k} slide(s)"
+        )
+
+    nav_goto_slide(app, sources[0])
+
+    # Anchor on SlideIDs because indices shift as we move. The j-th slide (in
+    # original order) must end up at new_position + j. MoveTo uses final-position
+    # semantics, so the iteration order depends on direction: a backward move
+    # (target at/below the block) places front-to-back; a forward move places
+    # back-to-front. Otherwise already-placed slides get displaced.
+    src_ids = [pres.Slides(i).SlideID for i in sources]
+    order = range(k) if new_position <= sources[0] else range(k - 1, -1, -1)
+    for j in order:
+        cur_idx = pres.Slides.FindBySlideID(src_ids[j]).SlideIndex
+        target = new_position + j
+        if cur_idx != target:
+            pres.Slides(cur_idx).MoveTo(toPos=target)
+
+    result = {
+        "success": True,
+        "moved_slide_ids": src_ids,
+        "moved_count": k,
+        "new_start_position": new_position,
+    }
+    # Backward compatibility for single-slide callers.
+    if slide_index is not None:
+        result["moved_from"] = slide_index
+        result["moved_to"] = new_position
+    return result
+
+
+def _copy_slide_impl(
+    slide_index: Optional[int],
+    slide_indices: Optional[list],
+    source_presentation_index: Optional[int],
+    source_presentation_name: Optional[str],
+    to_presentation_index: Optional[int],
+    to_presentation_name: Optional[str],
+    insert_at: Optional[int],
+) -> dict:
+    app = ppt._get_app_impl()
+
+    src_pres = _resolve_presentation(
+        app,
+        presentation_index=source_presentation_index,
+        presentation_name=source_presentation_name,
+    )
+    dst_pres = _resolve_presentation(
+        app,
+        presentation_index=to_presentation_index,
+        presentation_name=to_presentation_name,
+    )
+
+    sources = [slide_index] if slide_index is not None else list(slide_indices)
+
+    src_total = src_pres.Slides.Count
+    out_of_range = [i for i in sources if i < 1 or i > src_total]
+    if out_of_range:
+        raise ValueError(
+            f"Source slide index(es) {out_of_range} out of range "
+            f"(1-{src_total})"
+        )
+
+    append = insert_at is None or insert_at == -1
+    if not append:
+        # Allow inserting anywhere from the front up to one past the end.
+        if insert_at < 1 or insert_at > dst_pres.Slides.Count + 1:
+            raise ValueError(
+                f"insert_at {insert_at} out of range "
+                f"(1-{dst_pres.Slides.Count + 1})"
+            )
+
+    # Capture source SlideIDs up front. For a same-presentation copy each paste
+    # shifts the numbering, so a fixed src_i would select the wrong slide on
+    # later iterations — resolve by SlideID each time instead.
+    src_ids = [src_pres.Slides(i).SlideID for i in sources]
+
+    # Copy each source slide via the clipboard, which preserves formatting and
+    # carries the source design across presentations.
+    new_indices = []
+    for j, sid in enumerate(src_ids):
+        src_pres.Slides.FindBySlideID(sid).Copy()
+        # Paste(Index) inserts before slide Index; there is no slide one past
+        # the end to paste before, so fall back to append in that case.
+        if append or (insert_at + j) > dst_pres.Slides.Count:
+            rng = dst_pres.Slides.Paste()
+        else:
+            rng = dst_pres.Slides.Paste(insert_at + j)
+        new_indices.append(rng(1).SlideIndex)
+
+    # Navigate the destination's window to the last pasted slide.
+    try:
+        nav_goto_slide(app, new_indices[-1])
+    except Exception:
+        pass
+
     return {
         "success": True,
-        "moved_from": slide_index,
-        "moved_to": new_position,
+        "copied_count": len(new_indices),
+        "new_slide_indices": new_indices,
+        "target_presentation": dst_pres.Name,
+        "source_presentation": src_pres.Name,
     }
 
 
@@ -721,9 +1119,15 @@ def add_slide(params: AddSlideInput) -> str:
 
 
 def delete_slide(params: DeleteSlideInput) -> str:
-    """Delete a slide by index."""
+    """Delete one or more slides."""
     try:
-        result = ppt.execute(_delete_slide_impl, params.slide_index)
+        result = ppt.execute(
+            _delete_slide_impl,
+            params.slide_index,
+            params.slide_indices,
+            params.from_index,
+            params.to_index,
+        )
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
@@ -732,17 +1136,43 @@ def delete_slide(params: DeleteSlideInput) -> str:
 def duplicate_slide(params: DuplicateSlideInput) -> str:
     """Duplicate a slide."""
     try:
-        result = ppt.execute(_duplicate_slide_impl, params.slide_index)
+        result = ppt.execute(
+            _duplicate_slide_impl,
+            params.slide_index,
+            params.insert_at,
+            params.count,
+        )
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
 
 def move_slide(params: MoveSlideInput) -> str:
-    """Move a slide to a new position."""
+    """Move one or more slides to a new position."""
     try:
         result = ppt.execute(
-            _move_slide_impl, params.slide_index, params.new_position
+            _move_slide_impl,
+            params.new_position,
+            params.slide_index,
+            params.slide_indices,
+        )
+        return json.dumps(result)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def copy_slide(params: CopySlideInput) -> str:
+    """Copy slides, optionally into another open presentation."""
+    try:
+        result = ppt.execute(
+            _copy_slide_impl,
+            params.slide_index,
+            params.slide_indices,
+            params.source_presentation_index,
+            params.source_presentation_name,
+            params.to_presentation_index,
+            params.to_presentation_name,
+            params.insert_at,
         )
         return json.dumps(result)
     except Exception as e:
@@ -882,11 +1312,17 @@ def register_tools(mcp):
         },
     )
     async def tool_delete_slide(params: DeleteSlideInput) -> str:
-        """Delete a slide by its 1-based index.
+        """Delete one or more slides in a single call.
 
-        Remaining slides re-index automatically after deletion.
-        When deleting multiple slides, delete from highest index first
-        to avoid index shifting.
+        Provide exactly one of:
+          - slide_index: a single 1-based index, or
+          - slide_indices: a list of 1-based indices, or
+          - from_index + to_index: an inclusive 1-based range.
+
+        For the list/range forms, slides are removed highest-index-first
+        internally, so every index you pass refers to the CURRENT numbering —
+        no manual bookkeeping for index shifting. Deleting all slides is
+        rejected (a presentation must keep at least one).
         """
         return delete_slide(params)
 
@@ -901,9 +1337,17 @@ def register_tools(mcp):
         },
     )
     async def tool_duplicate_slide(params: DuplicateSlideInput) -> str:
-        """Duplicate a slide. The copy is inserted immediately after the original.
+        """Duplicate a slide, optionally at a target position and N times.
 
-        Returns the new slide's index and ID.
+        - insert_at omitted: copies go immediately after the source (historical
+          behavior).
+        - insert_at = -1: append at the end.
+        - insert_at = N: the first copy ends up at 1-based position N; extra
+          copies (count > 1) follow consecutively.
+
+        This collapses the old "duplicate then move" two-call dance into one.
+        Returns new_slide_indices / new_slide_ids (plus new_slide_index for a
+        single copy).
         """
         return duplicate_slide(params)
 
@@ -918,11 +1362,46 @@ def register_tools(mcp):
         },
     )
     async def tool_move_slide(params: MoveSlideInput) -> str:
-        """Move a slide to a new position within the presentation.
+        """Move one or more slides to a new position within the presentation.
 
-        Both slide_index and new_position are 1-based.
+        Provide exactly one of:
+          - slide_index: a single slide, or
+          - slide_indices: a block of slides (relative order preserved).
+
+        new_position is the 1-based destination of the first moved slide; a
+        block ends up contiguous at new_position..new_position+k-1. All indices
+        refer to the CURRENT numbering — the move is anchored on slide IDs so
+        index shifting is handled internally.
         """
         return move_slide(params)
+
+    @mcp.tool(
+        name="ppt_copy_slide",
+        annotations={
+            "title": "Copy Slide",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": False,
+        },
+    )
+    async def tool_copy_slide(params: CopySlideInput) -> str:
+        """Copy one or more slides, optionally into another open presentation.
+
+        Provide exactly one of slide_index or slide_indices for the source.
+        By default the source and destination are the active presentation; set
+        source_presentation_* / to_presentation_* (by index or name) to copy
+        between different open files — e.g. pull layout slides from a template
+        deck into the deck you are building.
+
+        insert_at is the 1-based destination position for the first copy; omit
+        it (or use -1) to append at the end. Copies are made via the clipboard,
+        which preserves formatting and carries the source design across files.
+
+        Both presentations must already be open (use ppt_open_presentation).
+        Returns new_slide_indices and the destination presentation name.
+        """
+        return copy_slide(params)
 
     @mcp.tool(
         name="ppt_list_slides",

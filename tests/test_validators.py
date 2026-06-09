@@ -36,7 +36,13 @@ from ppt_com.animation import AddAnimationInput, RemoveAnimationInput, UpdateAni
 from ppt_com.connectors import AddConnectorInput, FormatConnectorInput
 from ppt_com.layout import SetSlideBackgroundInput
 from ppt_com.presentation import CreatePresentationInput, OpenPresentationInput
-from ppt_com.slides import SetSlideNotesInput
+from ppt_com.slides import (
+    SetSlideNotesInput,
+    DeleteSlideInput,
+    DuplicateSlideInput,
+    MoveSlideInput,
+    CopySlideInput,
+)
 from ppt_com.text import (
     GetAllTextInput, SetBulletInput, SetParagraphFormatInput,
     CheckTypographyInput, FindReplaceTextInput,
@@ -2685,6 +2691,175 @@ class TestSetBulletAppearance:
         inp = self._ok(bullet_type="numbered", numbered_style="roman_lc_period")
         assert inp.bullet_type == "numbered"
         assert inp.numbered_style == "roman_lc_period"
+
+
+class TestDeleteSlideInput:
+    """Tests for bulk delete forms added in issue #169."""
+
+    def test_single_index(self):
+        inp = DeleteSlideInput(slide_index=3)
+        assert inp.slide_index == 3
+        assert inp.slide_indices is None
+
+    def test_list_form(self):
+        inp = DeleteSlideInput(slide_indices=[1, 3, 5])
+        assert inp.slide_indices == [1, 3, 5]
+
+    def test_range_form(self):
+        inp = DeleteSlideInput(from_index=2, to_index=5)
+        assert inp.from_index == 2 and inp.to_index == 5
+
+    def test_no_form_rejected(self):
+        with pytest.raises(ValidationError, match="Provide one of"):
+            DeleteSlideInput()
+
+    def test_multiple_forms_rejected(self):
+        with pytest.raises(ValidationError, match="only one of"):
+            DeleteSlideInput(slide_index=1, slide_indices=[2, 3])
+
+    def test_index_and_range_rejected(self):
+        with pytest.raises(ValidationError, match="only one of"):
+            DeleteSlideInput(slide_index=1, from_index=2, to_index=3)
+
+    def test_empty_list_rejected(self):
+        with pytest.raises(ValidationError, match="must not be empty"):
+            DeleteSlideInput(slide_indices=[])
+
+    def test_range_missing_end_rejected(self):
+        with pytest.raises(ValidationError, match="Both from_index and to_index"):
+            DeleteSlideInput(from_index=2)
+
+    def test_range_missing_start_rejected(self):
+        with pytest.raises(ValidationError, match="Both from_index and to_index"):
+            DeleteSlideInput(to_index=5)
+
+    def test_range_reversed_rejected(self):
+        with pytest.raises(ValidationError, match="must be <="):
+            DeleteSlideInput(from_index=5, to_index=2)
+
+    def test_list_with_zero_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            DeleteSlideInput(slide_indices=[1, 0, 3])
+
+    def test_range_from_zero_rejected(self):
+        with pytest.raises(ValidationError, match="from_index must be >= 1"):
+            DeleteSlideInput(from_index=0, to_index=3)
+
+
+class TestDuplicateSlideInput:
+    """Tests for positional/multi duplicate added in issue #169."""
+
+    def test_defaults(self):
+        inp = DuplicateSlideInput(slide_index=2)
+        assert inp.insert_at is None
+        assert inp.count == 1
+
+    def test_insert_at_and_count(self):
+        inp = DuplicateSlideInput(slide_index=2, insert_at=-1, count=3)
+        assert inp.insert_at == -1
+        assert inp.count == 3
+
+    def test_count_zero_rejected(self):
+        with pytest.raises(ValidationError):
+            DuplicateSlideInput(slide_index=2, count=0)
+
+    def test_insert_at_minus_one_allowed(self):
+        assert DuplicateSlideInput(slide_index=2, insert_at=-1).insert_at == -1
+
+    def test_insert_at_zero_rejected(self):
+        with pytest.raises(ValidationError, match="positive 1-based position or -1"):
+            DuplicateSlideInput(slide_index=2, insert_at=0)
+
+
+class TestMoveSlideInput:
+    """Tests for bulk move added in issue #169."""
+
+    def test_single(self):
+        inp = MoveSlideInput(slide_index=4, new_position=1)
+        assert inp.slide_index == 4 and inp.new_position == 1
+
+    def test_block(self):
+        inp = MoveSlideInput(slide_indices=[4, 5], new_position=1)
+        assert inp.slide_indices == [4, 5]
+
+    def test_both_forms_rejected(self):
+        with pytest.raises(ValidationError, match="exactly one"):
+            MoveSlideInput(slide_index=1, slide_indices=[2, 3], new_position=1)
+
+    def test_neither_form_rejected(self):
+        with pytest.raises(ValidationError, match="exactly one"):
+            MoveSlideInput(new_position=1)
+
+    def test_empty_list_rejected(self):
+        with pytest.raises(ValidationError, match="must not be empty"):
+            MoveSlideInput(slide_indices=[], new_position=1)
+
+    def test_list_with_zero_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            MoveSlideInput(slide_indices=[1, 0], new_position=1)
+
+    def test_new_position_zero_rejected(self):
+        with pytest.raises(ValidationError, match="new_position must be >= 1"):
+            MoveSlideInput(slide_index=2, new_position=0)
+
+    def test_new_position_required(self):
+        with pytest.raises(ValidationError):
+            MoveSlideInput(slide_index=2)
+
+
+class TestCopySlideInput:
+    """Tests for cross-presentation copy added in issue #169."""
+
+    def test_single_source(self):
+        inp = CopySlideInput(slide_index=1)
+        assert inp.slide_index == 1
+
+    def test_list_source_with_target(self):
+        inp = CopySlideInput(
+            slide_indices=[1, 2], to_presentation_name="Deck.pptx", insert_at=3
+        )
+        assert inp.slide_indices == [1, 2]
+        assert inp.to_presentation_name == "Deck.pptx"
+        assert inp.insert_at == 3
+
+    def test_both_source_forms_rejected(self):
+        with pytest.raises(ValidationError, match="exactly one"):
+            CopySlideInput(slide_index=1, slide_indices=[2, 3])
+
+    def test_no_source_rejected(self):
+        with pytest.raises(ValidationError, match="exactly one"):
+            CopySlideInput()
+
+    def test_empty_list_rejected(self):
+        with pytest.raises(ValidationError, match="must not be empty"):
+            CopySlideInput(slide_indices=[])
+
+    def test_list_with_zero_rejected(self):
+        with pytest.raises(ValidationError, match=">= 1"):
+            CopySlideInput(slide_indices=[1, 0])
+
+    def test_insert_at_zero_rejected(self):
+        with pytest.raises(ValidationError, match="positive 1-based position or -1"):
+            CopySlideInput(slide_index=1, insert_at=0)
+
+    def test_insert_at_minus_one_allowed(self):
+        assert CopySlideInput(slide_index=1, insert_at=-1).insert_at == -1
+
+    def test_source_index_and_name_rejected(self):
+        with pytest.raises(ValidationError, match="source_presentation"):
+            CopySlideInput(
+                slide_index=1,
+                source_presentation_index=1,
+                source_presentation_name="A.pptx",
+            )
+
+    def test_target_index_and_name_rejected(self):
+        with pytest.raises(ValidationError, match="to_presentation"):
+            CopySlideInput(
+                slide_index=1,
+                to_presentation_index=1,
+                to_presentation_name="A.pptx",
+            )
 
 
 # ============================================================================
