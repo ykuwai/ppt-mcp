@@ -2827,7 +2827,7 @@ class TestComputeFinalOrder:
         assert self._order([1, 4, 5], 5, 2) == [2, 1, 4, 5, 3]
 
     def test_contiguous_block_to_front(self):
-        # [4,5] -> 1 yields [E,C,B,A,D]; from A,B,C,D,E that is 4,5,1,2,3.
+        # [D,E] -> front of a fresh 5-slide deck gives [D,E,A,B,C] = [4,5,1,2,3].
         assert self._order([4, 5], 5, 1) == [4, 5, 1, 2, 3]
 
     def test_single_to_front(self):
