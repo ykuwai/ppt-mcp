@@ -2260,10 +2260,15 @@ class TestExportImagesInputSelection:
         with pytest.raises(ValidationError, match="Both from_index and to_index"):
             ExportImagesInput(output_dir="C:/tmp", to_index=3)
 
-    def test_range_from_above_one(self):
+    def test_range_from_below_one(self):
         """from_index below 1 is rejected."""
         with pytest.raises(ValidationError, match="from_index must be >= 1"):
             ExportImagesInput(output_dir="C:/tmp", from_index=0, to_index=3)
+
+    def test_range_to_below_one(self):
+        """to_index below 1 is rejected with a clear message."""
+        with pytest.raises(ValidationError, match="to_index must be >= 1"):
+            ExportImagesInput(output_dir="C:/tmp", from_index=1, to_index=0)
 
     def test_range_inverted_raises(self):
         """from_index greater than to_index is rejected."""

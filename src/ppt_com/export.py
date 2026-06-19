@@ -154,6 +154,8 @@ class ExportImagesInput(BaseModel):
                 )
             if self.from_index < 1:
                 raise ValueError("from_index must be >= 1")
+            if self.to_index < 1:
+                raise ValueError("to_index must be >= 1")
             if self.from_index > self.to_index:
                 raise ValueError(
                     f"from_index ({self.from_index}) must be <= to_index "
