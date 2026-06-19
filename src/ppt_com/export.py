@@ -144,6 +144,8 @@ class ExportImagesInput(BaseModel):
                 raise ValueError("slide_indices must not be empty")
             if any(i < 1 for i in self.slide_indices):
                 raise ValueError("slide_indices must all be >= 1")
+            if len(self.slide_indices) != len(set(self.slide_indices)):
+                raise ValueError("slide_indices must not contain duplicate indices")
 
         if ranged:
             if self.from_index is None or self.to_index is None:
@@ -160,6 +162,11 @@ class ExportImagesInput(BaseModel):
 
         if self.file_name is not None and not single:
             raise ValueError("file_name requires slide_index to be set")
+
+        # PowerPoint's Slide.Export takes ScaleWidth before ScaleHeight
+        # positionally, so height cannot be supplied without width.
+        if self.height is not None and self.width is None:
+            raise ValueError("height requires width to be set")
 
         return self
 
@@ -296,6 +303,8 @@ def _export_one_slide(slide, abs_file_path, filter_name, width, height) -> None:
 
     Slide.Export positional args: FileName, FilterName, ScaleWidth, ScaleHeight.
     """
+    # height without width is rejected upstream (validate_selection), so the
+    # only valid combinations are: both, width-only, or neither.
     if width is not None and height is not None:
         slide.Export(abs_file_path, filter_name, width, height)
     elif width is not None:
@@ -371,7 +380,7 @@ def _export_images_impl(
             )
             exported_files.append(abs_file_path)
 
-        return {
+        result = {
             "success": True,
             "output_dir": abs_dir,
             "format": fmt_key,
@@ -379,6 +388,11 @@ def _export_images_impl(
             "files_count": len(exported_files),
             "files": exported_files,
         }
+        # Backward compatibility: legacy single-slide callers expect a
+        # top-level "slide_index" key in the response.
+        if slide_index is not None:
+            result["slide_index"] = slide_index
+        return result
 
     # No selection: export every slide. SaveAs creates a folder of images.
     pres.SaveAs(abs_dir, IMAGE_FORMAT_MAP[fmt_key])
