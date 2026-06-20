@@ -60,7 +60,14 @@ class ExportPDFInput(BaseModel):
 
 
 class ExportImagesInput(BaseModel):
-    """Input for exporting slides as images."""
+    """Input for exporting slides as images.
+
+    Choose ONE selection mode (or none to export every slide):
+      - slide_index: a single slide.
+      - slide_indices: an explicit list of slides (e.g. [1, 3, 5]).
+      - from_index + to_index: an inclusive range of slides.
+      - (none of the above): every slide in the presentation.
+    """
     model_config = ConfigDict(str_strip_whitespace=True)
 
     output_dir: str = Field(
@@ -73,25 +80,96 @@ class ExportImagesInput(BaseModel):
     )
     slide_index: Optional[int] = Field(
         default=None,
-        description="1-based slide index to export a single slide. If omitted, exports all slides.",
+        description="1-based index of a single slide to export.",
+    )
+    slide_indices: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "Explicit list of 1-based slide indices to export at once "
+            "(e.g. [1, 3, 5]). Use this to export several specific slides."
+        ),
+    )
+    from_index: Optional[int] = Field(
+        default=None,
+        description=(
+            "Start of an inclusive 1-based range of slides to export "
+            "(used together with to_index)."
+        ),
+    )
+    to_index: Optional[int] = Field(
+        default=None,
+        description=(
+            "End of an inclusive 1-based range of slides to export "
+            "(used together with from_index)."
+        ),
     )
     width: Optional[int] = Field(
         default=None,
-        description="Image width in pixels (for single slide export).",
+        description=(
+            "Image width in pixels. Applies to single, slide_indices, and "
+            "range exports (ignored when exporting every slide)."
+        ),
     )
     height: Optional[int] = Field(
         default=None,
-        description="Image height in pixels (for single slide export).",
+        description=(
+            "Image height in pixels. Applies to single, slide_indices, and "
+            "range exports (ignored when exporting every slide)."
+        ),
     )
     file_name: Optional[str] = Field(
         default=None,
-        description="Custom filename for single-slide export (e.g. 'cover.png'). If omitted, defaults to 'Slide{N}.{format}'. Requires slide_index.",
+        description=(
+            "Custom filename for single-slide export (e.g. 'cover.png'). "
+            "If omitted, defaults to 'Slide{N}.{format}'. Requires slide_index "
+            "(not allowed for multi-slide or range exports)."
+        ),
     )
 
     @model_validator(mode="after")
-    def file_name_requires_slide_index(self):
-        if self.file_name is not None and self.slide_index is None:
+    def validate_selection(self):
+        single = self.slide_index is not None
+        listed = self.slide_indices is not None
+        ranged = self.from_index is not None or self.to_index is not None
+
+        # At most one selection mode may be used at a time.
+        if sum([single, listed, ranged]) > 1:
+            raise ValueError(
+                "Provide only one of: slide_index, slide_indices, or "
+                "from_index+to_index (not a combination)"
+            )
+
+        if listed:
+            if len(self.slide_indices) == 0:
+                raise ValueError("slide_indices must not be empty")
+            if any(i < 1 for i in self.slide_indices):
+                raise ValueError("slide_indices must all be >= 1")
+            if len(self.slide_indices) != len(set(self.slide_indices)):
+                raise ValueError("slide_indices must not contain duplicate indices")
+
+        if ranged:
+            if self.from_index is None or self.to_index is None:
+                raise ValueError(
+                    "Both from_index and to_index are required for a range"
+                )
+            if self.from_index < 1:
+                raise ValueError("from_index must be >= 1")
+            if self.to_index < 1:
+                raise ValueError("to_index must be >= 1")
+            if self.from_index > self.to_index:
+                raise ValueError(
+                    f"from_index ({self.from_index}) must be <= to_index "
+                    f"({self.to_index})"
+                )
+
+        if self.file_name is not None and not single:
             raise ValueError("file_name requires slide_index to be set")
+
+        # PowerPoint's Slide.Export takes ScaleWidth before ScaleHeight
+        # positionally, so height cannot be supplied without width.
+        if self.height is not None and self.width is None:
+            raise ValueError("height requires width to be set")
+
         return self
 
 
@@ -222,10 +300,28 @@ def _export_pdf_impl(
     }
 
 
+def _export_one_slide(slide, abs_file_path, filter_name, width, height) -> None:
+    """Export a single slide via COM, honoring optional pixel dimensions.
+
+    Slide.Export positional args: FileName, FilterName, ScaleWidth, ScaleHeight.
+    """
+    # height without width is rejected upstream (validate_selection), so the
+    # only valid combinations are: both, width-only, or neither.
+    if width is not None and height is not None:
+        slide.Export(abs_file_path, filter_name, width, height)
+    elif width is not None:
+        slide.Export(abs_file_path, filter_name, width)
+    else:
+        slide.Export(abs_file_path, filter_name)
+
+
 def _export_images_impl(
     output_dir: str,
     format: str,
     slide_index: Optional[int],
+    slide_indices: Optional[List[int]],
+    from_index: Optional[int],
+    to_index: Optional[int],
     width: Optional[int],
     height: Optional[int],
     file_name: Optional[str],
@@ -237,6 +333,7 @@ def _export_images_impl(
             "Use ppt_create_presentation or ppt_open_presentation first."
         )
     pres = ppt._get_pres_impl()
+    total_slides = pres.Slides.Count
 
     fmt_key = format.lower().strip()
     if fmt_key not in IMAGE_FORMAT_MAP:
@@ -246,63 +343,77 @@ def _export_images_impl(
 
     filter_name = IMAGE_FILTER_MAP[fmt_key]
 
-    if slide_index is not None:
-        # Export single slide
-        if slide_index < 1 or slide_index > pres.Slides.Count:
-            raise ValueError(
-                f"Slide index {slide_index} out of range (1-{pres.Slides.Count})"
-            )
+    # COM requires absolute Windows-style paths
+    abs_dir = os.path.abspath(output_dir)
 
-        # COM requires absolute Windows-style paths
-        abs_dir = os.path.abspath(output_dir)
+    # Resolve which slides to export.
+    if slide_index is not None:
+        targets = [slide_index]
+    elif slide_indices is not None:
+        targets = list(slide_indices)
+    elif from_index is not None and to_index is not None:
+        targets = list(range(from_index, to_index + 1))
+    else:
+        targets = None  # None means "every slide" (handled via SaveAs below)
+
+    if targets is not None:
+        # Validate all requested indices up front.
+        for idx in targets:
+            if idx < 1 or idx > total_slides:
+                raise ValueError(
+                    f"Slide index {idx} out of range (1-{total_slides})"
+                )
+
         if not os.path.exists(abs_dir):
             os.makedirs(abs_dir, exist_ok=True)
 
-        if file_name:
-            # Ensure correct extension (strip wrong extension to avoid double ext)
-            base, ext = os.path.splitext(file_name)
-            if ext.lower() != f".{fmt_key}":
-                file_name = f"{base}.{fmt_key}"
-        else:
-            file_name = f"Slide{slide_index}.{fmt_key}"
-        abs_file_path = os.path.join(abs_dir, file_name)
-
-        # Slide.Export positional args: FileName, FilterName, ScaleWidth, ScaleHeight
-        slide = pres.Slides(slide_index)
-        if width is not None and height is not None:
-            slide.Export(abs_file_path, filter_name, width, height)
-        elif width is not None:
-            slide.Export(abs_file_path, filter_name, width)
-        else:
-            slide.Export(abs_file_path, filter_name)
-
-        return {
-            "success": True,
-            "output_dir": abs_dir,
-            "format": fmt_key,
-            "slide_index": slide_index,
-            "files": [abs_file_path],
-        }
-    else:
-        # Export all slides - SaveAs creates a folder with individual images
-        abs_dir = os.path.abspath(output_dir)
-        pres.SaveAs(abs_dir, IMAGE_FORMAT_MAP[fmt_key])
-
-        # Collect exported files
         exported_files = []
-        if os.path.isdir(abs_dir):
-            for f in sorted(os.listdir(abs_dir)):
-                if f.lower().endswith(f".{fmt_key}"):
-                    exported_files.append(os.path.join(abs_dir, f))
+        for idx in targets:
+            if file_name:
+                # Single-slide export with a custom name (validated upstream).
+                # Ensure correct extension (avoid double ext like 'cover.png.png').
+                base, ext = os.path.splitext(file_name)
+                name = file_name if ext.lower() == f".{fmt_key}" else f"{base}.{fmt_key}"
+            else:
+                name = f"Slide{idx}.{fmt_key}"
+            abs_file_path = os.path.join(abs_dir, name)
+            _export_one_slide(
+                pres.Slides(idx), abs_file_path, filter_name, width, height
+            )
+            exported_files.append(abs_file_path)
 
-        return {
+        result = {
             "success": True,
             "output_dir": abs_dir,
             "format": fmt_key,
-            "total_slides": pres.Slides.Count,
+            "slide_indices": targets,
             "files_count": len(exported_files),
             "files": exported_files,
         }
+        # Backward compatibility: legacy single-slide callers expect a
+        # top-level "slide_index" key in the response.
+        if slide_index is not None:
+            result["slide_index"] = slide_index
+        return result
+
+    # No selection: export every slide. SaveAs creates a folder of images.
+    pres.SaveAs(abs_dir, IMAGE_FORMAT_MAP[fmt_key])
+
+    # Collect exported files
+    exported_files = []
+    if os.path.isdir(abs_dir):
+        for f in sorted(os.listdir(abs_dir)):
+            if f.lower().endswith(f".{fmt_key}"):
+                exported_files.append(os.path.join(abs_dir, f))
+
+    return {
+        "success": True,
+        "output_dir": abs_dir,
+        "format": fmt_key,
+        "total_slides": total_slides,
+        "files_count": len(exported_files),
+        "files": exported_files,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -617,6 +728,9 @@ def export_images(params: ExportImagesInput) -> str:
             params.output_dir,
             params.format,
             params.slide_index,
+            params.slide_indices,
+            params.from_index,
+            params.to_index,
             params.width,
             params.height,
             params.file_name,
@@ -675,11 +789,18 @@ def register_tools(mcp):
         },
     )
     async def tool_export_images(params: ExportImagesInput) -> str:
-        """Export slides as images (PNG or JPG).
+        """Export slides as images (PNG or JPG) into output_dir.
 
-        Export all slides to a directory, or a single slide by index.
-        For single slide export, optionally specify width and height in pixels.
-        For all slides, PowerPoint creates a folder of individual images.
+        Choose ONE selection mode (or none to export every slide):
+          - slide_index: a single slide.
+          - slide_indices: an explicit list of slides, e.g. [1, 3, 5].
+          - from_index + to_index: an inclusive range of slides.
+          - (omit all of the above): every slide in the presentation.
+
+        For single / slide_indices / range exports, optionally set width and
+        height (pixels) to control resolution; files are named 'Slide{N}.{format}'.
+        When exporting every slide, PowerPoint writes a folder of images and the
+        width/height options do not apply.
         """
         return export_images(params)
 

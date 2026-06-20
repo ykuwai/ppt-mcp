@@ -2198,6 +2198,116 @@ class TestExportImagesInputFileName:
                 output_dir="C:/tmp", file_name="cover.png",
             )
 
+    def test_file_name_with_slide_indices_raises(self):
+        """file_name is not allowed with a multi-slide selection."""
+        with pytest.raises(ValidationError, match="file_name requires slide_index"):
+            ExportImagesInput(
+                output_dir="C:/tmp", slide_indices=[1, 2], file_name="cover.png",
+            )
+
+    def test_file_name_with_range_raises(self):
+        """file_name is not allowed with a range selection."""
+        with pytest.raises(ValidationError, match="file_name requires slide_index"):
+            ExportImagesInput(
+                output_dir="C:/tmp", from_index=1, to_index=3, file_name="cover.png",
+            )
+
+
+class TestExportImagesInputSelection:
+    """Tests for ExportImagesInput slide selection modes."""
+
+    def test_no_selection_defaults_none(self):
+        """Omitting all selection fields exports every slide (all None)."""
+        inp = ExportImagesInput(output_dir="C:/tmp")
+        assert inp.slide_index is None
+        assert inp.slide_indices is None
+        assert inp.from_index is None
+        assert inp.to_index is None
+
+    def test_slide_indices_accepted(self):
+        """An explicit list of slides is accepted."""
+        inp = ExportImagesInput(output_dir="C:/tmp", slide_indices=[1, 3, 5])
+        assert inp.slide_indices == [1, 3, 5]
+
+    def test_slide_indices_empty_raises(self):
+        """An empty slide_indices list is rejected."""
+        with pytest.raises(ValidationError, match="must not be empty"):
+            ExportImagesInput(output_dir="C:/tmp", slide_indices=[])
+
+    def test_slide_indices_below_one_raises(self):
+        """slide_indices below 1 are rejected."""
+        with pytest.raises(ValidationError, match="must all be >= 1"):
+            ExportImagesInput(output_dir="C:/tmp", slide_indices=[1, 0])
+
+    def test_slide_indices_duplicates_raises(self):
+        """Duplicate slide_indices are rejected (would overwrite files)."""
+        with pytest.raises(ValidationError, match="must not contain duplicate"):
+            ExportImagesInput(output_dir="C:/tmp", slide_indices=[1, 1, 3])
+
+    def test_range_accepted(self):
+        """A from_index + to_index range is accepted."""
+        inp = ExportImagesInput(output_dir="C:/tmp", from_index=2, to_index=5)
+        assert inp.from_index == 2
+        assert inp.to_index == 5
+
+    def test_range_requires_both_bounds(self):
+        """from_index without to_index is rejected."""
+        with pytest.raises(ValidationError, match="Both from_index and to_index"):
+            ExportImagesInput(output_dir="C:/tmp", from_index=2)
+
+    def test_range_requires_both_bounds_to_only(self):
+        """to_index without from_index is rejected."""
+        with pytest.raises(ValidationError, match="Both from_index and to_index"):
+            ExportImagesInput(output_dir="C:/tmp", to_index=3)
+
+    def test_range_from_below_one(self):
+        """from_index below 1 is rejected."""
+        with pytest.raises(ValidationError, match="from_index must be >= 1"):
+            ExportImagesInput(output_dir="C:/tmp", from_index=0, to_index=3)
+
+    def test_range_to_below_one(self):
+        """to_index below 1 is rejected with a clear message."""
+        with pytest.raises(ValidationError, match="to_index must be >= 1"):
+            ExportImagesInput(output_dir="C:/tmp", from_index=1, to_index=0)
+
+    def test_range_inverted_raises(self):
+        """from_index greater than to_index is rejected."""
+        with pytest.raises(ValidationError, match="must be <= to_index"):
+            ExportImagesInput(output_dir="C:/tmp", from_index=5, to_index=2)
+
+    def test_combination_rejected(self):
+        """Combining selection modes is rejected."""
+        with pytest.raises(ValidationError, match="only one of"):
+            ExportImagesInput(
+                output_dir="C:/tmp", slide_index=1, slide_indices=[2, 3],
+            )
+
+    def test_single_and_range_rejected(self):
+        """slide_index combined with a range is rejected."""
+        with pytest.raises(ValidationError, match="only one of"):
+            ExportImagesInput(
+                output_dir="C:/tmp", slide_index=1, from_index=2, to_index=4,
+            )
+
+    def test_height_only_raises(self):
+        """height without width is rejected (cannot be supplied to COM alone)."""
+        with pytest.raises(ValidationError, match="height requires width"):
+            ExportImagesInput(output_dir="C:/tmp", slide_index=1, height=720)
+
+    def test_width_only_accepted(self):
+        """width without height is accepted (PowerPoint scales proportionally)."""
+        inp = ExportImagesInput(output_dir="C:/tmp", slide_index=1, width=1280)
+        assert inp.width == 1280
+        assert inp.height is None
+
+    def test_width_and_height_accepted(self):
+        """Both width and height together are accepted."""
+        inp = ExportImagesInput(
+            output_dir="C:/tmp", slide_index=1, width=1280, height=720,
+        )
+        assert inp.width == 1280
+        assert inp.height == 720
+
 
 # ============================================================================
 # text.py — FormatTextInput / FormatTextRangeInput (highlight_color)
