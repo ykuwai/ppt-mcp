@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ppt-mcp"
-version = "1.6.1"
+version = "1.7.0"
 description = "Real-time PowerPoint control via COM automation — an MCP server with 156 tools for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,9 +35,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    # mcp 2.0 renamed mcp.server.fastmcp to mcp.server.mcpserver (FastMCP -> MCPServer)
-    # with no compatibility shim, so the server cannot import under 2.x yet.
-    "mcp[cli]>=1.0.0,<2.0.0",
+    # Both 1.x and 2.x are supported (server.py imports either module layout).
+    # The upper bound is deliberate: mcp 2.0 renamed mcp.server.fastmcp with no
+    # compatibility shim, which broke every install (#176). Keep new majors
+    # opt-in so the same thing cannot happen again.
+    "mcp[cli]>=1.0.0,<3.0.0",
     "pywin32>=306",
     "pydantic>=2.0.0",
 ]
