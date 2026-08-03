@@ -23,9 +23,14 @@ from contextlib import asynccontextmanager
 # mcp 2.0 renamed mcp.server.fastmcp to mcp.server.mcpserver, and FastMCP to
 # MCPServer, without leaving a compatibility shim behind. Import from whichever
 # module the installed major provides so the server runs on both 1.x and 2.x.
+#
+# Catch ModuleNotFoundError rather than ImportError: the fallback should only
+# trigger when the 2.x module is absent. A broken 2.x install that raises
+# ImportError from one of its own imports must surface that traceback instead
+# of being masked by the 1.x fallback failing afterwards.
 try:
     from mcp.server.mcpserver import Image, MCPServer  # mcp >= 2.0
-except ImportError:  # pragma: no cover - depends on the installed mcp major
+except ModuleNotFoundError:
     from mcp.server.fastmcp import Image  # mcp 1.x
     from mcp.server.fastmcp import FastMCP as MCPServer
 
