@@ -13,6 +13,10 @@ on:
   pull_request:
   workflow_call:
 
+# Nothing here needs to write to the repo or read secrets.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: pytest (${{ matrix.label }})
@@ -24,11 +28,21 @@ jobs:
         include:
           # The dependency set users actually get from uv.lock.
           - label: mcp 1.x (locked)
-            major: locked
+            key: locked
+            run: uv run --frozen pytest -q
           # server.py supports both majors (#178). Without this leg, the 2.x
-          # import path would be untested and could rot silently.
+          # import path would be untested and could rot silently — the lockfile
+          # never resolves there. --no-project skips installing the package;
+          # tests/conftest.py puts src/ on sys.path already.
           - label: mcp 2.x
-            major: "2"
+            key: mcp2
+            run: >-
+              uv run --no-project
+              --with "mcp[cli]>=2,<3"
+              --with "pywin32>=306"
+              --with "pydantic>=2"
+              --with pytest
+              python -m pytest -q
 
     env:
       # windows-latest does not default to UTF-8; the suite reads source files
@@ -41,20 +55,13 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          # Both legs run concurrently and would otherwise race to reserve the
+          # same cache key, leaving one to fail its save step.
+          cache-suffix: ${{ matrix.key }}
 
       - name: Set up Python
         run: uv python install
 
-      - name: Run tests against locked dependencies
-        if: matrix.major == 'locked'
-        run: uv run --frozen pytest -q
-
-      - name: Run tests against mcp 2.x
-        if: matrix.major == '2'
-        run: >
-          uv run --no-project
-          --with "mcp[cli]>=2,<3"
-          --with "pywin32>=306"
-          --with "pydantic>=2"
-          --with pytest
-          python -m pytest -q
+      - name: Run tests
+        run: ${{ matrix.run }}
