@@ -390,7 +390,7 @@ wheels = [
 
 [[package]]
 name = "ppt-mcp"
-version = "1.6.1"
+version = "1.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
@@ -405,7 +405,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.0.0,<2.0.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.0.0,<3.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pywin32", specifier = ">=306" },
 ]

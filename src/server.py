@@ -20,7 +20,14 @@ if _src_dir not in sys.path:
 
 from contextlib import asynccontextmanager
 
-from mcp.server.fastmcp import FastMCP, Image
+# mcp 2.0 renamed mcp.server.fastmcp to mcp.server.mcpserver, and FastMCP to
+# MCPServer, without leaving a compatibility shim behind. Import from whichever
+# module the installed major provides so the server runs on both 1.x and 2.x.
+try:
+    from mcp.server.mcpserver import Image, MCPServer  # mcp >= 2.0
+except ImportError:  # pragma: no cover - depends on the installed mcp major
+    from mcp.server.fastmcp import Image  # mcp 1.x
+    from mcp.server.fastmcp import FastMCP as MCPServer
 
 # Configure logging to stderr (stdout is used for MCP protocol)
 logging.basicConfig(
@@ -32,7 +39,7 @@ logger = logging.getLogger("ppt-mcp")
 
 
 @asynccontextmanager
-async def app_lifespan(server: FastMCP):
+async def app_lifespan(server: MCPServer):
     """Manage COM lifecycle for the MCP server."""
     from utils.com_wrapper import ppt
 
@@ -51,7 +58,7 @@ async def app_lifespan(server: FastMCP):
         ppt.stop()
 
 
-mcp = FastMCP(
+mcp = MCPServer(
     "powerpoint_mcp",
     lifespan=app_lifespan,
     instructions="""
