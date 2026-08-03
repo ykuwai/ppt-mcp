@@ -1,0 +1,67 @@
+name: Tests
+
+# Runs on every push and PR, and is called by publish.yml so a release cannot
+# ship without passing the same checks.
+#
+# windows-latest is required: the tests import pywin32, which has no Linux
+# wheel. They do NOT need a live PowerPoint instance — the COM connection is
+# established lazily on the first tool call (#148), so importing the server is
+# safe on a headless runner.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_call:
+
+# Nothing here needs to write to the repo or read secrets.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (${{ matrix.label }})
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The dependency set users actually get from uv.lock.
+          - label: mcp 1.x (locked)
+            key: locked
+            run: uv run --frozen pytest -q
+          # server.py supports both majors (#178). Without this leg, the 2.x
+          # import path would be untested and could rot silently — the lockfile
+          # never resolves there. --no-project skips installing the package;
+          # tests/conftest.py puts src/ on sys.path already.
+          - label: mcp 2.x
+            key: mcp2
+            run: >-
+              uv run --no-project
+              --with "mcp[cli]>=2,<3"
+              --with "pywin32>=306"
+              --with "pydantic>=2"
+              --with pytest
+              python -m pytest -q
+
+    env:
+      # windows-latest does not default to UTF-8; the suite reads source files
+      # containing non-ASCII text.
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          # Both legs run concurrently and would otherwise race to reserve the
+          # same cache key, leaving one to fail its save step.
+          cache-suffix: ${{ matrix.key }}
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Run tests
+        run: ${{ matrix.run }}
