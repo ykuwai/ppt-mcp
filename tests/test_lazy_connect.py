@@ -305,7 +305,9 @@ def test_server_lifespan_does_not_eager_connect():
     server_src = (Path(__file__).resolve().parents[1] / "src" / "server.py").read_text(encoding="utf-8")
     # Inside app_lifespan, there must be no ppt.connect()/_connect_impl() call.
     lifespan_start = server_src.index("async def app_lifespan")
-    lifespan_end = server_src.index("mcp = FastMCP(", lifespan_start)
+    # Match the server instantiation without naming the class, which differs
+    # between mcp 1.x (FastMCP) and 2.x (MCPServer).
+    lifespan_end = server_src.index("\nmcp = ", lifespan_start)
     lifespan_block = server_src[lifespan_start:lifespan_end]
     assert "ppt.connect(" not in lifespan_block
     assert "_connect_impl(" not in lifespan_block
