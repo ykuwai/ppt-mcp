@@ -8,7 +8,7 @@ The pairing is done by name rather than by number, because the two platforms
 only sometimes agree on the number. ``ppSaveAsPNG`` is 18 on Windows while
 ``save as PNG`` is 24 on macOS, and ``ppLayoutBlank`` is 12 on both.
 
-341 constants across 40 enumerations, read from PowerPoint 16.97.2.
+343 constants across 40 enumerations, read from PowerPoint 16.97.2.
 
 Windows constants with no macOS counterpart, left out on purpose so that asking
 for one raises rather than quietly resolving to something close:
@@ -16,7 +16,6 @@ for one raises rather than quietly resolving to something close:
     MsoAnimAfterEffect: msoAnimAfterEffectNone
     MsoAnimTriggerType: msoAnimTriggerNone
     MsoAnimateByLevel: msoAnimateLevelNone
-    MsoArrowheadStyle: msoArrowheadNone
     MsoShapeType: msoEmbeddedOLEObject, msoOLEControlObject, msoTextEffect, msoSmartArt
     MsoTextOrientation: msoTextOrientationVerticalFarEast
     MsoTriState: msoTriStateMixed
@@ -28,7 +27,6 @@ for one raises rather than quietly resolving to something close:
     PpPlaceholderType: ppPlaceholderMixed
     PpSaveAsFileType: ppSaveAsOpenXMLAddin, ppSaveAsXPS, ppSaveAsOpenDocumentPresentation, ppSaveAsWMV, ppSaveAsMP4
     PpSlideLayout: ppLayoutTextAndMediaClip, ppLayoutMixed
-    PpSlideShowRangeType: ppShowSlideRange
     PpTransitionSpeed: ppTransitionSpeedFast, ppTransitionSpeedMedium, ppTransitionSpeedSlow
     PpViewType: ppViewSlideMaster, ppViewNotesPage, ppViewThumbnails, ppViewMasterThumbnails
     PpWindowState: ppWindowMaximized
@@ -137,6 +135,7 @@ MsoAnimateByLevel: dict = {
 
 
 MsoArrowheadStyle: dict = {
+    1: k.no_arrowhead,  # msoArrowheadNone
     2: k.triangle_arrowhead,  # msoArrowheadTriangle
     3: k.open_arrowhead,  # msoArrowheadOpen
     4: k.stealth_arrowhead,  # msoArrowheadStealth
@@ -516,6 +515,7 @@ PpSlideShowAdvanceMode: dict = {
 
 PpSlideShowRangeType: dict = {
     1: k.slide_show_range_show_all,  # ppShowAll
+    2: k.slide_show_range,  # ppShowSlideRange
     3: k.slide_show_range_named_slideshow,  # ppShowNamedSlideShow
 }
 

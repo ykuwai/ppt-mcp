@@ -53,14 +53,7 @@ from ppt_com.constants import (
 
 logger = logging.getLogger(__name__)
 
-# scripts/gen_mac_enums.py pairs by name, and Windows calls this one
-# `ppShowSlideRange` while macOS calls it `slide show range`, so the pairing was
-# missed and the generated table has no entry for 2. The enumerator's code is
-# 0x00d60002, which is the same ordinal Windows uses, so macOS does have the
-# range type and the "left out on purpose" list in mac_enums is wrong about
-# this one entry. It should disappear the next time the table is regenerated.
-_RANGE_TYPES = dict(PpSlideShowRangeType)
-_RANGE_TYPES.setdefault(ppShowSlideRange, k.slide_show_range)
+_RANGE_TYPES = PpSlideShowRangeType
 
 # The pointer type has no generated table because Windows and macOS name it
 # from different vocabularies, but the four macOS enumerators carry the codes

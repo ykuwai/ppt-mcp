@@ -38,20 +38,13 @@ from backend.mac_enums import (
     MsoLineDashStyle,
     to_keyword,
 )
-from ppt_com.constants import msoArrowheadNone
 from ppt_mac.shapes import _DASH_STYLE, _get_shape, _slide
 from utils.color import hex_to_rgb_list
 from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)
 
-# scripts/gen_mac_enums.py pairs by name, and Windows calls this one
-# `msoArrowheadNone` while macOS calls it `no arrowhead`, so the pairing was
-# missed and the generated table has no entry for 1. macOS does have the style,
-# so this is a gap in the generator rather than a gap in PowerPoint, and it
-# should disappear the next time the table is regenerated.
-_ARROWHEAD_STYLES = dict(MsoArrowheadStyle)
-_ARROWHEAD_STYLES.setdefault(msoArrowheadNone, k.no_arrowhead)
+_ARROWHEAD_STYLES = MsoArrowheadStyle
 
 # Arrowhead length and width never reached the generated table at all, because
 # the generator works from the banner sections of ppt_com/constants.py and

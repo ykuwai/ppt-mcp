@@ -103,6 +103,16 @@ OVERRIDES = {
         # name matcher cannot see that they are the same thing.
         "msoLineDot": "line dash style square dot",
     },
+    "MsoArrowheadStyle": {
+        # Windows says msoArrowheadNone, macOS says "no arrowhead". Every other
+        # member of this enumeration pairs on its own.
+        "msoArrowheadNone": "no arrowhead",
+    },
+    "PpSlideShowRangeType": {
+        # Windows numbers this one ppShowSlideRange and macOS spells it out as
+        # "slide show range", which the name matcher cannot see through.
+        "ppShowSlideRange": "slide show range",
+    },
     "MsoAnimDirection": {
         # The two words neither platform spells the same way. Everything else
         # in this enumeration matches on its own.

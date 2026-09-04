@@ -61,28 +61,24 @@ class TestEffectEnums:
 
 @macos_only
 class TestConnectorEnums:
-    """Three arrowhead tables the generated one does not carry in full."""
+    """Three arrowhead tables, one generated and two written out by hand."""
 
-    def test_the_arrowhead_the_generator_missed_is_put_back(self):
-        """Windows says msoArrowheadNone, macOS says `no arrowhead`."""
+    def test_the_arrowhead_the_generator_used_to_miss_is_there(self):
+        """Windows says msoArrowheadNone, macOS says `no arrowhead`.
+
+        The name matcher cannot see through that, so the generator carries an
+        override for it now and the table comes straight from the generated
+        one rather than from a local patch.
+        """
         from appscript import k
 
-        from ppt_mac.connectors import _ARROWHEAD_STYLES
-
-        assert _ARROWHEAD_STYLES[1] == k.no_arrowhead
-        assert _ARROWHEAD_STYLES[2] == k.triangle_arrowhead
-        assert _ARROWHEAD_STYLES[6] == k.oval_arrowhead
-
-    def test_the_fix_is_a_local_copy(self):
-        """Putting it back on the generated table would leak into every module."""
         from backend.mac_enums import MsoArrowheadStyle
         from ppt_mac.connectors import _ARROWHEAD_STYLES
 
-        assert _ARROWHEAD_STYLES is not MsoArrowheadStyle
-        assert all(
-            _ARROWHEAD_STYLES[number] == word
-            for number, word in MsoArrowheadStyle.items()
-        )
+        assert _ARROWHEAD_STYLES is MsoArrowheadStyle
+        assert _ARROWHEAD_STYLES[1] == k.no_arrowhead
+        assert _ARROWHEAD_STYLES[2] == k.triangle_arrowhead
+        assert _ARROWHEAD_STYLES[6] == k.oval_arrowhead
 
     def test_lengths_and_widths_are_the_dictionary_names(self):
         from appscript import k
