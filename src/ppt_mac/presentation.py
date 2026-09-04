@@ -712,37 +712,28 @@ def _get_presentation_info_impl(
     except Exception:
         pass
 
-    # Accent colours. The slide master's `theme color scheme` reads back as
-    # `missing value` on every deck measured, and the other route into the
-    # palette, `get color from`, declares no result in the dictionary, so this
-    # is normally all nulls. The walk is still made, so a PowerPoint that
-    # starts answering needs no code change here.
-    accent_colors = {
-        "accent1": None,
-        "accent2": None,
-        "accent3": None,
-        "accent4": None,
-        "accent5": None,
-        "accent6": None,
-    }
-    try:
-        scheme = pres.slide_master.theme.theme_color_scheme
-        if not is_missing(scheme.get()):
-            # macOS orders its scheme colours exactly as Windows numbers them,
-            # dark1, light1, dark2, light2, then accent1 to accent6, so the
-            # accents are positions 5 to 10.
-            colors = elements(scheme.theme_colors)
-            for offset, key in enumerate(
-                ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"],
-                start=4,
-            ):
-                if offset < len(colors):
-                    try:
-                        accent_colors[key] = rgb_list_to_hex(colors[offset].RGB())
-                    except Exception:
-                        pass
-    except Exception:
-        pass
+    # Accent colours. macOS orders its scheme colours exactly as Windows
+    # numbers them, dark1, light1, dark2, light2, then accent1 to accent6, so
+    # the accents are positions 5 to 10.
+    #
+    # Asked for one at a time rather than read out of the materialised
+    # collection. `theme colors` answers twelve elements happily enough, and
+    # then `RGB` on one of them raises, which is the rule this whole port runs
+    # on: a reference PowerPoint hands back is not trusted. Every accent came
+    # back null for it, on decks whose palette reads perfectly well through
+    # `theme_colors[5]`.
+    accent_colors = {}
+    scheme = pres.slide_master.theme.theme_color_scheme
+    for position, key in enumerate(
+        ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"],
+        start=5,
+    ):
+        try:
+            accent_colors[key] = rgb_list_to_hex(scheme.theme_colors[position].RGB())
+        except Exception:
+            # A deck with no palette to read is the ordinary case for a
+            # template that carries none, so null rather than an error.
+            accent_colors[key] = None
 
     full_name = pres.full_name()
     local_path = resolve_local_path(full_name)

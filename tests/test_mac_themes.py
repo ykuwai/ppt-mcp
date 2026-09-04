@@ -438,3 +438,33 @@ class TestTheDocumentedRefusalsMatchTheCode:
         assert int(stated.group(1)) == total
         assert int(stated.group(3)) == refusing
         assert int(stated.group(2)) == total - refusing
+
+
+@macos_only
+class TestTheAccentsPresentationInfoReports:
+    """The server's own instructions tell a caller to build a deck from the
+    accents `ppt_get_presentation_info` reports. Every one of them came back
+    null on decks whose palette reads perfectly well elsewhere, because the
+    colours were read out of the materialised collection instead of being asked
+    for one at a time."""
+
+    def test_the_accents_are_asked_for_by_position(self):
+        import inspect
+
+        from ppt_mac import presentation
+
+        source = inspect.getsource(presentation._get_presentation_info_impl)
+        accents = source[source.index("accent_colors = {"):]
+        assert "scheme.theme_colors[position]" in accents
+        assert "elements(scheme.theme_colors)" not in accents
+
+    def test_all_six_accents_are_reported_even_when_none_can_be_read(self):
+        """A deck with no palette answers null six times, not an empty dict."""
+        import inspect
+
+        from ppt_mac import presentation
+
+        source = inspect.getsource(presentation._get_presentation_info_impl)
+        for name in ("accent1", "accent2", "accent3", "accent4", "accent5", "accent6"):
+            assert f'"{name}"' in source
+        assert "accent_colors[key] = None" in source
