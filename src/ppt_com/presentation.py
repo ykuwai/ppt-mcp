@@ -7,7 +7,6 @@ import glob as glob_mod
 import json
 import logging
 import os
-import winreg
 from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -613,8 +612,11 @@ def _get_default_templates_dir() -> Optional[str]:
     2. Fallback: check common paths and return the first that exists
     3. Return None if no directory is found
     """
-    # 1. Try registry
+    # 1. Try registry. Imported lazily so this module stays importable on
+    # macOS, which has no registry and reaches the fallback below instead.
     try:
+        import winreg
+
         key = winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
             r"Software\Microsoft\Office\16.0\PowerPoint\Options",
@@ -623,7 +625,7 @@ def _get_default_templates_dir() -> Optional[str]:
         winreg.CloseKey(key)
         if path and os.path.isdir(path):
             return path
-    except (FileNotFoundError, OSError):
+    except (ImportError, FileNotFoundError, OSError):
         pass
 
     # 2. Fallback: check common paths in order

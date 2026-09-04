@@ -8,17 +8,36 @@ singleton-like access to the Application COM object.
 import gc
 import logging
 import os
+import sys
 import threading
 import time
 from concurrent.futures import Future
 from queue import Queue
 from typing import Any, Callable, Optional
 
-import pythoncom
-import pywintypes
-import win32com.client
-
 logger = logging.getLogger(__name__)
+
+# pywin32 only installs on Windows, and this module has to stay importable
+# everywhere so the macOS backend and the pure-schema tests can be collected
+# (#185). The stand-in com_error is never raised off Windows, because nothing
+# here runs there; it exists so the `except` clauses stay well formed.
+if sys.platform == "win32":
+    import pythoncom
+    import pywintypes
+    import win32com.client
+else:  # pragma: no cover - non-Windows
+    pythoncom = None
+    win32com = None
+
+    class _NotWindows:
+        class com_error(Exception):
+            """Placeholder so except clauses remain valid off Windows."""
+
+            hresult = None
+            strerror = None
+            excepinfo = None
+
+    pywintypes = _NotWindows()
 
 # HRESULTs that indicate PowerPoint is temporarily busy (e.g. modal dialog open).
 # RPC_E_CALL_REJECTED (0x80010001): server rejected the call outright.

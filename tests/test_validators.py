@@ -2037,6 +2037,10 @@ class TestUpdateAnimationInputSequenceIndex:
 from utils.onedrive import resolve_local_path
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="OneDrive URL resolution reads the Windows registry (#185)",
+)
 class TestOneDriveResolver:
     """Tests for OneDrive URL to local path resolution."""
 

@@ -5,17 +5,25 @@ Export presentations to PDF, images (PNG/JPG), or copy slides to clipboard.
 
 import atexit
 import ctypes
-import ctypes.wintypes
 import json
 import logging
 import os
 import shutil
 import struct
+import sys
 import tempfile
 from typing import List, Optional
 
-import pythoncom
 from pydantic import BaseModel, Field, ConfigDict, model_validator
+
+# Everything below the export tools themselves is Win32. `ctypes.wintypes`
+# raises on macOS at import time, and pythoncom does not exist there, so both
+# are conditional and the clipboard bindings are skipped entirely. The tools
+# that need them are Windows only and fail loudly when called elsewhere (#185).
+_WINDOWS = sys.platform == "win32"
+if _WINDOWS:
+    import ctypes.wintypes
+    import pythoncom
 
 from utils.com_wrapper import ppt
 from ppt_com.constants import (
@@ -423,26 +431,27 @@ CF_DIB = 8
 CF_HDROP = 15
 GHND = 0x0042  # GMEM_MOVEABLE | GMEM_ZEROINIT
 
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
-ole32 = ctypes.windll.ole32
+if _WINDOWS:
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    ole32 = ctypes.windll.ole32
 
-OpenClipboard = user32.OpenClipboard
-CloseClipboard = user32.CloseClipboard
-EmptyClipboard = user32.EmptyClipboard
-SetClipboardData = user32.SetClipboardData
-SetClipboardData.argtypes = [ctypes.wintypes.UINT, ctypes.wintypes.HANDLE]
-SetClipboardData.restype = ctypes.wintypes.HANDLE
-GlobalAlloc = kernel32.GlobalAlloc
-GlobalAlloc.argtypes = [ctypes.wintypes.UINT, ctypes.c_size_t]
-GlobalAlloc.restype = ctypes.wintypes.HGLOBAL
-GlobalLock = kernel32.GlobalLock
-GlobalLock.argtypes = [ctypes.wintypes.HGLOBAL]
-GlobalLock.restype = ctypes.c_void_p
-GlobalUnlock = kernel32.GlobalUnlock
-GlobalUnlock.argtypes = [ctypes.wintypes.HGLOBAL]
-GlobalFree = kernel32.GlobalFree
-GlobalFree.argtypes = [ctypes.wintypes.HGLOBAL]
+    OpenClipboard = user32.OpenClipboard
+    CloseClipboard = user32.CloseClipboard
+    EmptyClipboard = user32.EmptyClipboard
+    SetClipboardData = user32.SetClipboardData
+    SetClipboardData.argtypes = [ctypes.wintypes.UINT, ctypes.wintypes.HANDLE]
+    SetClipboardData.restype = ctypes.wintypes.HANDLE
+    GlobalAlloc = kernel32.GlobalAlloc
+    GlobalAlloc.argtypes = [ctypes.wintypes.UINT, ctypes.c_size_t]
+    GlobalAlloc.restype = ctypes.wintypes.HGLOBAL
+    GlobalLock = kernel32.GlobalLock
+    GlobalLock.argtypes = [ctypes.wintypes.HGLOBAL]
+    GlobalLock.restype = ctypes.c_void_p
+    GlobalUnlock = kernel32.GlobalUnlock
+    GlobalUnlock.argtypes = [ctypes.wintypes.HGLOBAL]
+    GlobalFree = kernel32.GlobalFree
+    GlobalFree.argtypes = [ctypes.wintypes.HGLOBAL]
 
 
 def _png_to_dib(png_path: str) -> bytes:

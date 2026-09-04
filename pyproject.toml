@@ -16,6 +16,7 @@ keywords = [
     "mcp",
     "powerpoint",
     "com",
+    "applescript",
     "automation",
     "ai-agent",
     "llm",
@@ -27,6 +28,7 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: Microsoft :: Windows :: Windows 10",
     "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -40,8 +42,13 @@ dependencies = [
     # compatibility shim, which broke every install (#176). Keep new majors
     # opt-in so the same thing cannot happen again.
     "mcp[cli]>=1.0.0,<3.0.0",
-    "pywin32>=306",
     "pydantic>=2.0.0",
+    # Platform backends. Windows drives PowerPoint through COM, macOS through
+    # Apple Events. Neither is installable on the other platform, so both carry
+    # a marker; without one, `uvx ppt-mcp` fails on macOS before the server has
+    # a chance to run (#185).
+    "pywin32>=306; sys_platform == 'win32'",
+    "appscript>=1.4.0; sys_platform == 'darwin'",
 ]
 
 [project.urls]
