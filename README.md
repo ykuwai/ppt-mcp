@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <img src="https://img.shields.io/badge/Platform-Windows-0078d4.svg" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
 
@@ -31,9 +31,13 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 
 ## 📋 Requirements
 
-- Windows 11
+- Windows 11, or macOS with Apple Silicon or Intel
 - Microsoft PowerPoint
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+On macOS the server drives PowerPoint over Apple Events instead of COM. The
+first tool call raises the system's automation prompt, and PowerPoint has to be
+allowed there once. See [macOS support](#-macos-support) for what differs.
 
 ## 🚀 Getting Started
 
@@ -292,6 +296,34 @@ When PowerPoint has a modal dialog open (e.g., SmartArt layout picker, Save dial
 
 ESC cancels without committing, so there are no destructive side effects. This is particularly useful in automated workflows where no human is present to close dialogs.
 
+## 🍎 macOS support
+
+The same tools, the same arguments, the same answers. What differs is what
+PowerPoint for Mac's scripting dictionary can reach, and where it cannot reach
+something the tool says so rather than doing something unexpected.
+
+Not available on macOS:
+
+- **Charts, SmartArt and freeform paths.** These have no words at all in the
+  dictionary, so they cannot be created or edited from a script.
+- **Grouping shapes.** Ungrouping works. Grouping needs a selection a script
+  cannot build.
+- **Inserting video and audio.** An existing media shape can still be moved,
+  resized and read.
+- **Removing one animation.** Clearing a slide's animations works.
+
+Smaller differences:
+
+- A few tools accept an argument that has no counterpart, a screen tip on a
+  hyperlink for instance. Those refuse with a message naming the argument, so
+  dropping it and retrying works.
+- Exports are staged through PowerPoint's own container and moved out, because
+  the application is sandboxed and cannot write to arbitrary folders.
+- Slide images come from a PDF render rather than PNG export, which is sharper
+  than the Windows route.
+- Automation consent belongs to whichever application launched the server, so
+  running it from a different terminal or editor raises the prompt again.
+
 ## 📄 License
 
 MIT
@@ -300,4 +332,5 @@ MIT
 
 - [FastMCP](https://github.com/jlowin/fastmcp) — Pythonic MCP server framework
 - [pywin32](https://github.com/mhammond/pywin32) — Windows COM automation
+- [appscript](https://github.com/hhas/appscript) — macOS Apple Event bridge
 - [Model Context Protocol](https://modelcontextprotocol.io/) — by Anthropic

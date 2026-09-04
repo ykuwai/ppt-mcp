@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <img src="https://img.shields.io/badge/Platform-Windows-0078d4.svg" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
 
@@ -31,9 +31,13 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 
 ## 📋 動作環境
 
-- Windows 11
+- Windows 11、または macOS（Apple Silicon と Intel のどちらも可）
 - Microsoft PowerPoint
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+macOS では COM ではなく Apple Event で PowerPoint を動かします。最初のツール
+呼び出しで OS の自動化の許可を求めるダイアログが出るので、そこで PowerPoint を
+一度許可してください。違いは [macOS 対応](#-macos-対応) にまとめてあります。
 
 ## 🚀 はじめかた
 
@@ -292,6 +296,33 @@ PowerPointのモーダルダイアログ（SmartArt レイアウト選択、保�
 
 ESCは変更を確定せずにキャンセルするため、意図しない操作は発生しません。人間が操作しない自動化ワークフローで特に有用です。
 
+## 🍎 macOS 対応
+
+ツールも引数も返り値も Windows と同じです。違うのは PowerPoint for Mac の
+スクリプト辞書が届く範囲だけで、届かないところではツールがそう答えます。
+黙って何もしなかったことにはしません。
+
+macOS でできないこと。
+
+- **グラフ、SmartArt、フリーフォーム。** 辞書にそもそも言葉がないので、
+  スクリプトからは作ることも編集することもできません
+- **図形のグループ化。** 解除はできます。作る方はスクリプトが選択範囲を
+  組み立てられないのでできません
+- **動画と音声の挿入。** すでに置いてあるメディアの移動やサイズ変更、
+  読み取りはできます
+- **アニメーションを1つだけ削除。** スライドごと消すことはできます
+
+細かい違い。
+
+- 対応するものがない引数を渡すと、その引数を名指しして断ります。
+  たとえばハイパーリンクのスクリーンチップです。外して呼び直せば通ります
+- PowerPoint はサンドボックスの中にいて任意のフォルダーに書けないので、
+  書き出しは PowerPoint 自身の容器を経由して取り出します
+- スライド画像は PNG 書き出しではなく PDF から描画しています。
+  Windows の経路より鮮明です
+- 自動化の許可はサーバーを起動したアプリに紐づきます。別のターミナルや
+  エディターから起動すると、もう一度許可を求められます
+
 ## 📄 ライセンス
 
 MIT
@@ -300,4 +331,5 @@ MIT
 
 - [FastMCP](https://github.com/jlowin/fastmcp) — Python MCPサーバーフレームワーク
 - [pywin32](https://github.com/mhammond/pywin32) — Windows COM自動化
+- [appscript](https://github.com/hhas/appscript) — macOS Apple Event ブリッジ
 - [Model Context Protocol](https://modelcontextprotocol.io/) — by Anthropic
