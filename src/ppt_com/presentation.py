@@ -12,7 +12,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.color import int_to_hex
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.onedrive import resolve_local_path
 from ppt_com.constants import (
     msoTrue,

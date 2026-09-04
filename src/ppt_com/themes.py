@@ -12,7 +12,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.color import int_to_hex, hex_to_int, THEME_COLOR_MAP
 from ppt_com.constants import (
     msoTrue, msoFalse,

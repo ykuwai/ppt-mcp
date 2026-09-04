@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 # When installed via PyPI (entry point: src.server:main), ensure the src/
 # directory is in sys.path so that internal imports like
-# `from utils.com_wrapper import ppt` resolve correctly.
+# `from backend import ppt` resolve correctly.
 _src_dir = str(Path(__file__).parent)
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
@@ -46,9 +46,9 @@ logger = logging.getLogger("ppt-mcp")
 @asynccontextmanager
 async def app_lifespan(server: MCPServer):
     """Manage COM lifecycle for the MCP server."""
-    from utils.com_wrapper import ppt
+    from backend import ppt
 
-    from utils.com_wrapper import AUTO_DISMISS_DIALOG
+    from backend import AUTO_DISMISS_DIALOG
     logger.info("AUTO_DISMISS_DIALOG=%s (set PPT_AUTO_DISMISS_DIALOG=true to enable)", AUTO_DISMISS_DIALOG)
     logger.info("Starting PowerPoint COM worker thread...")
     ppt.start()
@@ -435,7 +435,7 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
     Returns:
         Image: PNG image of the slide for visual inspection
     """
-    from utils.com_wrapper import ppt
+    from backend import ppt
     from utils.navigation import goto_slide
 
     def _export_slide_impl(slide_idx: int):

@@ -10,7 +10,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from utils.com_wrapper import ppt
+from backend import ppt
 
 logger = logging.getLogger(__name__)
 

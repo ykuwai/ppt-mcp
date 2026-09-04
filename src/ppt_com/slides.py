@@ -10,7 +10,7 @@ from typing import NamedTuple, Optional
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.color import hex_to_int
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide as nav_goto_slide
 from ppt_com.constants import ppLayoutBlank, msoTrue, msoFalse
 

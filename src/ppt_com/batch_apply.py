@@ -6,7 +6,7 @@ from typing import List, Literal, Union, get_args
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from utils.com_wrapper import ppt
+from backend import ppt
 
 # Import impl functions from existing modules
 from ppt_com.formatting import (

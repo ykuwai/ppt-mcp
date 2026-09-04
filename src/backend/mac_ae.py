@@ -1,0 +1,506 @@
+"""Apple Event connection lifecycle for PowerPoint on macOS.
+
+The counterpart of ``utils/com_wrapper.py``. PowerPoint for Mac exposes the
+same object model as the Windows VBA one, with spaces in the names, over Apple
+Events. This module owns the connection to it and absorbs every quirk of that
+channel so the tool modules never have to know about them.
+
+Two things are worth knowing before reading further.
+
+**The terminology argument is mandatory.** ``app(id=..., terms='sdef')`` is what
+makes any of this work. Without it appscript asks PowerPoint for terminology the
+old AETE way, gets nothing, silently falls back to fourteen built-in words, and
+every attribute access raises ``AttributeError``. It is undocumented and it is
+almost certainly why the received wisdom says Python cannot drive Office on a
+Mac.
+
+**Nothing is trusted because it did not raise.** PowerPoint has several
+operations that report success and do nothing. Callers verify; see
+``MACOS_PORT.md`` section 5 for the list.
+
+Everything runs on one worker thread, as on Windows. Apple Events do not need
+an STA apartment, but PowerPoint wedges under concurrent access, and keeping the
+same shape means the tool modules see one lifecycle surface on both platforms.
+"""
+
+import logging
+import os
+import subprocess
+import threading
+import time
+from concurrent.futures import Future
+from queue import Queue
+from typing import Any, Callable, Optional
+
+from appscript import app, its, k, mactypes  # noqa: F401  (re-exported for tools)
+from appscript.reference import CommandError, Reference
+
+logger = logging.getLogger(__name__)
+
+BUNDLE_ID = "com.microsoft.Powerpoint"
+
+# Apple Event errors worth naming. Everything else is passed through as is.
+AE_NO_SUCH_OBJECT = -1728      # the reference does not resolve right now
+AE_NOT_HANDLED = -1708         # PowerPoint does not implement this verb
+AE_TIMED_OUT = -1712           # PowerPoint did not answer in time
+AE_CONNECTION_INVALID = -609   # PowerPoint died mid call
+AE_APP_NOT_RUNNING = -600      # PowerPoint is not there at all
+AE_NOT_AUTHORISED = -1743      # the user declined the Automation prompt
+
+# Errors that mean the call never landed, so retrying is safe. This is the
+# Apple Event analogue of _BUSY_HRESULTS on the Windows side.
+_RETRYABLE = frozenset({AE_TIMED_OUT, AE_CONNECTION_INVALID, AE_APP_NOT_RUNNING})
+_RETRY_MAX = 2         # total attempts = _RETRY_MAX + 1
+_RETRY_INTERVAL = 2    # seconds between retries
+
+# Per call ceiling. PowerPoint wedges often enough that appscript's own 60
+# second default turns a stuck app into a stuck server; twenty seconds is long
+# enough for a real save and short enough to surface as an error the model can
+# act on.
+DEFAULT_TIMEOUT = int(os.getenv("PPT_AE_TIMEOUT", "20"))
+
+# The Windows wrapper's ESC-the-dialog escape hatch has no Apple Event
+# equivalent, so the flag exists only to keep the two module surfaces identical.
+AUTO_DISMISS_DIALOG: bool = False
+
+# PowerPoint is sandboxed and can only write where it has a grant. Exporting to
+# a directory it has not written to before blocks for tens of seconds and then
+# kills the application. Its own container is always writable, and an
+# unsandboxed Python process can read files back out of it freely, so exports
+# stage here and get moved afterwards.
+EXPORT_STAGING_DIR = os.path.expanduser(
+    "~/Library/Containers/com.microsoft.Powerpoint/Data/Documents"
+)
+
+
+class AppleEventError(RuntimeError):
+    """An Apple Event failure carrying its OSError number."""
+
+    def __init__(self, message: str, errornumber: Optional[int] = None):
+        super().__init__(message)
+        self.errornumber = errornumber
+
+
+def error_number(exc: BaseException) -> Optional[int]:
+    """Return the Apple Event error number of an exception, if it has one."""
+    return getattr(exc, "errornumber", None)
+
+
+def is_missing(value: Any) -> bool:
+    """True when PowerPoint answered with ``missing value``.
+
+    It uses that in place of an empty result far more often than the dictionary
+    suggests, including for collection counts and for theme colour schemes.
+
+    Compared by equality, not identity. ``k.missing_value`` builds a fresh
+    Keyword on every access, so ``is`` silently never matches.
+    """
+    return value is None or value == k.missing_value
+
+
+def elements(ref: Reference) -> list:
+    """Return the elements of a collection reference as a list.
+
+    PowerPoint raises -1728 for an empty collection instead of returning an
+    empty list, so an empty result and a broken reference look identical from
+    the outside. Both are reported as empty here, which is what every caller
+    wants.
+    """
+    try:
+        value = ref.get()
+    except CommandError as exc:
+        if error_number(exc) in (AE_NO_SUCH_OBJECT, AE_NOT_HANDLED):
+            return []
+        raise
+    if isinstance(value, list):
+        return value
+    if is_missing(value):
+        return []
+    return [value]
+
+
+def count(ref: Reference) -> int:
+    """Return how many elements a collection has.
+
+    ``ref.count()`` raises -1708, because PowerPoint's dictionary declares no
+    Standard Suite commands at all, so this counts what ``get`` returns.
+    """
+    return len(elements(ref))
+
+
+def raw(ref: Reference, code: bytes) -> Reference:
+    """Reach a property by its raw four character code.
+
+    A handful of property names collide with enumerator names in PowerPoint's
+    dictionary, and appscript resolves the collision toward the enumerator, so
+    the property becomes unreachable by name. ``rotation`` (``ShRt``) and
+    ``dash style`` (``LFds``) are the two that matter.
+
+        raw(shape, b'ShRt').set(33)
+        raw(shape.line_format, b'LFds').get()
+    """
+    return Reference(ref.AS_appdata, ref.AS_aemreference.property(code))
+
+
+def osascript(script: str, timeout: float = DEFAULT_TIMEOUT) -> str:
+    """Run one line of AppleScript and return its output.
+
+    A deliberate fallback, not a general escape hatch. A few Standard Suite
+    verbs (``open``, ``duplicate``) are absent from PowerPoint's dictionary and
+    misbehave through appscript while working perfectly from AppleScript, so
+    those go through here. Everything else stays on the fast in-process path.
+    """
+    try:
+        proc = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AppleEventError(
+            f"PowerPoint did not respond within {timeout}s", AE_TIMED_OUT
+        ) from exc
+    if proc.returncode != 0:
+        raise AppleEventError((proc.stderr or "").strip() or "AppleScript failed")
+    return (proc.stdout or "").strip()
+
+
+class PowerPointAppleEventWrapper:
+    """Manages the connection to PowerPoint over Apple Events.
+
+    Mirrors ``PowerPointCOMWrapper`` so the tool modules see one lifecycle
+    surface on both platforms. All work is routed through a single worker
+    thread, which serialises access; PowerPoint is not reliable when several
+    Apple Events are in flight at once.
+    """
+
+    def __init__(self):
+        self._app = None
+        self._thread: Optional[threading.Thread] = None
+        self._queue: Queue = Queue()
+        self._running = False
+        # Session level target, held by full name so a second file with the
+        # same basename cannot steal it. This matters more here than on
+        # Windows: `active presentation` raises -1728 whenever PowerPoint's
+        # start gallery is the frontmost window, which users hit every day.
+        self._target_pres_full_name: Optional[str] = None
+
+    # -- lifecycle ---------------------------------------------------------
+
+    def start(self) -> None:
+        """Start the worker thread. Does not touch PowerPoint."""
+        if self._running:
+            return
+        self._running = True
+        self._thread = threading.Thread(
+            target=self._worker, daemon=True, name="AppleEvent-Worker"
+        )
+        self._thread.start()
+        logger.info("Apple Event worker thread started")
+
+    def stop(self) -> None:
+        """Stop the worker thread. Leaves PowerPoint running."""
+        if not self._running:
+            return
+        self._running = False
+        self._queue.put(None)
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5.0)
+        self._app = None
+        logger.info("Apple Event worker thread stopped")
+
+    def _worker(self) -> None:
+        while self._running:
+            item = self._queue.get()
+            if item is None:
+                break
+            func, args, kwargs, future = item
+            for attempt in range(_RETRY_MAX + 1):
+                try:
+                    future.set_result(func(*args, **kwargs))
+                    break
+                except CommandError as exc:
+                    number = error_number(exc)
+                    if number in _RETRYABLE and attempt < _RETRY_MAX:
+                        logger.warning(
+                            "PowerPoint did not answer (error %s). "
+                            "Retrying in %ds... (%d/%d)",
+                            number, _RETRY_INTERVAL, attempt + 1, _RETRY_MAX,
+                        )
+                        # A dead application leaves a stale reference behind.
+                        if number in (AE_CONNECTION_INVALID, AE_APP_NOT_RUNNING):
+                            self._app = None
+                        time.sleep(_RETRY_INTERVAL)
+                        continue
+                    future.set_exception(self._translate(exc))
+                    break
+                except Exception as exc:  # noqa: BLE001 - reported to the caller
+                    future.set_exception(exc)
+                    break
+
+    @staticmethod
+    def _translate(exc: CommandError) -> Exception:
+        """Turn an Apple Event failure into something worth reading.
+
+        Only the cases where the raw message would send someone in the wrong
+        direction are rewritten. Everything else is passed through.
+        """
+        number = error_number(exc)
+        if number == AE_NOT_AUTHORISED:
+            return AppleEventError(
+                "macOS refused permission to control PowerPoint. Allow it under "
+                "System Settings > Privacy & Security > Automation, for the "
+                "application that launched this server (the terminal or editor, "
+                "not Python itself), then try again.",
+                number,
+            )
+        if number == AE_CONNECTION_INVALID:
+            return AppleEventError(
+                "PowerPoint stopped responding and the connection was lost. It "
+                "may have quit. Reopen the presentation and try again.",
+                number,
+            )
+        if number == AE_TIMED_OUT:
+            return AppleEventError(
+                f"PowerPoint did not answer within {DEFAULT_TIMEOUT}s. It is "
+                "usually waiting on a dialog, or being asked to write somewhere "
+                "its sandbox does not allow.",
+                number,
+            )
+        return AppleEventError(str(exc), number)
+
+    def execute(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
+        """Run ``func`` on the worker thread and return its result.
+
+        The single entry point for every operation, matching the Windows
+        wrapper. Blocks until the work finishes or the worker gives up.
+        """
+        future: Future = Future()
+        self._queue.put((func, args, kwargs, future))
+        # Generous relative to the per call ceiling, so the worker's own retry
+        # loop is what decides, not this.
+        budget = DEFAULT_TIMEOUT * (_RETRY_MAX + 1) + _RETRY_INTERVAL * _RETRY_MAX + 5
+        return future.result(timeout=budget)
+
+    # -- connection --------------------------------------------------------
+
+    def connect(self, visible: Optional[bool] = None, allow_launch: bool = True) -> Any:
+        """Connect to PowerPoint, launching it when allowed."""
+        return self.execute(self._connect_impl, visible, allow_launch)
+
+    def _connect_impl(
+        self, visible: Optional[bool] = None, allow_launch: bool = True
+    ) -> Any:
+        """Internal: connect on the worker thread.
+
+        ``visible`` has no counterpart here. PowerPoint for Mac has no headless
+        mode and no ``Application.Visible``, so the flag is accepted for API
+        symmetry and only used to decide whether to bring the app forward.
+        """
+        if self._app is not None:
+            try:
+                self._app.version()
+                return self._app
+            except CommandError:
+                logger.warning("Stale Apple Event reference, reconnecting...")
+                self._app = None
+
+        candidate = app(id=BUNDLE_ID, terms="sdef")
+        if not candidate.isrunning():
+            if not allow_launch:
+                raise ConnectionError(
+                    "PowerPoint is not running. Call ppt_connect, "
+                    "ppt_create_presentation, or ppt_open_presentation first."
+                )
+            candidate.activate()
+            # Launching is not instant, and the first event against a starting
+            # application fails rather than waiting.
+            deadline = time.time() + 20
+            while time.time() < deadline:
+                try:
+                    candidate.version()
+                    break
+                except CommandError:
+                    time.sleep(0.3)
+            else:
+                raise ConnectionError(
+                    "PowerPoint did not finish starting. Is it installed?"
+                )
+        elif visible:
+            candidate.activate()
+
+        self._app = candidate
+        logger.info("Connected to PowerPoint over Apple Events")
+        return self._app
+
+    def get_app(self, allow_launch: bool = False) -> Any:
+        """Get the application reference, reconnecting if needed."""
+        return self.execute(self._get_app_impl, allow_launch)
+
+    def _get_app_impl(self, allow_launch: bool = False) -> Any:
+        """Internal: get the application on the worker thread.
+
+        Attach only by default. Most tools operate on an already open
+        presentation and should fail fast rather than silently starting
+        PowerPoint, which is the same contract as the Windows side.
+        """
+        if self._app is None:
+            return self._connect_impl(allow_launch=allow_launch)
+        try:
+            self._app.version()
+            return self._app
+        except CommandError:
+            logger.warning("Apple Event connection lost, reconnecting...")
+            self._app = None
+            return self._connect_impl(allow_launch=allow_launch)
+
+    # -- presentations -----------------------------------------------------
+
+    def _presentations(self, app_ref) -> list:
+        return elements(app_ref.presentations)
+
+    def _get_pres_impl(self) -> Any:
+        """Internal: get the target presentation on the worker thread.
+
+        Returns the session target when one is set and its file is still open,
+        activating its window first so later navigation lands in the right
+        place. Falls back to the active presentation, and then to the first
+        open one, because ``active presentation`` raises whenever PowerPoint's
+        start gallery is frontmost.
+        """
+        app_ref = self._get_app_impl()
+        presentations = self._presentations(app_ref)
+
+        if self._target_pres_full_name:
+            for pres in presentations:
+                try:
+                    if pres.full_name() == self._target_pres_full_name:
+                        try:
+                            pres.document_windows[1].activate()
+                        except CommandError:
+                            pass
+                        return pres
+                except CommandError:
+                    continue
+            logger.warning(
+                "Target presentation '%s' is no longer open; "
+                "falling back to the active presentation",
+                self._target_pres_full_name,
+            )
+            self._target_pres_full_name = None
+
+        try:
+            active = app_ref.active_presentation
+            active.name()
+            return active
+        except CommandError:
+            if presentations:
+                return presentations[0]
+            raise RuntimeError(
+                "No presentation is open in PowerPoint. "
+                "Use ppt_create_presentation or ppt_open_presentation first."
+            ) from None
+
+    def _set_target_pres_impl(self, name_or_index) -> dict:
+        """Internal: set the session target presentation on the worker thread."""
+        app_ref = self._get_app_impl()
+        presentations = self._presentations(app_ref)
+        if not presentations:
+            raise RuntimeError("No presentation is open in PowerPoint.")
+
+        if isinstance(name_or_index, int):
+            if name_or_index < 1 or name_or_index > len(presentations):
+                raise ValueError(
+                    f"Presentation index {name_or_index} out of range "
+                    f"(1-{len(presentations)})"
+                )
+            pres = presentations[name_or_index - 1]
+        else:
+            wanted = name_or_index.lower()
+            matches = [
+                p for p in presentations
+                if p.name().lower() == wanted or p.full_name().lower() == wanted
+            ]
+            if not matches:
+                open_names = [p.name() for p in presentations]
+                raise ValueError(
+                    f"Presentation '{name_or_index}' not found. "
+                    f"Open presentations: {open_names}"
+                )
+            if len(matches) > 1:
+                raise ValueError(
+                    f"Multiple presentations match '{name_or_index}': "
+                    f"{[p.name() for p in matches]}. Use a more specific name."
+                )
+            pres = matches[0]
+
+        try:
+            pres.document_windows[1].activate()
+        except CommandError as exc:
+            logger.warning("Could not activate presentation window: %s", exc)
+
+        full_name = pres.full_name()
+        self._target_pres_full_name = full_name
+        index = None
+        for i, p in enumerate(presentations, start=1):
+            try:
+                if p.full_name() == full_name:
+                    index = i
+                    break
+            except CommandError:
+                continue
+        return {
+            "success": True,
+            "name": pres.name(),
+            "full_name": full_name,
+            "index": index,
+        }
+
+    def ensure_presentation(self) -> Any:
+        """Ensure at least one presentation is open, and return the target."""
+        return self.execute(self._ensure_presentation_impl)
+
+    def _ensure_presentation_impl(self) -> Any:
+        """Internal: ensure a presentation on the worker thread."""
+        app_ref = self._get_app_impl()
+        if not self._presentations(app_ref):
+            raise RuntimeError(
+                "No presentation is open in PowerPoint. "
+                "Use ppt_create_presentation or ppt_open_presentation first."
+            )
+        return self._get_pres_impl()
+
+    # -- verbs PowerPoint's dictionary leaves out ---------------------------
+
+    def open_presentation(self, path: str) -> None:
+        """Open a file, through AppleScript rather than appscript.
+
+        ``PP.open(...)`` returns None and opens nothing, because PowerPoint's
+        dictionary declares no Standard Suite commands and appscript's default
+        ``odoc`` event goes unanswered. The AppleScript form works, so it is
+        what runs here.
+        """
+        escaped = path.replace("\\", "\\\\").replace('"', '\\"')
+        osascript(
+            'tell application "Microsoft PowerPoint" to open POSIX file "%s"' % escaped
+        )
+
+
+def handle_com_error(exc: BaseException) -> dict:
+    """Parse a failure into the structured dict the error responses expect.
+
+    Named for its Windows counterpart so ``ppt_com.app`` needs no branch. The
+    keys match, with the Apple Event error number standing in for the HRESULT.
+    """
+    number = error_number(exc)
+    return {
+        "hresult": number,
+        "message": str(exc) or "Unknown Apple Event error",
+        "source": "Microsoft PowerPoint",
+        "description": getattr(exc, "errormessage", None),
+    }
+
+
+# Global singleton, matching the Windows module.
+ppt = PowerPointAppleEventWrapper()

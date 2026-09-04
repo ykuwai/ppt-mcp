@@ -10,7 +10,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.color import hex_to_int
 from utils.navigation import goto_slide
 from ppt_com.constants import (

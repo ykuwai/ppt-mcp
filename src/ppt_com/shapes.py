@@ -11,7 +11,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.color import hex_to_int, int_to_hex
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide
 from utils.redraw import FrozenRedraw
 from utils.validation import font_size_warning

@@ -8,7 +8,7 @@ import logging
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)

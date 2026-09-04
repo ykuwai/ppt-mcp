@@ -25,7 +25,7 @@ if _WINDOWS:
     import ctypes.wintypes
     import pythoncom
 
-from utils.com_wrapper import ppt
+from backend import ppt
 from ppt_com.constants import (
     ppFixedFormatTypePDF,
     ppSaveAsPDF,

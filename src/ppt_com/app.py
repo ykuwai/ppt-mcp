@@ -6,7 +6,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from utils.com_wrapper import ppt, handle_com_error
+from backend import ppt, handle_com_error
 from ppt_com.constants import WINDOW_STATE_NAMES, ppSelectionNone, ppSelectionSlides, ppSelectionShapes, ppSelectionText
 
 logger = logging.getLogger(__name__)

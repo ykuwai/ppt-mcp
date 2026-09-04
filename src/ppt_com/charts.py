@@ -16,7 +16,7 @@ from typing import Literal, Optional, Union
 import pythoncom
 from pydantic import BaseModel, Field, ConfigDict
 
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from ppt_com.constants import msoChart

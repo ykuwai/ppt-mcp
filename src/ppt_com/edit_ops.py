@@ -10,7 +10,7 @@ from typing import Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from utils.com_wrapper import ppt
+from backend import ppt
 from ppt_com.constants import msoTrue, msoFalse
 
 logger = logging.getLogger(__name__)

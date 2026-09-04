@@ -6,7 +6,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide
 from utils.color import int_to_hex
 from ppt_com.constants import (
