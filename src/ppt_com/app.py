@@ -254,3 +254,17 @@ def set_window_state(params: SetWindowStateInput) -> str:
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set window state: {str(e)}"})
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import app as _mac_app
+
+    use_mac_impls(globals(), _mac_app)

@@ -41,8 +41,34 @@ else:  # pragma: no cover - unsupported platform
 
 from backend.unsupported import unsupported  # noqa: E402,F401
 
+
+def use_mac_impls(namespace, module) -> None:
+    """Swap a tool module's COM implementations for their Apple Event ones.
+
+    Everything a tool module does apart from walking the object model is
+    already platform neutral: the pydantic models, the validation, the warnings,
+    the JSON it returns. Only the ``_*_impl`` functions differ, and they have
+    the same names and signatures on both sides, so the port is a swap rather
+    than a fork.
+
+    Called at the bottom of a ported module::
+
+        if IS_MACOS:
+            from ppt_mac import shapes as _mac
+            use_mac_impls(globals(), _mac)
+
+    The public functions look their implementation up in module globals at call
+    time, so replacing the name is enough. A module only defines the ones it
+    has ported; anything it leaves out keeps the COM version, which then fails
+    loudly rather than silently doing the wrong thing.
+    """
+    for name in dir(module):
+        if name.startswith("_") and name.endswith("_impl"):
+            namespace[name] = getattr(module, name)
+
 __all__ = [
     "ppt",
+    "use_mac_impls",
     "handle_com_error",
     "AUTO_DISMISS_DIALOG",
     "unsupported",
