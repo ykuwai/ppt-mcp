@@ -1,6 +1,19 @@
 # Bringing ppt-mcp to macOS
 
-Status: design study. Nothing here is implemented yet.
+Status: design study, now partly built. The measurements below stand; where
+building it changed the answer, the section says so.
+
+What has shipped so far, on the `macos-support` branch: the package installs
+and 563 tests run on macOS (#185), the Apple Event backend and the generated
+enumeration tables (#186), and the app and export tools (#187).
+
+The one place building it beat the study: **slide images do work**, just not the
+way Windows does them. Section 6 said there is no export command, which is true,
+and section 5 said whole deck PNG export reports success and writes nothing,
+which is also true. The route that does work is to export the deck to PDF and
+render the pages with Quartz, which ships with macOS. That returns a vector
+rendering at any size asked for rather than a screen capture, and it is fast:
+0.18s for the PDF, 0.10s per slide after that, 0.08s for a preview.
 
 ppt-mcp drives a live PowerPoint through Windows COM. macOS has no COM, but
 PowerPoint for Mac ships an Apple Event object model that is the same object
@@ -297,7 +310,7 @@ This is the honest part. These are not workarounds waiting to be found.
 | Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. An existing chart is visible as a plain shape, so it can be moved, resized and read, but not created or given data | `charts.py` 1,104 |
 | SmartArt | `SmartArt` object model | **no class** | `smartart.py` 796 |
 | Freeform paths | `Shapes.BuildFreeform` | **no builder** | `freeform.py` 751 |
-| Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all | `export.py` 825 |
+| Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all. Solved another way, by exporting the deck to PDF and rendering pages with Quartz, which is what shipped | `export.py` 825 |
 | Line visibility | `Shape.Line.Visible = False` | `line format` has **no `visible` property**. Weight 0 and transparency 1.0 both apply cleanly and are the practical stand-ins | every tool taking `line_visible` |
 | Theme colours | `Theme.ThemeColorScheme` | `theme color scheme` reads back as `missing value` on the slide master. The accent colour feature the README leads with has no direct route | `themes.py` 695 |
 | Sections | full API | the commands are declared but `get count of sections` returns -1708 through AppleScript. It did answer through appscript, so this needs one more pass | `sections.py` 242 |
