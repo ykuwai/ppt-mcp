@@ -275,3 +275,17 @@ def register_tools(mcp):
         Set radius=0 to remove the soft edge effect.
         """
         return set_soft_edge(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import effects as _mac_effects
+
+    use_mac_impls(globals(), _mac_effects)

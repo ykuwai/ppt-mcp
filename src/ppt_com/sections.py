@@ -240,3 +240,17 @@ def register_tools(mcp):
         - 'delete': Remove the section without deleting its slides.
         """
         return manage_section(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import sections as _mac_sections
+
+    use_mac_impls(globals(), _mac_sections)

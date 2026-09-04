@@ -287,3 +287,17 @@ def register_tools(mcp):
         Identify the group by shape name or 1-based shape index.
         """
         return get_group_items(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import groups as _mac_groups
+
+    use_mac_impls(globals(), _mac_groups)
