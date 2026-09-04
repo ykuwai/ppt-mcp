@@ -3,14 +3,20 @@
 Mirrors ``ppt_com/layout.py``. Same function names, same signatures, same
 returned shapes.
 
-Three of these tools cannot be done at all here, and they share one cause.
-``align``, ``distribute``, ``group`` and ``ungroup`` all take a ``shape range``,
-and the only ``shape range`` PowerPoint for Mac hands out is the one already
-selected in a window. Its dictionary has an ``unselect`` command and no
+``group``, ``ungroup`` and the shape range they need cannot be reached here.
+The only ``shape range`` PowerPoint for Mac hands out is the one already
+selected in a window, its dictionary has an ``unselect`` command and no
 ``select`` command, so a script cannot put shapes into a selection to act on
 them. ``ppt_merge_shapes`` has no route either, for a simpler reason: the
-Boolean merge verbs are not in the dictionary in any form. All three refuse
-rather than pretend.
+Boolean merge verbs are not in the dictionary in any form. Those refuse rather
+than pretend.
+
+``align`` and ``distribute`` were in that list and are not any more. Windows
+hands both to ``ShapeRange.Align`` and ``ShapeRange.Distribute``, but neither
+is doing anything a script cannot do itself: every shape's ``left position``,
+``top``, ``width`` and ``height`` read and write cleanly here, and moving four
+shapes is four writes. So they are computed rather than delegated, and the
+result is the same picture on both platforms.
 
 Slide height is the other gap. ``page setup`` carries ``slide width`` and no
 ``slide height``, and the slide master's ``height`` is read only, so a height
@@ -101,39 +107,137 @@ def _slide_dimensions(pres) -> tuple:
     return (pres.page_setup.slide_width(), pres.slide_master.height())
 
 
+def _boxes(slide_index, shape_names) -> list:
+    """Read each named shape's rectangle once, in one pass.
+
+    Every alignment decision needs all four numbers for every shape before it
+    can move any of them, and reading a property is an Apple Event, so they are
+    read together rather than one at a time inside the loop that writes.
+    ``_get_shape`` raises for a name that is not on the slide, which is the
+    same error Windows gives.
+    """
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+    boxes = []
+    for name in shape_names:
+        shape = _get_shape(slide, name)
+        boxes.append({
+            "shape": shape,
+            "left": shape.left_position(),
+            "top": shape.top(),
+            "width": shape.width(),
+            "height": shape.height(),
+        })
+    return boxes
+
+
+def _slide_size() -> tuple:
+    """The slide's width and height in points."""
+    return _slide_dimensions(ppt._get_pres_impl())
+
+
 # ---------------------------------------------------------------------------
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
 def _align_shapes_impl(slide_index, shape_names, align_to, relative_to_slide):
-    """Refuse, because a shape range cannot be built from a script here."""
-    # Validated first so a caller with a typo hears about the typo too.
+    """Align shapes by moving them, since there is no shape range to hand it to.
+
+    PowerPoint aligns to the bounding box of the shapes themselves, or to the
+    slide when asked to. Both are arithmetic on four readable properties, so
+    both are done here rather than refused.
+    """
     align_key = align_to.strip().lower()
     if align_key not in ALIGN_CMD_MAP:
         raise ValueError(
             f"Unknown align_to '{align_to}'. "
             f"Valid values: {list(ALIGN_CMD_MAP.keys())}"
         )
+
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    boxes = _boxes(slide_index, shape_names)
+
+    if relative_to_slide:
+        width, height = _slide_size()
+        left, top, right, bottom = 0.0, 0.0, width, height
+    else:
+        left = min(b["left"] for b in boxes)
+        top = min(b["top"] for b in boxes)
+        right = max(b["left"] + b["width"] for b in boxes)
+        bottom = max(b["top"] + b["height"] for b in boxes)
+
+    for box in boxes:
+        if align_key == "left":
+            box["shape"].left_position.set(left)
+        elif align_key == "center":
+            box["shape"].left_position.set(
+                (left + right) / 2 - box["width"] / 2
+            )
+        elif align_key == "right":
+            box["shape"].left_position.set(right - box["width"])
+        elif align_key == "top":
+            box["shape"].top.set(top)
+        elif align_key == "middle":
+            box["shape"].top.set((top + bottom) / 2 - box["height"] / 2)
+        else:  # bottom
+            box["shape"].top.set(bottom - box["height"])
+
     return {
-        "error": "ppt_align_shapes is not available on macOS",
-        "reason": _NO_SHAPE_RANGE,
-        "platform": "macOS",
-        "alternatives": ["ppt_update_shape", "ppt_get_shape_info"],
+        "success": True,
+        "aligned_count": len(shape_names),
+        "align_to": align_key,
+        "relative_to_slide": relative_to_slide,
     }
 
 
 def _distribute_shapes_impl(slide_index, shape_names, direction, relative_to_slide):
-    """Refuse, for the same reason as align."""
+    """Space shapes so the gaps between them are equal.
+
+    PowerPoint equalises the gaps between edges, not the distance between
+    centres, and it leaves the two outermost shapes where they are. Asked to
+    work relative to the slide, it spreads them from edge to edge instead.
+    Fewer than three shapes have nothing to distribute, which is also what
+    Windows does with them.
+    """
     dir_key = direction.strip().lower()
     if dir_key not in DISTRIBUTE_CMD_MAP:
         raise ValueError(
             f"Unknown direction '{direction}'. "
             f"Valid values: {list(DISTRIBUTE_CMD_MAP.keys())}"
         )
+
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    boxes = _boxes(slide_index, shape_names)
+
+    horizontal = dir_key == "horizontal"
+    span = "width" if horizontal else "height"
+    start = "left" if horizontal else "top"
+    boxes.sort(key=lambda b: b[start])
+
+    if relative_to_slide:
+        width, height = _slide_size()
+        first, last = 0.0, (width if horizontal else height)
+    else:
+        first = boxes[0][start]
+        last = boxes[-1][start] + boxes[-1][span]
+
+    used = sum(b[span] for b in boxes)
+    gap = (last - first - used) / (len(boxes) - 1) if len(boxes) > 1 else 0.0
+
+    cursor = first
+    for box in boxes:
+        if horizontal:
+            box["shape"].left_position.set(cursor)
+        else:
+            box["shape"].top.set(cursor)
+        cursor += box[span] + gap
+
     return {
-        "error": "ppt_distribute_shapes is not available on macOS",
-        "reason": _NO_SHAPE_RANGE,
-        "platform": "macOS",
-        "alternatives": ["ppt_update_shape", "ppt_get_shape_info"],
+        "success": True,
+        "distributed_count": len(shape_names),
+        "direction": dir_key,
+        "relative_to_slide": relative_to_slide,
     }
 
 
