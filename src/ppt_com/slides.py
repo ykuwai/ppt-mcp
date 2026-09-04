@@ -5,7 +5,7 @@ Add, delete, duplicate, move, list, and query slides. Manage speaker notes.
 
 import json
 import logging
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -45,12 +45,13 @@ class AddSlideInput(BaseModel):
             "If omitted, the slide is added at the end."
         ),
     )
-    layout: Optional[int] = Field(
+    layout: Optional[Union[int, str]] = Field(
         default=None,
         description=(
-            "PpSlideLayout constant: 1=Title, 2=Text, 11=TitleOnly, 12=Blank, "
+            "PpSlideLayout constant (1=Title, 2=Text, 11=TitleOnly, 12=Blank, "
             "33=SectionHeader, 34=Comparison, 35=ContentWithCaption, "
-            "36=PictureWithCaption. Ignored if layout_name is provided."
+            "36=PictureWithCaption) or a layout name; a name is treated "
+            "exactly like layout_name. Ignored if layout_name is provided."
         ),
     )
     layout_name: Optional[str] = Field(
@@ -89,6 +90,29 @@ class AddSlideInput(BaseModel):
         description="Number of slides to add. All slides use the same layout. "
         "When count > 1, returns a list of created slide indices.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_layout_names_in_layout(cls, data):
+        """Accept a layout name passed via `layout`.
+
+        Callers routinely put a friendly name such as 'blank' into `layout`
+        because the tool text mentions names and integer constants side by
+        side. Rejecting that with an int-parsing error only costs a round
+        trip, so a string is treated like layout_name instead: numeric
+        strings become the integer constant, any other name moves to
+        layout_name (unless layout_name is already set, which wins), and
+        `layout` is cleared.
+        """
+        if isinstance(data, dict) and isinstance(data.get("layout"), str):
+            value = data["layout"].strip()
+            if value.lstrip("+-").isdigit():
+                data["layout"] = int(value)
+            else:
+                if value and not data.get("layout_name"):
+                    data["layout_name"] = value
+                data["layout"] = None
+        return data
 
 
 class DeleteSlideInput(BaseModel):
@@ -1307,9 +1331,10 @@ def register_tools(mcp):
         no layout-name ambiguity (this only copies the look, not the content;
         use ppt_duplicate_slide for a full copy). This is the recommended path.
 
-        Otherwise specify a layout by name (e.g. 'blank', 'title', 'title_only')
-        or by PpSlideLayout integer constant. You can also provide a custom
-        layout_name to match a layout from the slide master.
+        Otherwise pass layout_name (a friendly name such as 'blank', 'title',
+        'title_only', or a custom layout name from the slide master) or layout
+        (a PpSlideLayout integer constant; a name passed here is treated like
+        layout_name).
         Position is 1-based; omit to append at the end.
         Use design_index to pick a layout from a specific slide master/design.
         Use count to create multiple slides at once; when count > 1, returns
