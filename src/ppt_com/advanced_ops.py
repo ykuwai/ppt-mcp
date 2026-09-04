@@ -157,9 +157,10 @@ _icon_on_cdn_cache = {}
 def _icon_is_on_cdn(name: str) -> bool:
     """Whether the icon package actually serves this name.
 
-    Only the outlined style is asked. The package carries every name in all
-    three styles, so one answer settles it, and a machine that cannot reach the
-    CDN at all is told nothing rather than told no.
+    Only the outlined, unfilled name is asked. The package pairs every icon
+    with its filled variant exactly, 3,631 of each under `outlined`, with no
+    name on one side missing from the other, so one answer settles both. A
+    machine that cannot reach the CDN at all is told nothing rather than no.
     """
     cached = _icon_on_cdn_cache.get(name)
     if cached is not None:

@@ -62,10 +62,19 @@ _RETRY_INTERVAL = 2    # seconds between retries
 # act on.
 DEFAULT_TIMEOUT = int(os.getenv("PPT_AE_TIMEOUT", "20"))
 
-# How long a call will queue behind the ones already in front of it before
-# it gives up. Only one thing at a time reaches PowerPoint, so a caller that
-# fires several tools at once puts the rest in line here.
-_QUEUE_WAIT = DEFAULT_TIMEOUT * 3
+# What one call is allowed, once it starts. The worker retries a call that
+# never landed, so this has to cover every attempt and the pauses between them.
+_CALL_BUDGET = DEFAULT_TIMEOUT * (_RETRY_MAX + 1) + _RETRY_INTERVAL * _RETRY_MAX + 5
+
+# How long a call will queue behind the ones already in front of it before it
+# gives up. Only one thing at a time reaches PowerPoint, so a caller that fires
+# several tools at once puts the rest in line here.
+#
+# It has to be more than one whole call, not less. A single call in front that
+# times out and is retried spends the full budget, so anything shorter would
+# take back every call behind a slow one that was going to recover, which is
+# the same wrong answer as before wearing better wording.
+_QUEUE_WAIT = _CALL_BUDGET * 2
 
 # The Windows wrapper's ESC-the-dialog escape hatch has no Apple Event
 # equivalent, so the flag exists only to keep the two module surfaces identical.
@@ -463,16 +472,13 @@ class PowerPointAppleEventWrapper:
                 )
             # It started while that was being decided, so wait for it properly.
 
-        # Generous relative to the per call ceiling, so the worker's own retry
-        # loop is what decides, not this.
-        budget = DEFAULT_TIMEOUT * (_RETRY_MAX + 1) + _RETRY_INTERVAL * _RETRY_MAX + 5
         try:
-            return job.future.result(timeout=budget)
+            return job.future.result(timeout=_CALL_BUDGET)
         except FutureTimeout:
             # `str()` on this one is the empty string, so letting it out reaches
             # the caller as "Failed to add picture: " with nothing after it.
             raise AppleEventError(
-                f"PowerPoint did not finish this within {budget}s and the "
+                f"PowerPoint did not finish this within {_CALL_BUDGET}s and the "
                 "request was abandoned. It may still be working, so check the "
                 "deck before asking for the same thing again.",
                 AE_TIMED_OUT,

@@ -900,3 +900,22 @@ class TestQueueingBehindAnotherCall:
         finally:
             release.set()
             wrapper.stop()
+
+
+@macos_only
+class TestTheWaitsAreTheRightWayRound:
+    """A call that would have recovered must not be taken back while it waits."""
+
+    def test_a_whole_call_fits_inside_the_queue_wait(self):
+        from backend import mac_ae
+
+        # One call in front that times out and is retried spends the whole
+        # budget. A shorter queue wait would take back everything behind it.
+        assert mac_ae._QUEUE_WAIT >= mac_ae._CALL_BUDGET
+
+    def test_the_call_budget_covers_every_retry_and_the_pauses_between(self):
+        from backend import mac_ae
+
+        attempts = mac_ae.DEFAULT_TIMEOUT * (mac_ae._RETRY_MAX + 1)
+        pauses = mac_ae._RETRY_INTERVAL * mac_ae._RETRY_MAX
+        assert mac_ae._CALL_BUDGET >= attempts + pauses
