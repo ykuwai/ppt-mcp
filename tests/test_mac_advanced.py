@@ -589,24 +589,37 @@ class TestFonts:
         assert result["shapes_updated"] == 0
         assert any("mix more than one font" in w for w in result["warnings"])
 
-    def test_listing_fonts_counts_through_the_presentation(self):
+    def test_listing_fonts_walks_the_theme_and_the_shapes(self):
+        """`presentation.fonts` counts and then will not resolve, so it is not used.
+
+        Live, a deck using one font answers 2 for its font count, nothing for
+        the collection's contents, and -1728 for `fonts[1]`. The tool walks the
+        theme font scheme and every shape with text instead, which is the
+        question it was asked.
+        """
         from ppt_mac.advanced_ops import _list_fonts_impl
 
-        with _fake_deck([]) as deck:
-            deck.font_names = ["Inter", "Meiryo"]
+        with _fake_deck(["A", "B"]) as deck:
+            deck.font_scheme.major[1].name.set("Inter")
+            deck.font_scheme.minor[3].name.set("Meiryo")
             result = _list_fonts_impl()
 
-        assert result == {
-            "success": True, "fonts_count": 2, "fonts": ["Inter", "Meiryo"],
-        }
+        assert result["success"] is True
+        assert "Inter" in result["fonts"]
+        assert "Meiryo" in result["fonts"]
+        assert result["fonts"] == sorted(result["fonts"])
+        assert result["fonts_count"] == len(result["fonts"])
+        assert any("will not enumerate" in w for w in result["warnings"])
 
-    def test_a_deck_with_no_fonts_answers_an_empty_list(self):
-        from ppt_mac.advanced_ops import _list_fonts_impl
+    def test_the_font_collection_is_never_touched(self):
+        """Reaching for it is the mistake this tool exists not to make."""
+        import inspect
 
-        with _fake_deck([]):
-            result = _list_fonts_impl()
+        from ppt_mac import advanced_ops
 
-        assert result == {"success": True, "fonts_count": 0, "fonts": []}
+        source = inspect.getsource(advanced_ops._list_fonts_impl)
+        assert "pres.fonts" not in source
+        assert "k.font" not in source
 
     def test_theme_fonts_are_written_at_the_latin_and_east_asian_positions(self):
         from ppt_mac.advanced_ops import _set_default_fonts_impl

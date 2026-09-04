@@ -393,42 +393,61 @@ def _replace_font_impl(original_font, replacement_font):
 
 
 def _list_fonts_impl():
-    """List the fonts the presentation carries.
+    """List the fonts the deck uses, by walking it.
 
-    ``presentation`` declares a ``font`` element, and it is counted through the
-    presentation rather than by materialising the collection, which is the safe
-    form everywhere in this port. A deck that answers with nothing comes back as
-    an empty list rather than as an error, because no fonts is a real answer.
+    ``presentation`` declares a ``font`` element and it is a trap. Asking the
+    presentation how many fonts it has answers 2 on a deck using one font,
+    asking the collection for its contents answers nothing, and ``fonts[1]``
+    answers -1728. The count is real and the elements behind it are not
+    reachable, which is the same shape of defect as everywhere else in this
+    port.
+
+    So the deck is walked instead, the way ``_replace_font_impl`` walks it,
+    which answers the question the tool is actually asking. The theme fonts are
+    included because placeholder text that has never been overridden is set in
+    them, and a list that left them out would be missing the fonts most of a
+    deck is written in.
     """
     ppt._get_app_impl()
     pres = ppt._get_pres_impl()
 
-    try:
-        total = count_of(pres, k.font)
-    except CommandError:
-        total = 0
-    if is_missing(total):
-        total = 0
+    found = []
 
-    fonts = []
-    for index in range(1, int(total) + 1):
-        entry = pres.fonts[index]
-        name = None
-        for attribute in ("font_name", "ASCII_name"):
+    def remember(value):
+        if is_missing(value) or not value:
+            return
+        name = str(value).strip()
+        if name and name not in found:
+            found.append(name)
+
+    scheme = pres.slide_master.theme.theme_font_scheme
+    for group in (scheme.major_theme_fonts, scheme.minor_theme_fonts):
+        for slot in (1, 3):
             try:
-                value = getattr(entry, attribute)()
-            except (CommandError, AttributeError):
+                remember(group[slot].name())
+            except CommandError:
                 continue
-            if not is_missing(value) and value:
-                name = value
-                break
-        if name is not None:
-            fonts.append(name)
+
+    for index in range(1, count(pres.slides) + 1):
+        for shape in _text_shapes(pres.slides[index]):
+            font = shape.text_frame.text_range.font
+            for attribute in ("font_name", "east_asian_name"):
+                try:
+                    remember(getattr(font, attribute)())
+                except CommandError:
+                    continue
 
     return {
         "success": True,
-        "fonts_count": len(fonts),
-        "fonts": fonts,
+        "fonts_count": len(found),
+        "fonts": sorted(found),
+        "warnings": [
+            "PowerPoint for Mac will not enumerate a presentation's fonts, so "
+            "this walked the theme and every shape with text instead. A shape "
+            "whose text mixes fonts answers nothing for its font name and "
+            "contributes none, and masters and layouts beyond the theme are "
+            "not walked."
+        ],
     }
 
 
