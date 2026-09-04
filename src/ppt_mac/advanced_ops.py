@@ -66,6 +66,7 @@ from backend.mac_enums import (
     PpSelectionType,
     to_keyword,
 )
+from backend.unsupported import refusal as _refusal
 from ppt_com.constants import (
     PICTURE_COLOR_TYPE_MAP,
     PICTURE_COLOR_TYPE_NAMES,
@@ -164,27 +165,6 @@ _WIN_PICTURE_COLOR_TYPE = {
 # How deep the font walk follows groups. Groups do not answer for their members
 # here, so this only guards against a PowerPoint that starts to.
 _GROUP_DEPTH = 4
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 def _staged_file(suffix: str) -> str:

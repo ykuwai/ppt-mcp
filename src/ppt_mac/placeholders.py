@@ -18,7 +18,16 @@ import logging
 
 from appscript.reference import CommandError
 
-from backend.mac_ae import count, elements, is_missing, positional, ppt, raw, shapes_of
+from backend.mac_ae import (
+    count,
+    elements,
+    is_missing,
+    positional,
+    ppt,
+    raw,
+    shapes_of,
+    windows_constant as _windows_constant,
+)
 from backend.mac_enums import (
     MsoShapeType,
     PpParagraphAlignment,
@@ -60,20 +69,6 @@ _NO_NAMES_NOTE = (
 # above do not declare one, but the code is worth a try because Office objects
 # often answer it anyway, and a failed try costs one event and reports null.
 _NAME_CODE = b'pnam'
-
-
-def _windows_constant(table, keyword, default=None):
-    """Turn a macOS enumerator back into the Windows constant it stands for.
-
-    ``to_keyword`` goes one way, and reading a property needs the other. The
-    generated tables are keyed by the Windows constant, and they are small
-    enough that a scan costs less than keeping a second index in step with
-    them.
-    """
-    for value, word in table.items():
-        if word == keyword:
-            return value
-    return default
 
 
 def _name_or_none(ref):
@@ -130,8 +125,8 @@ def _find_placeholder_by_type(slide, placeholder_type: int):
 
 def _resolve_placeholder(slide, placeholder_index=None, placeholder_type=None):
     """Resolve a placeholder by index (int) or type name (str) or type int."""
-    # Lazy import: ppt_com/placeholders.py imports this module at the bottom of
-    # its own file, so importing it back at module scope would let an
+    # Imported lazily. ppt_com/placeholders.py imports this module at the bottom
+    # of its own file, so importing it back at module scope would let an
     # "import ppt_mac.placeholders first" ordering run that swap block against
     # a module that has defined nothing yet, and the swap would silently not
     # happen. By call time both modules are fully loaded.
@@ -403,7 +398,7 @@ def _get_slide_master_info_impl(design_index) -> dict:
 
     # Theme colours. MACOS_PORT records `theme color scheme` reading back as
     # `missing value` on a slide master, so this is an attempt rather than a
-    # promise: whatever actually comes back is reported and nothing is
+    # promise. Whatever actually comes back is reported, and nothing is
     # invented when it does not.
     colors = []
     try:

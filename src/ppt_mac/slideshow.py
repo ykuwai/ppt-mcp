@@ -36,13 +36,20 @@ import time
 from appscript import k
 from appscript.reference import CommandError
 
-from backend.mac_ae import count, count_of, error_number, ppt
+from backend.mac_ae import (
+    count,
+    count_of,
+    error_number,
+    ppt,
+    windows_constant as _windows_constant,
+)
 from backend.mac_enums import (
     PpSlideShowRangeType,
     PpSlideShowState,
     PpSlideShowType,
     to_keyword,
 )
+from backend.unsupported import refusal as _refusal
 from ppt_com.constants import (
     SHOW_TYPE_NAMES,
     SLIDESHOW_STATE_NAMES,
@@ -73,35 +80,6 @@ _POINTER_TYPES = {
 # happened yet would be worse than waiting.
 _SETTLE_SECONDS = 0.5
 _SETTLE_STEPS = 5
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
-
-
-def _windows_constant(table, keyword, default=None):
-    """Turn a macOS enumerator back into the Windows constant it stands for."""
-    for value, word in table.items():
-        if word == keyword:
-            return value
-    return default
 
 
 def _show_window_count(app) -> int:
@@ -148,8 +126,8 @@ def _state_name(view) -> str:
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
 def _slideshow_start_impl(start_slide, end_slide, loop, show_type) -> dict:
-    # Lazy import: ppt_com/slideshow.py imports this module at the bottom of
-    # its own file, so importing it back at module scope would let an
+    # Imported lazily. ppt_com/slideshow.py imports this module at the bottom
+    # of its own file, so importing it back at module scope would let an
     # "import ppt_mac.slideshow first" ordering run that swap block against a
     # module that has defined nothing yet, and the swap would silently not
     # happen. By call time both modules are fully loaded.

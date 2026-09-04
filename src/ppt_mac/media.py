@@ -40,6 +40,8 @@ slide, so nothing calls ``goto_slide``.
 
 import logging
 
+from backend.unsupported import refusal as _refusal
+
 logger = logging.getLogger(__name__)
 
 # The two sentences every refusal in this module rests on, kept in one place so
@@ -57,27 +59,6 @@ _SANDBOX = (
     "even given a route the file would have to be copied into its container "
     "first, which is what link_to_file cannot survive."
 )
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 # ---------------------------------------------------------------------------

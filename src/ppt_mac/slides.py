@@ -28,7 +28,17 @@ from typing import Optional
 
 from appscript import k
 
-from backend.mac_ae import count, elements, is_missing, osascript, positional, ppt
+from backend.mac_ae import (
+    count,
+    elements,
+    full_names as _full_names,
+    is_missing,
+    osascript,
+    positional,
+    ppt,
+    resolve_presentation as _resolve_presentation,
+    windows_constant,
+)
 from backend.mac_enums import (
     PpEntryEffect,
     PpPlaceholderType,
@@ -64,11 +74,6 @@ _TITLE_PLACEHOLDERS = frozenset(
 # ---------------------------------------------------------------------------
 # Small helpers over the object model
 # ---------------------------------------------------------------------------
-def _full_names(app) -> list:
-    """Every open presentation's full name, in one Apple Event."""
-    return [str(name) for name in elements(app.presentations.full_name)]
-
-
 def _presentation_index(app, pres) -> int:
     """The 1-based position of a presentation among the open ones."""
     full_name = pres.full_name()
@@ -109,19 +114,17 @@ def _slide_ids(pres) -> list:
 
 
 def _windows_constant(table: dict, keyword):
-    """Translate a macOS enumerator back to the Windows constant it pairs with.
+    """``windows_constant`` with the missing value folded into the same answer.
 
-    The reverse of ``to_keyword``, for the fields Windows reports as a number.
-    A keyword the table does not carry answers None rather than the nearest
-    match, because a plausible wrong constant is the failure this whole layer
-    exists to avoid.
+    The fields this module reads come back as ``missing value`` when PowerPoint
+    has nothing to report, and a caller here wants None for that as much as it
+    wants None for a keyword the table does not carry. A plausible wrong
+    constant is the failure this whole layer exists to avoid, so neither case
+    reaches for the nearest match.
     """
     if is_missing(keyword):
         return None
-    for value, candidate in table.items():
-        if candidate == keyword:
-            return value
-    return None
+    return windows_constant(table, keyword)
 
 
 def _custom_layout_name(layout_ref):
@@ -160,7 +163,7 @@ def _realize_order(pres, final_ids: list) -> None:
     """Put the deck's slides into the given order, and prove that it took.
 
     Every move made here is backwards, from a higher index to a lower one.
-    Working left to right guarantees that: once positions 1 to f-1 hold their
+    Working left to right guarantees it. Once positions 1 to f-1 hold their
     final slide, the slide wanted at f is at some index at or after f. Placing
     a slide further back still works, because the slides that belong ahead of
     it move past it one at a time.
@@ -231,67 +234,6 @@ def _friendly_layout(key: str) -> Optional[int]:
 # ---------------------------------------------------------------------------
 # Helper to resolve a presentation
 # ---------------------------------------------------------------------------
-def _resolve_presentation(
-    app,
-    presentation_index: Optional[int] = None,
-    presentation_name: Optional[str] = None,
-):
-    """Return a presentation by index, by name, or the session target.
-
-    The counterpart of the helper of the same name in ``ppt_com/slides.py``,
-    raising the same errors with the same wording.
-    """
-    if presentation_index is not None and presentation_name is not None:
-        raise ValueError(
-            "Specify either presentation_index or presentation_name, not both"
-        )
-
-    presentations = elements(app.presentations)
-
-    if presentation_index is not None:
-        total = len(presentations)
-        if presentation_index < 1 or presentation_index > total:
-            raise ValueError(
-                f"Presentation index {presentation_index} out of range (1-{total})"
-            )
-        return presentations[presentation_index - 1]
-
-    if presentation_name is not None:
-        if not presentations:
-            raise RuntimeError(
-                "No presentation is open. "
-                "Use ppt_create_presentation or ppt_open_presentation first."
-            )
-        matches = []
-        available = []
-        for index, pres in enumerate(presentations, start=1):
-            name = pres.name()
-            available.append(f"  [{index}] {name}")
-            if name == presentation_name:
-                matches.append((index, pres))
-        if len(matches) == 1:
-            return matches[0][1]
-        if len(matches) > 1:
-            match_list = ", ".join(
-                f"[{index}] {presentation_name}" for index, _ in matches
-            )
-            raise ValueError(
-                f"Multiple presentations match name '{presentation_name}': "
-                f"{match_list}. Use presentation_index to disambiguate."
-            )
-        raise ValueError(
-            f"No presentation named '{presentation_name}'. "
-            f"Available presentations:\n" + "\n".join(available)
-        )
-
-    if not presentations:
-        raise RuntimeError(
-            "No presentation is open. "
-            "Use ppt_create_presentation or ppt_open_presentation first."
-        )
-    return ppt._get_pres_impl()
-
-
 # ---------------------------------------------------------------------------
 # Implementation functions (run on the Apple Event thread via ppt.execute)
 # ---------------------------------------------------------------------------
@@ -471,7 +413,7 @@ def _delete_slide_impl(
         raise ValueError(f"Slide index(es) {out_of_range} out of range (1-{total})")
     if len(targets) >= total:
         raise ValueError(
-            "Cannot delete every slide — a presentation must keep at least "
+            "Cannot delete every slide. A presentation must keep at least "
             f"one slide (requested {len(targets)} of {total})"
         )
 
@@ -591,11 +533,12 @@ def _move_slide_impl(
     nav_goto_slide(app, sources[0])
 
     # Build the full desired final order of slide IDs, then realise it. A
-    # direction heuristic based on sources[0] is not enough: a non-contiguous
-    # selection that straddles the target can leave a member outside the block
-    # (for example [1,4,5] to position 2). _compute_final_order is the same
-    # pure function the Windows side uses, imported when called because
-    # ppt_com/slides.py imports this module from its own last line.
+    # direction heuristic based on sources[0] is not enough, because a
+    # non-contiguous selection that straddles the target can leave a member
+    # outside the block (for example [1,4,5] to position 2).
+    # _compute_final_order is the same pure function the Windows side uses,
+    # imported when called because ppt_com/slides.py imports this module from
+    # its own last line.
     from ppt_com.slides import _compute_final_order
 
     all_ids = _slide_ids(pres)

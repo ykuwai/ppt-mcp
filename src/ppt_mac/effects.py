@@ -29,8 +29,9 @@ import logging
 
 from appscript import k
 
-from backend.mac_ae import ppt, raw
-from ppt_mac.shapes import _get_shape, _slide
+from backend.mac_ae import ppt, raw, slide_at as _slide
+from backend.unsupported import refusal as _refusal
+from ppt_mac.shapes import _get_shape
 from utils.color import hex_to_rgb_list
 from utils.navigation import goto_slide
 
@@ -66,27 +67,6 @@ _SOFT_EDGE_PRESETS = (
     (25.0, k.soft_edge_type5, "25 points"),
     (50.0, k.soft_edge_type6, "50 points"),
 )
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 def _nearest_soft_edge(radius: float):

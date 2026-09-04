@@ -14,7 +14,6 @@ import logging
 from typing import Optional
 
 from backend.mac_ae import count, elements, is_missing, ppt, shapes_of
-from ppt_com.constants import ppSelectionNone, ppSelectionShapes, ppSelectionText
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ def _keyword_name(value) -> str:
 
 
 def _connect_impl(visible: Optional[bool]) -> dict:
-    # Same contract as Windows: this is the user's explicit request to start or
+    # Same contract as Windows. This is the user's explicit request to start or
     # attach PowerPoint, so launching is allowed.
     app = ppt._connect_impl(visible, allow_launch=True)
     return {

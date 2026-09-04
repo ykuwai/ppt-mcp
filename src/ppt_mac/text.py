@@ -34,7 +34,15 @@ import re
 from appscript import k
 from appscript.reference import CommandError
 
-from backend.mac_ae import count, elements, is_missing, ppt, shapes_of
+from backend.mac_ae import (
+    count,
+    elements,
+    is_missing,
+    ppt,
+    shape_by_name_or_index as _get_shape,
+    shapes_of,
+    windows_constant as _windows_constant,
+)
 from backend.mac_enums import (
     MsoShapeType,
     MsoTextOrientation,
@@ -47,6 +55,7 @@ from backend.mac_enums import (
     PpPlaceholderType,
     to_keyword,
 )
+from backend.unsupported import refusal as _refusal
 from utils.color import (
     get_theme_color_index,
     hex_to_rgb_list,
@@ -62,7 +71,7 @@ from ppt_com.constants import (
 logger = logging.getLogger(__name__)
 
 # scripts/gen_mac_enums.py did not pair ppAutoSizeTextToFitShape, so the
-# generated table stops at "shape to fit text". macOS does have the value: the
+# generated table stops at "shape to fit text". macOS does have the value. The
 # sdef carries it twice under two spellings, `ppAutoSizeTextToFitShape` and
 # `text to fit shape`, and both share the code 0x00e50002, so this is a gap in
 # the generator rather than a gap in PowerPoint. Patched here so shrink to fit
@@ -91,53 +100,6 @@ def _clean(value):
 def _text_of(text_range) -> str:
     """Read a range's content, treating `missing value` as empty."""
     return _clean(text_range.content()) or ""
-
-
-def _windows_constant(table, keyword, default=None):
-    """Turn a macOS enumerator back into the Windows constant it stands for.
-
-    ``to_keyword`` goes one way and reading a property needs the other. The
-    generated tables are keyed by the Windows constant, and they are small
-    enough that a scan costs less than keeping a second index in step with
-    them.
-    """
-    for value, word in table.items():
-        if word == keyword:
-            return value
-    return default
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-    """
-    payload = {
-        "error": f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
-
-
-def _get_shape(slide, name_or_index):
-    """Find shape by name (str) or index (int)."""
-    shapes = shapes_of(slide)
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > len(shapes):
-            raise ValueError(
-                f"Shape index {name_or_index} out of range "
-                f"(1-{len(shapes)})"
-            )
-        return shapes[name_or_index - 1]
-    for shape in shapes:
-        if shape.name() == name_or_index:
-            return shape
-    raise ValueError(f"Shape '{name_or_index}' not found on slide")
 
 
 def _require_text_frame(shape):
@@ -175,7 +137,8 @@ def _character_runs(text_range):
 
     Eight events cover the whole range no matter how long it is. The
     alternative, one event per character per property, is what makes this worth
-    doing: a 200 character shape would otherwise cost 1,600 round trips.
+    doing, because a 200 character shape would otherwise cost 1,600 round
+    trips.
     """
     try:
         chars = text_range.characters
@@ -340,7 +303,7 @@ def _apply_highlight(text_range, highlight_color, start=None, length=None):
     Returns None when the highlight was applied, or a sentence explaining the
     refusal. macOS has a real ``highlight color`` on ``font``, so setting one
     is a single write and needs none of the Windows ClearFormatting dance. What
-    it has no word for is removing one: there is no "no highlight" value in the
+    it has no word for is removing one. There is no "no highlight" value in the
     dictionary, and guessing at ``missing value`` would be exactly the write
     that reports success and does nothing.
     """
@@ -648,7 +611,7 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
     # The row and column grouping is pure arithmetic over the dicts above, so
     # it is shared rather than copied. Imported here rather than at module
     # scope because ppt_com/text.py imports this module at the bottom of its
-    # own file: an "import ppt_mac.text first" ordering would otherwise run
+    # own file, so an "import ppt_mac.text first" ordering would otherwise run
     # that swap block against a module that has defined nothing yet, and the
     # swap would silently not happen. By call time both are fully loaded.
     from ppt_com.text import _group_into_columns, _group_into_rows
@@ -927,6 +890,20 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
                                indent_level, first_line_indent) -> dict:
     from ppt_com.text import ALIGNMENT_MAP
 
+    # Translated before goto_slide, so a misspelled alignment costs neither an
+    # Apple Event nor a jump to a slide the caller was not looking at.
+    align_word = None
+    if alignment is not None:
+        align_val = ALIGNMENT_MAP.get(alignment)
+        if align_val is None:
+            raise ValueError(
+                f"Invalid alignment '{alignment}'. "
+                f"Valid values: {list(ALIGNMENT_MAP.keys())}"
+            )
+        align_word = to_keyword(
+            PpParagraphAlignment, align_val, "paragraph alignment"
+        )
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -942,16 +919,8 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
     pf = target.paragraph_format
     applied = 0
 
-    if alignment is not None:
-        align_val = ALIGNMENT_MAP.get(alignment)
-        if align_val is None:
-            raise ValueError(
-                f"Invalid alignment '{alignment}'. "
-                f"Valid values: {list(ALIGNMENT_MAP.keys())}"
-            )
-        pf.alignment.set(
-            to_keyword(PpParagraphAlignment, align_val, "paragraph alignment")
-        )
+    if align_word is not None:
+        pf.alignment.set(align_word)
         applied += 1
 
     if line_spacing is not None:
@@ -1358,8 +1327,8 @@ def _set_textframe_impl(slide_index, shape_name_or_index,
         )
 
     if auto_size_val is not None:
-        # No TextFrame2 detour: `auto size` is on the text frame itself and
-        # covers shrink to fit as well.
+        # No TextFrame2 detour is needed, because `auto size` is on the text
+        # frame itself and covers shrink to fit as well.
         tf.auto_size.set(to_keyword(_AUTO_SIZE, auto_size_val, "auto size"))
 
     if anchor_val is not None:

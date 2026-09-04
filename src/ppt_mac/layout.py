@@ -7,13 +7,13 @@ returned shapes.
 The only ``shape range`` PowerPoint for Mac hands out is the one already
 selected in a window, its dictionary has an ``unselect`` command and no
 ``select`` command, so a script cannot put shapes into a selection to act on
-them. ``ppt_merge_shapes`` has no route either, for a simpler reason: the
-Boolean merge verbs are not in the dictionary in any form. Those refuse rather
+them. ``ppt_merge_shapes`` has no route either, for the simpler reason that
+the Boolean merge verbs are not in the dictionary in any form. Those refuse rather
 than pretend.
 
 ``align`` and ``distribute`` were in that list and are not any more. Windows
 hands both to ``ShapeRange.Align`` and ``ShapeRange.Distribute``, but neither
-is doing anything a script cannot do itself: every shape's ``left position``,
+is doing anything a script cannot do itself. Every shape's ``left position``,
 ``top``, ``width`` and ``height`` read and write cleanly here, and moving four
 shapes is four writes. So they are computed rather than delegated, and the
 result is the same picture on both platforms.
@@ -30,7 +30,7 @@ import os
 from appscript import k
 from appscript.reference import CommandError
 
-from backend.mac_ae import ppt
+from backend.mac_ae import ppt, slide_at as _slide
 from backend.mac_enums import MsoFlipCmd, MsoGradientStyle, to_keyword
 from ppt_com.constants import (
     ALIGN_CMD_MAP,
@@ -39,7 +39,7 @@ from ppt_com.constants import (
     GRADIENT_STYLE_MAP,
     MERGE_CMD_MAP,
 )
-from ppt_mac.shapes import _get_shape, _slide
+from ppt_mac.shapes import _get_shape
 from utils.color import hex_to_rgb_list
 from utils.navigation import goto_slide
 
@@ -57,8 +57,8 @@ _NO_SHAPE_RANGE = (
 # macOS names its slide sizes and Windows numbers them. The numbers agree, but
 # the project's own SLIDE_SIZE_MAP does not agree with either (it has A3 at 8
 # and 16:9 at 9), so the reverse lookup the Windows code does through that map
-# is not repeated here. This table carries both answers instead: the
-# PpSlideSizeType constant, and the preset name the tool takes as input.
+# is not repeated here. This table carries both answers instead, the
+# PpSlideSizeType constant and the preset name the tool takes as input.
 _SLIDE_SIZES = {
     k.slide_size_on_screen: (1, "4:3"),
     k.slide_size_letter_paper: (2, "letter"),
@@ -611,12 +611,8 @@ def _keyword_name(value) -> str:
 
 
 def _flip_shape_impl(slide_index, shape_name_or_index, direction):
-    app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
-    pres = ppt._get_pres_impl()
-    slide = _slide(pres, slide_index)
-    shape = _get_shape(slide, shape_name_or_index)
-
+    # Before goto_slide, so a misspelled direction costs neither an Apple Event
+    # nor a jump to a slide the caller was not looking at.
     dir_key = direction.strip().lower()
     flip_cmd = FLIP_CMD_MAP.get(dir_key)
     if flip_cmd is None:
@@ -624,8 +620,15 @@ def _flip_shape_impl(slide_index, shape_name_or_index, direction):
             f"Unknown direction '{direction}'. "
             f"Valid values: {list(FLIP_CMD_MAP.keys())}"
         )
+    flip_word = to_keyword(MsoFlipCmd, flip_cmd, "flip direction")
 
-    shape.flip(direction=to_keyword(MsoFlipCmd, flip_cmd, "flip direction"))
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+    shape = _get_shape(slide, shape_name_or_index)
+
+    shape.flip(direction=flip_word)
 
     # Read back flip state
     return {

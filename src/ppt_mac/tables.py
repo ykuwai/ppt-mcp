@@ -29,7 +29,15 @@ import logging
 from appscript import k
 from appscript.reference import CommandError
 
-from backend.mac_ae import count, elements, is_missing, ppt, raw, shapes_of
+from backend.mac_ae import (
+    count,
+    elements,
+    is_missing,
+    ppt,
+    raw,
+    shapes_of,
+    windows_constant as _windows_constant,
+)
 from backend.mac_enums import (
     MsoLineDashStyle,
     MsoVerticalAnchor,
@@ -37,6 +45,7 @@ from backend.mac_enums import (
     PpParagraphAlignment,
     to_keyword,
 )
+from backend.unsupported import refusal as _refusal
 from utils.color import hex_to_rgb_list, rgb_list_to_hex
 from utils.navigation import goto_slide
 from ppt_com.constants import msoLineDot
@@ -55,14 +64,6 @@ _DASH_STYLE_CODE = b'LFds'
 # disappear the next time the table is regenerated.
 _DASH_STYLES = dict(MsoLineDashStyle)
 _DASH_STYLES.setdefault(msoLineDot, k.line_dash_style_square_dot)
-
-
-def _windows_constant(table, keyword, default=None):
-    """Turn a macOS enumerator back into the Windows constant it stands for."""
-    for value, word in table.items():
-        if word == keyword:
-            return value
-    return default
 
 
 def _get_table_shape(slide, name_or_index):
@@ -103,27 +104,6 @@ def _cell_text(cell):
     """Read a cell's text, treating `missing value` as an empty cell."""
     content = cell.shape.text_frame.text_range.content()
     return "" if is_missing(content) else content
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 def _apply_cell_font(cell, font_name, font_name_fareast, font_size, bold, italic, color):
@@ -315,8 +295,8 @@ def _set_table_cell_impl(
     font_name, font_name_fareast, font_size, bold, italic, color,
     fill_color, alignment, vertical_alignment,
 ):
-    # Lazy import: ppt_com/tables.py imports this module at the bottom of its
-    # own file, so importing it back at module scope would let an
+    # Imported lazily. ppt_com/tables.py imports this module at the bottom of
+    # its own file, so importing it back at module scope would let an
     # "import ppt_mac.tables first" ordering run that swap block against a
     # module that has defined nothing yet, and the swap would silently not
     # happen. By call time both modules are fully loaded.
@@ -479,15 +459,8 @@ def _merge_table_cells_impl(slide_index, shape_name_or_index, start_row, start_c
 
 
 def _add_table_row_impl(slide_index, shape_name_or_index, position, height):
-    app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
-    pres = ppt._get_pres_impl()
-    slide = pres.slides[slide_index]
-    shape = _get_table_shape(slide, shape_name_or_index)
-    table = shape.table_object
-
-    before_rows, _ = _dimensions(shape)
-
+    # Before goto_slide, so a call that is going to be refused does not move
+    # the user's view first. The answer depends on the argument alone.
     if position is not None:
         return _refusal(
             "ppt_add_table_row",
@@ -502,6 +475,15 @@ def _add_table_row_impl(slide_index, shape_name_or_index, position, height):
             ],
             error="ppt_add_table_row cannot insert at a position on macOS",
         )
+
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.slides[slide_index]
+    shape = _get_table_shape(slide, shape_name_or_index)
+    table = shape.table_object
+
+    before_rows, _ = _dimensions(shape)
 
     # PowerPoint's dictionary declares no command for adding a row, so this is
     # the Standard Suite `make`, which is also how shapes and slides get
@@ -539,15 +521,17 @@ def _add_table_row_impl(slide_index, shape_name_or_index, position, height):
 
 
 def _delete_table_row_impl(slide_index, shape_name_or_index, position):
+    # Before goto_slide, so a call that cannot go anywhere does not move the
+    # user's view first.
+    if position is None:
+        raise ValueError("position is required for deleting a row")
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.slides[slide_index]
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.table_object
-
-    if position is None:
-        raise ValueError("position is required for deleting a row")
 
     before_rows, _ = _dimensions(shape)
     rows = elements(table.rows)
@@ -571,15 +555,8 @@ def _delete_table_row_impl(slide_index, shape_name_or_index, position):
 
 
 def _add_table_column_impl(slide_index, shape_name_or_index, position, width):
-    app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
-    pres = ppt._get_pres_impl()
-    slide = pres.slides[slide_index]
-    shape = _get_table_shape(slide, shape_name_or_index)
-    table = shape.table_object
-
-    _, before_cols = _dimensions(shape)
-
+    # Before goto_slide, so a call that is going to be refused does not move
+    # the user's view first. The answer depends on the argument alone.
     if position is not None:
         # Not a refusal on principle. Asking PowerPoint to make a column
         # before an existing one kills it with -609, on a plain three by three
@@ -598,6 +575,15 @@ def _add_table_column_impl(slide_index, shape_name_or_index, position, width):
             ],
             error="ppt_add_table_column cannot insert at a position on macOS",
         )
+
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.slides[slide_index]
+    shape = _get_table_shape(slide, shape_name_or_index)
+    table = shape.table_object
+
+    _, before_cols = _dimensions(shape)
 
     app.make(new=k.column, at=table.end)
 
@@ -628,15 +614,17 @@ def _add_table_column_impl(slide_index, shape_name_or_index, position, width):
 
 
 def _delete_table_column_impl(slide_index, shape_name_or_index, position):
+    # Before goto_slide, so a call that cannot go anywhere does not move the
+    # user's view first.
+    if position is None:
+        raise ValueError("position is required for deleting a column")
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.slides[slide_index]
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.table_object
-
-    if position is None:
-        raise ValueError("position is required for deleting a column")
 
     _, before_cols = _dimensions(shape)
     cols = elements(table.columns)
@@ -757,17 +745,9 @@ def _set_table_borders_impl(
 ):
     from ppt_com.tables import BORDER_SIDE_MAP, DASH_STYLE_MAP
 
-    app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
-    pres = ppt._get_pres_impl()
-    slide = pres.slides[slide_index]
-    shape = _get_table_shape(slide, shape_name_or_index)
-    table = shape.table_object
-
-    rows_count, cols_count = _dimensions(shape)
-    actual_end_row = end_row if end_row is not None else rows_count
-    actual_end_col = end_col if end_col is not None else cols_count
-
+    # Every argument is translated before goto_slide, so a misspelled side or
+    # dash style costs neither an Apple Event nor a jump to a slide the caller
+    # was not looking at. The tables are all local.
     side_keywords = []
     for side_name in sides:
         key = side_name.strip().lower()
@@ -791,6 +771,17 @@ def _set_table_borders_impl(
         dash_keyword = to_keyword(
             _DASH_STYLES, DASH_STYLE_MAP[key], "line dash style"
         )
+
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.slides[slide_index]
+    shape = _get_table_shape(slide, shape_name_or_index)
+    table = shape.table_object
+
+    rows_count, cols_count = _dimensions(shape)
+    actual_end_row = end_row if end_row is not None else rows_count
+    actual_end_col = end_col if end_col is not None else cols_count
 
     # Nothing to write is not the same as nothing to do, and it used to count
     # as a cell updated per cell in the range.

@@ -25,8 +25,8 @@ rather than being flattened into a bare success, for the same reason.
 
 import logging
 
-from backend.mac_ae import ppt
-from ppt_mac.shapes import _get_shape, _slide
+from backend.mac_ae import ppt, slide_at as _slide
+from ppt_mac.shapes import _get_shape
 
 logger = logging.getLogger(__name__)
 

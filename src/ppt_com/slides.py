@@ -722,7 +722,7 @@ def _delete_slide_impl(
         )
     if len(targets) >= total:
         raise ValueError(
-            "Cannot delete every slide — a presentation must keep at least "
+            "Cannot delete every slide. A presentation must keep at least "
             f"one slide (requested {len(targets)} of {total})"
         )
 

@@ -292,3 +292,78 @@ class TestTheTwoRefusalsThatProtectTheDeck:
             source = inspect.getsource(impl)
             assert "if position is not None:" in source
             assert source.index("if position is not None:") < source.index("make")
+
+    def test_neither_refusal_moves_the_view_first(self):
+        """Refused for its arguments, so the user's view stays where it was."""
+        import inspect
+
+        from ppt_mac import tables
+
+        for impl in (tables._add_table_row_impl, tables._add_table_column_impl):
+            source = inspect.getsource(impl)
+            assert source.index("if position is not None:") < source.index(
+                "goto_slide("
+            ), impl.__name__
+
+
+@macos_only
+class TestSections:
+    """Two things about sections that only running them showed."""
+
+    def test_adding_one_checks_the_name_rather_than_the_count(self):
+        """A section inserted mid deck brings a second one with it.
+
+        The slides in front of it need a section too, so a deck with none
+        goes straight to two. Counting one more would refuse a success.
+        """
+        import inspect
+
+        from ppt_mac import sections
+
+        source = inspect.getsource(sections._add_section_impl)
+        assert "if after != before + 1" not in source
+        assert "_locate_section" in source
+
+    def test_deleting_a_section_that_has_another_after_it_is_refused(self):
+        from appscript.reference import CommandError
+
+        from ppt_mac import sections
+
+        deck = mock.MagicMock()
+        sp = deck.section_properties
+        sp.delete_section.side_effect = CommandError(
+            None, None, RuntimeError("-50"), None
+        )
+        with mock.patch.object(sections.ppt, "_get_app_impl", return_value=mock.Mock()), \
+                mock.patch.object(sections.ppt, "_get_pres_impl", return_value=deck), \
+                mock.patch.object(sections, "_count_sections", return_value=3), \
+                mock.patch.object(sections, "_name_of", return_value="はじめに"), \
+                mock.patch.object(sections, "error_number", return_value=-50), \
+                mock.patch.object(sections, "goto_slide", lambda *a, **kw: None):
+            result = sections._manage_section_impl(1, "delete", None, None)
+
+        assert result["error"] == (
+            "ppt_manage_section cannot delete a section that has another "
+            "after it on macOS"
+        )
+        assert "はじめに" in result["reason"]
+        assert "section 2" in result["reason"]
+
+    def test_deleting_the_last_section_is_not_refused(self):
+        """Deleting from the back works, and so does deleting the only one."""
+        from appscript.reference import CommandError
+
+        from ppt_mac import sections
+
+        deck = mock.MagicMock()
+        deck.section_properties.delete_section.side_effect = CommandError(
+            None, None, RuntimeError("-50"), None
+        )
+        with mock.patch.object(sections.ppt, "_get_app_impl", return_value=mock.Mock()), \
+                mock.patch.object(sections.ppt, "_get_pres_impl", return_value=deck), \
+                mock.patch.object(sections, "_count_sections", return_value=3), \
+                mock.patch.object(sections, "_name_of", return_value="第二部"), \
+                mock.patch.object(sections, "error_number", return_value=-50), \
+                mock.patch.object(sections, "goto_slide", lambda *a, **kw: None):
+            with pytest.raises(CommandError):
+                sections._manage_section_impl(3, "delete", None, None)

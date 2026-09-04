@@ -37,6 +37,7 @@ from appscript import k
 from appscript.reference import CommandError
 
 from backend.mac_ae import count, error_number, is_missing, ppt, shapes_of
+from backend.unsupported import refusal as _refusal
 from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)
@@ -53,27 +54,6 @@ _NO_AUTHOR = (
     "`shape` and declares no properties of its own, so it carries no author, "
     "no initials and no date."
 )
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 def _is_comment(shape) -> bool:
@@ -280,6 +260,9 @@ def _list_comments_impl(slide_index) -> dict:
 
 
 def _delete_comment_impl(slide_index, comment_index) -> dict:
+    # Nothing here can be settled before goto_slide. Both answers below need
+    # the slide's comments counted first, and reading them is itself the round
+    # trip that moving the view would have saved.
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()

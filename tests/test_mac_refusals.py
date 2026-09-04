@@ -139,16 +139,45 @@ class TestTheDictionaryStillSaysThis:
 # ---------------------------------------------------------------------------
 @macos_only
 class TestTheRefusalHelperIsOneHelper:
-    """Four modules carry ``_refusal`` and it has to read identically."""
+    """Eighteen modules name ``_refusal`` and all eighteen mean one function."""
 
-    def test_the_three_new_ones_match_tables(self):
-        import inspect
+    def test_every_module_names_the_same_function(self):
+        import importlib
 
-        from ppt_mac import charts, freeform, smartart, tables
+        from backend.unsupported import refusal
 
-        wanted = inspect.getsource(tables._refusal)
-        for module in (charts, smartart, freeform):
-            assert inspect.getsource(module._refusal) == wanted, module.__name__
+        modules = (
+            "advanced_ops",
+            "animation",
+            "charts",
+            "comments",
+            "connectors",
+            "edit_ops",
+            "effects",
+            "freeform",
+            "groups",
+            "hyperlinks",
+            "media",
+            "properties",
+            "sections",
+            "slideshow",
+            "smartart",
+            "tables",
+            "text",
+            "themes",
+        )
+        for name in modules:
+            module = importlib.import_module(f"ppt_mac.{name}")
+            assert module._refusal is refusal, name
+
+    def test_the_encoded_form_cannot_drift_from_the_dict_one(self):
+        """``unsupported`` is the JSON of the same payload, built by the same call."""
+        import json
+
+        from backend.unsupported import refusal, unsupported
+
+        encoded = unsupported("ppt_x", "because", ["ppt_y"])
+        assert json.loads(encoded) == refusal("ppt_x", "because", ["ppt_y"])
 
     def test_it_builds_the_documented_shape(self):
         from ppt_mac.charts import _refusal
@@ -167,8 +196,8 @@ class TestTheRefusalHelperIsOneHelper:
     def test_the_error_override_names_an_argument_instead_of_a_tool(self):
         """No tool in these three modules needs it, so it is checked here.
 
-        All seventeen refuse wholesale. The parameter is kept so the helper
-        stays the same helper as tables.py's, not because a case arose.
+        All seventeen refuse wholesale. Other modules do use the override, and
+        this keeps it covered from the side that reads the shared helper.
         """
         from ppt_mac.charts import _refusal
 

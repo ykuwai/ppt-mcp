@@ -31,14 +31,15 @@ import logging
 from appscript import k
 from appscript.reference import CommandError
 
-from backend.mac_ae import ppt, raw, shapes_of
+from backend.mac_ae import ppt, raw, shapes_of, slide_at as _slide
 from backend.mac_enums import (
     MsoArrowheadStyle,
     MsoConnectorType,
     MsoLineDashStyle,
     to_keyword,
 )
-from ppt_mac.shapes import _DASH_STYLE, _get_shape, _slide
+from backend.unsupported import refusal as _refusal
+from ppt_mac.shapes import _DASH_STYLE, _get_shape
 from utils.color import hex_to_rgb_list
 from utils.navigation import goto_slide
 
@@ -74,27 +75,6 @@ _NO_SITE_NAMES = (
     "matched to a site number, and picking one by guesswork would attach the "
     "connector to the wrong edge without saying so."
 )
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 def _named_sites(**sites) -> list:
@@ -146,8 +126,8 @@ def _resolve_site(shape, site: int) -> int:
 # ---------------------------------------------------------------------------
 def _add_connector_impl(slide_index, connector_type, begin_shape, begin_site,
                          end_shape, end_site):
-    # Lazy import: ppt_com/connectors.py imports this module at the bottom of
-    # its own file, so importing it back at module scope would let an
+    # Imported lazily. ppt_com/connectors.py imports this module at the bottom
+    # of its own file, so importing it back at module scope would let an
     # "import ppt_mac.connectors first" ordering run that swap block against a
     # module that has defined nothing yet, and the swap would silently not
     # happen. By call time both modules are fully loaded.

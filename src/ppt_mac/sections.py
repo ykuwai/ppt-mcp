@@ -30,31 +30,18 @@ import logging
 
 from appscript.reference import CommandError
 
-from backend.mac_ae import AE_NO_SUCH_OBJECT, count, error_number, is_missing, ppt
+from backend.mac_ae import (
+    AE_NO_SUCH_OBJECT,
+    AE_PARAMETER,
+    count,
+    error_number,
+    is_missing,
+    ppt,
+)
+from backend.unsupported import refusal as _refusal
 from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 def _count_sections(sp) -> int:
@@ -171,21 +158,21 @@ def _add_section_impl(name, slide_index):
     # `before section` counts in sections and would land somewhere else.
     returned = sp.insert_section(before_slide=slide_index, titled=name)
 
+    # Not `before + 1`. A section inserted anywhere but the first slide brings
+    # a second one with it, because the slides in front of it need a section
+    # too, so a deck with none goes straight to two. Measured on a four slide
+    # deck, inserting at slide 3 left `既定のセクション` and the new one. The
+    # question worth asking is whether the section that was asked for is there.
     after = _count_sections(sp)
-    if after != before + 1:
-        return _refusal(
-            "ppt_add_section",
-            f"PowerPoint reported success and the deck still has {after} "
-            "sections, which is the silent no-op recorded in MACOS_PORT "
-            "section 5.",
-        )
-
     section_index = _locate_section(sp, after, name, slide_index)
     if section_index is None:
-        # The count grew, so the section is there; only its position could not
-        # be pinned down by reading. The answer PowerPoint gave is the last
-        # thing left to go on.
-        section_index = returned if isinstance(returned, int) else after
+        return _refusal(
+            "ppt_add_section",
+            f"PowerPoint reported success and no section called '{name}' is "
+            f"in the deck, which now has {after} sections where it had "
+            f"{before}. This is the silent no-op recorded in MACOS_PORT "
+            "section 5.",
+        )
 
     return {
         "success": True,
@@ -299,7 +286,30 @@ def _manage_section_impl(section_index, action, new_name, move_to_index):
     section_name = _name_of(sp, section_index)
     # `deleting slides` is not optional in the dictionary, and false is what
     # Windows passes, so the slides stay and only the grouping goes.
-    sp.delete_section(at_position=section_index, deleting_slides=False)
+    try:
+        sp.delete_section(at_position=section_index, deleting_slides=False)
+    except CommandError as exc:
+        if error_number(exc) != AE_PARAMETER or section_index >= total:
+            raise
+        # Only the first of several answers this. Removing it would leave the
+        # slides in front of the next section belonging to nothing, and
+        # PowerPoint will not have that. Deleting from the back works, and so
+        # does deleting the only section a deck has. Measured both ways.
+        return _refusal(
+            "ppt_manage_section",
+            f"PowerPoint will not delete '{section_name}' while section "
+            f"{section_index + 1} is still there, because the slides in front "
+            "of that one would then belong to no section. Delete the later "
+            "sections first, or rename this one instead.",
+            [
+                "ppt_manage_section with action='delete' on the last section",
+                "ppt_manage_section with action='rename'",
+            ],
+            error=(
+                "ppt_manage_section cannot delete a section that has another "
+                "after it on macOS"
+            ),
+        )
 
     after = _count_sections(sp)
     if after != total - 1:

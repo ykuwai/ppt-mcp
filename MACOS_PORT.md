@@ -3,7 +3,7 @@
 Status: design study, now partly built. The measurements below stand; where
 building it changed the answer, the section says so.
 
-What has shipped so far, on the `macos-support` branch: the package installs
+What has shipped so far, on the `macos-support` branch. The package installs
 and 563 tests run on macOS (#185), the Apple Event backend and the generated
 enumeration tables (#186), and the app and export tools (#187).
 
@@ -313,8 +313,8 @@ app.make(new=k.column, at=table.end)                 # works
 ```
 
 Behind all three is one habit. **A reference PowerPoint hands back is not to be
-trusted.** Asking for the elements of a collection is unreliable in general: a
-slide holding a text box and an autoshape answers `text_boxes[1]` and
+trusted.** Asking for the elements of a collection is unreliable in general,
+and a slide holding a text box and an autoshape answers `text_boxes[1]` and
 `shapes[2]`, and the second does not resolve. So is the reference a command
 returns: `get cell from` answers with something that renders as
 `rows[1].cells[1]` and then -1728 on every cell of a fresh table, while the
@@ -350,9 +350,9 @@ shape2.animation_settings.animate.set(False)
 `animate background` is the only one of the five that leaves the slide alone.
 
 So `ppt_add_animation` and `ppt_update_animation` never write four of them and
-say so in `warnings`, and `ppt_remove_animation` refuses outright: deleting one
-effect answers -50 and changes nothing, and clearing its shape costs the rest of
-the slide. `ppt_clear_animations` is the exception that is safe, because it is
+say so in `warnings`, and `ppt_remove_animation` refuses outright, because
+deleting one effect answers -50 and changes nothing, and clearing its shape
+costs the rest of the slide. `ppt_clear_animations` is the exception that is safe, because it is
 emptying the slide anyway. It was checked against a slide holding two effects on
 one shape and two exit animations, and it left nothing behind.
 
@@ -451,7 +451,7 @@ can be made to execute at all.
 
 Whether it executes is unproven. With no macro present it returns -18, which is
 equally consistent with "macro not found" and "handler is a stub". One line
-closes the question: put `Sub Ping()` in a `.pptm`, open it, and call it.
+closes the question. Put `Sub Ping()` in a `.pptm`, open it, and call it.
 
 Three constraints to weigh before building on it. Macro security consent is a
 real user facing cost, and an MCP server that asks people to lower it is a hard
@@ -494,8 +494,8 @@ src/
 The Windows implementation is a pass through to pywin32, so it costs almost
 nothing and changes almost nothing. Cutting here rather than at the tool level
 is what keeps everything above the object model single sourced, and there is a
-lot of it: the pseudo Markdown exporter (244 lines), the typography checker
-(180 lines), the icon search and SVG insertion, the batch dispatcher, every
+lot of it, including the pseudo Markdown exporter (244 lines), the typography
+checker (180 lines), the icon search and SVG insertion, the batch dispatcher, every
 layout helper, all of `color.py` and `units.py`, and all the pydantic input
 models. Cutting at the tool level would duplicate every one of them.
 

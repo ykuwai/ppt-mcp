@@ -23,12 +23,12 @@ import logging
 import os
 import shutil
 
-from appscript import k
 from appscript.reference import CommandError
 
 from backend.mac_ae import EXPORT_STAGING_DIR, count, ppt
+from backend.unsupported import refusal as _refusal
 from ppt_com.constants import msoTrue  # noqa: F401  (kept for signature parity)
-from utils.color import int_to_rgb, rgb_list_to_hex, rgb_list_to_int
+from utils.color import int_to_rgb, rgb_list_to_hex
 
 logger = logging.getLogger(__name__)
 
@@ -36,24 +36,6 @@ logger = logging.getLogger(__name__)
 # them as elements rather than by a call, and the order agrees, which was
 # checked against `theme color scheme index` on each one.
 _THEME_COLOR_COUNT = 12
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    Same payload as ``backend.unsupported.unsupported`` builds, handed back as
-    a dict because the caller here encodes it. ``error`` overrides the headline
-    for a tool that works but has one argument it cannot honour, so a reader is
-    not told to give up on the whole tool.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 def _theme_color_names():
@@ -209,7 +191,9 @@ def _set_headers_footers_impl(
     placeholder answers -1728 for it, which is not a failure of the call and
     does not stop the slides that do have one.
     """
-    app = ppt._get_app_impl()
+    # Asked for and not kept, so that a dead connection fails here rather
+    # than part way through the slides.
+    ppt._get_app_impl()
     pres = ppt._get_pres_impl()
 
     slide_count = count(pres.slides)

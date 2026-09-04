@@ -33,29 +33,9 @@ import logging
 from appscript.reference import CommandError
 
 from backend.mac_ae import is_missing, positional, ppt
+from backend.unsupported import refusal as _refusal
 
 logger = logging.getLogger(__name__)
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 # The reason both tools give when the deck answers with no properties at all.
@@ -158,8 +138,8 @@ def _set_properties_impl(title, author, subject, keywords, comments, category, c
 
 
 def _get_properties_impl():
-    # Lazy import: ppt_com/properties.py imports this module at the bottom of
-    # its own file, so importing it back at module scope would let an
+    # Imported lazily. ppt_com/properties.py imports this module at the bottom
+    # of its own file, so importing it back at module scope would let an
     # "import ppt_mac.properties first" ordering run that swap block against a
     # module that has defined nothing yet, and the swap would silently not
     # happen. By call time both modules are fully loaded.

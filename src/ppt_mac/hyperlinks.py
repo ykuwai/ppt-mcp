@@ -40,8 +40,16 @@ import logging
 from appscript import k
 from appscript.reference import CommandError
 
-from backend.mac_ae import error_number, is_missing, positional, ppt, shapes_of
+from backend.mac_ae import (
+    error_number,
+    is_missing,
+    positional,
+    ppt,
+    shape_by_name_or_index as _get_shape,
+    windows_constant as _windows_constant,
+)
 from backend.mac_enums import PpActionType, PpMouseActivation, to_keyword
+from backend.unsupported import refusal as _refusal
 from utils.navigation import goto_slide
 from ppt_com.constants import ppActionHyperlink, ppActionNone
 
@@ -81,64 +89,14 @@ _ACTION_SETTING_ROUTE = (
 )
 
 
-def _windows_constant(table, keyword, default=None):
-    """Turn a macOS enumerator back into the Windows constant it stands for."""
-    for value, word in table.items():
-        if word == keyword:
-            return value
-    return default
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
-
-
-def _get_shape(slide, name_or_index):
-    """Find a shape on a slide by name or 1-based index.
-
-    Through ``shapes_of``, never ``elements(slide.shapes)``, because a slide
-    holding more than one kind of shape answers with references addressed by
-    subclass and half of those do not resolve.
-    """
-    shapes = shapes_of(slide)
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > len(shapes):
-            raise ValueError(
-                f"Shape index {name_or_index} out of range (1-{len(shapes)})"
-            )
-        return shapes[name_or_index - 1]
-
-    for candidate in shapes:
-        if candidate.name() == name_or_index:
-            return candidate
-    raise ValueError(f"Shape '{name_or_index}' not found on slide")
-
-
 def _event_keyword(action_on):
     """Validate ``action_on`` and return the macOS word for it.
 
     Raises ``ValueError`` on an unknown value, matching the Windows module,
     which the tool layer turns into the same error text on both platforms.
     """
-    # Lazy import: ppt_com/hyperlinks.py imports this module at the bottom of
-    # its own file, so importing it back at module scope would let an
+    # Imported lazily. ppt_com/hyperlinks.py imports this module at the bottom
+    # of its own file, so importing it back at module scope would let an
     # "import ppt_mac.hyperlinks first" ordering run that swap block against a
     # module that has defined nothing yet. By call time both are fully loaded.
     from ppt_com.hyperlinks import ACTION_ON_MAP

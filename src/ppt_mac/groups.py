@@ -23,9 +23,9 @@ read as a group with nothing in it.
 **Ungrouping works, and it is the only thing here that does.** ``ungroup`` is
 declared to take a shape range like ``group`` is, but its description reads "the
 specified shape or range of shapes" and a single group shape is accepted.
-Verified live: a group of two came apart and both members appeared on the slide
-by name. The check is the group's own disappearance and the slide growing,
-because the members cannot be listed beforehand to compare against.
+Verified live, on a group of two that came apart with both members appearing on
+the slide by name. The check is the group's own disappearance and the slide
+growing, because the members cannot be listed beforehand to compare against.
 """
 
 import logging
@@ -33,6 +33,7 @@ import logging
 from appscript.reference import CommandError
 
 from backend.mac_ae import ppt
+from backend.unsupported import refusal as _refusal
 from ppt_com.constants import msoGroup
 from ppt_mac.layout import _NO_SHAPE_RANGE
 from ppt_mac.shapes import (
@@ -45,27 +46,6 @@ from ppt_mac.shapes import (
 from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 def _require_group(shape, verb: str):
@@ -150,7 +130,7 @@ def _get_group_items_impl(slide_index, shape_name_or_index):
 
     The dictionary reads as though this works. ``shape`` has a ``shape``
     element, and a group is a shape. Against a real group of two text boxes,
-    every route answers nothing: ``shapes`` counts 0, so does ``text boxes``
+    every route answers nothing. ``shapes`` counts 0, so does ``text boxes``
     and every other subclass collection, ``shapes[1]`` answers -1728, and
     ``has child`` answers ``missing value``. An empty list would read as a
     group with nothing in it, which is worse than saying so.

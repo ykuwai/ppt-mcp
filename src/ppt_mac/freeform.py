@@ -61,9 +61,10 @@ leaves the user's view where it was.
 import json
 import logging
 
-from backend.mac_ae import ppt
+from backend.mac_ae import ppt, slide_at as _slide
+from backend.unsupported import refusal as _refusal
 from ppt_com.constants import msoFreeform
-from ppt_mac.shapes import _WIN_SHAPE_TYPE, _get_shape, _slide, _win_constant
+from ppt_mac.shapes import _WIN_SHAPE_TYPE, _get_shape, _win_constant
 
 logger = logging.getLogger(__name__)
 
@@ -84,27 +85,6 @@ _SHAPE_TOOLS = [
     "ppt_list_shapes",
     "ppt_delete_shape",
 ]
-
-
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
 
 
 def _check_freeform(shape):

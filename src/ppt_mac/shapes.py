@@ -26,7 +26,15 @@ from typing import Optional, Union
 from appscript import k
 from appscript.reference import CommandError
 
-from backend.mac_ae import count, elements, is_missing, osascript, ppt, raw
+from backend.mac_ae import (
+    count,
+    elements,
+    is_missing,
+    osascript,
+    ppt,
+    raw,
+    slide_at as _slide,
+)
 from backend.mac_enums import (
     MsoAutoShapeType,
     MsoFillType,
@@ -135,22 +143,6 @@ def _win_constant(table: dict, word, default=None):
     if is_missing(word):
         return default
     return table.get(word, default)
-
-
-def _slide(pres, slide_index: int):
-    """Return a slide reference, checking the index first.
-
-    An out of range element reference does not fail where it is built, it fails
-    somewhere later with -1728 and no mention of the index, so the range is
-    checked here where the number is still in hand.
-    """
-    total = count(pres.slides)
-    if slide_index < 1 or slide_index > total:
-        raise ValueError(
-            f"Slide index {slide_index} is out of range. "
-            f"The presentation has {total} slides (1-based)."
-        )
-    return pres.slides[slide_index]
 
 
 def _shape_names(slide) -> list:
@@ -342,8 +334,8 @@ def _add_shape_impl(
     pres = ppt._get_pres_impl()
     # FrozenRedraw already degrades to a no-op where win32 is missing, so this
     # block does nothing on macOS. It is kept so the two platforms read the
-    # same, and because the flicker it fixes barely appears here: the whole
-    # call is one round of Apple Events rather than a visible sequence.
+    # same, and because the flicker it fixes barely appears here, the whole
+    # call being one round of Apple Events rather than a visible sequence.
     with FrozenRedraw():
         goto_slide(app, slide_index)
         slide = _slide(pres, slide_index)
@@ -435,7 +427,7 @@ def _apply_shape_attrs(
 
     # Corner radius for rounded rectangles
     if corner_radius is not None or corner_radius_pt is not None:
-        from ppt_com.shapes import SHAPE_NAME_MAP  # local: ppt_com imports us
+        from ppt_com.shapes import SHAPE_NAME_MAP  # local, because ppt_com imports us
 
         try:
             rounded = to_keyword(
@@ -850,7 +842,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
             info["adjustments_count"] = len(adj_dict)
             # Include semantic labels when available
             try:
-                from ppt_com.shapes import ADJUSTMENT_LABELS  # local: cycle
+                from ppt_com.shapes import ADJUSTMENT_LABELS  # local, to stay out of the cycle
 
                 labels = ADJUSTMENT_LABELS.get(
                     _win_constant(_WIN_AUTO_SHAPE_TYPE, shape.auto_shape_type())
@@ -923,7 +915,7 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
         }
         # Include semantic labels when available
         try:
-            from ppt_com.shapes import ADJUSTMENT_LABELS  # local: cycle
+            from ppt_com.shapes import ADJUSTMENT_LABELS  # local, to stay out of the cycle
 
             labels = ADJUSTMENT_LABELS.get(
                 _win_constant(_WIN_AUTO_SHAPE_TYPE, shape.auto_shape_type())
@@ -1041,14 +1033,17 @@ def _presentation_index(app, pres) -> Optional[int]:
 
 
 def _set_zorder_impl(slide_index, shape_name, shape_index, z_order_cmd):
+    # Translated before goto_slide, so a command macOS has no word for costs
+    # neither an Apple Event nor a jump to a slide the caller was not looking
+    # at. The table is local.
+    z_order_word = to_keyword(MsoZOrderCmd, z_order_cmd, "z order command")
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
-    shape.z_order(
-        z_order_position=to_keyword(MsoZOrderCmd, z_order_cmd, "z order command")
-    )
+    shape.z_order(z_order_position=z_order_word)
     return {
         "success": True,
         "shape_name": shape.name(),

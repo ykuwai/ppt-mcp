@@ -46,6 +46,7 @@ AE_TIMED_OUT = -1712           # PowerPoint did not answer in time
 AE_CONNECTION_INVALID = -609   # PowerPoint died mid call
 AE_APP_NOT_RUNNING = -600      # PowerPoint is not there at all
 AE_NOT_AUTHORISED = -1743      # the user declined the Automation prompt
+AE_PARAMETER = -50             # the command was refused for what it was given
 
 # Errors that mean the call never landed, so retrying is safe. This is the
 # Apple Event analogue of _BUSY_HRESULTS on the Windows side.
@@ -594,3 +595,130 @@ def handle_com_error(exc: BaseException) -> dict:
 
 # Global singleton, matching the Windows module.
 ppt = PowerPointAppleEventWrapper()
+
+
+# ---------------------------------------------------------------------------
+# Walking the object model
+#
+# The helpers every tool module needs before it can touch anything, the slide,
+# the shape on it, the presentation it belongs to, and the number Windows would
+# have reported for a macOS enumerator. They live here rather than in one of
+# the tool modules because a tool module that imported another one would meet
+# the import cycle ``ppt_com`` already sets up, and lose.
+# ---------------------------------------------------------------------------
+
+
+def slide_at(pres, slide_index: int):
+    """Return a slide reference, checking the index first.
+
+    An out of range element reference does not fail where it is built, it fails
+    somewhere later with -1728 and no mention of the index, so the range is
+    checked here where the number is still in hand.
+    """
+    total = count(pres.slides)
+    if slide_index < 1 or slide_index > total:
+        raise ValueError(
+            f"Slide index {slide_index} is out of range. "
+            f"The presentation has {total} slides (1-based)."
+        )
+    return pres.slides[slide_index]
+
+
+def shape_by_name_or_index(slide, name_or_index):
+    """Find a shape on a slide by name or 1-based index.
+
+    Built out of ``shapes_of`` rather than ``slide.shapes``, because asking
+    PowerPoint for a slide's shapes hands back references addressed by
+    subclass and the second of those does not resolve.
+    """
+    shapes = shapes_of(slide)
+    if isinstance(name_or_index, int):
+        if name_or_index < 1 or name_or_index > len(shapes):
+            raise ValueError(
+                f"Shape index {name_or_index} out of range (1-{len(shapes)})"
+            )
+        return shapes[name_or_index - 1]
+    for shape in shapes:
+        if shape.name() == name_or_index:
+            return shape
+    raise ValueError(f"Shape '{name_or_index}' not found on slide")
+
+
+def windows_constant(table, keyword, default=None):
+    """Turn a macOS enumerator back into the Windows constant it stands for.
+
+    ``to_keyword`` goes one way, and reading a property needs the other. The
+    generated tables are keyed by the Windows constant, and they are small
+    enough that a scan costs less than keeping a second index in step with
+    them.
+    """
+    for value, word in table.items():
+        if word == keyword:
+            return value
+    return default
+
+
+def full_names(app) -> list:
+    """Every open presentation's full name, in one Apple Event."""
+    return [str(name) for name in elements(app.presentations.full_name)]
+
+
+def resolve_presentation(
+    app,
+    presentation_index: Optional[int] = None,
+    presentation_name: Optional[str] = None,
+):
+    """Return a presentation by index, by name, or the session target.
+
+    The counterpart of the helper of the same name on the Windows side, raising
+    the same errors with the same wording.
+    """
+    if presentation_index is not None and presentation_name is not None:
+        raise ValueError(
+            "Specify either presentation_index or presentation_name, not both"
+        )
+
+    presentations = elements(app.presentations)
+
+    if presentation_index is not None:
+        total = len(presentations)
+        if presentation_index < 1 or presentation_index > total:
+            raise ValueError(
+                f"Presentation index {presentation_index} out of range (1-{total})"
+            )
+        return presentations[presentation_index - 1]
+
+    if presentation_name is not None:
+        if not presentations:
+            raise RuntimeError(
+                "No presentation is open. "
+                "Use ppt_create_presentation or ppt_open_presentation first."
+            )
+        matches = []
+        available = []
+        for index, pres in enumerate(presentations, start=1):
+            name = pres.name()
+            available.append(f"  [{index}] {name}")
+            if name == presentation_name:
+                matches.append((index, pres))
+        if len(matches) == 1:
+            return matches[0][1]
+        if len(matches) > 1:
+            match_list = ", ".join(
+                f"[{index}] {presentation_name}" for index, _ in matches
+            )
+            raise ValueError(
+                f"Multiple presentations match name '{presentation_name}': "
+                f"{match_list}. Use presentation_index to disambiguate."
+            )
+        raise ValueError(
+            f"No presentation named '{presentation_name}'. "
+            f"Available presentations:\n" + "\n".join(available)
+        )
+
+    if not presentations:
+        raise RuntimeError(
+            "No presentation is open. "
+            "Use ppt_create_presentation or ppt_open_presentation first."
+        )
+    return ppt._get_pres_impl()

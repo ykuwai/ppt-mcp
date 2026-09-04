@@ -11,7 +11,7 @@ exists at all, so it hunts for it instead of choosing something else.
 
 So the tool stays listed and says plainly what happened, why, and what to reach
 for instead. That is enough for the model to recover in one turn. Hiding buys
-nothing anyway: an unlisted tool that is called still comes back as
+nothing anyway, because an unlisted tool that is called still comes back as
 ``Unknown tool: ppt_add_chart``, which is the same wire shape with a worse
 message.
 
@@ -31,12 +31,17 @@ from typing import List, Optional
 from backend import PLATFORM_NAME
 
 
-def unsupported(
+def refusal(
     tool_name: str,
     reason: str,
     alternatives: Optional[List[str]] = None,
-) -> str:
-    """Return the JSON body a tool sends when this platform cannot do it.
+    error: Optional[str] = None,
+) -> dict:
+    """Build the body a tool returns when this platform cannot do the job.
+
+    The dict form is for the ``_*_impl`` functions, which hand a result back to
+    a tool function that encodes it. ``unsupported`` wraps this one for the
+    tools that answer with JSON themselves, so the two cannot drift apart.
 
     Args:
         tool_name: The MCP tool name, e.g. ``ppt_add_chart``.
@@ -44,15 +49,34 @@ def unsupported(
             that nobody re-derives it. Name the mechanism, not just the fact.
         alternatives: Tool names worth trying instead, best first. Omit rather
             than pad; a wrong suggestion costs more than no suggestion.
+        error: A replacement headline, for a tool that does work but has one
+            argument it cannot honour. Without it a reader is told to give up
+            on the whole tool when only that one argument has to go.
 
     Returns:
-        A JSON string, the same shape every other tool returns on failure.
+        A dict, the same keys every other tool returns on failure.
     """
     payload = {
-        "error": f"{tool_name} is not available on {PLATFORM_NAME}",
+        "error": error or f"{tool_name} is not available on {PLATFORM_NAME}",
         "reason": reason,
         "platform": PLATFORM_NAME,
     }
     if alternatives:
         payload["alternatives"] = alternatives
-    return json.dumps(payload)
+    return payload
+
+
+def unsupported(
+    tool_name: str,
+    reason: str,
+    alternatives: Optional[List[str]] = None,
+) -> str:
+    """Return the JSON body a tool sends when this platform cannot do it.
+
+    The encoded form of ``refusal``, for the tool functions that return a
+    string. See that function for what each argument carries.
+
+    Returns:
+        A JSON string, the same shape every other tool returns on failure.
+    """
+    return json.dumps(refusal(tool_name, reason, alternatives))

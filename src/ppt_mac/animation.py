@@ -17,9 +17,9 @@ and nothing should.
 This is the trap of the module and nothing about it announces itself. The old
 per shape API can only hold one entrance per shape, and writing to it seems to
 force the slide back into that model. Three shapes with one entrance each,
-setting ``dim color`` on the first: all three became a plain appear. Setting
-``animate`` to false on the second: the second went, as asked, and the first
-turned into an appear. Put an exit animation on the third and it disappears
+and setting ``dim color`` on the first turned all three into a plain appear.
+Setting ``animate`` to false on the second removed the second, as asked, and
+turned the first into an appear. Put an exit animation on the third and it disappears
 outright. ``text unit effect`` and ``animate text in reverse`` do the same.
 ``animate background`` is the one write that leaves the slide alone.
 
@@ -49,12 +49,14 @@ from appscript.reference import CommandError
 
 from backend.mac_ae import (
     AE_NOT_HANDLED,
-    count,
     count_of,
     error_number,
     is_missing,
     ppt,
+    shape_by_name_or_index as _get_shape,
     shapes_of,
+    slide_at as _slide,
+    windows_constant as _windows_constant,
 )
 from backend.mac_enums import (
     MsoAnimAfterEffect,
@@ -66,6 +68,7 @@ from backend.mac_enums import (
     PpEntryEffect,
     to_keyword,
 )
+from backend.unsupported import refusal as _refusal
 from ppt_com.constants import (
     AFTER_EFFECT_NAMES,
     ANIMATION_EFFECT_NAMES,
@@ -75,7 +78,6 @@ from ppt_com.constants import (
     msoAnimAfterEffectNone,
     msoAnimateLevelNone,
 )
-from utils.color import hex_to_rgb_list
 from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)
@@ -111,35 +113,6 @@ _WHAT_LEVEL = "text build level"
 _WHAT_TEXT_UNIT = "text unit effect"
 
 
-def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
-    """The body a tool returns when macOS genuinely cannot do it.
-
-    ``backend.unsupported.unsupported`` builds the same payload but returns it
-    already encoded, and these functions hand a dict back to a caller that
-    encodes it. Same keys, same reading, one less round of JSON.
-
-    ``error`` overrides the headline for a tool that does work but has one
-    argument it cannot honour, so a reader is not told to give up on the whole
-    tool when only that argument has to go.
-    """
-    payload = {
-        "error": error or f"{tool_name} is not available on macOS",
-        "reason": reason,
-        "platform": "macOS",
-    }
-    if alternatives:
-        payload["alternatives"] = alternatives
-    return payload
-
-
-def _windows_constant(table, keyword, default=None):
-    """Turn a macOS enumerator back into the Windows constant it stands for."""
-    for value, word in table.items():
-        if word == keyword:
-            return value
-    return default
-
-
 def _sequence_refusal(tool_name: str) -> dict:
     """The same answer both tools give to a sequence_index they cannot honour."""
     return _refusal(
@@ -152,42 +125,6 @@ def _sequence_refusal(tool_name: str) -> dict:
         [f"{tool_name} without sequence_index", "ppt_list_animations"],
         error=f"{tool_name} cannot take sequence_index on macOS",
     )
-
-
-def _slide(pres, slide_index: int):
-    """Return a slide reference, checking the index first.
-
-    An out of range element reference does not fail where it is built, it fails
-    somewhere later with -1728 and no mention of the index, so the range is
-    checked here where the number is still in hand.
-    """
-    total = count(pres.slides)
-    if slide_index < 1 or slide_index > total:
-        raise ValueError(
-            f"Slide index {slide_index} is out of range. "
-            f"The presentation has {total} slides (1-based)."
-        )
-    return pres.slides[slide_index]
-
-
-def _get_shape(slide, name_or_index):
-    """Find a shape on a slide by name or 1-based index.
-
-    Built out of ``shapes_of`` rather than ``slide.shapes``, because asking
-    PowerPoint for a slide's shapes hands back references addressed by
-    subclass and the second of those does not resolve.
-    """
-    shapes = shapes_of(slide)
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > len(shapes):
-            raise ValueError(
-                f"Shape index {name_or_index} out of range (1-{len(shapes)})"
-            )
-        return shapes[name_or_index - 1]
-    for shape in shapes:
-        if shape.name() == name_or_index:
-            return shape
-    raise ValueError(f"Shape '{name_or_index}' not found on slide")
 
 
 def _main_sequence(slide):
@@ -647,8 +584,8 @@ def _remove_animation_impl(slide_index, animation_index, sequence_index):
 
     Clearing the shape with ``animation settings.animate`` does remove the
     effect, and it damages the rest of the slide on the way past. Three shapes
-    with one entrance each, clearing the second: the second went, as asked, and
-    the first turned into a plain appear. Add an exit animation to the third and
+    with one entrance each, and clearing the second removed the second, as
+    asked, while the first turned into a plain appear. Add an exit animation to the third and
     that one disappears outright. Whatever is written through `animation
     settings` seems to rewrite the whole slide through the old one effect per
     shape model, and anything the old model cannot hold is lost.

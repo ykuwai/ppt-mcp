@@ -29,7 +29,15 @@ from typing import Optional
 
 from appscript import k, mactypes
 
-from backend.mac_ae import EXPORT_STAGING_DIR, count, elements, is_missing, ppt
+from backend.mac_ae import (
+    EXPORT_STAGING_DIR,
+    count,
+    elements,
+    full_names as _full_names,
+    is_missing,
+    ppt,
+    resolve_presentation as _resolve_presentation,
+)
 from backend.mac_enums import PpSaveAsFileType, to_keyword
 from ppt_com.constants import (
     ppSaveAsDefault,
@@ -85,11 +93,6 @@ _TEMPLATE_DIR_CANDIDATES = (
 # ---------------------------------------------------------------------------
 # Small helpers over the object model and the filesystem
 # ---------------------------------------------------------------------------
-def _full_names(app) -> list:
-    """Every open presentation's full name, in one Apple Event."""
-    return [str(name) for name in elements(app.presentations.full_name)]
-
-
 def _index_of(app, full_name: str) -> Optional[int]:
     """The 1-based position of a presentation among the open ones."""
     names = _full_names(app)
@@ -195,68 +198,6 @@ def _sandbox_error(target: str) -> RuntimeError:
 # ---------------------------------------------------------------------------
 # Helper to resolve a presentation by index or active
 # ---------------------------------------------------------------------------
-def _resolve_presentation(
-    app,
-    presentation_index: Optional[int] = None,
-    presentation_name: Optional[str] = None,
-):
-    """Return a presentation by index, by name, or the session target.
-
-    The counterpart of the helper of the same name in
-    ``ppt_com/presentation.py``, raising the same errors with the same
-    wording.
-    """
-    if presentation_index is not None and presentation_name is not None:
-        raise ValueError(
-            "Specify either presentation_index or presentation_name, not both"
-        )
-
-    presentations = elements(app.presentations)
-
-    if presentation_index is not None:
-        total = len(presentations)
-        if presentation_index < 1 or presentation_index > total:
-            raise ValueError(
-                f"Presentation index {presentation_index} out of range (1-{total})"
-            )
-        return presentations[presentation_index - 1]
-
-    if presentation_name is not None:
-        if not presentations:
-            raise RuntimeError(
-                "No presentation is open. "
-                "Use ppt_create_presentation or ppt_open_presentation first."
-            )
-        matches = []
-        available = []
-        for index, pres in enumerate(presentations, start=1):
-            name = pres.name()
-            available.append(f"  [{index}] {name}")
-            if name == presentation_name:
-                matches.append((index, pres))
-        if len(matches) == 1:
-            return matches[0][1]
-        if len(matches) > 1:
-            match_list = ", ".join(
-                f"[{index}] {presentation_name}" for index, _ in matches
-            )
-            raise ValueError(
-                f"Multiple presentations match name '{presentation_name}': "
-                f"{match_list}. Use presentation_index to disambiguate."
-            )
-        raise ValueError(
-            f"No presentation named '{presentation_name}'. "
-            f"Available presentations:\n" + "\n".join(available)
-        )
-
-    if not presentations:
-        raise RuntimeError(
-            "No presentation is open. "
-            "Use ppt_create_presentation or ppt_open_presentation first."
-        )
-    return ppt._get_pres_impl()
-
-
 # ---------------------------------------------------------------------------
 # Implementation functions (run on the Apple Event thread via ppt.execute)
 # ---------------------------------------------------------------------------
