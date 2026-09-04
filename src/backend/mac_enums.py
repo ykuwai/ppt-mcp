@@ -8,7 +8,7 @@ The pairing is done by name rather than by number, because the two platforms
 only sometimes agree on the number. ``ppSaveAsPNG`` is 18 on Windows while
 ``save as PNG`` is 24 on macOS, and ``ppLayoutBlank`` is 12 on both.
 
-343 constants across 40 enumerations, read from PowerPoint 16.97.2.
+344 constants across 40 enumerations, read from PowerPoint 16.97.2.
 
 Windows constants with no macOS counterpart, left out on purpose so that asking
 for one raises rather than quietly resolving to something close:
@@ -16,7 +16,7 @@ for one raises rather than quietly resolving to something close:
     MsoAnimAfterEffect: msoAnimAfterEffectNone
     MsoAnimTriggerType: msoAnimTriggerNone
     MsoAnimateByLevel: msoAnimateLevelNone
-    MsoShapeType: msoEmbeddedOLEObject, msoOLEControlObject, msoTextEffect, msoSmartArt
+    MsoShapeType: msoEmbeddedOLEObject, msoOLEControlObject, msoTextEffect
     MsoTextOrientation: msoTextOrientationVerticalFarEast
     MsoTriState: msoTriStateMixed
     MsoVerticalAnchor: msoVerticalAnchorMixed
@@ -263,6 +263,7 @@ MsoShapeType: dict = {
     16: k.shape_type_media,  # msoMedia
     17: k.shape_type_text_box,  # msoTextBox
     19: k.shape_type_table,  # msoTable
+    24: k.shape_type_smartart_graphic,  # msoSmartArt
 }
 
 

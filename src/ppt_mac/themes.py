@@ -28,7 +28,6 @@ from appscript.reference import CommandError
 
 from backend.mac_ae import EXPORT_STAGING_DIR, count, ppt
 from ppt_com.constants import msoTrue  # noqa: F401  (kept for signature parity)
-from ppt_com.themes import THEME_COLOR_NAMES
 from utils.color import int_to_rgb, rgb_list_to_hex, rgb_list_to_int
 
 logger = logging.getLogger(__name__)
@@ -55,6 +54,20 @@ def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict
     if alternatives:
         payload["alternatives"] = alternatives
     return payload
+
+
+def _theme_color_names():
+    """The twelve names Windows reports, fetched at call time.
+
+    Imported inside the function rather than at module scope. `ppt_com/themes.py`
+    imports this module at the bottom of its own file, so importing it back up
+    here lets an "import ppt_mac.themes first" ordering run that swap block
+    against a half built module, and `use_mac_impls` then silently finds nothing
+    to swap. By call time both are fully loaded.
+    """
+    from ppt_com.themes import THEME_COLOR_NAMES
+
+    return THEME_COLOR_NAMES
 
 
 def _theme_colors(pres):
@@ -130,7 +143,7 @@ def _get_theme_colors_impl():
     for i in range(1, _THEME_COLOR_COUNT + 1):
         colors.append({
             "index": i,
-            "name": THEME_COLOR_NAMES[i],
+            "name": _theme_color_names()[i],
             "color_hex": rgb_list_to_hex(scheme.theme_colors[i].RGB()),
         })
 
@@ -165,7 +178,7 @@ def _set_theme_colors_impl(color_map):
     for idx, bgr in color_map.items():
         wanted = rgb_list_to_hex(list(int_to_rgb(bgr)))
         got = rgb_list_to_hex(scheme.theme_colors[int(idx)].RGB())
-        entry = {"name": THEME_COLOR_NAMES[int(idx)], "color_hex": wanted}
+        entry = {"name": _theme_color_names()[int(idx)], "color_hex": wanted}
         if got == wanted:
             changed.append(entry)
         else:

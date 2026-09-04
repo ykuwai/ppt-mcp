@@ -103,6 +103,12 @@ OVERRIDES = {
         # name matcher cannot see that they are the same thing.
         "msoLineDot": "line dash style square dot",
     },
+    "MsoShapeType": {
+        # Windows says msoSmartArt and macOS says "shape type smartart
+        # graphic", which the name matcher reads as three words against one.
+        # Without this a genuine SmartArt shape reports no numeric type at all.
+        "msoSmartArt": "shape type smartart graphic",
+    },
     "MsoArrowheadStyle": {
         # Windows says msoArrowheadNone, macOS says "no arrowhead". Every other
         # member of this enumeration pairs on its own.

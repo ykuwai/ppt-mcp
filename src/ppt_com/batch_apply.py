@@ -275,3 +275,18 @@ def register_tools(mcp):
     )
     async def tool_batch_apply_formatting(params: BatchApplyFormattingInput) -> str:
         return batch_apply_formatting(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementation above walks COM. Its Apple Event counterpart has the same
+# name and signature, so on macOS it simply takes its place; nothing else in
+# this module changes, and `_dispatch_op` above is already reaching the Apple
+# Event versions of the tools it calls.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import batch_apply as _mac_batch_apply
+
+    use_mac_impls(globals(), _mac_batch_apply)

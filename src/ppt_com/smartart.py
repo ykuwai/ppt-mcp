@@ -794,3 +794,17 @@ def register_tools(mcp):
         Output is compact by default (index + name + english_name + category).
         """
         return list_smartart_options(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import smartart as _mac_smartart
+
+    use_mac_impls(globals(), _mac_smartart)
