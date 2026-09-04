@@ -31,6 +31,7 @@ Windows originals do not navigate the editing window either.
 """
 
 import logging
+import struct
 import time
 
 from appscript import k
@@ -193,7 +194,22 @@ def _slideshow_start_impl(start_slide, end_slide, loop, show_type) -> dict:
         # are a COM tri-state and mean nothing to Apple Events.
         settings.loop_until_stopped.set(bool(loop))
 
-    settings.run_slide_show()
+    try:
+        settings.run_slide_show()
+    except struct.error:
+        # `run slide show` answers with a slide show window, and appscript
+        # cannot decode what PowerPoint sends back, so it raises
+        # "unpack requires a buffer of 4 bytes" out of `struct` rather than an
+        # Apple Event error. The show does start. `duplicate` fails the same
+        # way in slides.py, which is where this was recognised.
+        #
+        # The answer was never used, so nothing is lost by dropping it. What
+        # decides whether the show started is the check below, which was
+        # already here and simply never got to run.
+        logger.debug(
+            "run slide show answered with something appscript could not "
+            "decode. Checking whether the show opened instead."
+        )
 
     # The window the command answered with is discarded. It is fetched again by
     # counting and indexing, and no window at all is the silent no-op.

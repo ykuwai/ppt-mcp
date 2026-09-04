@@ -144,7 +144,9 @@ def _get_group_items_impl(slide_index, shape_name_or_index):
         "ppt_get_group_items",
         f"'{shape.name()}' is a group and PowerPoint for Mac will not say what "
         "is in it. Its `shapes` collection counts zero, so does every subclass "
-        "collection, and indexing into it answers -1728. Ungrouping it does "
+        "collection, and indexing into it fails with Apple Event error "
+        "-1728, which is PowerPoint saying the reference does not resolve. "
+        "Ungrouping it does "
         "work, and the members can be read individually once they are on the "
         "slide in their own right.",
         ["ppt_ungroup_shapes", "ppt_list_shapes"],

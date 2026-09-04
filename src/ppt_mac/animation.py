@@ -289,9 +289,10 @@ def _apply_effect_options(
 
     if after_effect is not None:
         message = (
-            "after_effect was not applied. Setting it answers -1708 on this "
-            "platform and the effect's own after effect information is read "
-            "only, so PowerPoint for Mac offers no way in. "
+            "after_effect was not applied. Writing it fails with Apple Event "
+            "error -1708, which is PowerPoint saying it does not implement "
+            "that write, and the effect's own after effect information is "
+            "read only. So there is no way in on this platform. "
         )
         message += "Set it in PowerPoint by hand instead."
         warnings.append(message)
@@ -375,7 +376,9 @@ def _add_animation_impl(
         return _refusal(
             "ppt_add_animation",
             "An animation cannot be triggered by clicking another shape here. "
-            "Asking for that trigger answers -1708, and the interactive "
+            "Asking for that trigger fails with Apple Event error -1708, "
+            "which is PowerPoint saying it does not implement it, and the "
+            "interactive "
             "sequence it would need cannot be created either; the timeline "
             "hands back a sequence and then reports it has none. Use "
             "'on_click', 'with_previous' or 'after_previous' instead.",

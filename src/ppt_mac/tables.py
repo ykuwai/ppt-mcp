@@ -465,7 +465,9 @@ def _add_table_row_impl(slide_index, shape_name_or_index, position, height):
         return _refusal(
             "ppt_add_table_row",
             "A row can only be appended here, not inserted. Asking PowerPoint "
-            "to make a row before an existing one answers -1708, and the same "
+            "to make a row before an existing one fails with Apple Event error "
+            "-1708, which is PowerPoint saying it does not implement that, "
+            "and the same "
             "request for a column kills PowerPoint outright and takes every "
             "open deck with it, so neither is attempted.",
             [

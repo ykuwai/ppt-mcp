@@ -420,6 +420,30 @@ def _save_presentation_impl(
     }
 
 
+# Said in full once and then in one line. Saving at every natural break is the
+# advice, so the long form arrives on every save and a reader stops reading it,
+# while dropping it altogether would hide that the copy outside the container
+# goes stale. So the reason is given once and afterwards only what to do.
+_container_copy_explained = False
+
+
+def _container_copy_warning(staged: str, target: str) -> str:
+    """Say the open deck is the container's copy, at length the first time."""
+    global _container_copy_explained
+    if _container_copy_explained:
+        return (
+            f"{target} is again a copy, and PowerPoint still holds {staged}. "
+            "Save again to refresh it after further edits."
+        )
+    _container_copy_explained = True
+    return (
+        f"The open deck is {staged}, inside PowerPoint's container, and "
+        f"{target} is a copy of it. PowerPoint for Mac cannot hold a document "
+        "outside its container, so call ppt_save_presentation_as again to "
+        "refresh the copy after further edits."
+    )
+
+
 def _save_presentation_as_impl(
     file_path: str,
     format: Optional[str],
@@ -529,12 +553,7 @@ def _save_presentation_as_impl(
                 "to a path of your own when you want one outside the container."
             )
         else:
-            warnings.append(
-                f"The open deck is {staged}, inside PowerPoint's container, and "
-                f"{target} is a copy of it. PowerPoint for Mac cannot hold a "
-                "document outside its container, so call ppt_save_presentation_as "
-                "again to refresh the copy after further edits."
-            )
+            warnings.append(_container_copy_warning(staged, target))
     else:
         try:
             os.remove(staged)
