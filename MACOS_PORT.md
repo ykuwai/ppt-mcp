@@ -254,18 +254,39 @@ raise**. Verify.
 
 Every one of these is cheap, and every one of them is detectable.
 
-### 5.1 One read takes PowerPoint down
+### 5.1 One way of asking takes PowerPoint down
 
-Worse than a silent failure, and found only by running the port rather than by
-reading the dictionary. **Reading a slide's animation timeline crashes
-PowerPoint.** Touching `timeline.main_sequence.effects` kills the application
-with -609, on a slide with no animations at all, reproducibly, and the open
-deck goes with it.
+Found by running the port, not by reading the dictionary, and the sharpest
+lesson in it. **Asking a slide's animation timeline for its whole effects
+collection kills PowerPoint.**
 
-Nothing in the port reads it. `ppt_get_shape_info` reports `has_animation` as
-null with a note saying why, rather than paying for that field with the user's
-deck. `animation.py` (1,286 lines) is unsafe on macOS for the same reason and
-must not be ported until this is understood.
+```python
+slide.timeline.main_sequence.effects.get()     # -609, the application dies,
+                                               # and the open deck with it
+```
+
+It happens on a slide with no animations at all, reproducibly. But it is a
+problem with the way of asking, not with the timeline, and everything else in
+that area is fine.
+
+```python
+slide.timeline.main_sequence.effects[1].shape.name()   # works
+slide.timeline.sequences[1].effects[1]                 # works
+count(slide.timeline.sequences)                        # works
+shape.animation_settings.animate()                     # works, and is settable
+```
+
+So the rule is to never materialise that collection. `backend.mac_ae.probe_count`
+walks it one element at a time and stops when the next is not there, which is
+slower and safe. And where the question is only whether one shape is animated,
+the older per shape API answers instantly and is what `ppt_get_shape_info` uses.
+
+This is the same defect as section 5.2's, one step worse. Asking PowerPoint for
+the elements of a collection is unreliable in general: a slide holding a text
+box and an autoshape answers `text_boxes[1]` and `shapes[2]`, and the second
+does not resolve. `positional()` counts and then indexes for that case. Animation
+effects are the one place where getting it wrong costs the document rather than
+an error message.
 
 ### 5.2 The sandbox, and where exports have to go
 

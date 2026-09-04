@@ -73,13 +73,6 @@ EXPORT_STAGING_DIR = os.path.expanduser(
 )
 
 
-# Reading a slide's animation timeline takes PowerPoint down. Touching
-# `timeline.main_sequence.effects` kills the application with -609 even on a
-# slide that has no animations, reproducibly, and the open deck goes with it.
-# Nothing in the port reads it, and nothing should start; see MACOS_PORT.md.
-CRASHES_POWERPOINT = ("timeline.main_sequence.effects",)
-
-
 class AppleEventError(RuntimeError):
     """An Apple Event failure carrying its OSError number."""
 
@@ -160,6 +153,39 @@ def shapes_of(container) -> list:
     problem, and costs one extra Apple Event.
     """
     return positional(container.shapes)
+
+
+# How far probe_count will walk before deciding a collection is unreasonably
+# large. Nothing it is used for has thousands of members, and the point is to
+# fail rather than hang if PowerPoint starts answering strangely.
+_PROBE_CEILING = 500
+
+
+def probe_count(collection) -> int:
+    """Count a collection by walking it, without ever materialising it.
+
+    For collections where asking for the whole thing is not safe. A slide's
+    animation effects are the case that forced this: `main_sequence.effects.get()`
+    kills PowerPoint with -609 and takes the open deck with it, while
+    `main_sequence.effects[1]` answers perfectly. So this asks for element one,
+    then two, and stops when one is not there.
+
+    Slower than `count`, one Apple Event per element, so it is only for the
+    collections that need it.
+    """
+    total = 0
+    while total < _PROBE_CEILING:
+        try:
+            collection[total + 1].get()
+        except CommandError:
+            break
+        total += 1
+    return total
+
+
+def probe_elements(collection) -> list:
+    """Positional references for a collection that cannot be materialised."""
+    return [collection[i] for i in range(1, probe_count(collection) + 1)]
 
 
 def raw(ref: Reference, code: bytes) -> Reference:

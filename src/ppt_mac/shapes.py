@@ -659,16 +659,16 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         "line": None,
     }
 
-    # No animation check on macOS. Reading a slide's animation timeline is not
-    # slow or unsupported, it takes PowerPoint down: touching
-    # `timeline.main_sequence.effects` kills the application with -609, on a
-    # slide with no animations at all, reproducibly. Reporting null here is the
-    # only honest answer, and it costs less than losing the user's deck.
-    info["has_animation"] = None
-    info["has_animation_note"] = (
-        "not read on macOS, because reading a slide's animation timeline "
-        "crashes PowerPoint"
-    )
+    # Animation check, through the per shape settings rather than the slide's
+    # timeline. Asking the timeline for its whole effects collection kills
+    # PowerPoint with -609 and takes the open deck with it, on a slide with no
+    # animations at all. `animation settings` is the older per shape API, it
+    # answers instantly, and it is what this question actually needs, since
+    # Windows only wants to know whether this one shape is animated.
+    try:
+        info["has_animation"] = bool(shape.animation_settings.animate())
+    except Exception:
+        info["has_animation"] = None
 
     # Aspect ratio lock
     try:
