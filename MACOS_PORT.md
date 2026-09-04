@@ -585,7 +585,11 @@ Written down so nobody re-derives it.
 5. Align, distribute, group and ungroup all take a `shape range`, and the only
    route to one appears to be through the window's selection. That changes the
    shape of those four tools.
-6. Whether passing a file reference rather than a path string hands PowerPoint a
-   sandbox extension. If it does, arbitrary path exports work and only the text
-   typed parameters need staging, which is a much cheaper port than section 5.3
-   assumes.
+6. ~~Whether passing a file reference rather than a path string hands PowerPoint
+   a sandbox extension.~~ Settled, and the answer is half of each. A file
+   reference is necessary, `save in: "<path>"` as text writes nothing anywhere
+   at all, including inside the container, and reports success. It is not
+   sufficient. `save in: file "<path>"` outside the container hangs PowerPoint
+   until the call times out, on Documents, Desktop and Downloads alike. So
+   staging is still the answer, and the file reference plus an explicit format
+   is what makes the staged save land.

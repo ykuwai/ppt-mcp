@@ -27,7 +27,7 @@ import os
 import shutil
 from typing import Optional
 
-from appscript import k
+from appscript import k, mactypes
 
 from backend.mac_ae import EXPORT_STAGING_DIR, count, elements, is_missing, ppt
 from backend.mac_enums import PpSaveAsFileType, to_keyword
@@ -160,6 +160,25 @@ def _stage_template_copy(template_path: str) -> str:
     if not os.path.exists(dest) or os.path.getsize(dest) == 0:
         raise RuntimeError(f"Could not stage a copy of the template at {dest}")
     return dest
+
+
+def _presentation_at(app, path: str):
+    """The open presentation whose file is ``path``, or None.
+
+    Saving a deck renames it, and every reference held before the save is
+    addressed by the old name, so it stops resolving. Scanning is the only way
+    back to it, and the file just written is the one certain fact to scan for.
+    """
+    wanted = os.path.abspath(path)
+    for index in range(1, count(app.presentations) + 1):
+        candidate = app.presentations[index]
+        try:
+            full_name = candidate.full_name()
+        except Exception:
+            continue
+        if not is_missing(full_name) and os.path.abspath(str(full_name)) == wanted:
+            return candidate
+    return None
 
 
 def _sandbox_error(target: str) -> RuntimeError:
@@ -511,27 +530,76 @@ def _save_presentation_as_impl(
 
     before_mtime = os.path.getmtime(target) if os.path.exists(target) else None
 
+    # Two things are needed together and neither is optional. The destination
+    # has to be a file reference rather than a path string, and a format has to
+    # be named. `save in: "<path>"` writes nothing at all, anywhere, including
+    # inside PowerPoint's own container, and reports success. With
+    # `mactypes.File` and an explicit format it lands.
+    #
+    # And it only lands inside the container. Documents, Desktop and Downloads
+    # were each tried and each hung PowerPoint until the call timed out, which
+    # is the sandbox behaviour MACOS_PORT section 5.3 measured. So the deck is
+    # saved into the container and Python carries the file the rest of the way.
+    #
     # A POSIX path, always. An HFS colon path is taken as a literal filename
-    # here and produces a file called "Macintosh HD:Users:..." in the
-    # container root.
-    pres.save(in_=target, **kwargs)
+    # and produces a file called "Macintosh HD:Users:..." in the container root.
+    os.makedirs(EXPORT_STAGING_DIR, exist_ok=True)
+    staged = os.path.join(EXPORT_STAGING_DIR, os.path.basename(target))
+    if "as_" not in kwargs:
+        kwargs["as_"] = to_keyword(
+            PpSaveAsFileType,
+            SAVE_FORMAT_MAP.get(fmt_key, ppSaveAsOpenXMLPresentation),
+            "save format",
+        )
+    pres.save(in_=mactypes.File(staged), **kwargs)
 
+    if not os.path.exists(staged) or os.path.getsize(staged) == 0:
+        raise _sandbox_error(staged)
+
+    shutil.copy2(staged, target)
     if not os.path.exists(target) or os.path.getsize(target) == 0:
-        raise _sandbox_error(target)
+        raise RuntimeError(
+            f"The deck was saved to {staged} but could not be copied to "
+            f"{target}. The staged file is still there."
+        )
+
+    # The old reference is addressed by name and saving renamed the deck, so
+    # asking it anything now answers -1728. It is found again by the file
+    # PowerPoint just wrote, which is the one thing known for certain.
+    pres = _presentation_at(app, staged) or pres
+    full_name = pres.full_name()
+    warnings = []
+    if os.path.abspath(str(full_name)) == os.path.abspath(staged):
+        # PowerPoint is holding the staged file now, not the caller's. Saying
+        # so matters, because its own File then Save writes to the container
+        # from here on and the caller's copy would quietly stop keeping up.
+        warnings.append(
+            f"The open deck is {staged}, inside PowerPoint's container, and "
+            f"{target} is a copy of it. PowerPoint for Mac cannot hold a "
+            "document outside its container, so call ppt_save_presentation_as "
+            "again to refresh the copy after further edits."
+        )
+    else:
+        try:
+            os.remove(staged)
+        except OSError:
+            logger.debug("Could not remove the staged copy at %s", staged)
 
     result = {
         "success": True,
         "name": pres.name(),
-        "full_name": pres.full_name(),
+        "full_name": full_name,
     }
     if before_mtime is not None and os.path.getmtime(target) <= before_mtime:
         # Overwriting a file that was already there, and its timestamp did not
         # move. That is ambiguous rather than a failure, because PowerPoint may
         # have had nothing to rewrite, so it is reported instead of raised.
-        result["warning"] = (
+        warnings.append(
             f"{target} already existed and its timestamp did not change, so it "
             "may not have been rewritten. Check the file before relying on it."
         )
+    if warnings:
+        result["warnings"] = warnings
     return result
 
 
