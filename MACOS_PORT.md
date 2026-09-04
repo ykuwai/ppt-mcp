@@ -276,10 +276,22 @@ count(slide.timeline.sequences)                        # works
 shape.animation_settings.animate()                     # works, and is settable
 ```
 
-So the rule is to never materialise that collection. `backend.mac_ae.probe_count`
-walks it one element at a time and stops when the next is not there, which is
-slower and safe. And where the question is only whether one shape is animated,
-the older per shape API answers instantly and is what `ppt_get_shape_info` uses.
+So the rule is to never materialise that collection. There is a cheap safe way
+to count it and a slow safe one, and the difference between the cheap one and
+the crasher is one word.
+
+```python
+seq.effects.count()          # -609, the application dies. Same as .get()
+seq.count(each=k.effect)     # correct, one round trip, safe
+probe_count(seq.effects)     # correct, N round trips, safe
+```
+
+Asking the effects collection how many elements it has kills PowerPoint. Asking
+the sequence how many effects it holds does not. `backend.mac_ae.count_of` sends
+the second, and `probe_count` walks the collection one element at a time for
+anything that will not answer it. And where the question is only whether one
+shape is animated, the older per shape API answers instantly and is what
+`ppt_get_shape_info` uses.
 
 There is a second one, found later and just as fatal. **Asking PowerPoint to
 make a table column before an existing one kills it**, on a plain three by three

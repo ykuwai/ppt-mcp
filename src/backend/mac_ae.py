@@ -122,8 +122,9 @@ def elements(ref: Reference) -> list:
 def count(ref: Reference) -> int:
     """Return how many elements a collection has.
 
-    ``ref.count()`` raises -1708, because PowerPoint's dictionary declares no
-    Standard Suite commands at all, so this counts what ``get`` returns.
+    Counts what ``get`` returns, because asking a collection reference to count
+    itself answers -1708. Asking its container instead does work, which is what
+    ``count_of`` is for, and it is the safer of the two.
     """
     return len(elements(ref))
 
@@ -155,6 +156,24 @@ def shapes_of(container) -> list:
     return positional(container.shapes)
 
 
+def count_of(container, each) -> int:
+    """Ask a container how many of a class it holds, without materialising any.
+
+    The difference between this and asking the collection itself is not
+    cosmetic, it decides whether PowerPoint survives.
+    ``sequence.effects.count()`` asks the effects collection how many elements
+    it has, and kills PowerPoint with -609 exactly as ``.get()`` on it does.
+    ``sequence.count(each=k.effect)`` asks the sequence how many effects it
+    holds, answers in one round trip, and is safe. Both were run against the
+    same slide.
+
+    So where a collection is known to be dangerous, this is the cheap way to
+    count it and ``probe_count`` is the fallback for anything that will not
+    answer this either.
+    """
+    return container.count(each=each)
+
+
 # How far probe_count will walk before deciding a collection is unreasonably
 # large. Nothing it is used for has thousands of members, and the point is to
 # fail rather than hang if PowerPoint starts answering strangely.
@@ -170,8 +189,8 @@ def probe_count(collection) -> int:
     `main_sequence.effects[1]` answers perfectly. So this asks for element one,
     then two, and stops when one is not there.
 
-    Slower than `count`, one Apple Event per element, so it is only for the
-    collections that need it.
+    Slower than `count_of`, one Apple Event per element, so reach for that
+    first and keep this for collections that will not answer it.
     """
     total = 0
     while total < _PROBE_CEILING:
