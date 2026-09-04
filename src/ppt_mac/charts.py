@@ -66,8 +66,9 @@ def _com_charts():
 # that a reader who meets it twice recognises it as the same finding.
 _NO_CHART_OBJECT = (
     "PowerPoint for Mac has no `chart` class in its Apple Event dictionary. "
-    "The only word in it containing \"chart\" is `chart unit effect`, an "
-    "animation property, and `shape` carries `has table` with no `has chart` "
+    "The only property, element or command in it containing \"chart\" is "
+    "`chart unit effect`, which is an animation setting, and `shape` carries "
+    "`has table` with no `has chart` "
     "beside it. Windows reaches this through Shape.Chart, and that step does "
     "not exist here."
 )

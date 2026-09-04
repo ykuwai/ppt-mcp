@@ -227,3 +227,68 @@ class TestBatchCarriesWhatAnOperationSaid:
         assert _carried_over({"success": True, "shape_name": "Title"}) == {}
         assert _carried_over({"success": True, "warnings": []}) == {}
         assert _carried_over("not a dict") == {}
+
+
+@contextmanager
+def _refusing_deck(module):
+    """A PowerPoint that answers nothing, so only `make` can be observed.
+
+    The two refusals below are the only thing between a caller and losing
+    every open deck, so what they are tested for is that `make` is never
+    reached, not that the code stops at any particular earlier line.
+    """
+    app = mock.Mock()
+    app.make.side_effect = AssertionError("make must not be reached")
+    shape = mock.Mock()
+    shape.has_table.return_value = True
+    with mock.patch.object(module.ppt, "_get_app_impl", return_value=app), \
+            mock.patch.object(module.ppt, "_get_pres_impl", return_value=mock.MagicMock()), \
+            mock.patch.object(module, "goto_slide", lambda *a, **kw: None), \
+            mock.patch.object(module, "_get_table_shape", return_value=shape), \
+            mock.patch.object(module, "_dimensions", return_value=(3, 3)):
+        yield app
+
+
+@macos_only
+class TestTheTwoRefusalsThatProtectTheDeck:
+    """Inserting a table column at a position kills PowerPoint. Nothing else does.
+
+    These two are the only thing between a caller and losing every open deck,
+    so they are pinned the way the effects collection is, with a fake that
+    raises if the code reaches for `make` at all.
+    """
+
+    def test_a_row_at_a_position_refuses_and_never_reaches_make(self):
+        from ppt_mac import tables
+
+        with _refusing_deck(tables) as app:
+            result = tables._add_table_row_impl(1, 1, 2, None)
+
+        assert result["error"] == (
+            "ppt_add_table_row cannot insert at a position on macOS"
+        )
+        assert "-1708" in result["reason"]
+        app.make.assert_not_called()
+
+    def test_a_column_at_a_position_refuses_and_never_reaches_make(self):
+        from ppt_mac import tables
+
+        with _refusing_deck(tables) as app:
+            result = tables._add_table_column_impl(1, 1, 2, None)
+
+        assert result["error"] == (
+            "ppt_add_table_column cannot insert at a position on macOS"
+        )
+        assert "kills PowerPoint" in result["reason"]
+        app.make.assert_not_called()
+
+    def test_appending_is_not_refused(self):
+        """The refusal is about `position`, not about the tool."""
+        import inspect
+
+        from ppt_mac import tables
+
+        for impl in (tables._add_table_row_impl, tables._add_table_column_impl):
+            source = inspect.getsource(impl)
+            assert "if position is not None:" in source
+            assert source.index("if position is not None:") < source.index("make")

@@ -304,8 +304,10 @@ something the tool says so rather than doing something unexpected.
 
 Not available on macOS:
 
-- **Charts, SmartArt and freeform paths.** These have no words at all in the
-  dictionary, so they cannot be created or edited from a script.
+- **Charts, SmartArt and freeform paths.** The dictionary has no class and no
+  command for any of them, so they cannot be created or edited from a script.
+  An existing one is still an ordinary shape and can be moved, resized, read
+  and deleted.
 - **Grouping shapes.** Ungrouping works. Grouping needs a selection a script
   cannot build.
 - **Inserting video and audio.** An existing media shape can still be moved,

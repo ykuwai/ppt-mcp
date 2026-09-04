@@ -409,12 +409,11 @@ This is the honest part. These are not workarounds waiting to be found.
 
 | Area | Windows | macOS | Lines affected |
 |---|---|---|---|
-| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. An existing chart is visible as a plain shape, so it can be moved, resized and read, but not created or given data | `charts.py` 1,104 |
-| SmartArt | `SmartArt` object model | **no class** | `smartart.py` 796 |
-| Freeform paths | `Shapes.BuildFreeform` | **no builder** | `freeform.py` 751 |
-| Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all. Solved another way, by exporting the deck to PDF and rendering pages with Quartz, which is what shipped | `export.py` 825 |
+| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. An existing chart is visible as a plain shape, so it can be moved, resized and read, but not created or given data | `charts.py` 1,126 |
+| SmartArt | `SmartArt` object model | **no class, no command**. `shape type smartart graphic` exists, so an existing graphic is a shape like any other | `smartart.py` 810 |
+| Freeform paths | `Shapes.BuildFreeform` | **no builder** | `freeform.py` 765 |
+| Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all. Solved another way, by exporting the deck to PDF and rendering pages with Quartz, which is what shipped | `export.py` 848 |
 | Line visibility | `Shape.Line.Visible = False` | `line format` has **no `visible` property**. Weight 0 and transparency 1.0 both apply cleanly and are the practical stand-ins | every tool taking `line_visible` |
-| Sections | full API | the commands are declared but `get count of sections` returns -1708 through AppleScript. It did answer through appscript, so this needs one more pass | `sections.py` 242 |
 | Screen redraw suppression | `LockWindowUpdate` on `PPTFrameClass` | no equivalent. Less needed, because a whole tool call is 80 ms rather than a visible sequence, but the flicker fix from #164 does not transfer | `utils/redraw.py` 91 |
 | Shape naming | `Rectangle 1` | `Shape_0` | anything addressing shapes by name across platforms |
 
