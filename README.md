@@ -332,6 +332,9 @@ Smaller differences:
   than the Windows route.
 - Automation consent belongs to whichever application launched the server, so
   running it from a different terminal or editor raises the prompt again.
+- Save the deck early and at each break. A deck that has never been saved has
+  been seen to disappear mid-session, and the cause is not yet known
+  ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
 - Icons are rasterised with `sips` before they are inserted, because
   PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
   systems get a refusal naming the reason rather than a blank box.

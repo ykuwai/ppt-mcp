@@ -87,6 +87,12 @@ insert at a `position`, for instance, but appending still works.
 Some results carry `warnings` alongside `success`. Those are parts of the
 request that did not land, listed rather than silently dropped.
 
+**Save early and at each natural break.** A deck that has never been saved has
+been seen to disappear mid-session on macOS, taking every slide with it, and
+the cause is not yet known (issue #191). `ppt_save_presentation_as` right after
+creating a deck, and `ppt_save_presentation` at each break, costs almost
+nothing and is the difference between a hiccup and starting over.
+
 Charts, SmartArt and freeform paths have no words at all in PowerPoint for Mac's
 scripting dictionary. Build those by hand, or on Windows.
 """ if sys.platform == "darwin" else ""
