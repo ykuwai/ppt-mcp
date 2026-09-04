@@ -63,6 +63,29 @@ async def app_lifespan(server: MCPServer):
         ppt.stop()
 
 
+# Appended to the server instructions only when the backend is the Apple Event
+# one. On Windows it is empty, so nothing about it reaches a Windows reader.
+_MACOS_NOTE = """
+## On macOS
+
+This server is driving PowerPoint for Mac over Apple Events rather than COM.
+Almost everything works the same, and where it does not, a tool answers with
+`error`, `reason`, `platform` and often `alternatives` instead of doing
+something unexpected. Read the `reason`; it says what PowerPoint for Mac does
+not have and what to do instead, and one retry along that route usually works.
+
+A refusal whose `error` names an argument rather than the tool means the tool
+itself is fine and only that argument has to go. `ppt_add_table_row` cannot
+insert at a `position`, for instance, but appending still works.
+
+Some results carry `warnings` alongside `success`. Those are parts of the
+request that did not land, listed rather than silently dropped.
+
+Charts, SmartArt and freeform paths have no words at all in PowerPoint for Mac's
+scripting dictionary. Build those by hand, or on Windows.
+""" if sys.platform == "darwin" else ""
+
+
 mcp = MCPServer(
     "powerpoint_mcp",
     lifespan=app_lifespan,
@@ -102,7 +125,8 @@ Standard 16:9 slide = 960 × 540 pt. Default to light backgrounds unless the use
 - Body text: 20–28 pt
 - Caption / annotation: 16–20 pt
 - **Never go below 16 pt.** Smaller text is unreadable when projected.
-""",
+"""
+    + _MACOS_NOTE,
 )
 
 
