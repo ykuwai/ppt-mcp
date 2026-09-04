@@ -97,15 +97,13 @@ _BUILD_LEVELS.setdefault(msoAnimateLevelNone, k.text_by_no_levels)
 # reads "PowerPoint for Mac has no <what> matching the Windows constant <n>", so
 # each of these is written to finish that sentence and then name the way out.
 _WHAT_EFFECT = (
-    "animation effect (macOS has appear, fly, blinds, box, checkerboard, "
-    "circle, diamond, dissolve, fade, split, wipe, zoom, bounce, float, "
-    "grow_and_turn, spin and transparency; the emphasis and motion path "
-    "effects are Windows only)"
+    "animation effect (every effect ppt_add_animation lists is available here, "
+    "so a number this rejects is not one of them)"
 )
 _WHAT_TRANSITION = (
-    "slide transition effect (macOS has fade, cut, dissolve, random, "
-    "blinds_horizontal, blinds_vertical and none; push, wipe, split and reveal "
-    "are Windows only)"
+    "slide transition effect (push, wipe, split and reveal each exist here as "
+    "four directional variants and in no plain form, so there is nothing to "
+    "choose without being told the direction; the other seven all work)"
 )
 _WHAT_DIRECTION = "animation direction"
 _WHAT_TRIGGER = "animation trigger"

@@ -202,13 +202,33 @@ class TestAnimationEnums:
         assert to_keyword(MsoAnimEffect, 10, "animation effect") == k.animation_type_fade
         assert _windows_constant(MsoAnimEffect, k.animation_type_fade) == 10
 
-    def test_a_windows_only_effect_names_itself(self):
-        """Motion paths and most emphasis effects have no macOS word at all."""
+    def test_every_effect_the_tool_advertises_is_reachable(self):
+        """It once was not. Thirty seven of the fifty four failed on macOS.
+
+        The generator only read banner sections of constants.py, and this
+        vocabulary lives in a friendly name map in animation.py with no named
+        constants behind it, so nothing could tell it the words were missing.
+        """
+        from backend.mac_enums import MsoAnimEffect, to_keyword
+        from ppt_com.animation import ANIMATION_EFFECT_MAP
+        from ppt_mac.animation import _WHAT_EFFECT
+
+        for name, value in ANIMATION_EFFECT_MAP.items():
+            assert to_keyword(MsoAnimEffect, value, _WHAT_EFFECT), name
+
+    def test_the_motion_paths_are_the_same_words_in_another_order(self):
+        """Windows writes path_arc_down, macOS writes `arc down path`."""
+        from appscript import k
+
         from backend.mac_enums import MsoAnimEffect, to_keyword
         from ppt_mac.animation import _WHAT_EFFECT
 
-        with pytest.raises(ValueError, match="animation effect"):
-            to_keyword(MsoAnimEffect, 86, _WHAT_EFFECT)  # path_circle
+        assert to_keyword(MsoAnimEffect, 86, _WHAT_EFFECT) == (
+            k.animation_type_circle_path
+        )
+        assert to_keyword(MsoAnimEffect, 122, _WHAT_EFFECT) == (
+            k.animation_type_arc_down_path
+        )
 
     def test_every_direction_round_trips(self):
         from backend.mac_enums import MsoAnimDirection, to_keyword
@@ -230,21 +250,32 @@ class TestAnimationEnums:
         assert _windows_constant(_BUILD_LEVELS, k.text_by_no_levels) == 0
         assert _windows_constant(_BUILD_LEVELS, k.text_by_first_level) == 2
 
-    def test_an_unpaired_keyword_reports_nothing_rather_than_a_near_miss(self):
+    def test_an_emphasis_effect_reads_back_as_its_windows_number(self):
+        """A deck holding one has to report the same effect on both platforms."""
         from appscript import k
 
         from backend.mac_enums import MsoAnimEffect
         from ppt_mac.animation import _windows_constant
 
-        assert _windows_constant(MsoAnimEffect, k.animation_type_teeter) is None
+        assert _windows_constant(MsoAnimEffect, k.animation_type_teeter) == 80
+        assert _windows_constant(MsoAnimEffect, k.animation_type_grow_shrink) == 59
 
-    def test_a_transition_macos_lacks_says_which_ones_it_has(self):
+    def test_a_transition_with_four_directions_and_no_plain_form(self):
+        """These are not missing. They are four each, and choosing is a guess."""
         from backend.mac_enums import PpEntryEffect, to_keyword
         from ppt_mac.animation import _WHAT_TRANSITION
 
         assert to_keyword(PpEntryEffect, 3844, _WHAT_TRANSITION)  # fade
-        with pytest.raises(ValueError, match="push, wipe, split and reveal"):
+        with pytest.raises(ValueError, match="four directional variants"):
             to_keyword(PpEntryEffect, 3845, _WHAT_TRANSITION)  # ppEffectPush
+
+    def test_every_shape_the_tool_advertises_is_reachable(self):
+        """Fourteen of the sixty used to fail, for the same reason as above."""
+        from backend.mac_enums import MsoAutoShapeType, to_keyword
+        from ppt_com.shapes import SHAPE_NAME_MAP
+
+        for name, value in SHAPE_NAME_MAP.items():
+            assert to_keyword(MsoAutoShapeType, value, "shape type"), name
 
 
 @macos_only

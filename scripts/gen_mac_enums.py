@@ -65,13 +65,21 @@ ENUM_ALIASES = {
     "PpParagraphAlignment": "MsoParagraphAlignment",
 }
 
-# Enumerations constants.py records as a friendly name map rather than as a
+# Enumerations the project records as a friendly name map rather than as a
 # banner section of named constants. The tool arguments for these are words the
-# caller types, so the Windows side never needed the constant names, but the
-# numbers behind them are the enumeration all the same and the macOS side has
-# to translate them like any other.
+# caller types, so the Windows side never needed the constant names, and for
+# three of the four there is no named constant anywhere in constants.py. Those
+# numbers are the enumeration all the same, they are what the MCP surface
+# advertises, and leaving them out meant 57 of the 125 names three tools list
+# as valid failed on macOS while the refusal claimed the words did not exist.
+#
+# Each entry names the module the map lives in and the map itself. A friendly
+# name is only taken when the banner section has nothing for that number, so a
+# named constant always wins and the generated comment keeps pointing at it.
 NAME_MAPS = {
-    "MsoAnimDirection": "ANIM_DIRECTION_MAP",
+    "MsoAnimDirection": ("ppt_com/constants.py", "ANIM_DIRECTION_MAP"),
+    "MsoAnimEffect": ("ppt_com/animation.py", "ANIMATION_EFFECT_MAP"),
+    "MsoAutoShapeType": ("ppt_com/shapes.py", "SHAPE_NAME_MAP"),
 }
 
 # Pairs the automatic matcher cannot reach, because the two sides genuinely use
@@ -103,6 +111,13 @@ OVERRIDES = {
         # name matcher cannot see that they are the same thing.
         "msoLineDot": "line dash style square dot",
     },
+    "MsoAnimEffect": {
+        # The two motion paths whose macOS name is not the Windows one with its
+        # words rotated. PowerPoint offers no plain star path, so the five
+        # point one is the reading, and its loop is spelled out.
+        "path_star": "animation type 5 point star path",
+        "path_loop": "animation type loop de loop path",
+    },
     "MsoShapeType": {
         # Windows says msoSmartArt and macOS says "shape type smartart
         # graphic", which the name matcher reads as three words against one.
@@ -126,6 +141,10 @@ OVERRIDES = {
         "in": "inward",
     },
     "MsoAutoShapeType": {
+        # Windows calls 162 an L shape and macOS calls it a corner. The
+        # enumerator's own code is 0x006a00a2, and 0xa2 is 162, so this is the
+        # same shape under two names rather than a guess.
+        "l_shape": "autoshape corner",
         "msoShape4pointStar": "autoshape four point star",
         "msoShape5pointStar": "autoshape five point star",
         "msoShape8pointStar": "autoshape eight point star",
@@ -157,6 +176,14 @@ def variants(name, enum_words, group_drop, strict_only=False):
         forms.add(tuple(w for w in base if w not in enum_words))
         forms.add(tuple(w for w in base if w not in FILLER))
         forms.add(tuple(w for w in base if w not in enum_words and w not in FILLER))
+    # The two platforms sometimes put the same words in a different order, and
+    # in one whole family they do it consistently: Windows writes
+    # `path_arc_down` and macOS writes `arc down path`. Moving the first word to
+    # the end catches all of that family and, being an exact match on the
+    # result like every other reading here, cannot invent one.
+    for base in list(forms):
+        if len(base) > 1:
+            forms.add(base[1:] + base[:1])
     return {normalise(list(f)) for f in forms if f}
 
 
@@ -219,31 +246,48 @@ def read_windows_constants():
         if match and current:
             sections[current][match.group(1)] = int(match.group(2))
 
-    sections.update(read_name_maps())
+    # Merged, not overwritten. A banner section's named constants are the
+    # better source where they exist, so a friendly name only fills a number
+    # nothing has claimed.
+    for enum_name, friendly in read_name_maps().items():
+        section = sections.setdefault(enum_name, {})
+        claimed = set(section.values())
+        for name, value in friendly.items():
+            if value not in claimed:
+                section[name] = value
+                claimed.add(value)
     return sections
 
 
 def read_name_maps():
     """Read the NAME_MAPS entries into the same shape as a banner section.
 
-    Evaluated rather than parsed, because these are ordinary dictionaries and
-    a regular expression over a multi line literal would be the fragile way to
-    read one. Only the names in NAME_MAPS are taken, and only if they are
-    dictionaries of str to int.
+    Read as text rather than imported, because two of these modules pull in the
+    MCP server's dependencies and the generator has no business starting that.
+    The literal is small and flat in every case, so a line by line read of the
+    `"name": number,` pairs between the braces is enough and cannot run
+    anything.
     """
-    namespace = {}
-    exec(compile(CONSTANTS.read_text(), str(CONSTANTS), "exec"), namespace)
     sections = {}
-    for enum_name, map_name in NAME_MAPS.items():
-        table = namespace.get(map_name)
-        if not isinstance(table, dict):
+    for enum_name, (relative, map_name) in NAME_MAPS.items():
+        source = (ROOT / "src" / relative).read_text()
+        match = re.search(
+            r"^{}(?:\s*:[^=]+)?\s*=\s*\{{(.*?)^\}}".format(re.escape(map_name)),
+            source,
+            re.M | re.S,
+        )
+        if match is None:
             raise SystemExit(
-                "{} is named in NAME_MAPS but constants.py no longer has it"
-                .format(map_name)
+                "{} is named in NAME_MAPS but {} no longer has it"
+                .format(map_name, relative)
             )
-        sections[enum_name] = {
-            str(name): int(value) for name, value in table.items()
-        }
+        pairs = re.findall(r'"([^"]+)"\s*:\s*(-?\d+)', match.group(1))
+        if not pairs:
+            raise SystemExit(
+                "{} in {} has no name to number pairs any more"
+                .format(map_name, relative)
+            )
+        sections[enum_name] = {name: int(value) for name, value in pairs}
     return sections
 
 
@@ -380,8 +424,10 @@ only sometimes agree on the number. ``ppSaveAsPNG`` is 18 on Windows while
 
 {total} constants across {count} enumerations, read from PowerPoint {version}.
 
-Windows constants with no macOS counterpart, left out on purpose so that asking
-for one raises rather than quietly resolving to something close:
+Windows constants this table does not carry, so that asking for one raises
+rather than quietly resolving to something close. Most genuinely have no macOS
+word. The four slide transitions have the opposite problem, each exists as four
+directional variants and in no plain form, and picking one would be a guess:
 
 {unmatched}
 """

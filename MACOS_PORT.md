@@ -144,7 +144,14 @@ does not take integers, it takes named enumerators, and the names are its own.
 
 Note the prefixes. It is `autoshape rounded rectangle`, not `rounded rectangle`.
 184 auto shape types are available, which is more than `SHAPE_NAME_MAP` exposes
-today, so nothing is lost here. The work is mechanical but it is the single
+today, so nothing is lost here. That was written as an expectation and it took a
+second pass to make true. The generator reads named constants out of banner
+sections in `constants.py`, and three of the public vocabularies do not live
+there at all, they are friendly name maps in `animation.py` and `shapes.py` with
+no named constants behind them. So the generator had nothing to compare and its
+unmatched list could not mention them, while 57 of the 125 names those three
+tools list as valid failed on macOS with a message saying the words did not
+exist. It reads those maps now. The work is mechanical but it is the single
 largest translation in the project, and it has to be right because these names
 are the public MCP vocabulary's only anchor.
 
@@ -413,7 +420,9 @@ This is the honest part. These are not workarounds waiting to be found.
 
 The dictionary has gained no class and no command in ten years, and it lost
 ground in one place: `paragraph format` no longer carries `first line indent`,
-`left indent`, `right indent`, `indent level` or tab stops.
+`left indent` or `right indent`. `indent level` did not disappear, it moved to
+`text range`, and tab stops are still there as a `tab stop` class reached
+through a text style's `ruler`.
 
 ### 6.1 The VBA escape hatch, and its ceiling
 

@@ -8,10 +8,12 @@ The pairing is done by name rather than by number, because the two platforms
 only sometimes agree on the number. ``ppSaveAsPNG`` is 18 on Windows while
 ``save as PNG`` is 24 on macOS, and ``ppLayoutBlank`` is 12 on both.
 
-344 constants across 40 enumerations, read from PowerPoint 16.97.2.
+397 constants across 40 enumerations, read from PowerPoint 16.97.2.
 
-Windows constants with no macOS counterpart, left out on purpose so that asking
-for one raises rather than quietly resolving to something close:
+Windows constants this table does not carry, so that asking for one raises
+rather than quietly resolving to something close. Most genuinely have no macOS
+word. The four slide transitions have the opposite problem, each exists as four
+directional variants and in no plain form, and picking one would be a guess:
 
     MsoAnimAfterEffect: msoAnimAfterEffectNone
     MsoAnimTriggerType: msoAnimTriggerNone
@@ -104,8 +106,45 @@ MsoAnimEffect: dict = {
     26: k.animation_type_bounce,  # msoAnimEffectBounce
     30: k.animation_type_float,  # msoAnimEffectFloat
     31: k.animation_type_grow_and_turn,  # msoAnimEffectGrowAndTurn
+    54: k.animation_type_change_fill_color,  # change_fill_color
+    55: k.animation_type_change_font,  # change_font
+    56: k.animation_type_change_font_color,  # change_font_color
+    57: k.animation_type_change_font_size,  # change_font_size
+    59: k.animation_type_grow_shrink,  # grow_shrink
     61: k.animation_type_spin,  # msoAnimEffectSpin
     62: k.animation_type_transparency,  # msoAnimEffectTransparency
+    63: k.animation_type_bold_flash,  # bold_flash
+    69: k.animation_type_color_wave,  # color_wave
+    73: k.animation_type_darken,  # darken
+    74: k.animation_type_desaturate,  # desaturate
+    75: k.animation_type_flash_bulb,  # flash_bulb
+    78: k.animation_type_lighten,  # lighten
+    80: k.animation_type_teeter,  # teeter
+    82: k.animation_type_wave,  # wave
+    86: k.animation_type_circle_path,  # path_circle
+    88: k.animation_type_diamond_path,  # path_diamond
+    90: k.animation_type_5_point_star_path,  # path_star
+    92: k.animation_type_square_path,  # path_square
+    94: k.animation_type_heart_path,  # path_heart
+    109: k.animation_type_loop_de_loop_path,  # path_loop
+    120: k.animation_type_left_path,  # path_left
+    122: k.animation_type_arc_down_path,  # path_arc_down
+    123: k.animation_type_zigzag_path,  # path_zigzag
+    125: k.animation_type_sine_wave_path,  # path_sine_wave
+    126: k.animation_type_bounce_left_path,  # path_bounce_left
+    127: k.animation_type_down_path,  # path_down
+    129: k.animation_type_arc_up_path,  # path_arc_up
+    131: k.animation_type_spiral_right_path,  # path_spiral_right
+    132: k.animation_type_wave_path,  # path_wave
+    134: k.animation_type_diagonal_down_right_path,  # path_diagonal_down_right
+    136: k.animation_type_arc_left_path,  # path_arc_left
+    137: k.animation_type_funnel_path,  # path_funnel
+    138: k.animation_type_spring_path,  # path_spring
+    139: k.animation_type_bounce_right_path,  # path_bounce_right
+    141: k.animation_type_diagonal_up_right_path,  # path_diagonal_up_right
+    143: k.animation_type_arc_right_path,  # path_arc_right
+    148: k.animation_type_up_path,  # path_up
+    149: k.animation_type_right_path,  # path_right
 }
 
 
@@ -162,11 +201,18 @@ MsoAutoShapeType: dict = {
     17: k.autoshape_smiley_face,  # msoShapeSmileyFace
     18: k.autoshape_donut,  # msoShapeDonut
     19: k.autoshape_no_symbol,  # msoShapeNoSymbol
+    20: k.autoshape_block_arc,  # block_arc
     21: k.autoshape_heart,  # msoShapeHeart
     22: k.autoshape_lightning_bolt,  # msoShapeLightningBolt
     23: k.autoshape_sun,  # msoShapeSun
     24: k.autoshape_moon,  # msoShapeMoon
     25: k.autoshape_arc,  # msoShapeArc
+    26: k.autoshape_double_bracket,  # double_bracket
+    27: k.autoshape_double_brace,  # double_brace
+    29: k.autoshape_left_bracket,  # left_bracket
+    30: k.autoshape_right_bracket,  # right_bracket
+    31: k.autoshape_left_brace,  # left_brace
+    32: k.autoshape_right_brace,  # right_brace
     33: k.autoshape_right_arrow,  # msoShapeRightArrow
     34: k.autoshape_left_arrow,  # msoShapeLeftArrow
     35: k.autoshape_up_arrow,  # msoShapeUpArrow
@@ -174,6 +220,8 @@ MsoAutoShapeType: dict = {
     37: k.autoshape_left_right_arrow,  # msoShapeLeftRightArrow
     38: k.autoshape_up_down_arrow,  # msoShapeUpDownArrow
     39: k.autoshape_quad_arrow,  # msoShapeQuadArrow
+    49: k.autoshape_striped_right_arrow,  # striped_right_arrow
+    50: k.autoshape_notched_right_arrow,  # notched_right_arrow
     51: k.autoshape_pentagon,  # msoShapePentagon
     52: k.autoshape_chevron,  # msoShapeChevron
     61: k.autoshape_flowchart_process,  # msoShapeFlowchartProcess
@@ -190,6 +238,13 @@ MsoAutoShapeType: dict = {
     94: k.autoshape_sixteen_point_star,  # msoShape16pointStar
     95: k.autoshape_twenty_four_point_star,  # msoShape24pointStar
     96: k.autoshape_thirty_two_point_star,  # msoShape32pointStar
+    105: k.autoshape_rectangular_callout,  # rectangular_callout
+    106: k.autoshape_rounded_rectangular_callout,  # rounded_rectangular_callout
+    107: k.autoshape_oval_callout,  # oval_callout
+    108: k.autoshape_cloud_callout,  # cloud_callout
+    158: k.autoshape_frame,  # frame
+    159: k.autoshape_half_frame,  # half_frame
+    162: k.autoshape_corner,  # l_shape
     179: k.autoshape_cloud,  # msoShapeCloud
 }
 
