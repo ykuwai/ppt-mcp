@@ -25,7 +25,7 @@ wrong shape hears that, with the same message Windows gives, because being told
 a platform cannot do something is no use when the real mistake was the shape
 name. Only once the shape is found and is a chart does the refusal follow.
 
-MACOS_PORT section 6.1 leaves one question open, whether ``AddChart`` exists in
+MACOS_PORT section 6.2 leaves one question open, whether ``AddChart`` exists in
 the Mac VBA type library, and the honest answer there is that it was not found
 by a method whose negatives are unreliable. Nothing here contradicts that. The
 Apple Event dictionary is settled and empty; VBA is a separate route that would

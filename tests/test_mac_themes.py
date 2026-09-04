@@ -367,3 +367,74 @@ class TestSections:
                 mock.patch.object(sections, "goto_slide", lambda *a, **kw: None):
             with pytest.raises(CommandError):
                 sections._manage_section_impl(3, "delete", None, None)
+
+
+@macos_only
+class TestTheDocumentedRefusalsMatchTheCode:
+    """MACOS_PORT lists every tool that refuses. A test keeps the list true.
+
+    The list is what a user reads before deciding whether this is usable on a
+    Mac, so it going stale would be worse than not having it.
+    """
+
+    @staticmethod
+    def _always_refusing():
+        import ast
+        import pathlib
+
+        found = set()
+        for path in sorted(pathlib.Path("src/ppt_mac").glob("*.py")):
+            text = path.read_text()
+            for node in ast.parse(text).body:
+                if not isinstance(node, ast.FunctionDef):
+                    continue
+                if not node.name.endswith("_impl"):
+                    continue
+                returns = [
+                    n for n in ast.walk(node)
+                    if isinstance(n, ast.Return) and n.value is not None
+                ]
+                if not returns:
+                    continue
+                sources = [ast.get_source_segment(text, r) or "" for r in returns]
+                # `_refuse_for_shape` and `_refuse_for_node_tool` build the
+                # same payload for a whole module's worth of tools, so a
+                # refusal is any return that goes through one of the three.
+                if all(
+                    "_refusal" in s or "_refuse_" in s or "unsupported" in s
+                    for s in sources
+                ):
+                    found.add("ppt_" + node.name[1:-5])
+        return found
+
+    def test_the_list_names_exactly_the_tools_that_always_refuse(self):
+        import pathlib
+        import re
+
+        doc = pathlib.Path("MACOS_PORT.md").read_text()
+        section = doc[doc.index("### 6.1 Every tool that refuses"):]
+        section = section[:section.index("A further")]
+        documented = set(re.findall(r"`(ppt_[a-z_]+)`", section))
+
+        assert documented == self._always_refusing()
+
+    def test_the_headline_count_is_the_real_one(self):
+        import ast
+        import pathlib
+        import re
+
+        doc = pathlib.Path("MACOS_PORT.md").read_text()
+        stated = re.search(
+            r"\*\*(\d+) tools\. (\d+) do the job\. (\d+) always refuse\.\*\*", doc
+        )
+        assert stated, "the headline count is not in MACOS_PORT any more"
+        total = sum(
+            1
+            for path in pathlib.Path("src/ppt_mac").glob("*.py")
+            for node in ast.parse(path.read_text()).body
+            if isinstance(node, ast.FunctionDef) and node.name.endswith("_impl")
+        )
+        refusing = len(self._always_refusing())
+        assert int(stated.group(1)) == total
+        assert int(stated.group(3)) == refusing
+        assert int(stated.group(2)) == total - refusing

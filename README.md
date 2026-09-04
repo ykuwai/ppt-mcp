@@ -298,6 +298,9 @@ ESC cancels without committing, so there are no destructive side effects. This i
 
 ## 🍎 macOS support
 
+125 of the 155 tools work. The 30 that do not are listed by name in
+[MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
+
 The same tools, the same arguments, the same answers. What differs is what
 PowerPoint for Mac's scripting dictionary can reach, and where it cannot reach
 something the tool says so rather than doing something unexpected.

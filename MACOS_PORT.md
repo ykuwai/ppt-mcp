@@ -423,7 +423,40 @@ ground in one place: `paragraph format` no longer carries `first line indent`,
 `text range`, and tab stops are still there as a `tab stop` class reached
 through a text style's `ruler`.
 
-### 6.1 The VBA escape hatch, and its ceiling
+### 6.1 Every tool that refuses, by name
+
+The table above is by area. This is the list a user actually wants, and it is
+checked against the code by a test, so it cannot quietly go stale.
+
+**155 tools. 125 do the job. 30 always refuse.**
+
+| Why | Tools |
+|---|---|
+| No `chart` class | `ppt_add_chart`, `ppt_set_chart_data`, `ppt_get_chart_data`, `ppt_change_chart_type`, `ppt_format_chart`, `ppt_format_chart_axis`, `ppt_set_chart_series` |
+| No freeform builder and no `nodes` | `ppt_build_freeform`, `ppt_get_shape_nodes`, `ppt_insert_node`, `ppt_delete_node`, `ppt_set_node_position`, `ppt_set_node_editing_type`, `ppt_set_segment_type` |
+| No `smart art` class | `ppt_add_smartart`, `ppt_modify_smartart`, `ppt_list_smartart_options` |
+| Nothing puts a media file on a slide | `ppt_add_video`, `ppt_add_audio`, `ppt_set_media_settings` |
+| No `select` command, so no shape range | `ppt_group_shapes`, `ppt_select_shapes` |
+| A group will not say what is in it | `ppt_get_group_items` |
+| No tags anywhere in the dictionary | `ppt_set_tag`, `ppt_get_tags` |
+| Deleting one effect answers -50 and clearing its shape costs the slide | `ppt_remove_animation`, `ppt_copy_animation` |
+| No table style, only the text direction | `ppt_set_table_style` |
+| No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
+
+A further **13 tools work and refuse one argument**, with the headline naming
+the argument rather than the tool, so dropping it and calling again works.
+`ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
+`ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
+cannot take a `trigger_shape`, `ppt_set_reflection` cannot take the four
+numeric arguments, and the rest are checks that report a write which did not
+land rather than a capability that is missing.
+
+Everything else that differs comes back in `warnings` beside a success, which
+is where to look for the smaller gaps: a glow with no transparency, a line
+hidden by weight and transparency rather than by a flag, a shadow whose state
+PowerPoint will not read back.
+
+### 6.2 The VBA escape hatch, and its ceiling
 
 PowerPoint for Mac supports VBA, and `run VB macro` is in the dictionary.
 
