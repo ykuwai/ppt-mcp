@@ -1,0 +1,480 @@
+# Bringing ppt-mcp to macOS
+
+Status: design study. Nothing here is implemented yet.
+
+ppt-mcp drives a live PowerPoint through Windows COM. macOS has no COM, but
+PowerPoint for Mac ships an Apple Event object model that is the same object
+model wearing different names. This document records what was measured on a
+real machine, where the two platforms genuinely diverge, and how to carry the
+port without turning the codebase into two codebases.
+
+Measured on macOS 26.6.2 (25G83, arm64), Microsoft PowerPoint 16.97.2,
+Python 3.14.5. Every timing and every pass or fail below came from running the
+thing, not from reading documentation. Where community documentation and the
+live machine disagreed, the machine won and the disagreement is noted.
+
+---
+
+## 1. The short version
+
+**It works, and it is fast.** The full `ppt_add_shape` path (create the shape,
+solid fill, fill colour, line weight, line colour, text, Latin font, East Asian
+font, size, bold, text colour, paragraph alignment, vertical anchor, corner
+radius) is **15 Apple Events in 0.081 seconds**. Reading every property of every
+shape on a slide is one event, 0.011 seconds.
+
+The bridge is [appscript](https://github.com/hhas/appscript) with one argument
+that appears in no documentation.
+
+```python
+from appscript import app, k, mactypes
+PP = app(id='com.microsoft.Powerpoint', terms='sdef')
+```
+
+Without `terms='sdef'` appscript asks PowerPoint for terminology the old AETE
+way, gets nothing, silently falls back to 14 built-in words, and every attribute
+raises `AttributeError: Unknown property, element or command: 'presentations'`.
+That single missing argument is very likely why the received wisdom says Python
+cannot drive Office on a Mac. It can.
+
+appscript 1.4.0 (October 2025) publishes universal2 wheels for CPython 3.10
+through 3.14, so there is no build step and no compiler on the user's machine.
+
+Three things are genuinely absent from the Mac side. Charts, SmartArt and
+freeform path building have no words in the dictionary at all. Section 6 says
+what to do about that.
+
+One risk outranks every missing feature, and it is section 5.
+
+---
+
+## 2. How the two object models line up
+
+PowerPoint's Apple Event dictionary is the VBA object model with spaces in the
+names. Same tree, same verbs, different spelling. This is why a port is
+tractable at all.
+
+| Windows COM | macOS Apple Event | Note |
+|---|---|---|
+| `Application.ActivePresentation` | `active presentation` | raises -1728 when the start gallery is frontmost |
+| `Presentations(i)` | `presentations[i]` | 1 based on both sides |
+| `Presentation.Slides(i)` | `presentation.slides[i]` | |
+| `Slide.Shapes(i)` | `slide.shapes[i]` | |
+| `Shapes.AddShape(Type, L, T, W, H)` | `make new shape at end of slide N with properties {…}` | see 2.1 |
+| `Shape.Left` | `left position` | never `top position` for the other one |
+| `Shape.Top` | `top` | |
+| `Shape.TextFrame.TextRange.Text` | `text frame`'s `text range`'s `content` | |
+| `Font.Name` | `font name`, reached through `font of text range` | going via `text range` directly gives -10006 |
+| `Font.NameFarEast` | `east asian name` | |
+| `Font.Size` | `font size` | |
+| `Font.Color.RGB` | `font color` | value shape differs, see 2.2 |
+| `Shape.Fill` | `fill format` | |
+| `Fill.ForeColor.RGB` | `fill format`'s `fore color` | |
+| `Fill.Solid()` | `solid fill format of …` | a command, not a method |
+| `Fill.TwoColorGradient(s, v)` | `two color gradient … style … variant …` | |
+| `Shape.Fill.UserPicture(path)` | `user picture (fill format of …) picture file …` | verified, gives `fill picture` |
+| `Shape.Line` | `line format` | |
+| `Shape.Adjustments(1)` | `adjustment 1`'s `adjustment_value` | **not** `value` |
+| `Shape.ZOrder(cmd)` | `z order … z order position …` | |
+| `ParagraphFormat.Alignment` | `paragraph format`'s `alignment` | |
+| `TextFrame.VerticalAnchor` | `text frame`'s `vertical anchor` | |
+| `Window.View.GotoSlide(n)` | `document window 1`'s `view`'s `go to slide number n` | the nicety survives, 4 ms |
+| `Presentation.SlideMaster` | `slide master`, whose class is `master` | |
+| `Slide.Shapes.Placeholders(i)` | `place holder i`, two words | |
+| `PageSetup.SlideWidth` | `page setup`'s `slide width` | |
+| `PageSetup.SlideHeight` | **missing** | use `slide master`'s `height` |
+
+### 2.1 The insertion location trap
+
+The natural reading is wrong, and the error does not say so.
+
+```applescript
+-- fails, "cannot create class slide" (-2710)
+make new slide at end of slides of active presentation
+-- fails, parameter error (-50)
+make new shape at end of shapes of slide 1 of pres
+
+-- correct
+make new slide at end of active presentation with properties {layout:slide layout blank}
+make new shape at end of slide 1 of pres with properties {auto shape type:autoshape rectangle, …}
+```
+
+Through appscript the same rule applies. `at=pres.end` works, `at=pres.slides.end`
+raises -1708. Write it down once in the driver and never think about it again.
+
+### 2.2 Colours
+
+Windows COM packs a colour into one BGR integer, `R + G*256 + B*65536`. The Mac
+side takes and returns a three element list of 0 to 255 integers. Passing 65535
+gets clamped to 255, so the scale really is 8 bit.
+
+`utils/color.py` already funnels everything through `hex_to_int` and
+`int_to_hex`, so the whole conversion is two new functions next to them and one
+backend level choice of which pair to use. The MCP surface keeps taking
+`#RRGGBB` and nothing user facing changes.
+
+### 2.3 Enumerations
+
+`constants.py` is 866 lines of `mso*`, `pp*` and `xl*` integers. The Mac side
+does not take integers, it takes named enumerators, and the names are its own.
+
+| Windows constant | macOS enumerator |
+|---|---|
+| `msoShapeRectangle` = 1 | `autoshape rectangle` |
+| `msoShapeRoundedRectangle` = 5 | `autoshape rounded rectangle` |
+| `ppLayoutBlank` = 12 | `slide layout blank` |
+| `msoBringToFront` = 0 | `bring shape to front` |
+| `ppAlignCenter` = 2 | `paragraph align center` |
+| `msoAnchorMiddle` = 3 | `anchor middle` |
+| `msoThemeColorAccent1` = 5 | `first accent theme color` |
+| `ppSaveAsPNG` = 18 | `save as PNG` |
+
+Note the prefixes. It is `autoshape rounded rectangle`, not `rounded rectangle`.
+184 auto shape types are available, which is more than `SHAPE_NAME_MAP` exposes
+today, so nothing is lost here. The work is mechanical but it is the single
+largest translation in the project, and it has to be right because these names
+are the public MCP vocabulary's only anchor.
+
+---
+
+## 3. Where the bridge itself misbehaves
+
+These are appscript and PowerPoint quirks rather than design problems, but each
+one produces a wrong answer rather than an error, so the driver absorbs all of
+them in one place.
+
+| Symptom | Cause | What the driver does |
+|---|---|---|
+| `ref.count()` raises -1708 | PowerPoint's dictionary declares no Standard Suite commands at all, only the `window` class | `len(ref.get())` |
+| `ref.get()` raises -1728 on an empty collection | PowerPoint errors instead of returning an empty list | catch and return 0 |
+| `PP.open(...)` returns `None` and opens nothing | same missing Standard Suite | shell out to `osascript` with `open POSIX file "…"`, which does work, verified |
+| `ref.duplicate()` raises `unpack requires a buffer of 4 bytes` | appscript falls back to a code PowerPoint does not answer | same osascript fallback |
+| `shape.rotation` raises `AttributeError` | the dictionary defines both an enumerator and a property named `rotation`, and appscript resolves the collision toward the enumerator | reach the property by raw code. Verified working, set 33 and read 33.0 back |
+| `line_format.dash_style` raises `AttributeError` | same collision class, the `line dash style …` enumerators take the name | raw code `b'LFds'` |
+| PowerPoint stops answering | a modal sheet, or an operation that wedged it | every call carries `timeout=`, which appscript supports on every command |
+
+The raw code route is small enough to state in full.
+
+```python
+from appscript.reference import Reference
+def raw(ref, code):
+    return Reference(ref.AS_appdata, ref.AS_aemreference.property(code))
+
+raw(shape, b'ShRt').set(33)                 # rotation
+raw(shape.line_format, b'LFds').get()       # dash style
+```
+
+The last row deserves emphasis. PowerPoint wedged repeatedly during this study,
+several times past 12 seconds and three times fatally with -609. The Windows
+wrapper already has the right shape for this in `com_wrapper.py:107-135` (retry
+on busy, optional ESC to dismiss a dialog); the Mac side needs the same policy
+with a different trigger.
+
+`active presentation` raising -1728 whenever the start gallery is frontmost is
+worth calling out separately, because it is the Mac echo of a problem the
+project already solved. `_target_pres_full_name` is exactly the right design
+here too, and `presentations[1]` is the right fallback.
+
+---
+
+## 4. What is confirmed working
+
+Every line below was executed. Timings are wall clock including the Apple Event
+round trip.
+
+| Capability | Result |
+|---|---|
+| create a presentation | 0.705 s |
+| create a slide with an explicit layout | 0.123 s |
+| **`ppt_add_shape` equivalent, 15 chained operations** | **0.081 s** |
+| `ppt_add_textbox` equivalent, paragraphs split on CR | 0.006 s |
+| insert a picture from a path, verified as `shape type picture` at the requested size | 0.021 s |
+| picture as a shape fill, verified as `fill picture` | 0.17 s |
+| navigate the window to the slide being edited | 0.004 s |
+| read every property of every shape on a slide, one event | 0.011 s |
+| read names and geometry of every shape in bulk | 0.007 s |
+| placeholders, their type and their text | works |
+| custom layouts of the slide master, 11 found | works |
+| create a table with `make new shape table`, addressed with `get cell from` | works |
+| slide dimensions | width from `page setup`, height from `slide master` |
+| sections count through `section properties` | works |
+| **export the deck to PDF, from the container** | **0.19 s, file verified** |
+| **export one shape to PNG, into the container** | **0.15 s, 28 KB verified** |
+| a chart already in the deck, seen as a shape | name, type and geometry all readable |
+
+Per operation cost on the live object model settles around **0.5 ms for a simple
+read** and **2 to 3 ms for a four level chained write**.
+
+The comparison that matters for the architecture. Twenty shapes created through
+twenty separate `osascript` invocations cost 178 ms each. The same twenty inside
+one batched `tell` block cost 9 ms each. Speaking Apple Events from inside the
+Python process, as appscript does, removes that fixed cost entirely. The driver
+must not shell out per operation.
+
+---
+
+## 5. The risk that outranks every missing feature
+
+**PowerPoint reports success and does nothing.** For an MCP server this is worse
+than an unsupported tool, because the model believes the deck now contains
+something it does not, and keeps building on top of the belief.
+
+Four structurally different cases, all observed.
+
+| Operation | Reported | Actually |
+|---|---|---|
+| `save <pres> in <path> as <fmt>` on a deck that has **no file path yet** | no error, or a 40 second hang | nothing written. Seen to succeed once at 22.8 s and to hang past 40 s another time |
+| `save <pres> in <dir> as save as PNG` on a deck **with** a path, into the container | returned `ok` in 0.15 s | **no folder, no files** |
+| `save as picture` to a path outside what the sandbox allows | no error | nothing written |
+| `make new shape` given a `file name` | no error | an empty 25 by 25 autoshape, and a nonexistent path also reports success |
+
+So the rule for the port is that **no mutation is trusted because it did not
+raise**. Verify.
+
+- After any save or export, stat the file and check the size.
+- After setting a picture fill, read back `fill format type` and require
+  `fill picture`.
+- After a save that is meant to change the document's identity, read back
+  `full name`.
+- After creating a shape, count shapes before and after, and reject a result
+  that comes back as `shape type auto` at 25 by 25.
+
+Every one of these is cheap, and every one of them is detectable.
+
+### 5.1 The sandbox, and where exports have to go
+
+PowerPoint for Mac is sandboxed. It carries `com.apple.security.app-sandbox` and
+`files.user-selected.read-write`, and it has no entitlement for Desktop,
+Documents or Downloads.
+
+The consequences were reproduced three separate times. Exporting to a directory
+PowerPoint has not written to before blocks for tens of seconds and then kills
+the application with **-609**. Exporting to a directory it already has a grant
+for completes in under 0.2 seconds.
+
+The reliable answer, and the one Microsoft's own guidance points at, is to stage
+through the application's container.
+
+```
+~/Library/Containers/com.microsoft.Powerpoint/Data/Documents/
+```
+
+Verified there, with the deck itself opened from that folder. PDF export works
+(14 KB in 0.19 s) and per shape PNG export works (28 KB in 0.15 s). Whole deck
+PNG export is the silent no-op in the table above and must not be relied on, so
+slide previews should come from the PDF or from per shape PNG rather than from
+`save as save as PNG`.
+
+An unsandboxed Python process can read and write that folder freely, so the
+pattern is export into the container, then move the file out with Python.
+
+One more path trap. An HFS colon path is treated as a **literal filename**,
+producing a file called `Macintosh HD:Users:…png` inside the container root.
+Always use POSIX paths.
+
+### 5.2 Automation consent
+
+Two independent gates exist and neither substitutes for the other. Automation
+consent (TCC) governs the calling process talking to PowerPoint. The App Sandbox
+governs PowerPoint talking to the filesystem. Full Disk Access on the caller
+does nothing for Apple Events.
+
+Consent is attributed to the **responsible parent process**, not to `osascript`
+or to Python. In practice that is the terminal or editor that launched the MCP
+server, so the same server behaves differently under Terminal, iTerm, VS Code
+and Claude Desktop, and each needs its own grant. Refusal gives **-1743**, and
+the prompt cannot be answered headless or over ssh. The server has to recognise
+-1743 and say something useful rather than reporting a generic failure.
+
+---
+
+## 6. What is genuinely missing
+
+This is the honest part. These are not workarounds waiting to be found.
+
+| Area | Windows | macOS | Lines affected |
+|---|---|---|---|
+| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. An existing chart is visible as a plain shape, so it can be moved, resized and read, but not created or given data | `charts.py` 1,104 |
+| SmartArt | `SmartArt` object model | **no class** | `smartart.py` 796 |
+| Freeform paths | `Shapes.BuildFreeform` | **no builder** | `freeform.py` 751 |
+| Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all | `export.py` 825 |
+| Line visibility | `Shape.Line.Visible = False` | `line format` has **no `visible` property**. Weight 0 and transparency 1.0 both apply cleanly and are the practical stand-ins | every tool taking `line_visible` |
+| Theme colours | `Theme.ThemeColorScheme` | `theme color scheme` reads back as `missing value` on the slide master. The accent colour feature the README leads with has no direct route | `themes.py` 695 |
+| Sections | full API | the commands are declared but `get count of sections` returns -1708 through AppleScript. It did answer through appscript, so this needs one more pass | `sections.py` 242 |
+| Screen redraw suppression | `LockWindowUpdate` on `PPTFrameClass` | no equivalent. Less needed, because a whole tool call is 80 ms rather than a visible sequence, but the flicker fix from #164 does not transfer | `utils/redraw.py` 91 |
+| Shape naming | `Rectangle 1` | `Shape_0` | anything addressing shapes by name across platforms |
+
+The dictionary has gained no class and no command in ten years, and it lost
+ground in one place: `paragraph format` no longer carries `first line indent`,
+`left indent`, `right indent`, `indent level` or tab stops.
+
+### 6.1 The VBA escape hatch, and its ceiling
+
+PowerPoint for Mac supports VBA, and `run VB macro` is in the dictionary.
+
+```applescript
+run VB macro macro name "MyMacro" list of parameters {"a", "b"}
+```
+
+Reading the type libraries inside `Microsoft PowerPoint.app` shows
+`BuildFreeform`, `AddNodes`, `Vertices`, `Export`, `AddPicture`, `AddTextbox`,
+`AddTable`, `AddSmartArt` and `AddSection` present, and `AddChart` and
+`AddChart2` **absent**. That absence has a clean control, because `Excel.tlb`
+shipped in the same bundle and read the same way does yield `AddChart2`.
+
+Treat that absence carefully. Symbols are stored with type signature suffixes
+(`AddPictureWW`, `AddNodesP-`), so **presence is reliable evidence and absence is
+not**. A first pass with exact string matching wrongly reported `AddTable` and
+`BuildFreeform` missing for exactly that reason, and `AddShape` does not appear
+either. So the honest statement is that `AddChart` was **not found by a method
+whose negatives are unreliable**, which makes charts through VBA unlikely rather
+than settled.
+
+What is solid is the other direction. SmartArt, freeform paths and slide image
+export are all present in the library and become recoverable if `run VB macro`
+can be made to execute at all.
+
+Whether it executes is unproven. With no macro present it returns -18, which is
+equally consistent with "macro not found" and "handler is a stub". One line
+closes the question: put `Sub Ping()` in a `.pptm`, open it, and call it.
+
+Two constraints to weigh before building on it. Macro security consent is a real
+user facing cost, and an MCP server that asks people to lower it is a hard sell.
+And `run VB macro` takes only a list of text and returns only an integer, so
+anything richer has to come back out of band.
+
+---
+
+## 7. Design
+
+The constraint that matters most is the author's. Windows and macOS should feel
+the same, and the code must not fork into two projects.
+
+### 7.1 The seam is not where it looks
+
+Every one of the 27 modules under `src/ppt_com/` imports `ppt` from
+`utils/com_wrapper.py`, which looks like one clean seam. It is not. `ppt.execute`
+is a **thread and lifecycle seam only**. It hands a closure a raw COM object,
+and each of the roughly 150 `_impl` functions then walks the live object graph
+itself. There are 932 distinct member access chains and 1,934 references to
+them. One lifecycle seam, zero object model seam.
+
+So the real choice is where to cut, and the answer is at the object model.
+
+```
+src/
+  backend/
+    __init__.py      picks by sys.platform, exposes one `ppt` object
+    base.py          the accessor protocol
+    win_com.py       today's com_wrapper, behaviour unchanged
+    mac_ae.py        appscript, terms='sdef'
+    names.py         COM member <-> Apple Event term
+    enums.py         numeric constant <-> named enumerator
+  ppt_com/           unchanged name for now, no longer Windows only
+```
+
+The Windows implementation is a pass through to pywin32, so it costs almost
+nothing and changes almost nothing. Cutting here rather than at the tool level
+is what keeps everything above the object model single sourced, and there is a
+lot of it: the pseudo Markdown exporter (244 lines), the typography checker
+(180 lines), the icon search and SVG insertion, the batch dispatcher, every
+layout helper, all of `color.py` and `units.py`, and all the pydantic input
+models. Cutting at the tool level would duplicate every one of them.
+
+### 7.2 Keep the niceties
+
+The user visible care in this codebase is the point of it, and most of it
+survives.
+
+- **Show the slide you are editing.** `goto_slide` maps directly and costs 4 ms.
+  It stays in `utils/navigation.py` with a backend call behind it.
+- **Freeze the redraw while building a shape.** No Mac equivalent. `FrozenRedraw`
+  already degrades to a no-op when win32 is missing, so the Mac path needs no new
+  code, only an honest note that the flicker fix is Windows only.
+- **Do not launch PowerPoint on a read.** `allow_launch=False` is platform
+  neutral and stays as it is.
+- **Lock to one presentation.** `_target_pres_full_name` matters more on the Mac,
+  because `active presentation` fails in a state users hit every day.
+
+### 7.3 Degrade honestly, do not pretend
+
+For the missing areas the wrong answer is a silent no-op and the second wrong
+answer is hiding the tools, because then the model cannot see the capability
+exists and burns turns looking for it. The tool stays listed and returns a
+structured refusal naming the platform, the reason and a route to take instead.
+
+```json
+{"error": "ppt_add_chart is not available on macOS",
+ "reason": "PowerPoint for Mac exposes no chart object, to Apple Events or to VBA",
+ "alternatives": ["ppt_add_shape", "ppt_add_table"]}
+```
+
+The server `instructions` string should carry a short platform note too, since
+that is what the model reads before planning a deck.
+
+### 7.4 Packaging
+
+`pyproject.toml:43` declares `pywin32>=306` unconditionally, which is a hard
+install failure on macOS before a single line of the port matters.
+
+```toml
+dependencies = [
+  "mcp[cli]>=1.0.0,<3.0.0",
+  "pydantic>=2.0.0",
+  "pywin32>=306; sys_platform == 'win32'",
+  "appscript>=1.4.0; sys_platform == 'darwin'",
+]
+```
+
+The classifiers need macOS added, and the README badge stops saying Windows.
+
+---
+
+## 8. Sequence
+
+**Phase 0, make it installable and testable on a Mac.** Platform markers in
+`pyproject.toml`. Make `com_wrapper.py` import pywin32 lazily, the way
+`redraw.py` already imports win32gui lazily, and guard the `winreg` imports in
+`onedrive.py:11` and `presentation.py:10` and the `ctypes.windll` use at module
+scope in `export.py`. This alone takes the suite from 86 runnable tests on macOS
+to 539 of 555, which is a real regression net for the whole schema layer before
+any Apple Event code is written.
+
+**Phase 1, the driver.** `backend/mac_ae.py`, `names.py`, `enums.py`, the quirk
+absorption from section 3, the verify-every-mutation policy from section 5, and
+a timeout policy mirroring the existing busy retry loop.
+
+**Phase 2, the core tools.** app, presentation, slides, shapes, text,
+formatting, placeholders, layout, tables, export. This is where most real use
+lives.
+
+**Phase 3, the rest, and the honest refusals.**
+
+**Spike, in parallel and not on the critical path.** Whether a shipped `.ppam`
+plus `run VB macro` can reach the VBA object model. If it can, SmartArt,
+freeform and slide image export come back. Charts do not, either way.
+
+---
+
+## 9. What is still unknown
+
+Written down so nobody re-derives it.
+
+1. Whether `run VB macro` actually executes. Section 6.1 has the one line test.
+   The same spike should call `AddChart` once, which settles the chart question
+   properly rather than resting it on a type library negative.
+2. Table cell addressing. `make new shape table` creates tables and
+   `get cell from … row … column …` reaches cells, but element indexing under
+   `shape table` did not line up on the first attempt and needs a proper pass.
+3. Theme colours. `theme color scheme` reads back as `missing value`; whether
+   `color scheme` plus the `get color from` command is a usable substitute is
+   untested.
+4. Sections. The command answered through appscript and failed with -1708
+   through AppleScript, which should not both be true and needs one clean run.
+5. Align, distribute, group and ungroup all take a `shape range`, and the only
+   route to one appears to be through the window's selection. That changes the
+   shape of those four tools.
+6. Whether passing a file reference rather than a path string hands PowerPoint a
+   sandbox extension. If it does, arbitrary path exports work and only the text
+   typed parameters need staging, which is a much cheaper port than section 5.1
+   assumes.
