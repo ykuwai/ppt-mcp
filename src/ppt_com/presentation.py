@@ -991,3 +991,17 @@ def register_tools(mcp):
         ppt_create_presentation's template_path to create from a template.
         """
         return list_templates(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import presentation as _mac_presentation
+
+    use_mac_impls(globals(), _mac_presentation)

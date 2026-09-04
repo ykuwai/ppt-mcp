@@ -823,3 +823,17 @@ def register_tools(mcp):
         Optionally specify primary_shape to control which shape's formatting is kept.
         """
         return merge_shapes(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import layout as _mac_layout
+
+    use_mac_impls(globals(), _mac_layout)

@@ -8,19 +8,17 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from backend import ppt
 
-# Import impl functions from existing modules
-from ppt_com.formatting import (
-    _set_fill_impl, _set_line_impl, _set_shadow_impl,
-    SetFillInput, SetLineInput, SetShadowInput,
-)
-from ppt_com.effects import (
-    _set_glow_impl, _set_reflection_impl, _set_soft_edge_impl,
-    SetGlowInput, SetReflectionInput, SetSoftEdgeInput,
-)
-from ppt_com.text import (
-    _format_text_impl,
-    FormatTextInput,
-)
+# The input models are imported by name because they are platform neutral. The
+# impl functions are reached through their module instead, and looked up at call
+# time, because on macOS they are swapped for their Apple Event counterparts
+# after this module has already been imported. Binding the names here would
+# quietly keep the COM versions.
+from ppt_com import effects as _effects
+from ppt_com import formatting as _formatting
+from ppt_com import text as _text
+from ppt_com.effects import SetGlowInput, SetReflectionInput, SetSoftEdgeInput
+from ppt_com.formatting import SetFillInput, SetLineInput, SetShadowInput
+from ppt_com.text import FormatTextInput
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +105,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
             shape_name_or_index=shape_name_or_index,
             **params,
         )
-        return _set_fill_impl(
+        return _formatting._set_fill_impl(
             slide_index, shape_name_or_index,
             m.fill_type, m.color, m.gradient_color1, m.gradient_color2,
             m.gradient_style, m.transparency,
@@ -119,7 +117,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
             shape_name_or_index=shape_name_or_index,
             **params,
         )
-        return _set_line_impl(
+        return _formatting._set_line_impl(
             slide_index, shape_name_or_index,
             m.color, m.weight, m.dash_style, m.visible, m.transparency,
         )
@@ -130,7 +128,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
             shape_name_or_index=shape_name_or_index,
             **params,
         )
-        return _set_shadow_impl(
+        return _formatting._set_shadow_impl(
             slide_index, shape_name_or_index,
             m.visible, m.blur, m.offset_x, m.offset_y, m.color,
             m.transparency,
@@ -142,7 +140,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
             shape_name_or_index=shape_name_or_index,
             **params,
         )
-        return _set_glow_impl(
+        return _effects._set_glow_impl(
             slide_index, shape_name_or_index,
             m.radius, m.color, m.transparency,
         )
@@ -153,7 +151,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
             shape_name_or_index=shape_name_or_index,
             **params,
         )
-        return _set_reflection_impl(
+        return _effects._set_reflection_impl(
             slide_index, shape_name_or_index,
             m.reflection_type, m.blur, m.offset, m.size, m.transparency,
         )
@@ -164,7 +162,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
             shape_name_or_index=shape_name_or_index,
             **params,
         )
-        return _set_soft_edge_impl(
+        return _effects._set_soft_edge_impl(
             slide_index, shape_name_or_index,
             m.radius,
         )
@@ -175,7 +173,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
             shape_name_or_index=shape_name_or_index,
             **params,
         )
-        return _format_text_impl(
+        return _text._format_text_impl(
             slide_index, shape_name_or_index,
             m.font_name, m.font_name_fareast,
             m.font_size, m.bold, m.italic, m.underline,

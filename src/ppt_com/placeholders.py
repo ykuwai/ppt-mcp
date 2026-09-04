@@ -570,3 +570,17 @@ def register_tools(mcp):
         for the specified design.
         """
         return get_slide_master_info(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import placeholders as _mac_placeholders
+
+    use_mac_impls(globals(), _mac_placeholders)

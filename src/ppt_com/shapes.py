@@ -1418,3 +1418,17 @@ def register_tools(mcp):
         Identify the shape by name (shape_name) or 1-based index (shape_index).
         """
         return set_shape_zorder(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import shapes as _mac_shapes
+
+    use_mac_impls(globals(), _mac_shapes)

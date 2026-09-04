@@ -73,6 +73,13 @@ EXPORT_STAGING_DIR = os.path.expanduser(
 )
 
 
+# Reading a slide's animation timeline takes PowerPoint down. Touching
+# `timeline.main_sequence.effects` kills the application with -609 even on a
+# slide that has no animations, reproducibly, and the open deck goes with it.
+# Nothing in the port reads it, and nothing should start; see MACOS_PORT.md.
+CRASHES_POWERPOINT = ("timeline.main_sequence.effects",)
+
+
 class AppleEventError(RuntimeError):
     """An Apple Event failure carrying its OSError number."""
 
@@ -126,6 +133,33 @@ def count(ref: Reference) -> int:
     Standard Suite commands at all, so this counts what ``get`` returns.
     """
     return len(elements(ref))
+
+
+def positional(collection) -> list:
+    """Return one positional reference per element of a collection.
+
+    Asking PowerPoint for a collection hands back references addressed by
+    subclass, so a slide holding a text box and an autoshape answers with
+    ``text_boxes[1]`` and ``shapes[2]``, and the second does not resolve.
+    Counting and then indexing avoids it at the cost of one Apple Event.
+    """
+    total = count(collection)
+    return [collection[i] for i in range(1, total + 1)]
+
+
+def shapes_of(container) -> list:
+    """Return one positional reference per shape, in z order.
+
+    Not ``elements(container.shapes)``. Asking PowerPoint for the shapes of a
+    slide hands back references addressed by subclass, so a text box comes back
+    as ``text_boxes[1]`` while the autoshape beside it comes back as
+    ``shapes[2]``, and the second of those does not resolve. Every use of it
+    fails with -1728 the moment a slide holds more than one kind of shape.
+
+    Counting them and addressing each one as ``shapes[i]`` avoids the whole
+    problem, and costs one extra Apple Event.
+    """
+    return positional(container.shapes)
 
 
 def raw(ref: Reference, code: bytes) -> Reference:

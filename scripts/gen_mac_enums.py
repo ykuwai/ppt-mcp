@@ -84,6 +84,16 @@ OVERRIDES = {
         "msoThemeColorAccent5": "fifth accent theme color",
         "msoThemeColorAccent6": "sixth accent theme color",
     },
+    # ppAutoSizeTextToFitShape has no entry here on purpose. constants.py files
+    # it under PpAutoSize, but the value belongs to MsoAutoSize (the comment
+    # beside it says so), and macOS puts `text to fit shape` in MsoAutoSize
+    # too. Forcing it into the wrong enumeration is what the override check
+    # caught, so the caller reads MsoAutoSize for a text frame's auto size.
+    "MsoLineDashStyle": {
+        # Windows msoLineDot is a square dot; macOS spells that out, so the
+        # name matcher cannot see that they are the same thing.
+        "msoLineDot": "line dash style square dot",
+    },
     "MsoAutoShapeType": {
         "msoShape4pointStar": "autoshape four point star",
         "msoShape5pointStar": "autoshape five point star",
@@ -100,7 +110,7 @@ OVERRIDES = {
 FILLER = {"shape", "type", "style", "cmd", "index", "mso", "pp", "xl", "e"}
 
 
-def variants(name, enum_words, group_drop):
+def variants(name, enum_words, group_drop, strict_only=False):
     """Every spelling of a member worth trying when matching across platforms.
 
     The two platforms prefix and pad names differently and neither is
@@ -110,6 +120,8 @@ def variants(name, enum_words, group_drop):
     """
     words = split_words(name)
     forms = {tuple(words), tuple(words[group_drop:])}
+    if strict_only:
+        return {normalise(list(f)) for f in forms if f}
     for base in list(forms):
         forms.add(tuple(w for w in base if w not in enum_words))
         forms.add(tuple(w for w in base if w not in FILLER))
@@ -226,10 +238,17 @@ def main():
         win_drop = common_prefix([split_words(n) for n in win_members])
         mac_drop = common_prefix([split_words(n) for n in mac_members])
 
-        mac_index = {}
+        # Two separate indexes, not one merged one. A strict lookup has to be
+        # answered only by strict readings; otherwise `line dash style dash
+        # dot` reduced loosely to "dot" answers msoLineDot's exact "dot" and
+        # the strict pass stops being strict.
+        mac_strict, mac_loose = {}, {}
         for name in mac_members:
-            for form in variants(name, enum_words, mac_drop):
-                mac_index.setdefault(form, name)
+            for form in variants(name, enum_words, mac_drop, True):
+                mac_strict.setdefault(form, name)
+        for name in mac_members:
+            for form in variants(name, enum_words, mac_drop, False):
+                mac_loose.setdefault(form, name)
 
         overrides = OVERRIDES.get(win_name, {})
         for win_const, mac_const in overrides.items():
@@ -242,26 +261,39 @@ def main():
 
         entries = []
         missing = []
+        # Strict first, loose second. Dropping the enumeration's own words is
+        # what lets msoLineDash reach `line dash style dash`, but those same
+        # words are meaningful inside some members, so `line dash style dash
+        # dot` also reduces to "dot" and msoLineDot would claim it before
+        # msoLineDashDot ever got to ask. Letting every constant have its exact
+        # reading before anyone falls back to a loose one keeps that from
+        # happening, and leaves msoLineDot correctly unmatched, because macOS
+        # has square dot and round dot and no plain dot.
+        matched = {}
         taken = set()
-        for name, value in sorted(win_members.items(), key=lambda kv: kv[1]):
-            match = overrides.get(name)
-            if match is not None:
+        for strict_only in (True, False):
+            for name, value in sorted(win_members.items(), key=lambda kv: kv[1]):
+                if name in matched:
+                    continue
+                match = overrides.get(name)
+                if match is None:
+                    index = mac_strict if strict_only else mac_loose
+                    for form in sorted(
+                        variants(name, enum_words, win_drop, strict_only)
+                    ):
+                        candidate = index.get(form)
+                        # One macOS enumerator cannot stand for two Windows
+                        # constants.
+                        if candidate is not None and candidate not in taken:
+                            match = candidate
+                            break
+                if match is None:
+                    continue
                 taken.add(match)
-                entries.append((value, name, keyword_for(match)))
-                continue
-            for form in sorted(variants(name, enum_words, win_drop)):
-                candidate = mac_index.get(form)
-                # One macOS enumerator cannot stand for two Windows constants.
-                # Without this, a loose form lets a later constant steal an
-                # earlier one's match and both end up wrong.
-                if candidate is not None and candidate not in taken:
-                    match = candidate
-                    break
-            if match is None:
-                missing.append(name)
-                continue
-            taken.add(match)
-            entries.append((value, name, keyword_for(match)))
+                matched[name] = (value, name, keyword_for(match))
+
+        entries = sorted(matched.values())
+        missing = [n for n in win_members if n not in matched]
 
         if entries:
             total_pairs += len(entries)

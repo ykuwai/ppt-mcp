@@ -8,7 +8,7 @@ The pairing is done by name rather than by number, because the two platforms
 only sometimes agree on the number. ``ppSaveAsPNG`` is 18 on Windows while
 ``save as PNG`` is 24 on macOS, and ``ppLayoutBlank`` is 12 on both.
 
-314 constants across 39 enumerations, read from PowerPoint 16.97.2.
+315 constants across 39 enumerations, read from PowerPoint 16.97.2.
 
 Windows constants with no macOS counterpart, left out on purpose so that asking
 for one raises rather than quietly resolving to something close:
@@ -17,7 +17,6 @@ for one raises rather than quietly resolving to something close:
     MsoAnimTriggerType: msoAnimTriggerNone
     MsoAnimateByLevel: msoAnimateLevelNone
     MsoArrowheadStyle: msoArrowheadNone
-    MsoLineDashStyle: msoLineDashDot
     MsoShapeType: msoEmbeddedOLEObject, msoOLEControlObject, msoTextEffect, msoSmartArt
     MsoTextOrientation: msoTextOrientationVerticalFarEast
     MsoTriState: msoTriStateMixed
@@ -28,7 +27,7 @@ for one raises rather than quietly resolving to something close:
     PpNumberedBulletStyle: ppBulletArabicDBPeriod
     PpPlaceholderType: ppPlaceholderMixed
     PpSaveAsFileType: ppSaveAsOpenXMLAddin, ppSaveAsXPS, ppSaveAsOpenDocumentPresentation, ppSaveAsWMV, ppSaveAsMP4
-    PpSlideLayout: ppLayoutMixed, ppLayoutTextAndMediaClip
+    PpSlideLayout: ppLayoutTextAndMediaClip, ppLayoutMixed
     PpSlideShowRangeType: ppShowSlideRange
     PpTransitionSpeed: ppTransitionSpeedFast, ppTransitionSpeedMedium, ppTransitionSpeedSlow
     PpViewType: ppViewSlideMaster, ppViewNotesPage, ppViewThumbnails, ppViewMasterThumbnails
@@ -202,8 +201,9 @@ MsoGradientStyle: dict = {
 MsoLineDashStyle: dict = {
     1: k.line_dash_style_solid,  # msoLineSolid
     2: k.line_dash_style_round_dot,  # msoLineRoundDot
-    3: k.line_dash_style_dash_dot,  # msoLineDot
+    3: k.line_dash_style_square_dot,  # msoLineDot
     4: k.line_dash_style_dash,  # msoLineDash
+    5: k.line_dash_style_dash_dot,  # msoLineDashDot
     6: k.line_dash_style_dash_dot_dot,  # msoLineDashDotDot
     7: k.line_dash_style_long_dash,  # msoLineLongDash
     8: k.line_dash_style_long_dash_dot,  # msoLineLongDashDot

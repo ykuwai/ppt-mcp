@@ -1516,3 +1516,17 @@ def register_tools(mcp):
         Useful for jumping to a slide you want to view or edit.
         """
         return goto_slide(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import slides as _mac_slides
+
+    use_mac_impls(globals(), _mac_slides)

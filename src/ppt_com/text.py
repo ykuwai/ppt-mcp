@@ -999,6 +999,16 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
     return "\n".join(parts)
 
 
+def _slide_count_impl() -> int:
+    """How many slides the target presentation has.
+
+    A named impl rather than an inline lambda so that macOS can swap it like
+    everything else. A lambda in the public function would keep reaching for
+    COM's `Slides.Count` whatever platform it ran on.
+    """
+    return ppt._get_pres_impl().Slides.Count
+
+
 def _get_all_text_impl(slide_indices) -> str:
     """Extract all text from the presentation as pseudo-Markdown.
 
@@ -1828,7 +1838,7 @@ def get_all_text(params: GetAllTextInput) -> str:
             indices = params.slide_indices
         else:
             # Get total slide count first
-            total = ppt.execute(lambda: ppt._get_pres_impl().Slides.Count)
+            total = ppt.execute(_slide_count_impl)
             indices = list(range(1, total + 1))
 
         # Process in batches to stay under the 30s COM timeout
@@ -2226,7 +2236,7 @@ def check_typography(params: CheckTypographyInput) -> str:
         if params.slide_index is not None:
             indices = [params.slide_index]
         else:
-            total = ppt.execute(lambda: ppt._get_pres_impl().Slides.Count)
+            total = ppt.execute(_slide_count_impl)
             indices = list(range(1, total + 1))
 
         result = ppt.execute(
@@ -2501,3 +2511,17 @@ def register_tools(mcp):
         fix_status='no_break_point' or 'text_not_found'.
         """
         return check_typography(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import text as _mac_text
+
+    use_mac_impls(globals(), _mac_text)

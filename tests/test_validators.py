@@ -3514,6 +3514,14 @@ class TestFindReplaceTextShapeNameEmpty:
             FindReplaceTextInput(find_text="x", shape_name="")
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason=(
+        "drives a COM mock through TextRange.Replace, which only exists on "
+        "Windows. macOS has no Find and no Replace in its dictionary, so "
+        "_find_replace_text_impl walks the text in Python there instead"
+    ),
+)
 class TestFindReplaceReplaceLoopCursor:
     """Regression: Replace loop must advance the After cursor (issue #151 review).
 

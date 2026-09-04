@@ -1,0 +1,745 @@
+"""Presentation-level operations, on Apple Events.
+
+Mirrors ``ppt_com/presentation.py``. Same function names, same signatures, same
+returned shapes; what differs is the walk through PowerPoint's object model.
+
+Three things about PowerPoint for Mac shape everything below.
+
+**A deck with no file path cannot be saved.** ``save`` on an unsaved deck
+writes nothing and can hang past forty seconds without reporting anything. So
+the path is checked before the save, and everything that would produce a
+pathless deck produces a real file instead.
+
+**PowerPoint is sandboxed.** It can write where it has a grant and nowhere
+else, and a write to a directory it has never touched blocks for tens of
+seconds and then kills the application. There is no way to ask it what it is
+allowed to write, so a save is made and then the file is looked for on disk;
+when it is not there the error names the sandbox and the one directory that
+always works.
+
+**Page setup has a slide width but no slide height.** Height is read from the
+slide master and cannot be set at all.
+"""
+
+import glob as glob_mod
+import logging
+import os
+import shutil
+from typing import Optional
+
+from appscript import k
+
+from backend.mac_ae import EXPORT_STAGING_DIR, count, elements, is_missing, ppt
+from backend.mac_enums import PpSaveAsFileType, to_keyword
+from ppt_com.constants import (
+    ppSaveAsDefault,
+    ppSaveAsJPG,
+    ppSaveAsOpenXMLPresentation,
+    ppSaveAsPDF,
+    ppSaveAsPNG,
+)
+from utils.color import rgb_list_to_hex
+from utils.onedrive import resolve_local_path
+from utils.units import (
+    SLIDE_HEIGHT_4_3,
+    SLIDE_HEIGHT_16_9,
+    SLIDE_WIDTH_4_3,
+    SLIDE_WIDTH_16_9,
+)
+
+logger = logging.getLogger(__name__)
+
+# The same tables ppt_com/presentation.py builds, rebuilt from the same
+# sources. They are not imported from there because that module imports this
+# one from its own last line, so it is only half built when this one loads.
+SAVE_FORMAT_MAP = {
+    "pptx": ppSaveAsOpenXMLPresentation,
+    "pdf": ppSaveAsPDF,
+    "png": ppSaveAsPNG,
+    "jpg": ppSaveAsJPG,
+    "default": ppSaveAsDefault,
+}
+
+SLIDE_SIZE_PRESETS = {
+    "16:9": (SLIDE_WIDTH_16_9, SLIDE_HEIGHT_16_9),
+    "4:3": (SLIDE_WIDTH_4_3, SLIDE_HEIGHT_4_3),
+}
+
+# Whole-deck image export reports success in a fifth of a second and writes no
+# folder and no files, measured three separate times. It is refused rather
+# than attempted, because a caller that believes the images exist keeps
+# building on top of that belief.
+_IMAGE_FORMATS = {"png", "jpg", "jpeg"}
+
+# Where Office keeps personal templates on macOS. There is no registry to ask,
+# so these are checked in order and the first that exists wins. The localised
+# names are what a Japanese or French system actually has on disk.
+_TEMPLATE_DIR_CANDIDATES = (
+    "~/Library/Group Containers/UBF8T346G9.Office/User Content.localized/"
+    "Templates.localized",
+    "~/Library/Group Containers/UBF8T346G9.Office/User Content/Templates",
+    "~/Library/Application Support/Microsoft/Office/User Templates/My Templates",
+)
+
+
+# ---------------------------------------------------------------------------
+# Small helpers over the object model and the filesystem
+# ---------------------------------------------------------------------------
+def _full_names(app) -> list:
+    """Every open presentation's full name, in one Apple Event."""
+    return [str(name) for name in elements(app.presentations.full_name)]
+
+
+def _index_of(app, full_name: str) -> Optional[int]:
+    """The 1-based position of a presentation among the open ones."""
+    names = _full_names(app)
+    return names.index(full_name) + 1 if full_name in names else None
+
+
+def _local_path(full_name) -> Optional[str]:
+    """A presentation's path when it is one a Python process can stat.
+
+    An unsaved deck answers its bare name rather than a path, and that is not
+    something to go looking for on disk.
+    """
+    if is_missing(full_name):
+        return None
+    text = str(full_name)
+    return text if text.startswith("/") else None
+
+
+def _open_and_find(app, path: str):
+    """Open a file and return the presentation that appeared.
+
+    The deck is found by diffing the open presentations before and after
+    rather than by matching the path that was asked for. Symlinks and the
+    ``/System/Volumes/Data`` prefix make two spellings of the same file look
+    different, and that mismatch would be silent.
+    """
+    before = set(_full_names(app))
+    ppt.open_presentation(path)
+
+    presentations = elements(app.presentations)
+    names = _full_names(app)
+    fresh = [i for i, name in enumerate(names) if name not in before]
+    if fresh:
+        return presentations[fresh[-1]]
+
+    # Nothing new appeared. Either the file was already open, which is the
+    # ordinary idempotent case, or PowerPoint said nothing and did nothing.
+    basename = os.path.basename(path)
+    for pres in presentations:
+        if pres.name() == basename:
+            return pres
+    raise RuntimeError(
+        f"PowerPoint reported no error but did not open {path}."
+    )
+
+
+def _stage_template_copy(template_path: str) -> str:
+    """Copy a template into PowerPoint's container and return the copy's path.
+
+    Windows makes an untitled presentation from the template. There is no
+    untitled route worth taking here, because a deck with no file path cannot
+    be saved through Apple Events at all. Copying the template first and
+    opening the copy gives the same deck and a file that can actually be
+    saved.
+
+    The copy goes into PowerPoint's own container because that is the one
+    directory it is always allowed to read and write, and an unsandboxed
+    Python process can reach it freely.
+    """
+    os.makedirs(EXPORT_STAGING_DIR, exist_ok=True)
+    stem, ext = os.path.splitext(os.path.basename(template_path))
+    dest = os.path.join(EXPORT_STAGING_DIR, stem + ext)
+    serial = 2
+    while os.path.exists(dest):
+        dest = os.path.join(EXPORT_STAGING_DIR, f"{stem} {serial}{ext}")
+        serial += 1
+    shutil.copyfile(template_path, dest)
+    if not os.path.exists(dest) or os.path.getsize(dest) == 0:
+        raise RuntimeError(f"Could not stage a copy of the template at {dest}")
+    return dest
+
+
+def _sandbox_error(target: str) -> RuntimeError:
+    """The error for a save PowerPoint accepted and did not perform."""
+    return RuntimeError(
+        f"PowerPoint reported no error but nothing was written to {target}. "
+        "PowerPoint for Mac is sandboxed and can only write where it already "
+        "has a grant, and it reports success either way. Save into "
+        f"{EXPORT_STAGING_DIR}, which it can always write, and move the file "
+        "afterwards."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Helper to resolve a presentation by index or active
+# ---------------------------------------------------------------------------
+def _resolve_presentation(
+    app,
+    presentation_index: Optional[int] = None,
+    presentation_name: Optional[str] = None,
+):
+    """Return a presentation by index, by name, or the session target.
+
+    The counterpart of the helper of the same name in
+    ``ppt_com/presentation.py``, raising the same errors with the same
+    wording.
+    """
+    if presentation_index is not None and presentation_name is not None:
+        raise ValueError(
+            "Specify either presentation_index or presentation_name, not both"
+        )
+
+    presentations = elements(app.presentations)
+
+    if presentation_index is not None:
+        total = len(presentations)
+        if presentation_index < 1 or presentation_index > total:
+            raise ValueError(
+                f"Presentation index {presentation_index} out of range (1-{total})"
+            )
+        return presentations[presentation_index - 1]
+
+    if presentation_name is not None:
+        if not presentations:
+            raise RuntimeError(
+                "No presentation is open. "
+                "Use ppt_create_presentation or ppt_open_presentation first."
+            )
+        matches = []
+        available = []
+        for index, pres in enumerate(presentations, start=1):
+            name = pres.name()
+            available.append(f"  [{index}] {name}")
+            if name == presentation_name:
+                matches.append((index, pres))
+        if len(matches) == 1:
+            return matches[0][1]
+        if len(matches) > 1:
+            match_list = ", ".join(
+                f"[{index}] {presentation_name}" for index, _ in matches
+            )
+            raise ValueError(
+                f"Multiple presentations match name '{presentation_name}': "
+                f"{match_list}. Use presentation_index to disambiguate."
+            )
+        raise ValueError(
+            f"No presentation named '{presentation_name}'. "
+            f"Available presentations:\n" + "\n".join(available)
+        )
+
+    if not presentations:
+        raise RuntimeError(
+            "No presentation is open. "
+            "Use ppt_create_presentation or ppt_open_presentation first."
+        )
+    return ppt._get_pres_impl()
+
+
+# ---------------------------------------------------------------------------
+# Implementation functions (run on the Apple Event thread via ppt.execute)
+# ---------------------------------------------------------------------------
+def _create_presentation_impl(
+    template_path: Optional[str],
+    slide_width: Optional[float],
+    slide_height: Optional[float],
+    preset: Optional[str],
+    activate: bool,
+) -> dict:
+    # Creating a deck legitimately needs PowerPoint, so launch it if it is not
+    # already running. There is no Visible property and no headless mode here,
+    # so the Windows "make it visible" step becomes bringing it forward.
+    app = ppt._get_app_impl(allow_launch=True)
+    app.activate()
+
+    warnings = []
+    target_height = None
+
+    if template_path:
+        abs_path = os.path.abspath(os.path.expanduser(template_path))
+        if not os.path.exists(abs_path):
+            raise FileNotFoundError(f"Template not found: {abs_path}")
+        staged = _stage_template_copy(abs_path)
+        pres = _open_and_find(app, staged)
+        warnings.append(
+            "This deck is a copy of the template at "
+            f"{staged}, not an untitled presentation, because PowerPoint for "
+            "Mac cannot save a deck that has no file path. Use "
+            "ppt_save_presentation_as to put it where you want it."
+        )
+    else:
+        # The deck is found by diffing the open presentations rather than by
+        # keeping what `make` handed back, so a PowerPoint that answers
+        # nothing is caught here rather than three lines later.
+        before_names = set(_full_names(app))
+        app.make(new=k.presentation)
+        names_now = _full_names(app)
+        fresh = [i for i, name in enumerate(names_now) if name not in before_names]
+        if not fresh:
+            raise RuntimeError(
+                "PowerPoint reported no error but did not create a presentation."
+            )
+        pres = elements(app.presentations)[fresh[-1]]
+
+        target_width = None
+        if preset:
+            preset_key = preset.strip()
+            if preset_key not in SLIDE_SIZE_PRESETS:
+                raise ValueError(
+                    f"Unknown preset '{preset}'. "
+                    f"Supported: {list(SLIDE_SIZE_PRESETS.keys())}"
+                )
+            target_width, target_height = SLIDE_SIZE_PRESETS[preset_key]
+        elif slide_width is not None and slide_height is not None:
+            target_width, target_height = slide_width, slide_height
+
+        if target_width is not None:
+            # Only the width is settable. Both supported presets are 540 points
+            # high, and so is every deck PowerPoint starts from, so setting the
+            # width alone lands them exactly; anything else is reported below
+            # rather than silently left wrong.
+            pres.page_setup.slide_width.set(target_width)
+
+    actual_width = pres.page_setup.slide_width()
+    # `page setup` carries no slide height at all, so the height comes from the
+    # slide master, which is read only.
+    actual_height = pres.slide_master.height()
+
+    if target_height is not None and abs(actual_height - target_height) > 0.5:
+        warnings.append(
+            f"The slide height is {actual_height} points, not {target_height}. "
+            "PowerPoint for Mac's page setup has no slide height property and "
+            "the slide master's height is read only, so only the width could "
+            "be set."
+        )
+
+    template_name = ""
+    try:
+        value = pres.template_name()
+        template_name = "" if is_missing(value) else value
+    except Exception:
+        pass
+
+    full_name = pres.full_name()
+    pres_index = _index_of(app, full_name)
+    if pres_index is None:
+        raise RuntimeError(
+            "PowerPoint reported no error but the new presentation is not open."
+        )
+
+    if activate:
+        try:
+            pres.document_windows[1].activate()
+        except Exception as exc:  # noqa: BLE001 - the deck still exists
+            logger.warning("Could not activate new presentation window: %s", exc)
+        ppt._target_pres_full_name = full_name
+
+    result = {
+        "success": True,
+        "presentation_index": pres_index,
+        "name": pres.name(),
+        "slides_count": count(pres.slides),
+        "slide_width": actual_width,
+        "slide_height": actual_height,
+        "template_name": template_name,
+        "activated": activate,
+    }
+    if warnings:
+        result["warning"] = " ".join(warnings)
+    return result
+
+
+def _open_presentation_impl(
+    file_path: str,
+    read_only: bool,
+    with_window: bool,
+    activate: bool,
+) -> dict:
+    path = os.path.abspath(os.path.expanduser(file_path))
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    # Opening a file legitimately needs PowerPoint, so launch it if not running.
+    app = ppt._get_app_impl(allow_launch=True)
+    if with_window:
+        app.activate()
+
+    pres = _open_and_find(app, path)
+
+    warnings = []
+    actual_read_only = bool(pres.read_only())
+    if read_only and not actual_read_only:
+        # The dictionary declares no `open`, so opening goes through
+        # AppleScript's own verb, which takes no read-only option.
+        warnings.append(
+            "read_only was requested but the deck is open for editing. "
+            "PowerPoint for Mac's open verb takes no read-only option."
+        )
+    if not with_window:
+        warnings.append(
+            "with_window=false has no effect. PowerPoint for Mac has no "
+            "headless mode and always shows a window."
+        )
+
+    full_name = pres.full_name()
+    pres_index = _index_of(app, full_name)
+
+    if activate:
+        if with_window:
+            try:
+                pres.document_windows[1].activate()
+            except Exception as exc:  # noqa: BLE001 - the deck is still open
+                logger.warning(
+                    "Could not activate opened presentation window: %s", exc
+                )
+        ppt._target_pres_full_name = full_name
+
+    result = {
+        "success": True,
+        "presentation_index": pres_index,
+        "name": pres.name(),
+        "full_name": full_name,
+        "slides_count": count(pres.slides),
+        "read_only": actual_read_only,
+        "activated": activate,
+    }
+    if warnings:
+        result["warning"] = " ".join(warnings)
+    return result
+
+
+def _save_presentation_impl(
+    presentation_index: Optional[int],
+    presentation_name: Optional[str],
+) -> dict:
+    app = ppt._get_app_impl()
+    pres = _resolve_presentation(
+        app,
+        presentation_index=presentation_index,
+        presentation_name=presentation_name,
+    )
+
+    path = pres.path()
+    if is_missing(path) or not str(path).strip():
+        raise RuntimeError(
+            "This presentation has never been saved to a file, and PowerPoint "
+            "for Mac does not answer a save on a deck with no file path; it "
+            "writes nothing and can hang for a minute rather than failing. "
+            "Use ppt_save_presentation_as with a full path instead."
+        )
+
+    full_name = pres.full_name()
+    local = _local_path(full_name)
+    before_mtime = (
+        os.path.getmtime(local) if local and os.path.exists(local) else None
+    )
+
+    pres.save()
+
+    saved = bool(pres.saved())
+    if local:
+        if not os.path.exists(local) or os.path.getsize(local) == 0:
+            raise _sandbox_error(local)
+        # A deck with nothing to write leaves the file untouched and comes
+        # back already marked saved, so either signal is enough.
+        if os.path.getmtime(local) <= (before_mtime or 0) and not saved:
+            raise _sandbox_error(local)
+    elif not saved:
+        raise RuntimeError(
+            f"PowerPoint reported no error but {full_name} is still unsaved."
+        )
+
+    return {
+        "success": True,
+        "name": pres.name(),
+        "saved": saved,
+    }
+
+
+def _save_presentation_as_impl(
+    file_path: str,
+    format: Optional[str],
+    presentation_index: Optional[int],
+    presentation_name: Optional[str],
+) -> dict:
+    app = ppt._get_app_impl()
+    pres = _resolve_presentation(
+        app,
+        presentation_index=presentation_index,
+        presentation_name=presentation_name,
+    )
+
+    target = os.path.abspath(os.path.expanduser(file_path))
+    parent = os.path.dirname(target)
+    if parent and not os.path.isdir(parent):
+        raise FileNotFoundError(f"Directory not found: {parent}")
+
+    fmt_key = None
+    if format:
+        fmt_key = format.lower().strip()
+        if fmt_key not in SAVE_FORMAT_MAP:
+            raise ValueError(
+                f"Unknown format '{format}'. "
+                f"Supported: {list(SAVE_FORMAT_MAP.keys())}"
+            )
+    else:
+        # No format given, so PowerPoint infers from the extension. Work out
+        # the same answer here, only to catch the image formats below.
+        fmt_key = os.path.splitext(target)[1].lstrip(".").lower() or None
+
+    if fmt_key in _IMAGE_FORMATS:
+        return {
+            "error": "ppt_save_presentation_as to an image format is not "
+                     "available on macOS",
+            "reason": (
+                "PowerPoint for Mac's dictionary has no export command, and a "
+                "whole-deck save as PNG or JPG returns success in a fifth of "
+                "a second while writing no folder and no files. Save the deck "
+                "as PDF instead, which is verified working."
+            ),
+            "platform": "macOS",
+            "alternatives": ["ppt_save_presentation_as with format='pdf'"],
+        }
+
+    kwargs = {}
+    if format:
+        kwargs["as_"] = to_keyword(
+            PpSaveAsFileType, SAVE_FORMAT_MAP[fmt_key], "save format"
+        )
+
+    before_mtime = os.path.getmtime(target) if os.path.exists(target) else None
+
+    # A POSIX path, always. An HFS colon path is taken as a literal filename
+    # here and produces a file called "Macintosh HD:Users:..." in the
+    # container root.
+    pres.save(in_=target, **kwargs)
+
+    if not os.path.exists(target) or os.path.getsize(target) == 0:
+        raise _sandbox_error(target)
+
+    result = {
+        "success": True,
+        "name": pres.name(),
+        "full_name": pres.full_name(),
+    }
+    if before_mtime is not None and os.path.getmtime(target) <= before_mtime:
+        # Overwriting a file that was already there, and its timestamp did not
+        # move. That is ambiguous rather than a failure, because PowerPoint may
+        # have had nothing to rewrite, so it is reported instead of raised.
+        result["warning"] = (
+            f"{target} already existed and its timestamp did not change, so it "
+            "may not have been rewritten. Check the file before relying on it."
+        )
+    return result
+
+
+def _close_presentation_impl(
+    save_changes: bool,
+    presentation_index: Optional[int],
+    presentation_name: Optional[str],
+) -> dict:
+    app = ppt._get_app_impl()
+    pres = _resolve_presentation(
+        app,
+        presentation_index=presentation_index,
+        presentation_name=presentation_name,
+    )
+    name = pres.name()
+    full_name = pres.full_name()
+
+    if save_changes:
+        path = pres.path()
+        if is_missing(path) or not str(path).strip():
+            raise RuntimeError(
+                "This presentation has never been saved to a file, so saving "
+                "it on the way out would write nothing and could hang. Save "
+                "it with ppt_save_presentation_as first, or close it with "
+                "save_changes=false."
+            )
+        pres.save()
+        local = _local_path(full_name)
+        if local and (not os.path.exists(local) or os.path.getsize(local) == 0):
+            raise _sandbox_error(local)
+    else:
+        # Suppress the "save changes?" sheet, which would otherwise leave
+        # PowerPoint waiting on a click nobody is there to make.
+        pres.saved.set(True)
+
+    pres.close()
+
+    if full_name in _full_names(app):
+        raise RuntimeError(
+            f"PowerPoint reported no error but {name} is still open. It is "
+            "probably waiting on a dialog."
+        )
+
+    return {"success": True, "closed": name}
+
+
+def _get_presentation_info_impl(
+    presentation_index: Optional[int],
+    presentation_name: Optional[str],
+) -> dict:
+    app = ppt._get_app_impl()
+    pres = _resolve_presentation(
+        app,
+        presentation_index=presentation_index,
+        presentation_name=presentation_name,
+    )
+    page = pres.page_setup
+
+    template_name = ""
+    try:
+        value = pres.template_name()
+        template_name = "" if is_missing(value) else value
+    except Exception:
+        pass
+
+    # Fonts: title/body, Latin/East Asian from the theme font scheme. Windows
+    # reads MinorFont(1) and MinorFont(3); the collections here are in the same
+    # order, so the positions carry over.
+    fonts = {
+        "title_latin": None,
+        "title_east_asian": None,
+        "body_latin": None,
+        "body_east_asian": None,
+    }
+    try:
+        scheme = pres.slide_master.theme.theme_font_scheme
+
+        def _clean_font(name):
+            if is_missing(name):
+                return None
+            text = str(name)
+            if text.startswith("+"):
+                return None
+            return text or None
+
+        minor = elements(scheme.minor_theme_fonts)
+        major = elements(scheme.major_theme_fonts)
+        if len(minor) >= 1:
+            fonts["body_latin"] = _clean_font(minor[0].name())
+        if len(minor) >= 3:
+            fonts["body_east_asian"] = _clean_font(minor[2].name())
+        if len(major) >= 1:
+            fonts["title_latin"] = _clean_font(major[0].name())
+        if len(major) >= 3:
+            fonts["title_east_asian"] = _clean_font(major[2].name())
+    except Exception:
+        pass
+
+    # Accent colours. The slide master's `theme color scheme` reads back as
+    # `missing value` on every deck measured, and the other route into the
+    # palette, `get color from`, declares no result in the dictionary, so this
+    # is normally all nulls. The walk is still made, so a PowerPoint that
+    # starts answering needs no code change here.
+    accent_colors = {
+        "accent1": None,
+        "accent2": None,
+        "accent3": None,
+        "accent4": None,
+        "accent5": None,
+        "accent6": None,
+    }
+    try:
+        scheme = pres.slide_master.theme.theme_color_scheme
+        if not is_missing(scheme.get()):
+            # macOS orders its scheme colours exactly as Windows numbers them,
+            # dark1, light1, dark2, light2, then accent1 to accent6, so the
+            # accents are positions 5 to 10.
+            colors = elements(scheme.theme_colors)
+            for offset, key in enumerate(
+                ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"],
+                start=4,
+            ):
+                if offset < len(colors):
+                    try:
+                        accent_colors[key] = rgb_list_to_hex(colors[offset].RGB())
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    full_name = pres.full_name()
+    local_path = resolve_local_path(full_name)
+    local_dir = os.path.dirname(local_path) if local_path else None
+
+    path = pres.path()
+    slide_width = page.slide_width()
+    slide_height = pres.slide_master.height()
+
+    return {
+        "name": pres.name(),
+        "full_name": full_name,
+        "local_path": local_path,
+        "local_dir": local_dir,
+        # An unsaved deck answers `missing value` rather than an empty string,
+        # which would otherwise reach the caller as the text "k.missing_value".
+        "path": None if is_missing(path) else path,
+        "slides_count": count(pres.slides),
+        "read_only": bool(pres.read_only()),
+        "saved": bool(pres.saved()),
+        "slide_width": slide_width,
+        # There is no slide height in `page setup`, so this comes from the
+        # slide master.
+        "slide_height": slide_height,
+        "slide_width_inches": round(slide_width / 72.0, 3),
+        "slide_height_inches": round(slide_height / 72.0, 3),
+        "first_slide_number": page.first_slide_number(),
+        "template_name": template_name,
+        "fonts": fonts,
+        "accent_colors": accent_colors,
+    }
+
+
+def _list_templates_impl(templates_dir: Optional[str]) -> dict:
+    """List PowerPoint template files in a directory.
+
+    Touches the filesystem only, never PowerPoint. The Windows version reads
+    the personal templates folder out of the registry, which has no macOS
+    counterpart, so the known Office locations are checked instead.
+    """
+    if templates_dir is None:
+        for candidate in _TEMPLATE_DIR_CANDIDATES:
+            expanded = os.path.expanduser(candidate)
+            if os.path.isdir(expanded):
+                templates_dir = expanded
+                break
+
+    if templates_dir is None:
+        return {
+            "templates_dir": None,
+            "count": 0,
+            "templates": [],
+            "error": (
+                "Could not find a templates directory. Specify templates_dir "
+                "explicitly."
+            ),
+        }
+
+    if not os.path.isdir(templates_dir):
+        return {
+            "templates_dir": templates_dir,
+            "count": 0,
+            "templates": [],
+            "error": f"Directory not found: {templates_dir}",
+        }
+
+    templates = []
+    for ext in ("*.potx", "*.potm"):
+        pattern = os.path.join(templates_dir, ext)
+        for filepath in glob_mod.glob(pattern):
+            templates.append({
+                "name": os.path.splitext(os.path.basename(filepath))[0],
+                "file_name": os.path.basename(filepath),
+                "file_path": os.path.abspath(filepath),
+            })
+
+    templates.sort(key=lambda t: t["name"])
+    return {
+        "templates_dir": templates_dir,
+        "count": len(templates),
+        "templates": templates,
+    }

@@ -1,6 +1,8 @@
-"""Navigation helpers for PowerPoint COM automation."""
+"""Navigation helpers for PowerPoint automation."""
 
 import logging
+
+from backend import IS_MACOS, ppt
 
 logger = logging.getLogger(__name__)
 
@@ -13,10 +15,18 @@ def goto_slide(app, slide_index: int) -> None:
     slideshow mode or when no window is available).
 
     Args:
-        app: PowerPoint Application COM object.
+        app: PowerPoint Application object.
         slide_index: 1-based slide index to navigate to.
     """
     try:
-        app.ActiveWindow.View.GotoSlide(slide_index)
+        if IS_MACOS:
+            # Navigate the target deck's own window rather than the frontmost
+            # one. There is an `active window` here too, but it raises whenever
+            # PowerPoint's start gallery is in front, and it can belong to a
+            # different deck than the one being edited.
+            pres = ppt._get_pres_impl()
+            pres.document_windows[1].view.go_to_slide(number=slide_index)
+        else:
+            app.ActiveWindow.View.GotoSlide(slide_index)
     except Exception:
         pass

@@ -254,7 +254,20 @@ raise**. Verify.
 
 Every one of these is cheap, and every one of them is detectable.
 
-### 5.1 The sandbox, and where exports have to go
+### 5.1 One read takes PowerPoint down
+
+Worse than a silent failure, and found only by running the port rather than by
+reading the dictionary. **Reading a slide's animation timeline crashes
+PowerPoint.** Touching `timeline.main_sequence.effects` kills the application
+with -609, on a slide with no animations at all, reproducibly, and the open
+deck goes with it.
+
+Nothing in the port reads it. `ppt_get_shape_info` reports `has_animation` as
+null with a note saying why, rather than paying for that field with the user's
+deck. `animation.py` (1,286 lines) is unsafe on macOS for the same reason and
+must not be ported until this is understood.
+
+### 5.2 The sandbox, and where exports have to go
 
 PowerPoint for Mac is sandboxed. It carries `com.apple.security.app-sandbox` and
 `files.user-selected.read-write`, and it has no entitlement for Desktop,
@@ -285,7 +298,7 @@ One more path trap. An HFS colon path is treated as a **literal filename**,
 producing a file called `Macintosh HD:Users:…png` inside the container root.
 Always use POSIX paths.
 
-### 5.2 Automation consent
+### 5.3 Automation consent
 
 Two independent gates exist and neither substitutes for the other. Automation
 consent (TCC) governs the calling process talking to PowerPoint. The App Sandbox
