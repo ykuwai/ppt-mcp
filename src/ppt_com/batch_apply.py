@@ -177,7 +177,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
             slide_index, shape_name_or_index,
             m.font_name, m.font_name_fareast,
             m.font_size, m.bold, m.italic, m.underline,
-            m.color, m.font_color_theme,
+            m.color, m.font_color_theme, m.highlight_color,
         )
 
     else:

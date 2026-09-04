@@ -2048,11 +2048,47 @@ def _right_neighbor_gap(shape, slide):
     return min_gap
 
 
+# A shape is allowed to sit right on the slide edge, so a fraction of a point
+# past it is rounding rather than a mistake.
+_OFF_SLIDE_TOLERANCE = 0.5
+
+
+def _off_slide_edges(shape, slide_w, slide_h) -> list:
+    """Which slide edges a shape hangs over, by name, or an empty list."""
+    if not slide_w or not slide_h:
+        return []
+    try:
+        left, top = _shape_left_top(shape)
+        width, height = _shape_width_height(shape)
+    except Exception:  # noqa: BLE001 - a shape that will not answer is skipped
+        return []
+    edges = []
+    if left < -_OFF_SLIDE_TOLERANCE:
+        edges.append("left")
+    if top < -_OFF_SLIDE_TOLERANCE:
+        edges.append("top")
+    if left + width > slide_w + _OFF_SLIDE_TOLERANCE:
+        edges.append("right")
+    if top + height > slide_h + _OFF_SLIDE_TOLERANCE:
+        edges.append("bottom")
+    return edges
+
+
+def _shape_left_top(shape):
+    return shape.Left, shape.Top
+
+
+def _shape_width_height(shape):
+    return shape.Width, shape.Height
+
+
 def _check_typography_impl(slide_indices, max_chars, max_words,
                            fix, max_expand_pt):
-    """Scan shapes for widow lines; optionally fix by widening."""
+    """Scan shapes for widow lines and for text that does not fit its box."""
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
+    slide_w = pres.PageSetup.SlideWidth
+    slide_h = pres.PageSetup.SlideHeight
     issues = []
     fixed = []
 
@@ -2064,6 +2100,22 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
 
         for j in range(1, slide.Shapes.Count + 1):
             shape = slide.Shapes(j)
+
+            # Before the text frame check, because a picture hanging off the
+            # slide is as wrong as a paragraph doing it. A box set to grow with
+            # its text is the usual way in: nothing overflows, because the box
+            # keeps growing, and it walks off the bottom of the slide instead.
+            edges = _off_slide_edges(shape, slide_w, slide_h)
+            if edges:
+                issues.append({
+                    "slide_index": si,
+                    "shape_name": shape.Name,
+                    "shape_width": round(shape.Width, 2),
+                    "type": "off_slide",
+                    "edges": edges,
+                    "fixable": False,
+                })
+
             if not shape.HasTextFrame:
                 continue
             tr = shape.TextFrame.TextRange
@@ -2072,25 +2124,36 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
 
             # Detect auto-shrink — only when text is actually being
             # compressed (natural height exceeds available space).
+            # The same measurement answers two questions. Text that does not
+            # fit is either being shrunk to make it fit, which is worth saying
+            # because the reader gets smaller than the deck was designed for,
+            # or it is spilling out of the box, which is worse and used to go
+            # unreported. Only shrink-to-fit has to be turned off first, so
+            # that the natural height is what gets measured.
             try:
                 tf2 = shape.TextFrame2
-                if tf2.AutoSize == ppAutoSizeTextToFitShape:
-                    # Temporarily disable shrink to measure natural height
+                shrinking = tf2.AutoSize == ppAutoSizeTextToFitShape
+                if shrinking:
                     tf2.AutoSize = ppAutoSizeNone
+                try:
                     natural_h = tf2.TextRange.BoundHeight
                     margin_h = tf2.MarginTop + tf2.MarginBottom
                     avail_h = shape.Height - margin_h
-                    tf2.AutoSize = ppAutoSizeTextToFitShape  # restore
-                    if natural_h > avail_h:
-                        issues.append({
-                            "slide_index": si,
-                            "shape_name": shape.Name,
-                            "shape_width": round(shape.Width, 2),
-                            "type": "auto_shrink",
-                            "fixable": False,
-                        })
+                finally:
+                    if shrinking:
+                        tf2.AutoSize = ppAutoSizeTextToFitShape
+                if natural_h > avail_h:
+                    issues.append({
+                        "slide_index": si,
+                        "shape_name": shape.Name,
+                        "shape_width": round(shape.Width, 2),
+                        "type": "auto_shrink" if shrinking else "overflow",
+                        "natural_height": round(natural_h, 2),
+                        "available_height": round(avail_h, 2),
+                        "fixable": False,
+                    })
             except Exception:
-                logger.debug("Cannot check AutoSize for shape '%s'",
+                logger.debug("Cannot measure text height for shape '%s'",
                              shape.Name, exc_info=True)
 
             widows = _get_widows(shape, max_chars, max_words)
@@ -2486,7 +2549,7 @@ def register_tools(mcp):
     @mcp.tool(
         name="ppt_check_typography",
         annotations={
-            "title": "Check Typography (Widow Lines)",
+            "title": "Check Typography",
             "readOnlyHint": False,
             "destructiveHint": False,
             "idempotentHint": False,
@@ -2496,13 +2559,20 @@ def register_tools(mcp):
     async def tool_ppt_check_typography(params: CheckTypographyInput) -> str:
         """Detect and optionally fix typography issues on slides.
 
-        Detects three issue types:
+        Detects five issue types:
         - **widow**: a line with only 1-3 characters caused by word
           wrapping (e.g. "サー / バー" — "バー" alone on the last line).
         - **short_after_vbreak**: a line that is too short after an
           explicit soft return. Often a side-effect of widow fixes.
         - **auto_shrink**: text silently compressed by PowerPoint's
           shrink_to_fit setting (reported with fixable=false).
+        - **overflow**: text taller than the box it is in, spilling out
+          of the shape (reported with fixable=false). Both this and
+          auto_shrink carry natural_height and available_height.
+        - **off_slide**: a shape hanging over a slide edge, so part of it
+          will not be seen (reported with fixable=false, and `edges`
+          naming which sides). A box set to grow with its text is the
+          usual way in; it never overflows, it walks off the slide.
 
         With fix=false (default), detection is read-only. Set fix=true
         to auto-fix widows: first tries widening shapes (left edge

@@ -1478,3 +1478,57 @@ class TestTheVisibilityStandInIsExplainedOnce:
         assert "no visible property" in first
         assert "no visible property" not in second
         assert "visible=False" in second
+
+
+class TestShapesThatWalkOffTheSlide:
+    """A box set to grow with its text never overflows. It grows past the
+    slide edge instead, and nothing used to say so."""
+
+    class _Shape:
+        def __init__(self, left, top, width, height):
+            self._box = (left, top, width, height)
+
+        def left_position(self):
+            return self._box[0]
+
+        def top(self):
+            return self._box[1]
+
+        def width(self):
+            return self._box[2]
+
+        def height(self):
+            return self._box[3]
+
+    def _edges(self, left, top, width, height):
+        from ppt_mac.text import _off_slide_edges
+
+        return _off_slide_edges(self._Shape(left, top, width, height), 960, 540)
+
+    def test_a_shape_inside_the_slide_is_not_reported(self):
+        assert self._edges(100, 100, 200, 100) == []
+
+    def test_a_shape_flush_against_an_edge_is_not_reported(self):
+        assert self._edges(0, 0, 960, 540) == []
+
+    def test_the_edge_a_shape_hangs_over_is_named(self):
+        assert self._edges(60, 60, 150, 530) == ["bottom"]
+        assert self._edges(900, 100, 150, 100) == ["right"]
+        assert self._edges(-20, -10, 100, 100) == ["left", "top"]
+
+    def test_a_fraction_of_a_point_past_the_edge_is_rounding(self):
+        assert self._edges(0, 0, 960.2, 540.2) == []
+
+    def test_a_shape_that_will_not_answer_is_skipped(self):
+        from ppt_mac.text import _off_slide_edges
+
+        class Mute:
+            def left_position(self):
+                raise RuntimeError("no")
+
+        assert _off_slide_edges(Mute(), 960, 540) == []
+
+    def test_a_deck_that_will_not_say_its_size_reports_nothing(self):
+        from ppt_mac.text import _off_slide_edges
+
+        assert _off_slide_edges(self._Shape(0, 0, 9999, 9999), None, None) == []

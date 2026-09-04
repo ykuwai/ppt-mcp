@@ -1168,3 +1168,61 @@ class TestTheCopyOutsideTheContainer:
             assert presentation._refresh_external_copy(str(inside)) is None
         finally:
             presentation._EXTERNAL_COPIES.pop(str(inside), None)
+
+
+class TestBatchCallsMatchTheImplementations:
+    """Every operation ppt_batch_apply_formatting offers has to actually run.
+
+    `format_text` was passing ten arguments to an implementation that takes
+    eleven, so the operation failed with a Python TypeError on every call, on
+    both platforms. Nothing caught it because the dispatch calls positionally
+    and nothing counted. This counts.
+    """
+
+    def _dispatch_source(self):
+        import inspect
+
+        from ppt_com import batch_apply
+
+        return inspect.getsource(batch_apply._dispatch_op)
+
+    def test_every_operation_is_dispatched(self):
+        from ppt_com.batch_apply import SUPPORTED_OPERATIONS
+
+        source = self._dispatch_source()
+        for name in SUPPORTED_OPERATIONS:
+            assert f'"{name}"' in source, f"{name} has no branch in _dispatch_op"
+
+    def test_each_call_passes_every_argument_its_impl_takes(self):
+        import ast
+        import inspect
+        import textwrap
+
+        from ppt_com import batch_apply, effects, formatting, text
+
+        modules = {
+            "_formatting": formatting,
+            "_effects": effects,
+            "_text": text,
+        }
+        tree = ast.parse(textwrap.dedent(self._dispatch_source()))
+        checked = 0
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if not (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id in modules
+                and func.attr.endswith("_impl")
+            ):
+                continue
+            impl = getattr(modules[func.value.id], func.attr)
+            wanted = len(inspect.signature(impl).parameters)
+            assert len(node.args) == wanted, (
+                f"{func.value.id}.{func.attr} takes {wanted} arguments and "
+                f"the batch dispatch passes {len(node.args)}"
+            )
+            checked += 1
+        assert checked == len(batch_apply.SUPPORTED_OPERATIONS)

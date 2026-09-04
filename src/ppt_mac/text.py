@@ -242,12 +242,39 @@ def _uniform_run(text_range):
 # ---------------------------------------------------------------------------
 def _apply_font_props(font, font_name, font_name_fareast, font_size, bold,
                       italic, underline, color, font_color_theme):
-    """Apply font properties to a `font of text range` reference."""
+    """Apply font properties to a `font of text range` reference.
+
+    Returns a list of sentences for anything that did not land, empty when it
+    all did.
+    """
+    warnings = []
     if font_name is not None:
         font.font_name.set(font_name)
-        font.east_asian_name.set(font_name)  # default: match Latin unless overridden
+        # Windows' documented behaviour, that a Latin name also becomes the
+        # East Asian one unless overridden. It does not always take here.
+        # PowerPoint for Mac accepts the write and keeps the old value when the
+        # font has no East Asian glyphs, saying nothing about it. Setting
+        # Arial left Hiragino Sans in place; setting Meiryo replaced it. So it
+        # is asked for and then read back, and a refusal is reported rather
+        # than assumed to have worked.
+        font.east_asian_name.set(font_name)
+        if font_name_fareast is None and not _east_asian_took(font, font_name):
+            warnings.append(
+                f"The East Asian font was left as it was. '{font_name}' has no "
+                "East Asian glyphs, and PowerPoint for Mac keeps the old East "
+                "Asian font in that case without reporting anything. Japanese "
+                "and Chinese text is still in the previous font. Pass "
+                "font_name_fareast to choose one."
+            )
     if font_name_fareast is not None:
         font.east_asian_name.set(font_name_fareast)  # override East Asian independently
+        if not _east_asian_took(font, font_name_fareast):
+            warnings.append(
+                f"font_name_fareast '{font_name_fareast}' was not applied. "
+                "PowerPoint for Mac keeps the East Asian font it had when the "
+                "one it is given has no East Asian glyphs, and says nothing. "
+                "Check the spelling, and that the font is installed."
+            )
     if font_size is not None:
         font.font_size.set(font_size)
     if bold is not None:
@@ -266,6 +293,18 @@ def _apply_font_props(font, font_name, font_name_fareast, font_size, bold,
                 "theme color",
             )
         )
+    return warnings
+
+
+def _east_asian_took(font, wanted: str) -> bool:
+    """Whether the East Asian font is the one that was just asked for."""
+    try:
+        current = font.east_asian_name()
+    except CommandError:
+        # No way to tell, so nothing is claimed either way. A warning that
+        # might be wrong is worse than none.
+        return True
+    return is_missing(current) or str(current) == wanted
 
 
 def _character_range(text_range, start, length):
@@ -286,15 +325,21 @@ def _apply_font_to_range(text_range, start, length, props):
     on its own rather than reporting a success that never happened.
     """
     if length < 1:
-        return
+        return []
     try:
-        _apply_font_props(_character_range(text_range, start, length).font, **props)
-        return
+        return _apply_font_props(
+            _character_range(text_range, start, length).font, **props
+        )
     except CommandError:
         logger.debug("Range font write refused; falling back per character",
                      exc_info=True)
+    warnings = []
     for i in range(start, start + length):
-        _apply_font_props(text_range.characters[i].font, **props)
+        for note in _apply_font_props(text_range.characters[i].font, **props):
+            # The same refusal once per character is noise, not information.
+            if note not in warnings:
+                warnings.append(note)
+    return warnings
 
 
 def _apply_highlight(text_range, highlight_color, start=None, length=None):
@@ -792,7 +837,7 @@ def _format_text_impl(slide_index, shape_name_or_index,
     _require_text_frame(shape)
 
     tr = shape.text_frame.text_range
-    _apply_font_props(
+    warnings = _apply_font_props(
         tr.font, font_name, font_name_fareast, font_size, bold, italic,
         underline, color, font_color_theme,
     )
@@ -813,7 +858,9 @@ def _format_text_impl(slide_index, shape_name_or_index,
     if warning:
         result["partial"] = True
         result["unsupported"] = ["highlight_color=clear"]
-        result["warnings"] = [warning]
+        warnings.append(warning)
+    if warnings:
+        result["warnings"] = warnings
     return result
 
 
@@ -853,7 +900,7 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
         start = pos + 1
         length = len(search_text)
 
-    _apply_font_to_range(tr, start, length, {
+    warnings = _apply_font_to_range(tr, start, length, {
         "font_name": font_name,
         "font_name_fareast": font_name_fareast,
         "font_size": font_size,
@@ -881,7 +928,9 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
     if warning:
         result["partial"] = True
         result["unsupported"] = ["highlight_color=clear"]
-        result["warnings"] = [warning]
+        warnings.append(warning)
+    if warnings:
+        result["warnings"] = warnings
     return result
 
 
@@ -1466,14 +1515,50 @@ def _right_neighbor_gap(shape, slide):
     return min_gap
 
 
+# A shape is allowed to sit right on the slide edge, so a fraction of a point
+# past it is rounding rather than a mistake.
+_OFF_SLIDE_TOLERANCE = 0.5
+
+
+def _off_slide_edges(shape, slide_w, slide_h) -> list:
+    """Which slide edges a shape hangs over, by name, or an empty list."""
+    if not slide_w or not slide_h:
+        return []
+    try:
+        left, top = _shape_left_top(shape)
+        width, height = _shape_width_height(shape)
+    except Exception:  # noqa: BLE001 - a shape that will not answer is skipped
+        return []
+    edges = []
+    if left < -_OFF_SLIDE_TOLERANCE:
+        edges.append("left")
+    if top < -_OFF_SLIDE_TOLERANCE:
+        edges.append("top")
+    if left + width > slide_w + _OFF_SLIDE_TOLERANCE:
+        edges.append("right")
+    if top + height > slide_h + _OFF_SLIDE_TOLERANCE:
+        edges.append("bottom")
+    return edges
+
+
+def _shape_left_top(shape):
+    return shape.left_position(), shape.top()
+
+
+def _shape_width_height(shape):
+    return shape.width(), shape.height()
+
+
 def _check_typography_impl(slide_indices, max_chars, max_words,
                            fix, max_expand_pt):
-    """Scan shapes for widow lines; optionally fix by widening."""
+    """Scan shapes for widow lines and for text that does not fit its box."""
     from ppt_com.text import _find_best_vbreak
 
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
     total_slides = count(pres.slides)
+    slide_w = pres.page_setup.slide_width()
+    slide_h = pres.slide_master.height()
     issues = []
     fixed = []
 
@@ -1487,6 +1572,22 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
         slide = pres.slides[si]
 
         for shape in shapes_of(slide):
+
+            # Before the text frame check, because a picture hanging off the
+            # slide is as wrong as a paragraph doing it. A box set to grow with
+            # its text is the usual way in: nothing overflows, because the box
+            # keeps growing, and it walks off the bottom of the slide instead.
+            edges = _off_slide_edges(shape, slide_w, slide_h)
+            if edges:
+                issues.append({
+                    "slide_index": si,
+                    "shape_name": shape.name(),
+                    "shape_width": round(shape.width(), 2),
+                    "type": "off_slide",
+                    "edges": edges,
+                    "fixable": False,
+                })
+
             if not shape.has_text_frame():
                 continue
             tf = shape.text_frame
@@ -1496,24 +1597,35 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
 
             # Detect auto-shrink, only when text is actually being
             # compressed (natural height exceeds available space).
+            # The same measurement answers two questions. Text that does not
+            # fit is either being shrunk to make it fit, which is worth saying
+            # because the reader gets smaller than the deck was designed for,
+            # or it is spilling out of the box, which is worse and used to go
+            # unreported. Only shrink-to-fit has to be turned off first, so
+            # that the natural height is what gets measured.
             try:
-                if tf.auto_size() == shrink_to_fit:
-                    # Temporarily disable shrink to measure natural height
+                shrinking = tf.auto_size() == shrink_to_fit
+                if shrinking:
                     tf.auto_size.set(no_auto_size)
+                try:
                     natural_h = tr.bounds_height()
                     margin_h = tf.margin_top() + tf.margin_bottom()
                     avail_h = shape.height() - margin_h
-                    tf.auto_size.set(shrink_to_fit)  # restore
-                    if natural_h > avail_h:
-                        issues.append({
-                            "slide_index": si,
-                            "shape_name": shape.name(),
-                            "shape_width": round(shape.width(), 2),
-                            "type": "auto_shrink",
-                            "fixable": False,
-                        })
+                finally:
+                    if shrinking:
+                        tf.auto_size.set(shrink_to_fit)
+                if natural_h > avail_h:
+                    issues.append({
+                        "slide_index": si,
+                        "shape_name": shape.name(),
+                        "shape_width": round(shape.width(), 2),
+                        "type": "auto_shrink" if shrinking else "overflow",
+                        "natural_height": round(natural_h, 2),
+                        "available_height": round(avail_h, 2),
+                        "fixable": False,
+                    })
             except Exception:
-                logger.debug("Cannot check auto size for shape '%s'",
+                logger.debug("Cannot measure text height for shape '%s'",
                              shape.name(), exc_info=True)
 
             widows = _get_widows(shape, max_chars, max_words)
