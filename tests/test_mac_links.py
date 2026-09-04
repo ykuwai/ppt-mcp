@@ -120,7 +120,7 @@ class TestHyperlinkValidation:
             result = _add_hyperlink_impl(1, "Title", "https://x", None, None, " Click ")
 
         assert result["action_on"] == "click"
-        assert deck.shape("Title").events == ["k.mouse_activation_mouse_click"]
+        assert deck.shape("Title").events == [1]   # position 1 is the click
 
     def test_a_shape_index_past_the_end_says_the_range(self):
         from ppt_mac.hyperlinks import _add_hyperlink_impl
@@ -169,8 +169,8 @@ class TestHyperlinkRefusals:
             ppt._get_app_impl = original
         assert "screen_tip" in payload["error"]
 
-    def test_an_action_setting_that_does_not_resolve_names_the_command(self):
-        """The one command result this port has to trust, and it can fail."""
+    def test_an_action_setting_that_does_not_resolve_says_which_position(self):
+        """The route is built here, and it can still fail on an odd shape."""
         from ppt_mac.hyperlinks import _add_hyperlink_impl, _remove_hyperlink_impl
 
         with _fake_deck(action_setting_error=-1728):
@@ -179,8 +179,8 @@ class TestHyperlinkRefusals:
 
         for payload in (add, remove):
             assert payload["platform"] == "macOS"
-            assert "get action setting for" in payload["reason"]
-            assert "no action setting property" in payload["reason"]
+            assert "`action settings` position 1" in payload["reason"]
+            assert "built rather than asked for" in payload["reason"]
             assert "-1728" in payload["reason"]
         assert add["error"] == "ppt_add_hyperlink is not available on macOS"
         assert remove["error"] == "ppt_remove_hyperlink is not available on macOS"
@@ -248,7 +248,7 @@ class TestHyperlinkWrites:
             "shape_name": "Body",
             "action_on": "mouseover",
         }
-        assert deck.shape("Body").events == ["k.mouse_activation_mouse_over"]
+        assert deck.shape("Body").events == [2]   # position 2 is the mouse over
 
     def test_removing_clears_the_action_it_was_asked_for(self):
         from ppt_mac.hyperlinks import _remove_hyperlink_impl
@@ -645,6 +645,7 @@ class _FakeShape:
         self.left_position = _FakeProperty(left)
         self.top = _FakeProperty(top)
         self.events: list = []
+        self._settings: dict = {}
 
     def name(self):
         return self._name
@@ -655,11 +656,29 @@ class _FakeShape:
     def has_text_frame(self):
         return True
 
-    def get_action_setting_for(self, event=None):
-        if self._deck.action_setting_error is not None:
-            raise _command_error(self._deck.action_setting_error)
-        self.events.append(str(event))
-        return _FakeActionSetting(self._deck)
+    @property
+    def action_settings(self):
+        """Reached by position, never through `get action setting for`.
+
+        The command answers with a reference that will not resolve, so the
+        port builds this one itself. Position 1 is the click, position 2 is
+        the mouse over.
+        """
+        shape = self
+
+        class _Settings:
+            def __getitem__(self, position):
+                if shape._deck.action_setting_error is not None:
+                    raise _command_error(shape._deck.action_setting_error)
+                shape.events.append(position)
+                return shape._setting(position)
+
+        return _Settings()
+
+    def _setting(self, position):
+        if position not in self._settings:
+            self._settings[position] = _FakeActionSetting(self._deck)
+        return self._settings[position]
 
     def delete(self):
         if self._deck.delete_is_frozen:

@@ -75,11 +75,9 @@ _WHAT_EVENT = "mouse activation"
 # Said the same way by every refusal that gets this far, because the cause is
 # always the one command and a reader should recognise it on sight.
 _ACTION_SETTING_ROUTE = (
-    "The only route to a shape's click action on macOS is the "
-    "`get action setting for` command, and the reference it answered with did "
-    "not resolve. PowerPoint for Mac gives `shape` no action setting property "
-    "and no action setting element, so there is no reference to rebuild by "
-    "hand the way this port does everywhere else."
+    "A shape's click action is reached here as `action settings` position 1 for "
+    "a click and position 2 for a mouse over, built rather than asked for, and "
+    "this shape's did not resolve."
 )
 
 
@@ -155,6 +153,26 @@ def _event_keyword(action_on):
     )
 
 
+# Where each mouse event's action setting sits. PowerPoint keeps exactly two
+# per shape, click first and mouse over second, which was checked by reading
+# both and by writing to the first and seeing the slide gain a hyperlink.
+_SETTING_POSITION = {"click": 1, "mouseover": 2}
+
+
+def _action_setting(shape, action_key):
+    """The shape's action setting for one mouse event, built here.
+
+    Not `get action setting for`. The command is in the dictionary, takes the
+    event the dictionary says it takes, and answers with a reference that does
+    not resolve; every property on it comes back -1728. Building the same
+    reference by index works for both events, reads the action, writes it, and
+    the slide gains a hyperlink afterwards. It is the `get cell from` defect
+    from tables.py again, and the rule is the same, a reference PowerPoint
+    hands back is not used.
+    """
+    return shape.action_settings[_SETTING_POSITION[action_key]]
+
+
 def _hyperlink_type(word):
     """The Windows number for the kind of thing a hyperlink is attached to.
 
@@ -205,7 +223,7 @@ def _add_hyperlink_impl(
     shape = _get_shape(slide, shape_name_or_index)
 
     try:
-        setting = shape.get_action_setting_for(event=event)
+        setting = _action_setting(shape, action_key)
         # The order matters here as it does on Windows. The action has to say
         # hyperlink before the address will hold.
         setting.action.set(to_keyword(PpActionType, ppActionHyperlink, _WHAT_ACTION))
@@ -295,7 +313,7 @@ def _remove_hyperlink_impl(slide_index, shape_name_or_index, action_on):
     shape = _get_shape(slide, shape_name_or_index)
 
     try:
-        setting = shape.get_action_setting_for(event=event)
+        setting = _action_setting(shape, action_key)
         setting.action.set(to_keyword(PpActionType, ppActionNone, _WHAT_ACTION))
         after = setting.action()
     except CommandError as exc:
