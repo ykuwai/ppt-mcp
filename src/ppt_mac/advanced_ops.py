@@ -109,8 +109,8 @@ _THEME_COLOR_INDEX = {
 # names them, and the numbers do not agree, so this is hand written rather than
 # generated. scripts/gen_mac_enums.py pairs by name and these two enumerations
 # have no names in common at all, Windows spelling them `ppShapeFormatPNG` and
-# macOS `save as PNG file`. The suffix travels with the keyword
-# because the staged file has to carry the extension PowerPoint expects.
+# macOS `save as PNG file`. The suffix travels with the keyword because the
+# staged file has to carry the extension PowerPoint expects.
 _SHAPE_FORMATS = {
     0: (k.save_as_GIF_file, ".gif"),
     1: (k.save_as_JPG_file, ".jpg"),
@@ -1213,7 +1213,9 @@ def _set_default_shape_style_impl(
             "ppt_set_default_shape_style",
             "PowerPoint reported success but the template shape never arrived "
             "on the slide, which is the silent no-op recorded in MACOS_PORT "
-            "section 5. Nothing was changed.",
+            "section 5. Nothing was changed. The tool itself works; this one "
+            "call did not land.",
+            error="ppt_set_default_shape_style could not make a template shape",
         ))
     shape = shapes_now[-1]
 

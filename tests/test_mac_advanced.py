@@ -276,7 +276,9 @@ class TestStaging:
             deck.shape("Box").export_writes = False
             result = _export_shape_impl(1, "Box", str(destination), 2, None, None)
 
-        assert result["error"] == "ppt_export_shape is not available on macOS"
+        assert result["error"] == "ppt_export_shape wrote no file"
+        # The tool works; this call did not land, and the headline says which.
+        assert "is not available" not in result["error"]
         assert "wrote no file" in result["reason"]
         assert not destination.exists()
 
@@ -451,7 +453,8 @@ class TestWritesAreVerified:
             deck.slide_object.slide_show_transition.hidden.clamp_to = False
             result = _set_slide_hidden_impl(1, True)
 
-        assert result["error"] == "ppt_set_slide_hidden is not available on macOS"
+        assert result["error"] == "ppt_set_slide_hidden did not change the slide"
+        assert "is not available" not in result["error"]
         assert "silent no-op" in result["reason"]
 
     def test_locking_the_aspect_ratio_reads_back(self):
@@ -470,6 +473,8 @@ class TestWritesAreVerified:
             deck.shape("Box").lock_aspect_ratio.clamp_to = False
             result = _lock_aspect_ratio_impl(1, "Box", True)
 
+        assert result["error"] == "ppt_lock_aspect_ratio did not change the shape"
+        assert "is not available" not in result["error"]
         assert "silent no-op" in result["reason"]
 
 
@@ -639,6 +644,18 @@ class TestFonts:
 
         assert result["theme_updated"] is False
         assert "reads back as" in result["warnings"][0]
+
+    def test_every_slot_written_is_read_back_not_just_the_first(self):
+        """The Latin face landing says nothing about the East Asian one."""
+        from ppt_mac.advanced_ops import _set_default_fonts_impl
+
+        with _fake_deck([]) as deck:
+            deck.font_scheme.minor[3].name.clamp_to = "Calibri"
+            result = _set_default_fonts_impl("Inter", "Meiryo", False)
+
+        assert deck.font_scheme.minor[1].name() == "Inter"
+        assert result["theme_updated"] is False
+        assert "'Meiryo'" in result["warnings"][0]
 
 
 @macos_only
