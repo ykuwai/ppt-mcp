@@ -501,10 +501,10 @@ def _table_to_markdown(shape) -> str:
             cells = []
             for c in range(1, cols + 1):
                 try:
-                    # Cells are reached with `get cell from`, not by index;
-                    # element indexing under `shape table` did not line up in
-                    # earlier testing.
-                    cell = table.get_cell_from(row=r, column=c)
+                    # By index, never `get cell from`. The command answers
+                    # with a reference that will not resolve, so every cell
+                    # came back empty here. See ppt_mac/tables.py.
+                    cell = table.rows[r].cells[c]
                     text = _text_of(cell.shape.text_frame.text_range)
                     text = text.replace("\r", " ").replace("\v", " ").replace("|", "\\|").strip()
                 except Exception:

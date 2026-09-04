@@ -5,10 +5,14 @@ returned shapes; what differs is the walk through PowerPoint's object model.
 
 Three things about tables on this side are worth knowing before reading on.
 
-**Cells are reached with a command, not by index.** ``get cell from`` takes the
-``table object`` of a ``shape table`` plus a row and a column. Element indexing
-under ``shape table`` did not line up in earlier testing (MACOS_PORT section 9,
-item 2), so every cell in this module goes through the command, which did.
+**Cells are reached by index, never with ``get cell from``.** The command is in
+the dictionary and it answers without complaining, but the reference it hands
+back does not resolve. Every cell of a fresh three by three table answers -1728
+through it, and the same nine cells read and write without a murmur through
+``rows[r].cells[c]``, which this module builds itself. It is the same defect as
+the collection one in MACOS_PORT section 5.1, seen from the other end;
+PowerPoint returns references it cannot resolve, so none of them are taken at
+face value here.
 
 **Row and column counts come from the shape, not from counting elements.**
 ``number of rows`` and ``number of columns`` are declared on ``shape table``
@@ -91,8 +95,8 @@ def _dimensions(shape):
 
 
 def _cell(table, row, col):
-    """Reach one cell. See the module docstring for why this is a command."""
-    return table.get_cell_from(row=row, column=col)
+    """Reach one cell. See the module docstring for why this is not a command."""
+    return table.rows[row].cells[col]
 
 
 def _cell_text(cell):
@@ -436,15 +440,25 @@ def _add_table_row_impl(slide_index, shape_name_or_index, position, height):
 
     before_rows, _ = _dimensions(shape)
 
+    if position is not None:
+        return _refusal(
+            "ppt_add_table_row",
+            "A row can only be appended here, not inserted. Asking PowerPoint "
+            "to make a row before an existing one answers -1708, and the same "
+            "request for a column kills PowerPoint outright and takes every "
+            "open deck with it, so neither is attempted.",
+            [
+                "Append the row and move the values down with "
+                "ppt_set_table_data",
+                "ppt_add_table",
+            ],
+        )
+
     # PowerPoint's dictionary declares no command for adding a row, so this is
     # the Standard Suite `make`, which is also how shapes and slides get
     # created here even though that suite is absent too. It is attempted rather
     # than refused on principle, and the row count decides whether it worked.
-    if position is not None:
-        location = elements(table.rows)[position - 1].before
-    else:
-        location = table.end
-    new_row = app.make(new=k.row, at=location)
+    app.make(new=k.row, at=table.end)
 
     after_rows, after_cols = _dimensions(shape)
     if after_rows != before_rows + 1:
@@ -457,6 +471,11 @@ def _add_table_row_impl(slide_index, shape_name_or_index, position, height):
         )
 
     if height is not None:
+        # `make`'s own return value is not used. PowerPoint hands back a
+        # reference that does not resolve, and asking it for anything answers
+        # -1728 against a nonsensical path. The new row is where it was asked
+        # to go, so it is fetched again by index.
+        new_row = table.rows[after_rows]
         try:
             new_row.height.set(height)
         except CommandError:
@@ -513,10 +532,24 @@ def _add_table_column_impl(slide_index, shape_name_or_index, position, width):
     _, before_cols = _dimensions(shape)
 
     if position is not None:
-        location = elements(table.columns)[position - 1].before
-    else:
-        location = table.end
-    new_col = app.make(new=k.column, at=location)
+        # Not a refusal on principle. Asking PowerPoint to make a column
+        # before an existing one kills it with -609, on a plain three by three
+        # table, and every open deck goes down with it. Reproduced on its own,
+        # twice. Appending is safe.
+        return _refusal(
+            "ppt_add_table_column",
+            "A column can only be appended here, not inserted. Asking "
+            "PowerPoint to make a column before an existing one kills "
+            "PowerPoint and takes every open deck with it, so it is not "
+            "attempted.",
+            [
+                "Append the column and move the values across with "
+                "ppt_set_table_data",
+                "ppt_add_table",
+            ],
+        )
+
+    app.make(new=k.column, at=table.end)
 
     after_rows, after_cols = _dimensions(shape)
     if after_cols != before_cols + 1:
@@ -529,6 +562,9 @@ def _add_table_column_impl(slide_index, shape_name_or_index, position, width):
         )
 
     if width is not None:
+        # Fetched again by index rather than taken from `make`; see the note in
+        # _add_table_row_impl.
+        new_col = table.columns[after_cols]
         try:
             new_col.width.set(width)
         except CommandError:
