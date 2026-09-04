@@ -344,6 +344,7 @@ def _replace_font_impl(original_font, replacement_font):
     wanted = original_font.strip().lower()
     shapes_updated = 0
     mixed = 0
+    refused = 0
     for index in range(1, count(pres.slides) + 1):
         slide = pres.slides[index]
         for shape in _text_shapes(slide):
@@ -356,18 +357,27 @@ def _replace_font_impl(original_font, replacement_font):
             if is_missing(latin) and is_missing(east_asian):
                 mixed += 1
                 continue
-            changed = False
+            wrote_latin = False
+            wrote_east_asian = False
             if not is_missing(latin) and str(latin).strip().lower() == wanted:
                 font.font_name.set(replacement_font)
-                changed = True
+                wrote_latin = True
             if (
                 not is_missing(east_asian)
                 and str(east_asian).strip().lower() == wanted
             ):
                 font.east_asian_name.set(replacement_font)
-                changed = True
-            if changed:
-                shapes_updated += 1
+                wrote_east_asian = True
+            # Counted from what the font reads back as, not from a write that
+            # did not raise. The read is the same one two lines above, so the
+            # route is known to work, and this number is the whole answer the
+            # tool gives.
+            if wrote_latin or wrote_east_asian:
+                if _font_reads_back(font, replacement_font,
+                                    wrote_latin, wrote_east_asian):
+                    shapes_updated += 1
+                else:
+                    refused += 1
 
     warnings = [
         "PowerPoint for Mac has no font replace command, so this walked the "
@@ -382,6 +392,12 @@ def _replace_font_impl(original_font, replacement_font):
             "skipped, because PowerPoint answers with no font name at all for "
             "those rather than with a list."
         )
+    if refused:
+        warnings.append(
+            f"{refused} shape(s) were written and still read back with their "
+            "old font, so PowerPoint declined those without saying so. They "
+            "are not counted in shapes_updated."
+        )
 
     return {
         "success": True,
@@ -390,6 +406,24 @@ def _replace_font_impl(original_font, replacement_font):
         "shapes_updated": shapes_updated,
         "warnings": warnings,
     }
+
+
+def _font_reads_back(font, expected, check_latin: bool, check_east_asian: bool) -> bool:
+    """Say whether a font write is actually there.
+
+    One Apple Event per face written. Both faces are checked when both were
+    written, because PowerPoint taking the Latin one says nothing about the
+    East Asian one, and a deck set only through `font name` renders Japanese in
+    the theme font.
+    """
+    try:
+        if check_latin and str(font.font_name()) != expected:
+            return False
+        if check_east_asian and str(font.east_asian_name()) != expected:
+            return False
+    except CommandError:
+        return False
+    return True
 
 
 def _list_fonts_impl():
@@ -477,23 +511,31 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
             if east_asian:
                 family[3].name.set(east_asian)
         # Nothing is trusted because it did not raise, and every slot written
-        # is read back rather than one standing in for the others. PowerPoint
-        # accepting the Latin face and quietly dropping the East Asian one is
-        # the failure worth catching, and a deck set only through `font name`
-        # renders Japanese in the theme font.
+        # is read back rather than one standing in for the others. That means
+        # both families as well as both slots, because the major scheme taking
+        # a face says nothing about the minor scheme, and the minor is the one
+        # body text is set in. PowerPoint accepting the Latin face and quietly
+        # dropping the East Asian one is the failure worth catching, and a deck
+        # set only through `font name` renders Japanese in the theme font.
         theme_updated = True
+        families = (
+            ("major", scheme.major_theme_fonts),
+            ("minor", scheme.minor_theme_fonts),
+        )
         for slot, expected in ((1, latin), (3, east_asian)):
             if not expected:
                 continue
-            probe = scheme.minor_theme_fonts[slot].name()
-            if is_missing(probe) or str(probe) != expected:
-                theme_updated = False
-                warnings.append(
-                    "PowerPoint reported no error but the theme font reads "
-                    f"back as {probe!r} rather than {expected!r}, so that part "
-                    "of the theme was left alone. Text already on the slides "
-                    "was still updated when apply_to_existing was set."
-                )
+            for family_name, family in families:
+                probe = family[slot].name()
+                if is_missing(probe) or str(probe) != expected:
+                    theme_updated = False
+                    warnings.append(
+                        "PowerPoint reported no error but the "
+                        f"{family_name} theme font reads back as {probe!r} "
+                        f"rather than {expected!r}, so that part of the theme "
+                        "was left alone. Text already on the slides was still "
+                        "updated when apply_to_existing was set."
+                    )
     except CommandError as exc:
         logger.warning("Could not update the theme fonts: %s", exc)
         warnings.append(
@@ -503,6 +545,7 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
 
     slides_processed = 0
     shapes_updated = 0
+    refused = 0
     if apply_to_existing:
         for index in range(1, count(pres.slides) + 1):
             slide = pres.slides[index]
@@ -516,8 +559,24 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
                         font.east_asian_name.set(east_asian)
                 except CommandError:
                     continue
-                shapes_updated += 1
+                # Counted from the read back, the same way ppt_replace_font
+                # counts, so a shape PowerPoint declined is not in the total.
+                latin_ok = not latin or _font_reads_back(font, latin, True, False)
+                east_ok = (
+                    not east_asian
+                    or _font_reads_back(font, east_asian, False, True)
+                )
+                if latin_ok and east_ok:
+                    shapes_updated += 1
+                else:
+                    refused += 1
         warnings.append(_grouped_text_warning())
+        if refused:
+            warnings.append(
+                f"{refused} shape(s) were written and still read back with "
+                "their old font, so PowerPoint declined those without saying "
+                "so. They are not counted in shapes_updated."
+            )
 
     result = {"success": True, "theme_updated": theme_updated}
     if latin:
@@ -976,6 +1035,16 @@ def _set_view_impl(view_type, zoom):
     current_view_type, current_name = _VIEW_TYPES.get(current_word, (None, None))
     current_zoom = window.view.zoom()
 
+    # The zoom below is read back, so it only needs saying when it disagrees.
+    # PowerPoint holds a view to its own range and reports no error for
+    # clamping, and some views will not zoom at all.
+    if zoom is not None and (is_missing(current_zoom) or current_zoom != zoom):
+        warnings.append(
+            f"A zoom of {zoom} was asked for and the window holds "
+            f"{None if is_missing(current_zoom) else current_zoom}. PowerPoint "
+            "keeps a view inside its own range and says nothing about doing it."
+        )
+
     result = {
         "success": True,
         "view_type": current_name or VIEW_TYPE_NAMES.get(
@@ -1171,6 +1240,17 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
 # ---------------------------------------------------------------------------
 # Default shape style
 # ---------------------------------------------------------------------------
+# No read route at all. `set shapes default properties` is a command with no
+# matching property anywhere in the dictionary, so nothing says what the
+# default style now is, and a new shape is the only way to find out.
+_DEFAULT_STYLE_WARNING = (
+    "PowerPoint for Mac takes the default shape style as one command and "
+    "answers nothing about what it now holds, and no property reads it back. "
+    "So this reports the command was sent rather than a measurement. Add a "
+    "shape with ppt_add_shape to see what new shapes look like now."
+)
+
+
 def _set_default_shape_style_from_shape_impl(slide_index, shape_name_or_index):
     """Capture one shape's whole style as the default for new shapes.
 
@@ -1187,7 +1267,11 @@ def _set_default_shape_style_from_shape_impl(slide_index, shape_name_or_index):
     slide = _slide(pres, slide_index)
     shape = _get_shape(slide, shape_name_or_index)
     shape.set_shapes_default_properties()
-    return json.dumps({"success": True, "source_shape": shape.name()})
+    return json.dumps({
+        "success": True,
+        "source_shape": shape.name(),
+        "warnings": [_DEFAULT_STYLE_WARNING],
+    })
 
 
 def _set_default_shape_style_impl(
@@ -1272,7 +1356,7 @@ def _set_default_shape_style_impl(
     finally:
         shape.delete()
 
-    return json.dumps({"success": True})
+    return json.dumps({"success": True, "warnings": [_DEFAULT_STYLE_WARNING]})
 
 
 # ---------------------------------------------------------------------------

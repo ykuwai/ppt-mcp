@@ -105,6 +105,13 @@ def _render_pdf_pages(pdf_path, pages, width=None, height=None):
         if number < 1 or number > total:
             raise ValueError(f"Slide {number} is not in the exported PDF (1-{total})")
         page = Quartz.CGPDFDocumentGetPage(document, number)
+        if page is None:
+            # Answering None rather than raising is how Quartz declines a page
+            # it has, and drawing None draws nothing at all.
+            raise RuntimeError(
+                f"Slide {number} is missing from the deck's PDF export, so no "
+                "image could be rendered for it."
+            )
         box = Quartz.CGPDFPageGetBoxRect(page, Quartz.kCGPDFMediaBox)
 
         if width and height:
@@ -187,8 +194,14 @@ def _export_pdf_impl(
         if os.path.exists(staged):
             os.remove(staged)
 
-    if not os.path.exists(abs_path):
-        raise RuntimeError("The PDF was not written. Check the output directory.")
+    # The size as well as the file, the same pair `_save_pdf` checks. A PDF
+    # context that wrote no page still leaves a file behind, so existence on
+    # its own is not evidence.
+    if not os.path.exists(abs_path) or os.path.getsize(abs_path) == 0:
+        raise RuntimeError(
+            "PowerPoint reported success but wrote no PDF. Check the output "
+            "directory, and that the presentation has been saved to a file."
+        )
 
     return {
         "success": True,
@@ -200,7 +213,13 @@ def _export_pdf_impl(
 
 
 def _write_pdf_range(source: str, destination: str, start: int, end: int) -> None:
-    """Copy a page range out of one PDF into another."""
+    """Copy a page range out of one PDF into another, and count what landed.
+
+    ``CGPDFDocumentGetPage`` answers None for a page it will not give, and
+    drawing None draws nothing, so a range that quietly lost pages used to come
+    back as a file that exists and is short. Every page is checked as it is
+    taken, and the finished document is opened again and counted.
+    """
     try:
         import Quartz
         from CoreFoundation import (
@@ -217,16 +236,38 @@ def _write_pdf_range(source: str, destination: str, start: int, end: int) -> Non
         )
 
     document = Quartz.CGPDFDocumentCreateWithURL(_url(source))
+    if document is None:
+        raise RuntimeError("The exported PDF could not be read back.")
+
     context = Quartz.CGPDFContextCreateWithURL(_url(destination), None, None)
     try:
         for number in range(start, end + 1):
             page = Quartz.CGPDFDocumentGetPage(document, number)
+            if page is None:
+                raise RuntimeError(
+                    f"Slide {number} is missing from the deck's PDF export, so "
+                    "the range could not be written."
+                )
             box = Quartz.CGPDFPageGetBoxRect(page, Quartz.kCGPDFMediaBox)
             Quartz.CGContextBeginPage(context, box)
             Quartz.CGContextDrawPDFPage(context, page)
             Quartz.CGContextEndPage(context)
     finally:
         Quartz.CGPDFContextClose(context)
+
+    wanted = end - start + 1
+    written = Quartz.CGPDFDocumentCreateWithURL(_url(destination))
+    if written is None:
+        raise RuntimeError(
+            "The slide range was written and the file cannot be read back as a "
+            "PDF, so nothing usable came out of it."
+        )
+    pages = Quartz.CGPDFDocumentGetNumberOfPages(written)
+    if pages != wanted:
+        raise RuntimeError(
+            f"The slide range should hold {wanted} page(s) and the file holds "
+            f"{pages}. Quartz reported no error for the difference."
+        )
 
 
 def _export_images_impl(
@@ -290,8 +331,14 @@ def _export_images_impl(
                 name = f"Slide{number}.{fmt_key}"
             final = os.path.join(abs_dir, name)
             shutil.move(temp_png, final)
-            if not os.path.exists(final):
-                raise RuntimeError(f"Slide {number} was not written to {final}")
+            # The size as well as the file, the same pair `_save_pdf` checks.
+            # An empty file is what a move onto a full disk leaves behind, and
+            # it reads as a written image to anything checking existence alone.
+            if not os.path.exists(final) or os.path.getsize(final) == 0:
+                raise RuntimeError(
+                    f"Slide {number} was not written to {final}, or arrived "
+                    "there empty."
+                )
             exported.append({
                 "slide_index": number,
                 "file_path": final,

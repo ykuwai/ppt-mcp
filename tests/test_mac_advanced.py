@@ -508,6 +508,16 @@ class TestView:
         assert result["view_type"] == "normal"
         assert "did not switch" in result["warnings"][0]
 
+    def test_a_zoom_powerpoint_kept_inside_its_own_range_is_reported(self):
+        from ppt_mac.advanced_ops import _set_view_impl
+
+        with _fake_deck([]) as deck:
+            deck.window.view.zoom.clamp_to = 100
+            result = _set_view_impl(None, 400)
+
+        assert result["zoom"] == 100
+        assert "keeps a view inside its own range" in result["warnings"][0]
+
 
 @macos_only
 class TestSelectionReading:
@@ -670,6 +680,32 @@ class TestFonts:
         assert result["theme_updated"] is False
         assert "'Meiryo'" in result["warnings"][0]
 
+    def test_the_major_family_is_probed_as_well_as_the_minor(self):
+        """Writing both families and reading one leaves half the write unchecked."""
+        from ppt_mac.advanced_ops import _set_default_fonts_impl
+
+        with _fake_deck([]) as deck:
+            deck.font_scheme.major[1].name.clamp_to = "Calibri"
+            result = _set_default_fonts_impl("Inter", None, False)
+
+        assert deck.font_scheme.minor[1].name() == "Inter"
+        assert result["theme_updated"] is False
+        assert "major theme font" in result["warnings"][0]
+
+    def test_a_font_that_reads_back_unchanged_is_not_counted(self):
+        """A write that did not raise is not the same as a font that changed."""
+        from ppt_mac.advanced_ops import _replace_font_impl
+
+        with _fake_deck(["A"]) as deck:
+            deck.shape("A").set_fonts("Arial", "Arial")
+            font = deck.shape("A").text_frame.text_range.font
+            font.font_name.clamp_to = "Arial"
+            font.east_asian_name.clamp_to = "Arial"
+            result = _replace_font_impl("Arial", "Inter")
+
+        assert result["shapes_updated"] == 0
+        assert any("still read back" in w for w in result["warnings"])
+
 
 @macos_only
 class TestPictures:
@@ -769,7 +805,12 @@ class TestDefaultShapeStyle:
             answer = _set_default_shape_style_from_shape_impl(1, "Box")
 
         assert deck.shape("Box").defaults_set == 1
-        assert json.loads(answer) == {"success": True, "source_shape": "Box"}
+        payload = json.loads(answer)
+        assert payload["success"] is True
+        assert payload["source_shape"] == "Box"
+        # Nothing reads a default style back, so the answer has to say that
+        # rather than let the command standing in for evidence.
+        assert "rather than a measurement" in payload["warnings"][0]
 
     def test_the_template_shape_is_deleted_even_though_it_was_styled(self):
         import json
@@ -782,7 +823,9 @@ class TestDefaultShapeStyle:
                 "Inter", 18, True, False, "#FFFFFF",
             )
 
-        assert json.loads(answer) == {"success": True}
+        payload = json.loads(answer)
+        assert payload["success"] is True
+        assert "rather than a measurement" in payload["warnings"][0]
         assert deck.slide_shapes == []
         (template,) = deck.deleted_shapes
         assert template.defaults_set == 1

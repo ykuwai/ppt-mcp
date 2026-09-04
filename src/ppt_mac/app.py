@@ -13,7 +13,7 @@ quietly doing nothing.
 import logging
 from typing import Optional
 
-from backend.mac_ae import count, elements, is_missing, ppt
+from backend.mac_ae import count, elements, is_missing, ppt, shapes_of
 from ppt_com.constants import ppSelectionNone, ppSelectionShapes, ppSelectionText
 
 logger = logging.getLogger(__name__)
@@ -108,15 +108,32 @@ def _get_active_window_info_impl() -> dict:
 
         if result["selection_type"] == "shapes":
             shapes = []
-            for shape in elements(selection.shape_range.shapes):
-                shapes.append({
-                    "name": shape.name(),
-                    "type": _keyword_name(shape.shape_type()),
-                    # macOS exposes no shape id, only stacking order, and a
-                    # made-up id would be worse than an honest null.
-                    "id": None,
-                    "z_order_position": shape.z_order_position(),
-                })
+            try:
+                # `shapes_of`, not `elements(...shapes)`. PowerPoint addresses
+                # the shapes of a range by subclass, so a selection holding a
+                # text box and an autoshape answers `text_boxes[1]` and
+                # `shapes[2]`, and the second does not resolve. Counting and
+                # then indexing is the route the rest of the port takes.
+                for shape in shapes_of(selection.shape_range):
+                    shapes.append({
+                        "name": shape.name(),
+                        "type": _keyword_name(shape.shape_type()),
+                        # macOS exposes no shape id, only stacking order, and a
+                        # made-up id would be worse than an honest null.
+                        "id": None,
+                        "z_order_position": shape.z_order_position(),
+                    })
+            except Exception as exc:
+                # An empty list here used to read as an empty selection, which
+                # is a different answer from PowerPoint refusing to describe
+                # one, and only the second is worth a caller's attention.
+                logger.warning("Could not read the selected shapes: %s", exc)
+                result["warnings"] = [
+                    "Shapes are selected and PowerPoint would not say which "
+                    f"ones ({exc}), so selected_shapes is empty because the "
+                    "question could not be answered rather than because "
+                    "nothing is selected."
+                ]
             result["selected_shapes"] = shapes
 
         elif result["selection_type"] == "text":

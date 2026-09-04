@@ -28,6 +28,7 @@ import logging
 import os
 
 from appscript import k
+from appscript.reference import CommandError
 
 from backend.mac_ae import ppt
 from backend.mac_enums import MsoFlipCmd, MsoGradientStyle, to_keyword
@@ -136,6 +137,44 @@ def _slide_size() -> tuple:
     return _slide_dimensions(ppt._get_pres_impl())
 
 
+# How far a shape may sit from where it was sent and still count as arrived.
+# PowerPoint rounds a position to the nearest fraction of a point and a shape
+# locked by its placeholder does not move at all, so the tolerance separates
+# rounding from refusal rather than being a margin of comfort.
+_POSITION_TOLERANCE = 0.5
+
+
+def _verify_moved(wanted, horizontal: bool) -> tuple:
+    """Split shapes into the ones that moved and the ones that did not.
+
+    ``wanted`` is a list of (box, target) pairs. One Apple Event per shape,
+    which is what turns a count of writes sent into a count of shapes standing
+    where they were asked to stand.
+    """
+    landed, stayed = [], []
+    for box, target in wanted:
+        try:
+            now = box["shape"].left_position() if horizontal else box["shape"].top()
+        except (CommandError, AttributeError):
+            stayed.append(box["shape"].name())
+            continue
+        if now is None or abs(now - target) > _POSITION_TOLERANCE:
+            stayed.append(box["shape"].name())
+        else:
+            landed.append(box["shape"].name())
+    return landed, stayed
+
+
+def _did_not_move_warning(stayed, horizontal: bool) -> str:
+    """The sentence both layout tools carry for a shape that stayed put."""
+    edge = "left" if horizontal else "top"
+    return (
+        f"{', '.join(stayed)} did not move. PowerPoint reported no error and "
+        f"the {edge} edge reads back where it was, which is what a locked "
+        "shape or a placeholder driven by its layout does."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
@@ -166,28 +205,35 @@ def _align_shapes_impl(slide_index, shape_names, align_to, relative_to_slide):
         right = max(b["left"] + b["width"] for b in boxes)
         bottom = max(b["top"] + b["height"] for b in boxes)
 
+    horizontal = align_key in ("left", "center", "right")
+    wanted = []
     for box in boxes:
         if align_key == "left":
-            box["shape"].left_position.set(left)
+            target = left
         elif align_key == "center":
-            box["shape"].left_position.set(
-                (left + right) / 2 - box["width"] / 2
-            )
+            target = (left + right) / 2 - box["width"] / 2
         elif align_key == "right":
-            box["shape"].left_position.set(right - box["width"])
+            target = right - box["width"]
         elif align_key == "top":
-            box["shape"].top.set(top)
+            target = top
         elif align_key == "middle":
-            box["shape"].top.set((top + bottom) / 2 - box["height"] / 2)
+            target = (top + bottom) / 2 - box["height"] / 2
         else:  # bottom
-            box["shape"].top.set(bottom - box["height"])
+            target = bottom - box["height"]
+        (box["shape"].left_position if horizontal else box["shape"].top).set(target)
+        wanted.append((box, target))
 
-    return {
-        "success": True,
-        "aligned_count": len(shape_names),
+    landed, stayed = _verify_moved(wanted, horizontal)
+
+    result = {
+        "success": bool(landed) or not shape_names,
+        "aligned_count": len(landed),
         "align_to": align_key,
         "relative_to_slide": relative_to_slide,
     }
+    if stayed:
+        result["warnings"] = [_did_not_move_warning(stayed, horizontal)]
+    return result
 
 
 def _distribute_shapes_impl(slide_index, shape_names, direction, relative_to_slide):
@@ -226,19 +272,26 @@ def _distribute_shapes_impl(slide_index, shape_names, direction, relative_to_sli
     gap = (last - first - used) / (len(boxes) - 1) if len(boxes) > 1 else 0.0
 
     cursor = first
+    wanted = []
     for box in boxes:
         if horizontal:
             box["shape"].left_position.set(cursor)
         else:
             box["shape"].top.set(cursor)
+        wanted.append((box, cursor))
         cursor += box[span] + gap
 
-    return {
-        "success": True,
-        "distributed_count": len(shape_names),
+    landed, stayed = _verify_moved(wanted, horizontal)
+
+    result = {
+        "success": bool(landed) or not shape_names,
+        "distributed_count": len(landed),
         "direction": dir_key,
         "relative_to_slide": relative_to_slide,
     }
+    if stayed:
+        result["warnings"] = [_did_not_move_warning(stayed, horizontal)]
+    return result
 
 
 def _merge_shapes_impl(slide_index, shape_names, merge_type, primary_shape):
@@ -404,6 +457,8 @@ def _set_slide_background_impl(slide_index, fill_type, color,
         )
 
     applied = []
+    missed = []
+    clamped = []
     for idx in targets:
         goto_slide(app, idx)
         slide = _slide(pres, idx)
@@ -449,17 +504,110 @@ def _set_slide_background_impl(slide_index, fill_type, color,
             if transparency is not None and fill_key not in ("none", "master"):
                 fill.transparency.set(transparency)
 
-        applied.append(idx)
+        # One call can name twenty slides, and this used to record all twenty
+        # as repainted whether or not any of them were. Each one is measured
+        # before it is counted.
+        failure = _background_landed(slide, fill_key)
+        if failure is None:
+            applied.append(idx)
+        else:
+            missed.append(f"slide {idx} ({failure})")
+
+        # Asked separately from whether the slide was repainted at all,
+        # because PowerPoint keeps a transparency inside its own range without
+        # saying so, and a clamped number is not a background that did not
+        # take.
+        wrote_transparency = (
+            transparency is not None and fill_key not in ("none", "master")
+        )
+        if failure is None and wrote_transparency:
+            held = _background_transparency(slide)
+            if held is None or abs(held - transparency) > 0.01:
+                clamped.append(f"slide {idx} holds {held}")
 
     result = {
-        "success": True,
+        # A call that repainted nothing is not a success, whatever it reported.
+        "success": bool(applied),
         "slide_indices": applied,
         "fill_type": fill_key,
     }
-    # Backward compatibility: include slide_index when called with single target
+    warnings = []
+    if missed:
+        warnings.append(
+            "PowerPoint reported no error and these slides did not take the "
+            f"background: {'; '.join(missed)}."
+        )
+    if clamped:
+        warnings.append(
+            f"The background was painted and a transparency of {transparency} "
+            f"is not what came back: {'; '.join(clamped)}. PowerPoint keeps "
+            "the value inside its own range and says nothing about doing it."
+        )
+    if warnings:
+        result["warnings"] = warnings
+    # Backward compatibility: include slide_index when called with single
+    # target. It names the slide that was asked for, so a call where nothing
+    # landed still says which slide it was about.
     if slide_indices is None:
-        result["slide_index"] = applied[0]
+        result["slide_index"] = targets[0]
     return result
+
+
+def _background_landed(slide, fill_key: str):
+    """Read a slide's background back, and say what is wrong with it.
+
+    Returns None when it took, and a short reason when it did not. The picture
+    branch is not checked here because it checks itself where it is written and
+    raises, which is the one case where carrying on would leave the caller with
+    an image PowerPoint's sandbox never let it read.
+
+    ``visible`` and ``fill format type`` are the pair ``ppt_get_shape_info``
+    reads off a shape's fill, and a slide's background is a shape, so the same
+    two answer this. Each read is guarded on its own; a background that will
+    not answer is reported as unverified rather than as a failure.
+    """
+    if fill_key == "master":
+        try:
+            return None if slide.follow_master_background() else (
+                "it is still painted with its own background"
+            )
+        except (CommandError, AttributeError):
+            return "PowerPoint would not say whether it follows the master"
+
+    fill = slide.background.fill_format
+    try:
+        visible = bool(fill.visible())
+    except (CommandError, AttributeError):
+        visible = None
+
+    if fill_key == "none":
+        if visible is None:
+            return "PowerPoint would not say whether the background is hidden"
+        return None if visible is False else "the background is still filled"
+
+    if fill_key in ("solid", "gradient"):
+        expected = k.fill_solid if fill_key == "solid" else k.fill_gradient
+        try:
+            word = fill.fill_format_type()
+        except (CommandError, AttributeError):
+            return "PowerPoint would not say what fill the background carries"
+        if word != expected:
+            return f"the background reads back as {_keyword_name(word)}"
+
+    return None
+
+
+def _background_transparency(slide):
+    """Read a slide background's transparency, or None when it will not say."""
+    try:
+        return slide.background.fill_format.transparency()
+    except (CommandError, AttributeError):
+        return None
+
+
+def _keyword_name(value) -> str:
+    """Return an appscript keyword's own name, as it reads in the dictionary."""
+    return str(value).replace("k.", "").replace("_", " ")
 
 
 def _flip_shape_impl(slide_index, shape_name_or_index, direction):

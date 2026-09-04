@@ -322,6 +322,23 @@ def _set_table_cell_impl(
     # happen. By call time both modules are fully loaded.
     from ppt_com.tables import ALIGNMENT_MAP, VERTICAL_ALIGNMENT_MAP
 
+    # Both names are checked before the first Apple Event. Checked where they
+    # were used, a misspelled one handed the caller an error and a cell that
+    # had already taken its new text and font.
+    align_key = alignment.strip().lower() if alignment is not None else None
+    if align_key is not None and align_key not in ALIGNMENT_MAP:
+        raise ValueError(
+            f"Unknown alignment '{alignment}'. Use: {', '.join(ALIGNMENT_MAP.keys())}"
+        )
+    va_key = (
+        vertical_alignment.strip().lower() if vertical_alignment is not None else None
+    )
+    if va_key is not None and va_key not in VERTICAL_ALIGNMENT_MAP:
+        raise ValueError(
+            f"Unknown vertical_alignment '{vertical_alignment}'. "
+            f"Use: {', '.join(VERTICAL_ALIGNMENT_MAP.keys())}"
+        )
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -337,12 +354,7 @@ def _set_table_cell_impl(
     tr = cell.shape.text_frame.text_range
     _apply_cell_font(cell, font_name, font_name_fareast, font_size, bold, italic, color)
 
-    if alignment is not None:
-        align_key = alignment.strip().lower()
-        if align_key not in ALIGNMENT_MAP:
-            raise ValueError(
-                f"Unknown alignment '{alignment}'. Use: {', '.join(ALIGNMENT_MAP.keys())}"
-            )
+    if align_key is not None:
         tr.paragraph_format.alignment.set(
             to_keyword(PpParagraphAlignment, ALIGNMENT_MAP[align_key], "paragraph alignment")
         )
@@ -352,12 +364,7 @@ def _set_table_cell_impl(
         cell.shape.fill_format.visible.set(True)
         cell.shape.fill_format.fore_color.set(hex_to_rgb_list(fill_color))
 
-    if vertical_alignment is not None:
-        va_key = vertical_alignment.strip().lower()
-        if va_key not in VERTICAL_ALIGNMENT_MAP:
-            raise ValueError(
-                f"Unknown vertical_alignment '{vertical_alignment}'. Use: {', '.join(VERTICAL_ALIGNMENT_MAP.keys())}"
-            )
+    if va_key is not None:
         cell.shape.text_frame.vertical_anchor.set(
             to_keyword(MsoVerticalAnchor, VERTICAL_ALIGNMENT_MAP[va_key], "vertical anchor")
         )
@@ -386,14 +393,21 @@ def _set_table_data_impl(
 
     cells_set = 0
     rows_written = 0
+    rows_dropped = 0
+    cols_dropped = 0
     for r_idx, row_data in enumerate(data):
         target_row = start_row + r_idx
         if target_row > rows_count:
+            # The table is smaller than the data. Every remaining row goes
+            # nowhere, and saying so is the difference between a success and a
+            # caller who thinks five rows landed in a three row table.
+            rows_dropped = len(data) - r_idx
             break
         row_had_writes = False
         for c_idx, cell_text in enumerate(row_data):
             target_col = start_col + c_idx
             if target_col > cols_count:
+                cols_dropped = max(cols_dropped, len(row_data) - c_idx)
                 break
             cell = _cell(table, target_row, target_col)
             cell.shape.text_frame.text_range.content.set(
@@ -406,7 +420,7 @@ def _set_table_data_impl(
         if row_had_writes:
             rows_written += 1
 
-    return {
+    result = {
         "success": True,
         "shape_name": shape.name(),
         "cells_set": cells_set,
@@ -414,6 +428,27 @@ def _set_table_data_impl(
         "table_rows": rows_count,
         "table_columns": cols_count,
     }
+
+    warnings = []
+    if rows_dropped:
+        warnings.append(
+            f"{rows_dropped} row(s) of data had nowhere to go and were not "
+            f"written. Writing from row {start_row} of a table with "
+            f"{rows_count} rows leaves room for "
+            f"{max(0, rows_count - start_row + 1)}. Add rows with "
+            "ppt_add_table_row, or rebuild the table at the size the data "
+            "needs."
+        )
+    if cols_dropped:
+        warnings.append(
+            f"Up to {cols_dropped} value(s) per row fell past the table's last "
+            f"column and were not written. Writing from column {start_col} of "
+            f"a table with {cols_count} columns leaves room for "
+            f"{max(0, cols_count - start_col + 1)}."
+        )
+    if warnings:
+        result["warnings"] = warnings
+    return result
 
 
 def _merge_table_cells_impl(slide_index, shape_name_or_index, start_row, start_col, end_row, end_col):
@@ -431,6 +466,15 @@ def _merge_table_cells_impl(slide_index, shape_name_or_index, start_row, start_c
     return {
         "success": True,
         "merged": f"Cell({start_row},{start_col}) to Cell({end_row},{end_col})",
+        # No read route. A merge leaves the row and column counts where they
+        # were and PowerPoint for Mac's `cell` class carries nothing that says
+        # a cell is now part of a merge, so there is nothing to measure.
+        "warnings": [
+            "PowerPoint for Mac answers nothing about which cells are merged, "
+            "so the range above is what was asked for rather than a "
+            "measurement. Read the table back with ppt_get_table_data to see "
+            "what it holds now."
+        ],
     }
 
 
@@ -674,15 +718,36 @@ def _split_table_cells_impl(slide_index, shape_name_or_index, row, col, num_rows
     slide = pres.slides[slide_index]
     shape = _get_table_shape(slide, shape_name_or_index)
     table = shape.table_object
+    before_rows, before_cols = _dimensions(shape)
     cell = _cell(table, row, col)
     cell.split(number_of_rows=num_rows, number_of_columns=num_cols)
-    return {
+
+    # A split is the one table command whose effect the shape itself reports,
+    # so the table is measured afterwards the way its four siblings measure
+    # theirs. Splitting one cell into n rows adds n minus 1 rows to the whole
+    # table, which was measured on a three by three, one cell into two rows,
+    # four rows afterwards. So the expected size is known and can be checked
+    # rather than only reported.
+    after_rows, after_cols = _dimensions(shape)
+    expected = (before_rows + num_rows - 1, before_cols + num_cols - 1)
+    result = {
         "success": True,
         "row": row,
         "col": col,
         "num_rows": num_rows,
         "num_cols": num_cols,
+        "table_rows": after_rows,
+        "table_columns": after_cols,
     }
+    if (after_rows, after_cols) != expected:
+        result["warnings"] = [
+            f"The table measures {after_rows} by {after_cols} and a split of "
+            f"one cell into {num_rows} by {num_cols} should have left it "
+            f"{expected[0]} by {expected[1]}. A split PowerPoint declined "
+            "reports no error, so read the table back with ppt_get_table_data "
+            "before building on this."
+        ]
+    return result
 
 
 def _set_table_borders_impl(
@@ -727,10 +792,29 @@ def _set_table_borders_impl(
             _DASH_STYLES, DASH_STYLE_MAP[key], "line dash style"
         )
 
+    # Nothing to write is not the same as nothing to do, and it used to count
+    # as a cell updated per cell in the range.
+    if not side_keywords or all(
+        value is None for value in (visible, color, weight, dash_style)
+    ):
+        return {
+            "success": True,
+            "cells_updated": 0,
+            "borders_written": 0,
+            "rows": f"{start_row}-{actual_end_row}",
+            "cols": f"{start_col}-{actual_end_col}",
+            "warnings": [
+                "No border property was given, so nothing was written. Pass "
+                "visible, color, weight or dash_style to change a border."
+            ],
+        }
+
     cells_updated = 0
+    borders_written = 0
     for r in range(start_row, actual_end_row + 1):
         for c in range(start_col, actual_end_col + 1):
             cell = _cell(table, r, c)
+            wrote_here = False
             for edge in side_keywords:
                 border = cell.get_border(edge=edge)
                 if visible is not None:
@@ -745,12 +829,17 @@ def _set_table_borders_impl(
                     border.line_weight.set(weight)
                 if dash_keyword is not None:
                     raw(border, _DASH_STYLE_CODE).set(dash_keyword)
-            if side_keywords:
+                # Counted here, after the writes, so the number is of borders
+                # PowerPoint took rather than of cells the loop walked past.
+                borders_written += 1
+                wrote_here = True
+            if wrote_here:
                 cells_updated += 1
 
     result = {
         "success": True,
         "cells_updated": cells_updated,
+        "borders_written": borders_written,
         "rows": f"{start_row}-{actual_end_row}",
         "cols": f"{start_col}-{actual_end_col}",
     }

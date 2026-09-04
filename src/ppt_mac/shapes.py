@@ -72,6 +72,49 @@ _VERTICAL_ANCHOR_VALUES = {
     "bottom": 4,    # msoAnchorBottom
 }
 
+_VALID_FILL_TYPES = {"solid", "none", "gradient"}
+
+
+# The same sentence ppt_set_table_borders carries for the same substitution,
+# written once because the two have to say the same thing.
+_LINE_VISIBILITY_WARNING = (
+    "PowerPoint for Mac's line format has no visible property, so "
+    "visible={visible} was applied as line weight and transparency instead. "
+    "PowerPoint's own no line flag is untouched, so a later weight or colour "
+    "will bring the border back."
+)
+
+
+# Every name a caller can misspell is checked by one of these, and they are all
+# called before the first write. A name checked where it is used instead costs
+# the caller a shape they did not ask for and a view that has already moved.
+def _validate_align(align) -> None:
+    """Reject an alignment name, without touching PowerPoint."""
+    if align is not None and align.lower() not in _ALIGN_VALUES:
+        raise ValueError(
+            f"Invalid align '{align}'. Must be one of: {sorted(_ALIGN_VALUES)}"
+        )
+
+
+def _validate_fill_type(fill_type) -> None:
+    """Reject a fill type name, without touching PowerPoint."""
+    if fill_type is not None and fill_type not in _VALID_FILL_TYPES:
+        raise ValueError(
+            f"Invalid fill_type '{fill_type}'. Must be one of: {sorted(_VALID_FILL_TYPES)}"
+        )
+
+
+def _validate_vertical_anchor(vertical_anchor) -> None:
+    """Reject a vertical anchor name, without touching PowerPoint."""
+    if (
+        vertical_anchor is not None
+        and vertical_anchor.lower() not in _VERTICAL_ANCHOR_VALUES
+    ):
+        raise ValueError(
+            f"Invalid vertical_anchor '{vertical_anchor}'. "
+            f"Must be one of: {sorted(_VERTICAL_ANCHOR_VALUES)}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -242,14 +285,28 @@ def _apply_font(font, font_name, font_size, bold, italic, font_color) -> None:
 
 def _apply_alignment(text_range, align) -> None:
     """Apply a paragraph alignment given by its user facing name."""
-    align_val = _ALIGN_VALUES.get(align.lower())
-    if align_val is None:
-        raise ValueError(
-            f"Invalid align '{align}'. Must be one of: {sorted(_ALIGN_VALUES)}"
-        )
+    _validate_align(align)
     text_range.paragraph_format.alignment.set(
-        to_keyword(PpParagraphAlignment, align_val, "alignment")
+        to_keyword(PpParagraphAlignment, _ALIGN_VALUES[align.lower()], "alignment")
     )
+
+
+def _verify_text_written(shape, text) -> None:
+    """Check that text written at creation actually landed.
+
+    ``ppt_set_text`` reads the same write back and raises when the frame comes
+    back empty, and the creation path is where a model leans on it hardest, so
+    the two now hold to the same standard. One Apple Event, and it is the only
+    evidence that the shape holds what the caller asked for.
+    """
+    if not text:
+        return
+    written = shape.text_frame.text_range.content()
+    if is_missing(written) or written == "":
+        raise RuntimeError(
+            f"PowerPoint reported no error but shape '{shape.name()}' came back "
+            "empty, so the text was not written."
+        )
 
 
 def _resolve_image_path(file_path: str) -> str:
@@ -275,6 +332,12 @@ def _add_shape_impl(
     line_visible, line_color, line_weight,
     corner_radius, corner_radius_pt,
 ):
+    # Both names are checked here rather than where they are used, so a
+    # misspelling costs nothing. Checked later, it left a styled shape on the
+    # slide and handed the caller an error for it.
+    _validate_align(align)
+    _validate_fill_type(fill_type)
+
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
     # FrozenRedraw already degrades to a no-op where win32 is missing, so this
@@ -313,11 +376,14 @@ def _apply_shape_attrs(
     line_visible, line_color, line_weight, corner_radius, corner_radius_pt,
     width, height,
 ):
+    warnings = []
+
     if text:
         text = text.replace("\n", "\r")  # \n -> paragraph break (Enter)
-        # \v (vertical tab) -> line break (Shift+Enter) — passed through as-is
+        # \v (vertical tab) -> line break (Shift+Enter), passed through as it is
         text_range = shape.text_frame.text_range
         text_range.content.set(text)
+        _verify_text_written(shape, text)
 
         if font_name is not None or font_size is not None or bold is not None \
                 or italic is not None or font_color is not None:
@@ -330,12 +396,8 @@ def _apply_shape_attrs(
         if align is not None:
             _apply_alignment(text_range, align)
 
-    # Inline fill — avoids a follow-up ppt_set_fill call
-    _VALID_FILL_TYPES = {"solid", "none", "gradient"}
-    if fill_type is not None and fill_type not in _VALID_FILL_TYPES:
-        raise ValueError(
-            f"Invalid fill_type '{fill_type}'. Must be one of: {sorted(_VALID_FILL_TYPES)}"
-        )
+    # Inline fill, which saves a follow-up ppt_set_fill call
+    _validate_fill_type(fill_type)
     if fill_color is not None or fill_type is not None or fill_transparency is not None:
         effective_type = fill_type or ("solid" if fill_color is not None else None)
         fill = shape.fill_format
@@ -360,9 +422,12 @@ def _apply_shape_attrs(
         if fill_transparency is not None and effective_type != "none":
             fill.transparency.set(fill_transparency)
 
-    # Inline line/border — avoids a follow-up ppt_set_line call
+    # Inline line and border, which saves a follow-up ppt_set_line call
     if line_visible is not None:
-        _apply_line_visibility(shape.line_format, line_visible)
+        warnings.append(_LINE_VISIBILITY_WARNING.format(visible=line_visible))
+        failure = _apply_line_visibility(shape.line_format, line_visible)
+        if failure:
+            warnings.append(failure)
     if line_color is not None:
         shape.line_format.fore_color.set(hex_to_rgb_list(line_color))
     if line_weight is not None:
@@ -382,7 +447,8 @@ def _apply_shape_attrs(
                     short_side = min(width, height)
                     adj_value = min(0.5, corner_radius_pt / short_side)
                 else:
-                    # Ratio: map user-facing 0.0–1.0 to the adjustment's 0.0–0.5
+                    # Ratio: map the user facing 0.0 to 1.0 onto the
+                    # adjustment's own 0.0 to 0.5
                     adj_value = corner_radius * 0.5
                 # An adjustment carries its number in `adjustment value`. Its
                 # `value` is a different thing and setting that does nothing.
@@ -390,7 +456,7 @@ def _apply_shape_attrs(
         except Exception:
             logger.warning("Failed to set corner_radius on shape '%s'", shape.name())
 
-    return {
+    result = {
         "success": True,
         "shape_name": shape.name(),
         "shape_index": shape.z_order_position(),
@@ -399,9 +465,13 @@ def _apply_shape_attrs(
             shape.auto_shape_type(),
         ),
     }
+    if warnings:
+        result["warnings"] = warnings
+    return result
 
 
-def _apply_line_visibility(line, visible: bool) -> None:
+
+def _apply_line_visibility(line, visible: bool):
     """Show or hide a border without a `visible` property to set.
 
     ``line format`` has no ``visible`` on macOS, so this is a stand-in and not
@@ -410,8 +480,10 @@ def _apply_line_visibility(line, visible: bool) -> None:
     weight or colour will bring the border back.
 
     A shape with no line format to speak of, a picture or a placeholder, answers
-    with an error rather than ignoring the request. That is worth a warning and
-    not worth throwing away a shape that has already been created and styled.
+    with an error rather than ignoring the request. Returns that failure as a
+    sentence for the caller to pass on, and None when the writes went through,
+    because a caller that swallowed it was reporting success for a border it
+    had not touched.
     """
     try:
         if visible:
@@ -425,6 +497,12 @@ def _apply_line_visibility(line, visible: bool) -> None:
             line.transparency.set(1.0)
     except CommandError as exc:
         logger.warning("This shape has no border to show or hide: %s", exc)
+        return (
+            f"This shape has no line format to show or hide ({exc}), so "
+            f"visible={visible} was not applied. Pictures and some "
+            "placeholders answer that way."
+        )
+    return None
 
 
 def _add_textbox_impl(
@@ -432,6 +510,11 @@ def _add_textbox_impl(
     font_name, font_size, bold, italic, font_color, align,
     vertical_anchor,
 ):
+    # Before the first Apple Event, so a misspelled name costs neither a stray
+    # text box on the slide nor a jump to a slide the caller was not looking at.
+    _validate_align(align)
+    _validate_vertical_anchor(vertical_anchor)
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -457,30 +540,29 @@ def _add_textbox_impl(
     )
     if text:
         text = text.replace("\n", "\r")  # \n -> paragraph break (Enter)
-        # \v (vertical tab) -> line break (Shift+Enter) — passed through as-is
+        # \v (vertical tab) -> line break (Shift+Enter), passed through as it is
         textbox.text_frame.text_range.content.set(text)
+        _verify_text_written(textbox, text)
 
-    # Inline font — avoids a follow-up ppt_format_text call
+    # Inline font, which saves a follow-up ppt_format_text call
     if any(x is not None for x in [font_name, font_size, bold, italic, font_color]):
         _apply_font(
             textbox.text_frame.text_range.font,
             font_name, font_size, bold, italic, font_color,
         )
 
-    # Inline alignment — avoids a follow-up ppt_set_paragraph_format call
+    # Inline alignment, which saves a follow-up ppt_set_paragraph_format call
     if align is not None:
         _apply_alignment(textbox.text_frame.text_range, align)
 
-    # Inline vertical anchor — avoids a follow-up ppt_set_textframe call
+    # Inline vertical anchor, which saves a follow-up ppt_set_textframe call
     if vertical_anchor is not None:
-        anchor_val = _VERTICAL_ANCHOR_VALUES.get(vertical_anchor.lower())
-        if anchor_val is None:
-            raise ValueError(
-                f"Invalid vertical_anchor '{vertical_anchor}'. "
-                f"Must be one of: {sorted(_VERTICAL_ANCHOR_VALUES)}"
-            )
         textbox.text_frame.vertical_anchor.set(
-            to_keyword(MsoVerticalAnchor, anchor_val, "vertical anchor")
+            to_keyword(
+                MsoVerticalAnchor,
+                _VERTICAL_ANCHOR_VALUES[vertical_anchor.lower()],
+                "vertical anchor",
+            )
         )
 
     return {

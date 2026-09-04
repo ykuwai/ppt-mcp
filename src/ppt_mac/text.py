@@ -71,6 +71,14 @@ logger = logging.getLogger(__name__)
 _AUTO_SIZE = dict(PpAutoSize)
 _AUTO_SIZE.setdefault(ppAutoSizeTextToFitShape, k.ppAutoSizeTextToFitShape)
 
+# At module scope rather than inside the branch that uses it, so the name a
+# caller passes can be checked before anything is written.
+_VERTICAL_ANCHOR_MAP = {
+    "top": 1,       # msoAnchorTop
+    "middle": 3,    # msoAnchorMiddle
+    "bottom": 4,    # msoAnchorBottom
+}
+
 
 # ---------------------------------------------------------------------------
 # Small helpers
@@ -620,7 +628,7 @@ def _shape_info_to_markdown(info: dict, subheading_level: str = "##") -> str:
     if info["is_title"]:
         return _shape_paragraphs_to_markdown(shape, as_heading="#")
 
-    # Subtitle — plain text (no heading marker)
+    # A subtitle is plain text, with no heading marker
     if info["is_subtitle"]:
         return _shape_paragraphs_to_markdown(shape)
 
@@ -746,7 +754,7 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text: str) -> dict:
 
     tr = shape.text_frame.text_range
     text = text.replace('\n', '\r')  # \n -> paragraph break, CR here too
-    # \v (vertical tab) -> line break (Shift+Enter) — passed through as-is
+    # \v (vertical tab) -> line break (Shift+Enter), passed through as it is
     tr.content.set(text)
 
     # Nothing is trusted because it did not raise.
@@ -1067,19 +1075,83 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
     effective_use_text_color = False if color is not None else use_text_color
     effective_use_text_font = False if font_name is not None else use_text_font
 
-    return {
+    # Read back the two that decide whether the paragraph is bulleted at all,
+    # plus the indent when one was asked for. Those are the properties this
+    # module already reads elsewhere, so the route is known to work. The rest
+    # of the bullet format is written blind and the warning below says so
+    # rather than letting the echo pass for evidence.
+    measured_type = _measured_bullet_type(bullet)
+    measured_indent = indent_level
+    if indent_level is not None:
+        try:
+            measured_indent = _clean(target.indent_level()) or indent_level
+        except CommandError:
+            pass
+
+    result = {
         "status": "success",
         "shape_name": shape.name(),
         "paragraph_index": paragraph_index or "all",
-        "bullet_type": bullet_type,
+        "bullet_type": measured_type or bullet_type,
         "numbered_style": numbered_style,
-        "indent_level": indent_level,
+        "indent_level": measured_indent,
         "color_hex": color,
         "size": size,
         "font_name": font_name,
         "use_text_color": effective_use_text_color,
         "use_text_font": effective_use_text_font,
     }
+
+    warnings = []
+    if measured_type is not None and measured_type != bullet_type:
+        warnings.append(
+            f"A {bullet_type} bullet was asked for and the paragraph reads "
+            f"back as {measured_type}, so PowerPoint did not take it."
+        )
+    unmeasured = [
+        name for name, value in (
+            ("numbered_style", numbered_style), ("color_hex", color),
+            ("size", size), ("font_name", font_name),
+            ("use_text_color", use_text_color), ("use_text_font", use_text_font),
+        )
+        if value is not None
+    ]
+    if unmeasured:
+        warnings.append(
+            f"{', '.join(unmeasured)} is what was asked for rather than a "
+            "measurement. PowerPoint for Mac answers nothing for those parts "
+            "of a bullet format, so only the bullet type and the indent level "
+            "above were read back."
+        )
+    if warnings:
+        result["warnings"] = warnings
+    return result
+
+
+def _measured_bullet_type(bullet):
+    """Read a bullet back, in the words the tool takes it in.
+
+    ``visible`` and ``bullet type`` are the pair ``ppt_get_slide_markdown``
+    already reads, which is why these two are read and the rest of the bullet
+    format is not. None means PowerPoint would not say.
+    """
+    from ppt_com.text import BULLET_TYPE_MAP
+
+    try:
+        if not bullet.visible():
+            return "none"
+        word = bullet.bullet_type()
+    except (CommandError, AttributeError):
+        return None
+    if is_missing(word):
+        return None
+    for value, keyword in PpBulletType.items():
+        if keyword == word:
+            for name, mapped in BULLET_TYPE_MAP.items():
+                if mapped == value:
+                    return name
+            return None
+    return None
 
 
 def _replace_characters(text_range, start, length, new_text):
@@ -1230,6 +1302,34 @@ def _set_textframe_impl(slide_index, shape_name_or_index,
                         orientation, vertical_anchor) -> dict:
     from ppt_com.text import AUTO_SIZE_MAP, ORIENTATION_MAP
 
+    # All three names are checked before the first write. Checked where they
+    # were used, a misspelled one handed the caller an error and a text frame
+    # that had already taken four new margins and a new wrap setting.
+    orient_val = None
+    if orientation is not None:
+        orient_val = ORIENTATION_MAP.get(orientation)
+        if orient_val is None:
+            raise ValueError(
+                f"Invalid orientation '{orientation}'. "
+                f"Valid values: {list(ORIENTATION_MAP.keys())}"
+            )
+    auto_size_val = None
+    if auto_size is not None:
+        auto_size_val = AUTO_SIZE_MAP.get(auto_size)
+        if auto_size_val is None:
+            raise ValueError(
+                f"Invalid auto_size '{auto_size}'. "
+                f"Valid values: {list(AUTO_SIZE_MAP.keys())}"
+            )
+    anchor_val = None
+    if vertical_anchor is not None:
+        anchor_val = _VERTICAL_ANCHOR_MAP.get(vertical_anchor.lower())
+        if anchor_val is None:
+            raise ValueError(
+                f"Invalid vertical_anchor '{vertical_anchor}'. "
+                f"Must be one of: {sorted(_VERTICAL_ANCHOR_MAP)}"
+            )
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1250,42 +1350,19 @@ def _set_textframe_impl(slide_index, shape_name_or_index,
         tf.margin_bottom.set(margin_bottom)
     if word_wrap is not None:
         tf.word_wrap.set(bool(word_wrap))
-    if orientation is not None:
-        orient_val = ORIENTATION_MAP.get(orientation)
-        if orient_val is None:
-            raise ValueError(
-                f"Invalid orientation '{orientation}'. "
-                f"Valid values: {list(ORIENTATION_MAP.keys())}"
-            )
+    if orient_val is not None:
         # `orientation` is read only here; `text orientation` is the settable
         # one and carries the same enumerators.
         tf.text_orientation.set(
             to_keyword(MsoTextOrientation, orient_val, "text orientation")
         )
 
-    if auto_size is not None:
-        auto_size_val = AUTO_SIZE_MAP.get(auto_size)
-        if auto_size_val is None:
-            raise ValueError(
-                f"Invalid auto_size '{auto_size}'. "
-                f"Valid values: {list(AUTO_SIZE_MAP.keys())}"
-            )
+    if auto_size_val is not None:
         # No TextFrame2 detour: `auto size` is on the text frame itself and
         # covers shrink to fit as well.
         tf.auto_size.set(to_keyword(_AUTO_SIZE, auto_size_val, "auto size"))
 
-    if vertical_anchor is not None:
-        VERTICAL_ANCHOR_MAP = {
-            "top": 1,       # msoAnchorTop
-            "middle": 3,    # msoAnchorMiddle
-            "bottom": 4,    # msoAnchorBottom
-        }
-        anchor_val = VERTICAL_ANCHOR_MAP.get(vertical_anchor.lower())
-        if anchor_val is None:
-            raise ValueError(
-                f"Invalid vertical_anchor '{vertical_anchor}'. "
-                f"Must be one of: {sorted(VERTICAL_ANCHOR_MAP)}"
-            )
+    if anchor_val is not None:
         tf.vertical_anchor.set(
             to_keyword(MsoVerticalAnchor, anchor_val, "vertical anchor")
         )
@@ -1329,7 +1406,7 @@ def _get_widows(shape, max_chars, max_words):
     widows = []
     for li in range(2, len(lines) + 1):
         prev_text = lines[li - 2]
-        # Explicit break (\r = paragraph, \n = soft return) — not a widow.
+        # An explicit break (\r = paragraph, \n = soft return) is not a widow.
         if prev_text.endswith("\r") or prev_text.endswith("\n"):
             continue
 
@@ -1367,7 +1444,7 @@ def _get_short_vbreaks(shape, max_chars, max_words):
     for li in range(2, len(lines) + 1):
         prev_text = lines[li - 2]
         # Only flag lines after an explicit \v (which reads back as \n).
-        # Skip \r (paragraph break) — those are intentional structural breaks.
+        # \r is a paragraph break, which is deliberate structure, so it is skipped.
         if not prev_text.endswith("\n"):
             continue
 
@@ -1448,7 +1525,7 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
             if not _text_of(tr).strip():
                 continue
 
-            # Detect auto-shrink — only when text is actually being
+            # Detect auto-shrink, only when text is actually being
             # compressed (natural height exceeds available space).
             try:
                 if tf.auto_size() == shrink_to_fit:
@@ -1511,7 +1588,7 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                         break
 
                 if not resolved:
-                    # Revert width — try soft-return insertion instead
+                    # Revert the width and try inserting a soft return instead
                     shape.width.set(original_width)
                     remaining = widows
                     # Strategy 2: insert \v at word boundary
