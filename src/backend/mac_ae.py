@@ -248,11 +248,22 @@ class PowerPointAppleEventWrapper:
         """
         number = error_number(exc)
         if number == AE_NOT_AUTHORISED:
+            # Written for the model to relay, not for a developer to debug.
+            # The user has to fix this themselves, so the useful thing is to
+            # route them there in one step. Note whose permission it is: macOS
+            # attributes automation consent to the responsible parent process,
+            # so it is the terminal or editor that launched the server, not
+            # Python, that appears in the list.
             return AppleEventError(
-                "macOS refused permission to control PowerPoint. Allow it under "
-                "System Settings > Privacy & Security > Automation, for the "
-                "application that launched this server (the terminal or editor, "
-                "not Python itself), then try again.",
+                "macOS refused permission to control PowerPoint.\n"
+                "Open System Settings > Privacy & Security > Automation and "
+                "allow the application that launched this server (the terminal "
+                "or editor, not Python itself) to control Microsoft PowerPoint.\n"
+                "To open that pane directly, run:\n"
+                "  open \"x-apple.systempreferences:com.apple.preference.security"
+                "?Privacy_Automation\"\n"
+                "The prompt cannot be answered over ssh or with no one at the "
+                "screen.",
                 number,
             )
         if number == AE_CONNECTION_INVALID:
