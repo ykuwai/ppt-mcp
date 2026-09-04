@@ -49,6 +49,9 @@ dependencies = [
     # a chance to run (#185).
     "pywin32>=306; sys_platform == 'win32'",
     "appscript>=1.4.0; sys_platform == 'darwin'",
+    # PowerPoint for Mac has no slide export command, so slide images are
+    # rendered from the deck's PDF export with Quartz (#187).
+    "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
 ]
 
 [project.urls]

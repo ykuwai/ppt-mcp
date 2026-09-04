@@ -435,10 +435,18 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
     Returns:
         Image: PNG image of the slide for visual inspection
     """
-    from backend import ppt
+    from backend import IS_MACOS, ppt
     from utils.navigation import goto_slide
 
     def _export_slide_impl(slide_idx: int):
+        if IS_MACOS:
+            # PowerPoint for Mac has no Slide.Export. The preview is rendered
+            # from the deck's PDF export instead; see ppt_mac/export.py.
+            from ppt_mac.export import render_slide_png
+
+            goto_slide(ppt._get_app_impl(), slide_idx)
+            return render_slide_png(slide_idx)
+
         app = ppt._get_app_impl()
         pres = ppt._get_pres_impl()
         goto_slide(app, slide_idx)

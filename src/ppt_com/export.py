@@ -832,3 +832,17 @@ def register_tools(mcp):
         Multiple slides are placed as file drop (paste inserts all images).
         """
         return copy_to_clipboard(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# PowerPoint for Mac has no slide export command, so the Apple Event versions
+# go through the deck's PDF export and render the pages with Quartz. Same
+# function names and signatures, so nothing else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import export as _mac_export
+
+    use_mac_impls(globals(), _mac_export)
