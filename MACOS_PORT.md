@@ -417,10 +417,13 @@ Whether it executes is unproven. With no macro present it returns -18, which is
 equally consistent with "macro not found" and "handler is a stub". One line
 closes the question: put `Sub Ping()` in a `.pptm`, open it, and call it.
 
-Two constraints to weigh before building on it. Macro security consent is a real
-user facing cost, and an MCP server that asks people to lower it is a hard sell.
-And `run VB macro` takes only a list of text and returns only an integer, so
-anything richer has to come back out of band.
+Three constraints to weigh before building on it. Macro security consent is a
+real user facing cost, and an MCP server that asks people to lower it is a hard
+sell. `run VB macro` takes only a list of text and returns only an integer, so
+anything richer has to come back out of band. And it can only run a macro that
+is already in the file. The old `do visual basic`, which compiled a string, is
+gone from the dictionary entirely, so there is no route that does not involve
+shipping a `.pptm` with the macro already in it.
 
 ---
 
