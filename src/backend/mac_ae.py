@@ -30,6 +30,7 @@ import subprocess
 import threading
 import time
 from concurrent.futures import Future
+from concurrent.futures import TimeoutError as FutureTimeout
 from queue import Queue
 from typing import Any, Callable, Optional
 
@@ -60,6 +61,11 @@ _RETRY_INTERVAL = 2    # seconds between retries
 # enough for a real save and short enough to surface as an error the model can
 # act on.
 DEFAULT_TIMEOUT = int(os.getenv("PPT_AE_TIMEOUT", "20"))
+
+# How long a call will queue behind the ones already in front of it before
+# it gives up. Only one thing at a time reaches PowerPoint, so a caller that
+# fires several tools at once puts the rest in line here.
+_QUEUE_WAIT = DEFAULT_TIMEOUT * 3
 
 # The Windows wrapper's ESC-the-dialog escape hatch has no Apple Event
 # equivalent, so the flag exists only to keep the two module surfaces identical.
@@ -267,6 +273,46 @@ def osascript(script: str, timeout: float = DEFAULT_TIMEOUT) -> str:
     return (proc.stdout or "").strip()
 
 
+class _Job:
+    """One piece of work waiting for the worker thread.
+
+    It carries an extra handshake the Windows wrapper does not need. Work is
+    queued from whichever thread the tool call arrived on, and a caller that
+    gives up waiting used to leave its job in the queue, where the worker ran it
+    minutes later against a deck that had moved on. That is where a caller got
+    back an error with no message at all and then found the picture on the slide
+    anyway, and where retrying it put a second copy there. So the caller and the
+    worker agree on exactly one of two outcomes before any of it runs.
+    """
+
+    __slots__ = ("func", "args", "kwargs", "future", "started", "_lock", "_dropped")
+
+    def __init__(self, func: Callable, args: tuple, kwargs: dict):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.future: Future = Future()
+        self.started = threading.Event()
+        self._lock = threading.Lock()
+        self._dropped = False
+
+    def claim(self) -> bool:
+        """Worker side. True when the job is still wanted."""
+        with self._lock:
+            if self._dropped:
+                return False
+            self.started.set()
+            return True
+
+    def drop(self) -> bool:
+        """Caller side. True when the job was taken back before it began."""
+        with self._lock:
+            if self.started.is_set():
+                return False
+            self._dropped = True
+            return True
+
+
 class PowerPointAppleEventWrapper:
     """Manages the connection to PowerPoint over Apple Events.
 
@@ -316,7 +362,16 @@ class PowerPointAppleEventWrapper:
             item = self._queue.get()
             if item is None:
                 break
-            func, args, kwargs, future = item
+            if not item.claim():
+                # The caller stopped waiting and already said so. Running this
+                # now would change the deck long after the tool call that asked
+                # for it reported failure.
+                logger.warning(
+                    "Skipping %s: the call that queued it gave up waiting",
+                    getattr(item.func, "__name__", item.func),
+                )
+                continue
+            func, args, kwargs, future = item.func, item.args, item.kwargs, item.future
             for attempt in range(_RETRY_MAX + 1):
                 try:
                     future.set_result(func(*args, **kwargs))
@@ -388,12 +443,40 @@ class PowerPointAppleEventWrapper:
         The single entry point for every operation, matching the Windows
         wrapper. Blocks until the work finishes or the worker gives up.
         """
-        future: Future = Future()
-        self._queue.put((func, args, kwargs, future))
+        job = _Job(func, args, kwargs)
+        self._queue.put(job)
+
+        # Two waits, not one. The first is for the queue, and it is the caller's
+        # to abandon; the second is for PowerPoint, and it starts only once the
+        # work does. Timing both together used to charge a call for the time it
+        # spent in line, which is how a handful of parallel tool calls made the
+        # ones at the back fail while their work went ahead regardless.
+        if not job.started.wait(timeout=_QUEUE_WAIT):
+            if job.drop():
+                raise AppleEventError(
+                    f"PowerPoint was still busy with an earlier request after "
+                    f"{_QUEUE_WAIT}s, so this one was taken back rather than "
+                    "left to run later on its own. Nothing was changed. Only "
+                    "one request at a time reaches PowerPoint on macOS, so "
+                    "call these tools one after another rather than several in "
+                    "the same turn."
+                )
+            # It started while that was being decided, so wait for it properly.
+
         # Generous relative to the per call ceiling, so the worker's own retry
         # loop is what decides, not this.
         budget = DEFAULT_TIMEOUT * (_RETRY_MAX + 1) + _RETRY_INTERVAL * _RETRY_MAX + 5
-        return future.result(timeout=budget)
+        try:
+            return job.future.result(timeout=budget)
+        except FutureTimeout:
+            # `str()` on this one is the empty string, so letting it out reaches
+            # the caller as "Failed to add picture: " with nothing after it.
+            raise AppleEventError(
+                f"PowerPoint did not finish this within {budget}s and the "
+                "request was abandoned. It may still be working, so check the "
+                "deck before asking for the same thing again.",
+                AE_TIMED_OUT,
+            ) from None
 
     # -- connection --------------------------------------------------------
 

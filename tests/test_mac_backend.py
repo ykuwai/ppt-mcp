@@ -7,6 +7,7 @@ by running the server.
 """
 
 import sys
+import time
 
 import pytest
 
@@ -822,3 +823,80 @@ def _command_error(number):
             return f"stub error {number}"
 
     return _Stub()
+
+
+@macos_only
+class TestQueueingBehindAnotherCall:
+    """Only one request at a time reaches PowerPoint, and the rest wait.
+
+    A caller that stopped waiting used to leave its work in the queue, where the
+    worker ran it later against a deck that had moved on. That is how a tool call
+    reported failure with no message at all and put its picture on the slide
+    regardless, and how retrying it put a second one there.
+    """
+
+    def _wrapper(self):
+        from backend.mac_ae import PowerPointAppleEventWrapper
+
+        wrapper = PowerPointAppleEventWrapper()
+        wrapper.start()
+        return wrapper
+
+    def test_work_taken_back_after_the_wait_never_runs(self, monkeypatch):
+        import threading
+
+        from backend import mac_ae
+
+        monkeypatch.setattr(mac_ae, "_QUEUE_WAIT", 0.2)
+        release = threading.Event()
+        ran = []
+
+        wrapper = self._wrapper()
+        try:
+            blocker = threading.Thread(
+                target=lambda: wrapper.execute(lambda: release.wait(5)), daemon=True
+            )
+            blocker.start()
+            # Let the blocker reach the worker before the second call queues.
+            time_waited = 0.0
+            while wrapper._queue.unfinished_tasks == 0 and time_waited < 2:
+                time.sleep(0.01)
+                time_waited += 0.01
+
+            with pytest.raises(mac_ae.AppleEventError) as caught:
+                wrapper.execute(lambda: ran.append("second"))
+            assert "one after another" in str(caught.value)
+
+            release.set()
+            blocker.join(5)
+            # The worker is now free. Give it every chance to run the dropped
+            # job, so this fails if the job was left in the queue.
+            wrapper.execute(lambda: None)
+            assert ran == []
+        finally:
+            release.set()
+            wrapper.stop()
+
+    def test_a_call_is_not_charged_for_the_time_it_spent_in_line(self, monkeypatch):
+        """It waits its turn and then runs, rather than failing at the back."""
+        import threading
+
+        from backend import mac_ae
+
+        monkeypatch.setattr(mac_ae, "_QUEUE_WAIT", 5)
+        release = threading.Event()
+
+        wrapper = self._wrapper()
+        try:
+            blocker = threading.Thread(
+                target=lambda: wrapper.execute(lambda: release.wait(5)), daemon=True
+            )
+            blocker.start()
+            time.sleep(0.1)
+            releaser = threading.Timer(0.3, release.set)
+            releaser.start()
+            assert wrapper.execute(lambda: "landed") == "landed"
+            blocker.join(5)
+        finally:
+            release.set()
+            wrapper.stop()

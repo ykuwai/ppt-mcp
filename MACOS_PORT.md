@@ -387,7 +387,49 @@ One more path trap. An HFS colon path is treated as a **literal filename**,
 producing a file called `Macintosh HD:Users:…png` inside the container root.
 Always use POSIX paths.
 
-### 5.4 Automation consent
+### 5.4 One request at a time, and what a caller in the queue used to get back
+
+Everything reaches PowerPoint through a single worker thread, because several
+Apple Events in flight at once are not reliable. A caller that fires several
+tools in the same turn therefore puts them in a queue.
+
+That queue was where three separate complaints came from, all one bug. The
+caller's clock started when the work was **queued**, not when it **ran**, so a
+call waiting behind two slow ones blew its budget and reported failure. The
+failure it reported was `concurrent.futures.TimeoutError`, whose `str()` is the
+empty string, so it arrived as `Failed to add picture: ` with nothing after it.
+And the job was still in the queue, so the worker ran it a minute later anyway
+and the picture appeared on the slide. A caller who believed the error and tried
+again got two.
+
+Fixed by splitting the wait in two. The caller waits for its turn, and that wait
+is its to abandon: a job taken back before it begins is skipped by the worker
+rather than run late. Only once the work starts does the per call budget begin.
+Both waits now end in a sentence rather than in an empty string.
+
+What this does **not** fix is ordering. Parallel tool calls arrive in whatever
+order the transport hands them over, so "add a slide" and "read slide 4" sent
+together can still run the wrong way round, and the read answers honestly about
+a deck that has not grown yet. Nothing inside the server can put that right, so
+the instructions say to call these tools one after another on macOS.
+
+### 5.5 PowerPoint cannot read an SVG, and does not say so
+
+`ppt_add_svg_icon` handed PowerPoint the SVG it downloaded. PowerPoint answered
+that the picture was made and left a 25 by 25 empty box on the slide instead,
+which is the silent no-op of section 5 wearing a different hat. Every icon
+failed and each failure left litter behind.
+
+`sips` rasterises the SVG first, and everything it needs was measured rather
+than assumed. It honours `viewBox` and renders at the size asked for rather than
+scaling up the 48 by 48 the file declares, it keeps the alpha channel so the
+icon sits on any background, and it keeps the fill colour substituted in for
+`currentColor`. SVG support in `sips` arrived with macOS 13, so it is probed
+once and the tool refuses with that reason where it is absent.
+
+`_place_picture` now also deletes the empty box before it reports the failure.
+
+### 5.6 Automation consent
 
 Two independent gates exist and neither substitutes for the other. Automation
 consent (TCC) governs the calling process talking to PowerPoint. The App Sandbox

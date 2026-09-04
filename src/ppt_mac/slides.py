@@ -276,6 +276,11 @@ def _add_slide_impl(
         friendly = _friendly_layout(layout_name.lower().strip().replace(" ", "_"))
         if friendly is not None:
             layout_keyword = to_keyword(PpSlideLayout, friendly, "slide layout")
+            # Report the name that was asked for and applied. `custom layout`
+            # declares no name here, so reading it back answers nothing, and
+            # answering null for a layout this call chose itself told the
+            # caller their own argument had been ignored.
+            resolved_layout_name = friendly
         else:
             designs = elements(pres.designs)
             if design_index is not None and (

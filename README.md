@@ -319,6 +319,10 @@ Not available on macOS:
 
 Smaller differences:
 
+- **Call the tools one after another, not several in the same turn.** Only one
+  request at a time reaches PowerPoint, so the rest queue behind it and come
+  out in whatever order they arrived. A call left waiting too long is taken
+  back and says so, having changed nothing.
 - A few tools accept an argument that has no counterpart, a screen tip on a
   hyperlink for instance. Those refuse with a message naming the argument, so
   dropping it and retrying works.
@@ -328,6 +332,9 @@ Smaller differences:
   than the Windows route.
 - Automation consent belongs to whichever application launched the server, so
   running it from a different terminal or editor raises the prompt again.
+- Icons are rasterised with `sips` before they are inserted, because
+  PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
+  systems get a refusal naming the reason rather than a blank box.
 
 ## 📄 License
 

@@ -93,6 +93,26 @@ _LINE_VISIBILITY_WARNING = (
     "will bring the border back."
 )
 
+# Said in full once and then in one line. A deck is built a shape at a time and
+# the long form on every one of them buries everything else in the log, while
+# saying nothing at all would hide a substitution that changes what the slide
+# looks like. So the reason is given once and afterwards only the fact.
+_LINE_VISIBILITY_WARNING_AGAIN = (
+    "visible={visible} was again applied as line weight and transparency, the "
+    "stand-in explained in full the first time it came up this session."
+)
+
+_line_visibility_explained = False
+
+
+def _line_visibility_warning(visible) -> str:
+    """The visibility stand-in warning, in full the first time and short after."""
+    global _line_visibility_explained
+    if _line_visibility_explained:
+        return _LINE_VISIBILITY_WARNING_AGAIN.format(visible=visible)
+    _line_visibility_explained = True
+    return _LINE_VISIBILITY_WARNING.format(visible=visible)
+
 
 # Every name a caller can misspell is checked by one of these, and they are all
 # called before the first write. A name checked where it is used instead costs
@@ -417,7 +437,7 @@ def _apply_shape_attrs(
 
     # Inline line and border, which saves a follow-up ppt_set_line call
     if line_visible is not None:
-        warnings.append(_LINE_VISIBILITY_WARNING.format(visible=line_visible))
+        warnings.append(_line_visibility_warning(line_visible))
         failure = _apply_line_visibility(shape.line_format, line_visible)
         if failure:
             warnings.append(failure)

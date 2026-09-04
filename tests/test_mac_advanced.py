@@ -320,9 +320,10 @@ class TestStaging:
         assert result["source_url"] == "https://example.test/a.png"
         assert os.listdir(staging) == []
 
-    def test_an_svg_icon_is_staged_and_coloured_before_it_is_handed_over(
+    def test_an_svg_icon_is_coloured_then_rendered_to_a_png_before_it_is_handed_over(
         self, tmp_path, monkeypatch
     ):
+        """PowerPoint for Mac cannot read an SVG, so it is never handed one."""
         from ppt_mac import advanced_ops
 
         staging = tmp_path / "container"
@@ -334,18 +335,53 @@ class TestStaging:
                 "image/svg+xml",
             ),
         )
+        monkeypatch.setattr(advanced_ops, "_sips_renders_svg", lambda: True)
+
+        rendered = []
+
+        def fake_render(svg_path, png_path, pixels):
+            rendered.append((open(svg_path).read(), pixels))
+            with open(png_path, "wb") as handle:
+                handle.write(b"\x89PNG\r\n\x1a\n")
+            return True
+
+        monkeypatch.setattr(advanced_ops, "_sips_to_png", fake_render)
 
         with _fake_deck([]) as deck:
             result = advanced_ops._add_svg_icon_impl(
                 1, "bolt", 0, 0, 72, 72, "#1F6FEB", "outlined", False
             )
 
-        assert "currentColor" not in deck.picture_contents[0]
-        assert "#1F6FEB" in deck.picture_contents[0]
-        assert os.path.dirname(deck.picture_paths[0]) == str(staging)
+        (svg_text, pixels) = rendered[0]
+        assert "currentColor" not in svg_text
+        assert "#1F6FEB" in svg_text
+        assert pixels == 72 * advanced_ops._SVG_RENDER_SCALE
+
+        handed_over = deck.picture_paths[0]
+        assert handed_over.endswith(".png")
+        assert os.path.dirname(handed_over) == str(staging)
+        assert "PNG" in deck.picture_contents[0]
         assert result["icon_name"] == "bolt"
         assert result["source_url"].endswith("/outlined/bolt.svg")
         assert os.listdir(staging) == []
+
+    def test_an_svg_icon_refuses_where_sips_cannot_read_an_svg(self, monkeypatch):
+        """Rather than leave the empty box PowerPoint puts there instead."""
+        from ppt_mac import advanced_ops
+
+        monkeypatch.setattr(advanced_ops, "_sips_renders_svg", lambda: False)
+        result = advanced_ops._add_svg_icon_impl(
+            1, "bolt", 0, 0, 72, 72, "#1F6FEB", "outlined", False
+        )
+
+        assert "error" in result
+        assert "macOS 13" in result["reason"]
+
+    def test_sips_really_renders_an_svg_on_this_machine(self):
+        """The one measurement the whole icon route rests on."""
+        from ppt_mac import advanced_ops
+
+        assert advanced_ops._sips_renders_svg() is True
 
     def test_a_picture_powerpoint_would_not_read_is_not_reported_as_added(
         self, tmp_path, monkeypatch
@@ -367,6 +403,10 @@ class TestStaging:
                 advanced_ops._add_picture_from_url_impl(
                     1, "https://example.test/a.png", 0, 0, None, None, None, False
                 )
+
+        # And the empty box is taken off the slide again. Leaving it there made
+        # every retry add another one for someone to find by hand afterwards.
+        assert len(deck.deleted_shapes) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1369,3 +1409,72 @@ def _command_error(number):
             return f"stub error {number}"
 
     return _Stub()
+
+
+# ---------------------------------------------------------------------------
+# The icon search and the icon package have to agree
+# ---------------------------------------------------------------------------
+class TestIconSearchOffersOnlyWhatCanBeInserted:
+    """Searching reads Google Fonts and inserting reads a pinned npm package.
+
+    They do not hold the same names. `auto_awesome` is on the site and has never
+    shipped in the package, so a search that offered it sent the caller to a 404.
+    """
+
+    def _stub(self, monkeypatch, available):
+        from ppt_com import advanced_ops
+
+        monkeypatch.setattr(advanced_ops, "_icon_on_cdn_cache", {})
+        monkeypatch.setattr(
+            advanced_ops, "_icon_is_on_cdn", lambda name: name in available
+        )
+        return advanced_ops
+
+    def test_a_name_the_package_does_not_serve_is_dropped(self, monkeypatch):
+        advanced_ops = self._stub(monkeypatch, {"star"})
+        results = [{"name": "auto_awesome"}, {"name": "star"}]
+
+        kept = advanced_ops._drop_what_cannot_be_inserted(results, 5)
+
+        assert [icon["name"] for icon in kept] == ["star"]
+
+    def test_the_next_match_takes_the_dropped_one_s_place(self, monkeypatch):
+        advanced_ops = self._stub(monkeypatch, {"b", "c"})
+        results = [{"name": "a"}, {"name": "b"}, {"name": "c"}]
+
+        kept = advanced_ops._drop_what_cannot_be_inserted(results, 2)
+
+        assert [icon["name"] for icon in kept] == ["b", "c"]
+
+    def test_a_cdn_that_cannot_be_reached_filters_nothing(self, monkeypatch):
+        """Not knowing is not the same answer as no."""
+        import urllib.error
+
+        from ppt_com import advanced_ops
+
+        monkeypatch.setattr(advanced_ops, "_icon_on_cdn_cache", {})
+
+        def unreachable(request, timeout=None):
+            raise urllib.error.URLError("no network")
+
+        monkeypatch.setattr(advanced_ops.urllib.request, "urlopen", unreachable)
+
+        assert advanced_ops._icon_is_on_cdn("anything") is True
+        assert advanced_ops._icon_on_cdn_cache == {}
+
+
+@macos_only
+class TestTheVisibilityStandInIsExplainedOnce:
+    """A deck is built a shape at a time and the long form buried the rest."""
+
+    def test_the_reason_is_given_once_and_then_only_the_fact(self, monkeypatch):
+        from ppt_mac import shapes
+
+        monkeypatch.setattr(shapes, "_line_visibility_explained", False)
+
+        first = shapes._line_visibility_warning(False)
+        second = shapes._line_visibility_warning(False)
+
+        assert "no visible property" in first
+        assert "no visible property" not in second
+        assert "visible=False" in second

@@ -18,7 +18,7 @@ from backend.mac_enums import MsoGradientStyle, MsoLineDashStyle, to_keyword
 from ppt_com.constants import msoGradientHorizontal
 from ppt_mac.shapes import (
     _DASH_STYLE,
-    _LINE_VISIBILITY_WARNING,
+    _line_visibility_warning,
     _apply_line_visibility,
     _get_shape,
     _slide,
@@ -222,7 +222,7 @@ def _set_line_impl(slide_index, shape_name_or_index,
     # transparency in the same call overrides the visibility stand-in below.
     visibility_failed = None
     if visible is not None:
-        warnings.append(_LINE_VISIBILITY_WARNING.format(visible=visible))
+        warnings.append(_line_visibility_warning(visible))
         visibility_failed = _apply_line_visibility(line, visible)
 
     if visibility_failed and color is None and weight is None \

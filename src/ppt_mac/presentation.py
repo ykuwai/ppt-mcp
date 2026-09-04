@@ -499,7 +499,13 @@ def _save_presentation_as_impl(
     if not os.path.exists(staged) or os.path.getsize(staged) == 0:
         raise _sandbox_error(staged)
 
-    shutil.copy2(staged, target)
+    # The caller is allowed to name the container path itself, and a caller who
+    # read the warning below is likely to. Then source and destination are one
+    # file and `copy2` raises SameFileError, whose message prints the same path
+    # twice and reads like nonsense for a save that in fact landed.
+    saved_in_place = os.path.abspath(staged) == os.path.abspath(target)
+    if not saved_in_place:
+        shutil.copy2(staged, target)
     if not os.path.exists(target) or os.path.getsize(target) == 0:
         raise RuntimeError(
             f"The deck was saved to {staged} but could not be copied to "
@@ -516,12 +522,19 @@ def _save_presentation_as_impl(
         # PowerPoint is holding the staged file now, not the caller's. Saying
         # so matters, because its own File then Save writes to the container
         # from here on and the caller's copy would quietly stop keeping up.
-        warnings.append(
-            f"The open deck is {staged}, inside PowerPoint's container, and "
-            f"{target} is a copy of it. PowerPoint for Mac cannot hold a "
-            "document outside its container, so call ppt_save_presentation_as "
-            "again to refresh the copy after further edits."
-        )
+        if saved_in_place:
+            warnings.append(
+                f"The deck was saved to {target}, which is inside PowerPoint's "
+                "container, so there is no copy anywhere else. Save it again "
+                "to a path of your own when you want one outside the container."
+            )
+        else:
+            warnings.append(
+                f"The open deck is {staged}, inside PowerPoint's container, and "
+                f"{target} is a copy of it. PowerPoint for Mac cannot hold a "
+                "document outside its container, so call ppt_save_presentation_as "
+                "again to refresh the copy after further edits."
+            )
     else:
         try:
             os.remove(staged)

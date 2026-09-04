@@ -74,6 +74,12 @@ Almost everything works the same, and where it does not, a tool answers with
 something unexpected. Read the `reason`; it says what PowerPoint for Mac does
 not have and what to do instead, and one retry along that route usually works.
 
+**Call these tools one after another, not several in the same turn.** Only one
+request at a time reaches PowerPoint here, so the rest queue behind it, and the
+order they come out in is whatever order they arrived. A call that adds a slide
+and a call that reads it, sent together, can run the wrong way round. A call
+left waiting too long is taken back and says so, having changed nothing.
+
 A refusal whose `error` names an argument rather than the tool means the tool
 itself is fine and only that argument has to go. `ppt_add_table_row` cannot
 insert at a `position`, for instance, but appending still works.

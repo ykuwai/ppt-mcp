@@ -864,3 +864,8 @@ TEXT_UNIT_EFFECT_MAP = {
     "by_paragraph": 0, "by_character": 1, "by_word": 2,
 }
 TEXT_UNIT_EFFECT_NAMES = {v: k for k, v in TEXT_UNIT_EFFECT_MAP.items()}
+
+# The icon set ppt_add_svg_icon downloads from, and the set ppt_search_icons
+# checks its matches against. Pinned, so a name that searched clean stays
+# insertable.
+ICON_PACKAGE_BASE = "https://cdn.jsdelivr.net/npm/@material-symbols/svg-400@0.31.3"

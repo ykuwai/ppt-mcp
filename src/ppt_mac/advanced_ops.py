@@ -45,6 +45,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import tempfile
 import urllib.error
 import urllib.request
@@ -68,6 +69,7 @@ from backend.mac_enums import (
 )
 from backend.unsupported import refusal as _refusal
 from ppt_com.constants import (
+    ICON_PACKAGE_BASE,
     PICTURE_COLOR_TYPE_MAP,
     PICTURE_COLOR_TYPE_NAMES,
     VIEW_TYPE_MAP,
@@ -1092,10 +1094,20 @@ def _place_picture(app, slide, path, left, top):
         )
     picture = shapes_now[-1]
     if picture.shape_type() not in _PICTURE_TYPES:
+        # Clear up before reporting. The empty box PowerPoint leaves behind is
+        # 25 by 25 and unnamed, so a caller who retries collects one of these
+        # per attempt and has to find them all by hand afterwards.
+        removed = True
+        try:
+            picture.delete()
+        except CommandError:
+            removed = False
+            logger.debug("Could not remove the empty shape left at %s", path)
         raise RuntimeError(
             "PowerPoint reported success but left a plain autoshape on the "
             "slide rather than a picture, which is what it does when it cannot "
             "read the file it was given."
+            + ("" if removed else " The empty shape is still on the slide.")
         )
     return picture
 
@@ -1167,7 +1179,72 @@ def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_c
             os.remove(tmp_path)
 
 
+# PowerPoint for Mac cannot read an SVG. Handing it one is not an error it
+# reports: it says the picture was made and leaves an empty 25 by 25 box on the
+# slide instead. So the file it is handed is always a PNG, rendered here.
+#
+# `sips` does the rendering, which arrived with macOS 13. It honours `viewBox`
+# and rasterises at whatever size is asked for rather than scaling the 48 by 48
+# the file declares, keeps the alpha channel, and keeps the fill colour that was
+# substituted in. All of that was measured rather than assumed, so a machine
+# where it is not true should say so instead of leaving an empty box behind.
+_SVG_RENDER_SCALE = 4       # pixels per point, so the icon survives a zoom
+_SVG_RENDER_MIN = 256
+_SVG_RENDER_MAX = 2048
+
+_sips_svg_support = None
+
+
+def _sips_renders_svg() -> bool:
+    """Ask this machine, once, whether ``sips`` can read an SVG."""
+    global _sips_svg_support
+    if _sips_svg_support is not None:
+        return _sips_svg_support
+
+    probe_dir = tempfile.mkdtemp(prefix="ppt_mcp_svg_probe_")
+    svg_path = os.path.join(probe_dir, "probe.svg")
+    png_path = os.path.join(probe_dir, "probe.png")
+    try:
+        with open(svg_path, "w", encoding="utf-8") as handle:
+            handle.write(
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+                '<rect width="10" height="10" fill="#000000"/></svg>'
+            )
+        _sips_svg_support = _sips_to_png(svg_path, png_path, 32)
+    except Exception:  # noqa: BLE001 - a probe that fails is a "no"
+        _sips_svg_support = False
+    finally:
+        shutil.rmtree(probe_dir, ignore_errors=True)
+    return _sips_svg_support
+
+
+def _sips_to_png(svg_path: str, png_path: str, pixels: int) -> bool:
+    """Rasterise an SVG to a PNG of ``pixels`` on its longest side."""
+    try:
+        subprocess.run(
+            ["sips", "-s", "format", "png", svg_path,
+             "--out", png_path, "-Z", str(pixels)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return os.path.exists(png_path) and os.path.getsize(png_path) > 0
+
+
 def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style, filled):
+    if not _sips_renders_svg():
+        return _refusal(
+            "ppt_add_svg_icon",
+            "PowerPoint for Mac cannot read an SVG, so the file has to be "
+            "rasterised first, and `sips` on this machine will not read one "
+            "either. SVG support in `sips` arrived with macOS 13.",
+            alternatives=[
+                "Convert the icon to PNG yourself and use ppt_add_picture",
+                "ppt_add_shape for a plain geometric marker",
+            ],
+        )
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1175,7 +1252,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
 
     hex_color = _resolve_color(pres, color)
 
-    base = "https://cdn.jsdelivr.net/npm/@material-symbols/svg-400@0.31.3"
+    base = ICON_PACKAGE_BASE
     file_name = f"{icon_name}-fill" if filled else icon_name
     svg_url = f"{base}/{style}/{file_name}.svg"
 
@@ -1185,7 +1262,10 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
         if e.code == 404:
             raise ValueError(
                 f"Icon '{icon_name}' not found (style='{style}', filled={filled}). "
-                f"Check the name at https://fonts.google.com/icons . "
+                "The icon set this reads from is a pinned npm package, and it "
+                "holds fewer names than the Google Fonts site lists, so a name "
+                "that exists there can still be missing here. Search again with "
+                "ppt_search_icons, which only offers names this package has. "
                 f"URL: {svg_url}"
             ) from None
         raise
@@ -1195,12 +1275,25 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
     if f'fill="{hex_color}"' not in svg_text:
         svg_text = svg_text.replace("<svg ", f'<svg fill="{hex_color}" ', 1)
 
-    tmp_path = _staged_file(".svg")
+    pixels = int(max(width or 0, height or 0, 0) * _SVG_RENDER_SCALE)
+    pixels = max(_SVG_RENDER_MIN, min(pixels, _SVG_RENDER_MAX))
+
+    # The SVG itself never reaches PowerPoint, so it can live in the ordinary
+    # temp directory. Only the PNG has to be staged inside the container.
+    svg_dir = tempfile.mkdtemp(prefix="ppt_mcp_svg_")
+    svg_path = os.path.join(svg_dir, "icon.svg")
+    png_path = _staged_file(".png")
     try:
-        with open(tmp_path, "w", encoding="utf-8") as handle:
+        with open(svg_path, "w", encoding="utf-8") as handle:
             handle.write(svg_text)
 
-        pic = _place_picture(app, slide, tmp_path, left, top)
+        if not _sips_to_png(svg_path, png_path, pixels):
+            raise RuntimeError(
+                f"'{icon_name}' was downloaded but could not be rendered to a "
+                "PNG, so nothing was put on the slide. The slide is unchanged."
+            )
+
+        pic = _place_picture(app, slide, png_path, left, top)
         _fit_picture(pic, left, top, width, height)
 
         return {
@@ -1213,8 +1306,9 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
             "source_url": svg_url,
         }
     finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        shutil.rmtree(svg_dir, ignore_errors=True)
+        if os.path.exists(png_path):
+            os.remove(png_path)
 
 
 # ---------------------------------------------------------------------------
