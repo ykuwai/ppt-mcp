@@ -8,7 +8,9 @@ Four things about PowerPoint for Mac shape everything below.
 **Slides cannot be addressed by name.** The dictionary declares no ``name`` on
 ``slide``, on ``custom layout`` or on ``design``, so the fields Windows fills
 with "Slide 3" or "Title and Content" come back as null here. An invented value
-would read as real and be wrong, which is worse than an honest null.
+would read as real and be wrong, which is worse than an honest null. The one
+exception is a built-in layout ``ppt_add_slide`` was given by name, where the
+name is what the caller passed rather than anything read back.
 
 **There is no FindBySlideID.** Following a slide across a move means reading
 every slide ID and looking the wanted one up. That is one Apple Event for the
@@ -273,14 +275,15 @@ def _add_slide_impl(
             pres.slides[like_slide_index].custom_layout
         )
     elif layout_name:
-        friendly = _friendly_layout(layout_name.lower().strip().replace(" ", "_"))
+        friendly_key = layout_name.lower().strip().replace(" ", "_")
+        friendly = _friendly_layout(friendly_key)
         if friendly is not None:
             layout_keyword = to_keyword(PpSlideLayout, friendly, "slide layout")
             # Report the name that was asked for and applied. `custom layout`
             # declares no name here, so reading it back answers nothing, and
             # answering null for a layout this call chose itself told the
             # caller their own argument had been ignored.
-            resolved_layout_name = friendly
+            resolved_layout_name = friendly_key
         else:
             designs = elements(pres.designs)
             if design_index is not None and (
