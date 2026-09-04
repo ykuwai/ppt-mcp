@@ -693,3 +693,17 @@ def register_tools(mcp):
         an auto-updating date (PpDateTimeFormat integer).
         """
         return set_headers_footers(params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import themes as _mac_themes
+
+    use_mac_impls(globals(), _mac_themes)

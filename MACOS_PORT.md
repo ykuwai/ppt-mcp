@@ -407,7 +407,6 @@ This is the honest part. These are not workarounds waiting to be found.
 | Freeform paths | `Shapes.BuildFreeform` | **no builder** | `freeform.py` 751 |
 | Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all. Solved another way, by exporting the deck to PDF and rendering pages with Quartz, which is what shipped | `export.py` 825 |
 | Line visibility | `Shape.Line.Visible = False` | `line format` has **no `visible` property**. Weight 0 and transparency 1.0 both apply cleanly and are the practical stand-ins | every tool taking `line_visible` |
-| Theme colours | `Theme.ThemeColorScheme` | `theme color scheme` reads back as `missing value` on the slide master. The accent colour feature the README leads with has no direct route | `themes.py` 695 |
 | Sections | full API | the commands are declared but `get count of sections` returns -1708 through AppleScript. It did answer through appscript, so this needs one more pass | `sections.py` 242 |
 | Screen redraw suppression | `LockWindowUpdate` on `PPTFrameClass` | no equivalent. Less needed, because a whole tool call is 80 ms rather than a visible sequence, but the flicker fix from #164 does not transfer | `utils/redraw.py` 91 |
 | Shape naming | `Rectangle 1` | `Shape_0` | anything addressing shapes by name across platforms |
@@ -577,9 +576,10 @@ Written down so nobody re-derives it.
 2. ~~Table cell addressing.~~ Settled. `get cell from` is the wrong route and
    `table.rows[r].cells[c]` is the right one; see section 5.1. Every table tool
    now runs live.
-3. Theme colours. `theme color scheme` reads back as `missing value`; whether
-   `color scheme` plus the `get color from` command is a usable substitute is
-   untested.
+3. ~~Theme colours.~~ Settled, and the earlier note was wrong. All twelve read
+   and write through `slide master`'s `theme`'s `theme color scheme`. What does
+   not work is the Windows walk, because a deck's `designs` collection counts
+   zero here and `designs[1]` answers -1728.
 4. Sections. The command answered through appscript and failed with -1708
    through AppleScript, which should not both be true and needs one clean run.
 5. Align, distribute, group and ungroup all take a `shape range`, and the only
