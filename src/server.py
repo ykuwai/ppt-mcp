@@ -87,6 +87,19 @@ insert at a `position`, for instance, but appending still works.
 Some results carry `warnings` alongside `success`. Those are parts of the
 request that did not land, listed rather than silently dropped.
 
+**The fonts named above are Windows fonts.** Segoe UI is not on macOS, and
+neither is BIZ UDPゴシック, so asking for either gets a substitute chosen by the
+system rather than the font that was asked for. Hiragino Sans reads well for
+Japanese and Hiragino Sans W6 is its heavier weight, which projects better;
+Helvetica Neue and Arial are both present for Latin. BIZ UDGothic ships here
+too, without the P.
+
+One more thing about Japanese. PowerPoint for Mac will not set the East Asian
+font to a font that has no East Asian glyphs. It accepts the write, keeps the
+old value and reports nothing, so `font_name` alone leaves Japanese text in
+whatever font it was in. That now comes back as a warning; pass
+`font_name_fareast` to choose the Japanese font yourself.
+
 **Save early and at each natural break.** A deck that has never been saved has
 been seen to disappear mid-session on macOS, taking every slide with it, and
 the cause is not yet known (issue #191). `ppt_save_presentation_as` right after

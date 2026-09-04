@@ -926,7 +926,43 @@ def _group_into_columns(shapes: list, threshold: float = 50.0) -> list:
 
     # Sort columns left-to-right
     columns.sort(key=lambda col: sum(s["left"] for s in col) / len(col))
+
+    # Reading down the columns is right for a layout that is columns. It is
+    # badly wrong for a layout that is rows, and clustering on the left edge
+    # cannot tell them apart on its own.
+    #
+    # The case that broke it: three labels down the left, each with a number at
+    # the end of its own bar. The numbers sat at three unrelated X positions,
+    # so each became a column of one, and the columns were then sorted by X.
+    # The output paired every label with the wrong number and read as fact.
+    rows = _group_into_rows(shapes)
+    if _columns_would_scramble(columns, rows):
+        return [[s for row in rows for s in row]]
     return columns
+
+
+def _columns_would_scramble(columns: list, rows: list) -> bool:
+    """Whether reading down these columns would break up what sits on a row.
+
+    A column holding one shape that shares its row with something else is not
+    a column at all; it is one cell of a row that happened to land at its own
+    X. Reading down the columns then separates it from the shape it belongs
+    with and files it by X, which is how a label met the wrong number.
+
+    Columns of two or more are left alone. Two headings side by side, each
+    over its own paragraph, is the layout the column reading exists for, and
+    nothing here disturbs it.
+    """
+    lone = [col[0] for col in columns if len(col) == 1]
+    if not lone:
+        return False
+    for row in rows:
+        if len(row) < 2:
+            continue
+        for shape in lone:
+            if any(other is shape for other in row):
+                return True
+    return False
 
 
 def _slide_to_markdown(slide, slide_index: int) -> str:

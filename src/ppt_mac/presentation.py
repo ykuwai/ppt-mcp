@@ -457,7 +457,12 @@ def _refresh_external_copy(local: Optional[str]) -> Optional[str]:
 # Said in full once and then in one line. Saving at every natural break is the
 # advice, so the long form arrives on every save and a reader stops reading it,
 # while dropping it altogether would hide that the copy outside the container
-# goes stale. So the reason is given once and afterwards only what to do.
+# goes stale.
+#
+# The short form has to stand on its own. It first said the reason had been
+# given "the first time", and the flag behind that lives as long as the server
+# process, which serves one conversation after another. A caller's very first
+# save was answered with a pointer to an explanation given to somebody else.
 _container_copy_explained = False
 
 
@@ -466,8 +471,9 @@ def _container_copy_warning(staged: str, target: str) -> str:
     global _container_copy_explained
     if _container_copy_explained:
         return (
-            f"{target} is again a copy, and PowerPoint still holds {staged}. "
-            "ppt_save_presentation keeps it up to date from here."
+            f"PowerPoint holds {staged} and {target} is a copy of it, because "
+            "it cannot hold a document outside its container. "
+            "ppt_save_presentation keeps the copy up to date from here."
         )
     _container_copy_explained = True
     return (

@@ -105,11 +105,22 @@ _LINE_VISIBILITY_WARNING = {
 # Said in full once and then in one line. A deck is built a shape at a time and
 # the long form on every one of them buries everything else in the log, while
 # saying nothing at all would hide a substitution that changes what the slide
-# looks like. So the reason is given once and afterwards only the fact.
-_LINE_VISIBILITY_WARNING_AGAIN = (
-    "visible={visible} was again applied as weight and transparency, the "
-    "stand-in explained in full the first time it came up this session."
-)
+# looks like.
+#
+# The short form has to stand on its own. It first pointed back at "the full
+# explanation this session", and the flag behind that lives as long as the
+# server process, which outlives any one conversation. So the caller who saw
+# the long form and the caller reading the short one are routinely not the
+# same person, and a first call answered with a pointer to something that was
+# never said to them. Now it is shorter, not partial.
+_LINE_VISIBILITY_WARNING_AGAIN = {
+    True: "visible=True was applied as a weight and full opacity. The border is drawn.",
+    False: (
+        "visible=False was applied as weight 0 and full transparency. The "
+        "shape has no border to look at, and a colour or weight set on it "
+        "later will bring one back."
+    ),
+}
 
 _line_visibility_explained = False
 
@@ -118,7 +129,7 @@ def _line_visibility_warning(visible) -> str:
     """The visibility stand-in warning, in full the first time and short after."""
     global _line_visibility_explained
     if _line_visibility_explained:
-        return _LINE_VISIBILITY_WARNING_AGAIN.format(visible=visible)
+        return _LINE_VISIBILITY_WARNING_AGAIN[bool(visible)]
     _line_visibility_explained = True
     return _LINE_VISIBILITY_WARNING[bool(visible)]
 

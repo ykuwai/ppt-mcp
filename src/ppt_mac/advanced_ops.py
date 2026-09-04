@@ -552,7 +552,12 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
                     shapes_updated += 1
                 else:
                     refused += 1
-        warnings.append(_grouped_text_warning())
+        if slides_processed:
+            # Only when there was something to walk. A deck with no slides yet,
+            # which is where a caller sets the default fonts, was being told
+            # that text inside groups had probably been missed, having walked
+            # no shapes at all.
+            warnings.append(_grouped_text_warning())
         if refused:
             warnings.append(
                 f"{refused} shape(s) were written and still read back with "
