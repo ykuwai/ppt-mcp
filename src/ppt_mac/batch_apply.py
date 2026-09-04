@@ -16,6 +16,11 @@ that cannot be honoured returns a refusal dict instead of raising. Recorded the
 Windows way, a batch of seven refusals reads as seven successes, which is the
 exact failure MACOS_PORT section 7.3 is written against. So the return value is
 inspected here and a refusal is recorded as an error carrying its reason.
+
+Refusing is not the only thing an operation can say. Several apply most of what
+they were asked and name the rest in ``warnings``, or in ``partial`` and
+``unsupported`` for the paragraph format tools. Those travel onto the step
+rather than being flattened into a bare success, for the same reason.
 """
 
 import logging
@@ -40,6 +45,21 @@ def _describe_failure(result):
         return None
     reason = result.get("reason")
     return f"{result['error']}. {reason}" if reason else str(result["error"])
+
+
+# What an operation can say about itself besides working or not. A tool that
+# applied nine of its ten properties reports the tenth here, and a batch that
+# threw those away would be the same lie this module exists to stop, one step
+# quieter. `partial` and `unsupported` come from the paragraph format tools and
+# `warnings` from most of the rest.
+_CARRIED_KEYS = ("warnings", "partial", "unsupported", "note")
+
+
+def _carried_over(result):
+    """The parts of an operation's answer that survive into the batch's."""
+    if not isinstance(result, dict):
+        return {}
+    return {key: result[key] for key in _CARRIED_KEYS if result.get(key)}
 
 
 def _batch_apply_impl(slide_index, shapes, operations):
@@ -83,7 +103,9 @@ def _batch_apply_impl(slide_index, shapes, operations):
 
             failure = _describe_failure(outcome)
             if failure is None:
-                shape_results.append({"tool": op["tool"], "status": "success"})
+                step = {"tool": op["tool"], "status": "success"}
+                step.update(_carried_over(outcome))
+                shape_results.append(step)
             else:
                 shape_results.append({
                     "tool": op["tool"],

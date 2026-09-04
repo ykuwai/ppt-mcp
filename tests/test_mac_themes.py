@@ -199,3 +199,31 @@ class TestHeadersAndFooters:
 
         with pytest.raises(ValueError, match="date format"):
             _date_format_keyword(9999)
+
+
+@macos_only
+class TestBatchCarriesWhatAnOperationSaid:
+    """A step that worked and warned has to still say it warned."""
+
+    def test_warnings_and_partial_travel_onto_the_step(self):
+        from ppt_mac.batch_apply import _carried_over
+
+        assert _carried_over({
+            "success": True,
+            "warnings": ["transparency was not applied"],
+            "partial": True,
+            "unsupported": ["first_line_indent"],
+            "note": "cleared by shape",
+        }) == {
+            "warnings": ["transparency was not applied"],
+            "partial": True,
+            "unsupported": ["first_line_indent"],
+            "note": "cleared by shape",
+        }
+
+    def test_a_plain_success_carries_nothing(self):
+        from ppt_mac.batch_apply import _carried_over
+
+        assert _carried_over({"success": True, "shape_name": "Title"}) == {}
+        assert _carried_over({"success": True, "warnings": []}) == {}
+        assert _carried_over("not a dict") == {}
