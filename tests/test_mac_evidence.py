@@ -217,7 +217,22 @@ class TestLineVisibility:
         assert deck.shape("Box").line_format.transparency() == 1.0
         assert result["status"] == "success"
         assert "no visible property" in result["warnings"][0]
-        assert "bring the border back" in result["warnings"][0]
+        assert "make the border show again" in result["warnings"][0]
+
+    def test_it_says_which_way_round_the_substitution_went(self):
+        """One sentence for hiding and another for showing.
+
+        A reader was left working out whether transparency 0.0 meant opaque or
+        see through, because both directions got the same sentence.
+        """
+        from ppt_mac.shapes import _LINE_VISIBILITY_WARNING
+
+        hiding = _LINE_VISIBILITY_WARNING[False]
+        showing = _LINE_VISIBILITY_WARNING[True]
+
+        assert "no border to look at" in hiding
+        assert "The border is drawn." in showing
+        assert hiding != showing
 
     def test_a_shape_with_no_border_is_not_a_success(self):
         """A picture answers with an error, and that used to be swallowed."""
@@ -1104,3 +1119,52 @@ def _command_error(number):
             return f"stub error {number}"
 
     return _Stub()
+
+
+@macos_only
+class TestTheCopyOutsideTheContainer:
+    """PowerPoint can only hold a deck inside its container, so the caller's own
+    file is a copy. It used to fall behind on every ordinary save without saying
+    so, while the advice was to save at every break."""
+
+    def test_a_save_refreshes_the_copy_it_was_given(self, tmp_path):
+        from ppt_mac import presentation
+
+        inside = tmp_path / "container" / "deck.pptx"
+        inside.parent.mkdir()
+        inside.write_bytes(b"second version")
+        outside = tmp_path / "Desktop" / "deck.pptx"
+        outside.parent.mkdir()
+        outside.write_bytes(b"first version")
+
+        presentation._EXTERNAL_COPIES[str(inside)] = str(outside)
+        try:
+            where = presentation._refresh_external_copy(str(inside))
+        finally:
+            presentation._EXTERNAL_COPIES.pop(str(inside), None)
+
+        assert where == str(outside)
+        assert outside.read_bytes() == b"second version"
+
+    def test_a_deck_with_no_copy_outside_is_left_alone(self, tmp_path):
+        from ppt_mac import presentation
+
+        inside = tmp_path / "deck.pptx"
+        inside.write_bytes(b"only version")
+
+        assert presentation._refresh_external_copy(str(inside)) is None
+        assert presentation._refresh_external_copy(None) is None
+
+    def test_a_copy_that_cannot_be_written_does_not_fail_the_save(self, tmp_path):
+        """The save landed. Saying where it did not reach beats raising."""
+        from ppt_mac import presentation
+
+        inside = tmp_path / "deck.pptx"
+        inside.write_bytes(b"data")
+        unwritable = tmp_path / "gone" / "deck.pptx"
+
+        presentation._EXTERNAL_COPIES[str(inside)] = str(unwritable)
+        try:
+            assert presentation._refresh_external_copy(str(inside)) is None
+        finally:
+            presentation._EXTERNAL_COPIES.pop(str(inside), None)

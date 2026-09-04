@@ -84,21 +84,30 @@ _VERTICAL_ANCHOR_VALUES = {
 _VALID_FILL_TYPES = {"solid", "none", "gradient"}
 
 
-# The same sentence ppt_set_table_borders carries for the same substitution,
-# written once because the two have to say the same thing.
-_LINE_VISIBILITY_WARNING = (
-    "PowerPoint for Mac's line format has no visible property, so "
-    "visible={visible} was applied as line weight and transparency instead. "
-    "PowerPoint's own no line flag is untouched, so a later weight or colour "
-    "will bring the border back."
-)
+# One sentence per direction, because the substitution does opposite things
+# and a reader was left working out which. Hiding a border is where the caveat
+# belongs; showing one has a different trap, a border of weight 0.
+_LINE_VISIBILITY_WARNING = {
+    True: (
+        "PowerPoint for Mac's line format has no visible property, so "
+        "visible=True was applied as a weight and full opacity instead. The "
+        "border is drawn."
+    ),
+    False: (
+        "PowerPoint for Mac's line format has no visible property, so "
+        "visible=False was applied as weight 0 and full transparency instead. "
+        "The shape has no border to look at. PowerPoint's own no line flag is "
+        "untouched though, so setting a colour or a weight on it later will "
+        "make the border show again."
+    ),
+}
 
 # Said in full once and then in one line. A deck is built a shape at a time and
 # the long form on every one of them buries everything else in the log, while
 # saying nothing at all would hide a substitution that changes what the slide
 # looks like. So the reason is given once and afterwards only the fact.
 _LINE_VISIBILITY_WARNING_AGAIN = (
-    "visible={visible} was again applied as line weight and transparency, the "
+    "visible={visible} was again applied as weight and transparency, the "
     "stand-in explained in full the first time it came up this session."
 )
 
@@ -111,7 +120,7 @@ def _line_visibility_warning(visible) -> str:
     if _line_visibility_explained:
         return _LINE_VISIBILITY_WARNING_AGAIN.format(visible=visible)
     _line_visibility_explained = True
-    return _LINE_VISIBILITY_WARNING.format(visible=visible)
+    return _LINE_VISIBILITY_WARNING[bool(visible)]
 
 
 # Every name a caller can misspell is checked by one of these, and they are all

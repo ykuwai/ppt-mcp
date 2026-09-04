@@ -413,11 +413,45 @@ def _save_presentation_impl(
             f"PowerPoint reported no error but {full_name} is still unsaved."
         )
 
-    return {
+    result = {
         "success": True,
         "name": pres.name(),
         "saved": saved,
     }
+    refreshed = _refresh_external_copy(local)
+    if refreshed:
+        result["also_copied_to"] = refreshed
+    return result
+
+
+# Where each deck inside PowerPoint's container has a copy of its own outside
+# it. PowerPoint for Mac cannot hold a document anywhere but its container, so
+# ppt_save_presentation_as leaves the deck there and carries a copy out. Saving
+# after that used to refresh only the container's file, so a caller following
+# the advice to save at every break watched their own file fall further behind
+# without being told. Keyed by the container path, which is what the open deck
+# answers for itself.
+_EXTERNAL_COPIES: dict = {}
+
+
+def _refresh_external_copy(local: Optional[str]) -> Optional[str]:
+    """Bring the caller's own copy back up to date after a save.
+
+    Returns where it was copied to, or None when this deck has no copy outside
+    the container. A copy that cannot be written is not an error; the save
+    itself landed, and saying where it did not reach beats failing the call.
+    """
+    if not local:
+        return None
+    target = _EXTERNAL_COPIES.get(os.path.abspath(local))
+    if not target:
+        return None
+    try:
+        shutil.copy2(local, target)
+    except OSError:
+        logger.debug("Could not refresh the copy at %s", target)
+        return None
+    return target
 
 
 # Said in full once and then in one line. Saving at every natural break is the
@@ -433,14 +467,15 @@ def _container_copy_warning(staged: str, target: str) -> str:
     if _container_copy_explained:
         return (
             f"{target} is again a copy, and PowerPoint still holds {staged}. "
-            "Save again to refresh it after further edits."
+            "ppt_save_presentation keeps it up to date from here."
         )
     _container_copy_explained = True
     return (
         f"The open deck is {staged}, inside PowerPoint's container, and "
         f"{target} is a copy of it. PowerPoint for Mac cannot hold a document "
-        "outside its container, so call ppt_save_presentation_as again to "
-        "refresh the copy after further edits."
+        "outside its container. There is nothing more to do about it though. "
+        "ppt_save_presentation now refreshes this copy every time it saves, "
+        "and says so in `also_copied_to`."
     )
 
 
@@ -546,6 +581,10 @@ def _save_presentation_as_impl(
         # PowerPoint is holding the staged file now, not the caller's. Saying
         # so matters, because its own File then Save writes to the container
         # from here on and the caller's copy would quietly stop keeping up.
+        if not saved_in_place:
+            # Remember it, so an ordinary save from here on refreshes this copy
+            # too rather than leaving it behind in the container.
+            _EXTERNAL_COPIES[os.path.abspath(staged)] = os.path.abspath(target)
         if saved_in_place:
             warnings.append(
                 f"The deck was saved to {target}, which is inside PowerPoint's "

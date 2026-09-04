@@ -837,10 +837,21 @@ def _set_table_borders_impl(
         "cols": f"{start_col}-{actual_end_col}",
     }
     if visible is not None:
-        result["warnings"] = [
-            "PowerPoint for Mac's line format has no visible property, so "
-            f"visible={visible} was applied as transparency "
-            f"{0.0 if visible else 1.0}. The border still exists; it is drawn "
-            "fully transparent."
-        ]
+        if visible:
+            note = (
+                "PowerPoint for Mac's line format has no visible property, so "
+                "visible=True was applied as transparency 0.0, which is fully "
+                "opaque. The border is drawn. Give it a weight as well if it "
+                "is still not showing, because a border of weight 0 stays "
+                "invisible however opaque it is."
+            )
+        else:
+            note = (
+                "PowerPoint for Mac's line format has no visible property, so "
+                "visible=False was applied as transparency 1.0, which is fully "
+                "see through. The border is still there and PowerPoint's own "
+                "no line flag is untouched, so setting a colour or a weight on "
+                "it later will make it show again."
+            )
+        result["warnings"] = [note]
     return result
