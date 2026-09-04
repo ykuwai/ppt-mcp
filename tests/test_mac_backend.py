@@ -189,6 +189,584 @@ class TestUnsupportedTools:
         assert "alternatives" not in payload
 
 
+@macos_only
+class TestAnimationEnums:
+    """Animation constants have to read the same number on both platforms."""
+
+    def test_effects_translate_out_and_back(self):
+        from appscript import k
+
+        from backend.mac_enums import MsoAnimEffect, to_keyword
+        from ppt_mac.animation import _windows_constant
+
+        assert to_keyword(MsoAnimEffect, 10, "animation effect") == k.animation_type_fade
+        assert _windows_constant(MsoAnimEffect, k.animation_type_fade) == 10
+
+    def test_a_windows_only_effect_names_itself(self):
+        """Motion paths and most emphasis effects have no macOS word at all."""
+        from backend.mac_enums import MsoAnimEffect, to_keyword
+        from ppt_mac.animation import _WHAT_EFFECT
+
+        with pytest.raises(ValueError, match="animation effect"):
+            to_keyword(MsoAnimEffect, 86, _WHAT_EFFECT)  # path_circle
+
+    def test_every_direction_round_trips(self):
+        from backend.mac_enums import MsoAnimDirection, to_keyword
+        from ppt_com.constants import ANIM_DIRECTION_MAP
+        from ppt_mac.animation import _windows_constant
+
+        for value in ANIM_DIRECTION_MAP.values():
+            word = to_keyword(MsoAnimDirection, value, "animation direction")
+            assert _windows_constant(MsoAnimDirection, word) == value
+
+    def test_the_two_names_the_generator_missed_are_filled_in(self):
+        """Windows says None where macOS says `no after effect` and `no levels`."""
+        from appscript import k
+
+        from ppt_mac.animation import _AFTER_EFFECTS, _BUILD_LEVELS, _windows_constant
+
+        assert _windows_constant(_AFTER_EFFECTS, k.no_after_effect) == 0
+        assert _windows_constant(_AFTER_EFFECTS, k.dim) == 1
+        assert _windows_constant(_BUILD_LEVELS, k.text_by_no_levels) == 0
+        assert _windows_constant(_BUILD_LEVELS, k.text_by_first_level) == 2
+
+    def test_an_unpaired_keyword_reports_nothing_rather_than_a_near_miss(self):
+        from appscript import k
+
+        from backend.mac_enums import MsoAnimEffect
+        from ppt_mac.animation import _windows_constant
+
+        assert _windows_constant(MsoAnimEffect, k.animation_type_teeter) is None
+
+    def test_a_transition_macos_lacks_says_which_ones_it_has(self):
+        from backend.mac_enums import PpEntryEffect, to_keyword
+        from ppt_mac.animation import _WHAT_TRANSITION
+
+        assert to_keyword(PpEntryEffect, 3844, _WHAT_TRANSITION)  # fade
+        with pytest.raises(ValueError, match="push, wipe, split and reveal"):
+            to_keyword(PpEntryEffect, 3845, _WHAT_TRANSITION)  # ppEffectPush
+
+
+@macos_only
+class TestAnimationRefusals:
+    """What the animation tools say to an argument macOS cannot honour."""
+
+    def test_sequence_index_names_the_argument_not_the_tool(self):
+        """The tool works; only that one argument has to go, and it says so."""
+        from ppt_mac.animation import _remove_animation_impl, _update_animation_impl
+
+        for payload in (
+            _remove_animation_impl(1, 1, 2),
+            _update_animation_impl(
+                1, 1, 2, "fade", None, None, None, None, None,
+                None, None, None, None, None, None, None, None,
+                None, None, None, None,
+            ),
+        ):
+            assert "sequence_index" in payload["error"]
+            assert "is not available" not in payload["error"]
+            assert payload["platform"] == "macOS"
+            assert "sequence count stays at zero" in payload["reason"]
+
+    def test_a_shape_click_trigger_names_trigger_shape(self):
+        from ppt_mac.animation import _add_animation_impl
+
+        payload = _add_animation_impl(
+            1, "Title", "fade", "on_shape_click", None, None, False,
+            None, None, None, None, None, None,
+            "Button", None, None,
+            None, None, None, None,
+        )
+        assert "trigger_shape" in payload["error"]
+        assert "-1708" in payload["reason"]
+        assert "ppt_add_animation with trigger='on_click'" in payload["alternatives"]
+
+    def test_a_refusal_never_reaches_powerpoint(self):
+        """A refused call is answered before anything is asked of the app."""
+        from backend.mac_ae import ppt
+        from ppt_mac.animation import _remove_animation_impl
+
+        def _explode(*args, **kwargs):
+            raise AssertionError("a refusal must not touch PowerPoint")
+
+        original = ppt._get_app_impl
+        ppt._get_app_impl = _explode
+        try:
+            assert "error" in _remove_animation_impl(1, 1, 1)
+        finally:
+            ppt._get_app_impl = original
+
+
+@macos_only
+class TestAnimationRemoval:
+    """There is no way to remove one animation here, so nothing is attempted."""
+
+    def test_removal_is_refused_and_names_the_shape(self):
+        from ppt_mac.animation import _remove_animation_impl
+
+        with _fake_deck(["Title", "Body", "Footer"]) as deck:
+            result = _remove_animation_impl(1, 2, None)
+
+        assert "error" in result
+        assert "Body" in result["reason"]
+        assert result["alternatives"] == [
+            "ppt_list_animations", "ppt_clear_animations", "ppt_add_animation",
+        ]
+        # The whole point: nothing was cleared, so nothing was flattened.
+        assert deck.cleared == []
+
+    def test_the_error_line_names_the_tool_limit_not_the_tool(self):
+        from ppt_mac.animation import _remove_animation_impl
+
+        with _fake_deck(["Body", "Title", "Body"]) as deck:
+            result = _remove_animation_impl(1, 1, None)
+
+        assert result["error"] == (
+            "ppt_remove_animation cannot remove a single animation on macOS"
+        )
+        assert deck.cleared == []
+
+    def test_an_index_past_the_end_says_the_range(self):
+        from ppt_mac.animation import _remove_animation_impl
+
+        with _fake_deck(["Title"]):
+            with pytest.raises(ValueError, match=r"out of range \(1-1\)"):
+                _remove_animation_impl(1, 4, None)
+
+
+@macos_only
+class TestSlideTransition:
+    """Seven of the eleven transitions Windows names exist here."""
+
+    def test_a_transition_macos_has_is_set_and_read_back(self):
+        from appscript import k
+
+        from ppt_mac.animation import _set_slide_transition_impl
+
+        with _fake_deck([], shape_names=["Title"]) as deck:
+            result = _set_slide_transition_impl(1, "dissolve", 1.25, True, False, None)
+
+        assert result == {"success": True, "slide_index": 1, "effect": 1537}
+        assert deck.transition.entry_effect() == k.entry_effect_dissolve
+        assert deck.transition.transition_duration() == 1.25
+        assert deck.transition.advance_on_click() is True
+
+    def test_a_transition_macos_lacks_raises_rather_than_landing_nearby(self):
+        from ppt_mac.animation import _set_slide_transition_impl
+
+        with _fake_deck([], shape_names=["Title"]) as deck:
+            with pytest.raises(ValueError, match="push, wipe, split and reveal"):
+                _set_slide_transition_impl(1, "push", None, None, None, None)
+
+        assert deck.transition.entry_effect() is None
+
+
+@macos_only
+class TestAnimationAdding:
+    """Adding works; the parts of the Windows call that cannot follow say so."""
+
+    def test_the_effect_is_refetched_by_index_rather_than_taken_from_the_add(self):
+        from ppt_mac.animation import _add_animation_impl
+
+        with _fake_deck([], shape_names=["Title"]) as deck:
+            result = _add_animation_impl(
+                1, "Title", "fade", "after_previous", 0.75, None, True,
+                "left", 2, True, True, True, True,
+                None, None, None,
+                None, "by_word", True, False,
+            )
+
+        assert result["success"] is True
+        assert result["animation_index"] == 1
+        assert result["shape_name"] == "Title"
+        assert result["effect"] == 10
+        assert len(deck.effects) == 1
+        assert deck.effects[0].timing.duration() == 0.75
+        assert deck.effects[0].timing.repeat_count() == 2
+        assert deck.effects[0].exit_animation() is True
+
+    def test_the_trigger_goes_in_at_the_add_because_nothing_else_takes_one(self):
+        from appscript import k
+
+        from ppt_mac.animation import _add_animation_impl
+
+        with _fake_deck([], shape_names=["Title"]) as deck:
+            _add_animation_impl(
+                1, "Title", "zoom", "after_previous", None, None, False,
+                None, None, None, None, None, None,
+                None, None, None,
+                "first_level", None, None, None,
+            )
+
+        added = deck.added[0]
+        assert added["fx"] == k.animation_type_zoom
+        assert added["trigger"] == k.after_previous
+        assert added["level"] == k.text_by_first_level
+
+    def test_a_delay_is_reported_rather_than_dropped(self):
+        from ppt_mac.animation import _add_animation_impl
+
+        with _fake_deck([], shape_names=["Title"]):
+            result = _add_animation_impl(
+                1, "Title", "fade", "on_click", None, 0.5, False,
+                None, None, None, None, None, None,
+                None, None, None,
+                None, None, None, None,
+            )
+
+        assert any("delay was not applied" in w for w in result["warnings"])
+
+    def test_a_dim_colour_is_never_written(self):
+        """Writing one wipes every animation on the slide, so it is not written."""
+        from ppt_mac.animation import _add_animation_impl
+
+        with _fake_deck([], shape_names=["Title"]) as deck:
+            result = _add_animation_impl(
+                1, "Title", "fade", "on_click", None, None, False,
+                None, None, None, None, None, None,
+                None, "dim", "#808080",
+                None, None, None, None,
+            )
+
+        shape = deck.shape("Title")
+        assert shape.animation_settings.dim_color() is None
+        dim = [w for w in result["warnings"] if "dim_color" in w]
+        assert len(dim) == 1
+        assert "#808080" in dim[0]
+        assert "wipes every animation" in dim[0]
+        assert any("after_effect" in w and "-1708" in w for w in result["warnings"])
+
+    def test_animate_in_reverse_is_refused_rather_than_attempted(self):
+        from ppt_mac.animation import _add_animation_impl
+
+        with _fake_deck([], shape_names=["Title"]) as deck:
+            result = _add_animation_impl(
+                1, "Title", "fade", "on_click", None, None, False,
+                None, None, None, None, None, None,
+                None, None, None,
+                None, None, True, None,
+            )
+
+        shape = deck.shape("Title")
+        assert shape.animation_settings.animate_text_in_reverse() is not True
+        assert any(
+            "animate_in_reverse was not applied" in w for w in result["warnings"]
+        )
+
+    def test_a_shape_wide_setting_says_it_is_shape_wide(self):
+        from ppt_mac.animation import _add_animation_impl
+
+        with _fake_deck([], shape_names=["Title"]):
+            result = _add_animation_impl(
+                1, "Title", "fade", "on_click", None, None, False,
+                None, None, None, None, None, None,
+                None, None, None,
+                None, None, None, True,
+            )
+
+        assert any("belongs to the shape here" in w for w in result["warnings"])
+
+
+@macos_only
+class TestAnimationUpdating:
+    """Updating an effect in place, and the three things that cannot be updated."""
+
+    def test_what_cannot_be_changed_comes_back_as_warnings_not_a_failure(self):
+        from ppt_mac.animation import _update_animation_impl
+
+        with _fake_deck(["Title"]) as deck:
+            result = _update_animation_impl(
+                1, 1, None,
+                "zoom", "with_previous", 1.5, 0.25, 3, True,
+                "up", None, None, None, None, None,
+                None, None,
+                "first_level", None, None, None,
+            )
+
+        assert result["success"] is True
+        assert result["animation_index"] == 1
+        assert deck.effects[0].timing.duration() == 1.5
+        assert deck.effects[0].exit_animation() is True
+        joined = " ".join(result["warnings"])
+        for phrase in ("trigger was not applied", "delay was not applied",
+                       "move_to was not applied", "build_level was not applied"):
+            assert phrase in joined
+
+    def test_the_unreadable_fields_report_nothing_rather_than_a_guess(self):
+        from ppt_mac.animation import _update_animation_impl
+
+        with _fake_deck(["Title"]):
+            result = _update_animation_impl(
+                1, 1, None,
+                None, None, 2.0, None, None, None,
+                None, None, None, None, None, None,
+                None, None,
+                None, None, None, None,
+            )
+
+        assert result["trigger_type"] is None
+        assert result["trigger_name"] is None
+        assert result["delay"] is None
+
+
+@macos_only
+class TestAnimationListing:
+    """Reading the timeline, without ever asking for the whole of it."""
+
+    def test_the_effects_collection_is_never_materialised(self):
+        """The fake raises if anything asks for it, which is what -609 costs."""
+        from ppt_mac.animation import _clear_animations_impl, _list_animations_impl
+
+        with _fake_deck(["Title", "Body"]):
+            _list_animations_impl(1)
+            _clear_animations_impl(1, False)
+
+    def test_it_reports_the_keys_windows_reports(self):
+        from ppt_mac.animation import _list_animations_impl
+
+        with _fake_deck(["Title"]):
+            result = _list_animations_impl(1)
+
+        assert result["main_sequence_count"] == 1
+        assert result["interactive_sequences"] == []
+        assert result["interactive_count"] == 0
+        animation = result["animations"][0]
+        for key in (
+            "index", "shape_name", "effect_type", "effect_name", "trigger_type",
+            "trigger_name", "duration", "exit", "category", "direction",
+            "direction_name", "after_effect", "after_effect_name",
+            "build_level", "build_level_name", "text_unit_effect",
+            "text_unit_effect_name", "animate_in_reverse", "animate_background",
+        ):
+            assert key in animation
+        assert animation["index"] == 1
+        assert animation["shape_name"] == "Title"
+
+    def test_macos_keywords_come_back_as_the_windows_numbers(self):
+        """A caller reading a deck on a Mac has to see the numbers Windows reports."""
+        from ppt_mac.animation import _list_animations_impl
+
+        with _fake_deck(["Title"]):
+            animation = _list_animations_impl(1)["animations"][0]
+
+        assert (animation["effect_type"], animation["effect_name"]) == (10, "fade")
+        assert (animation["direction"], animation["direction_name"]) == (3, "down")
+        assert (animation["after_effect"], animation["after_effect_name"]) == (1, "dim")
+        assert (animation["build_level"], animation["build_level_name"]) == (0, "none")
+        assert animation["text_unit_effect_name"] == "by_paragraph"
+        assert animation["animate_background"] is True
+        assert animation["duration"] == 0.5
+        assert animation["category"] == "entrance"
+
+    def test_a_trigger_is_reported_as_unknown_rather_than_guessed(self):
+        """Nothing on a macOS effect carries a trigger, so None is the honest answer."""
+        from ppt_mac.animation import _list_animations_impl
+
+        with _fake_deck(["Title"]):
+            animation = _list_animations_impl(1)["animations"][0]
+
+        assert animation["trigger_type"] is None
+        assert animation["trigger_name"] is None
+
+    def test_clearing_counts_before_and_after_rather_than_reporting_intent(self):
+        from ppt_mac.animation import _clear_animations_impl
+
+        with _fake_deck(["Title", "Body", "Body"]) as deck:
+            result = _clear_animations_impl(1, True)
+
+        assert result["cleared_count"] == 3
+        assert result["remaining_count"] == 0
+        assert result["interactive_cleared"] == 0
+        assert deck.transition_cleared is True
+
+
+# ---------------------------------------------------------------------------
+# A slide made of stand-ins, for the decisions that are worth testing without
+# PowerPoint. Only the parts the animation tools touch are modelled, and the
+# effects collection deliberately raises if anything asks for it whole, because
+# that is the call that kills the application.
+# ---------------------------------------------------------------------------
+class _FakeCollection:
+    def __init__(self, items):
+        self._items = items
+
+    def get(self):
+        return list(self._items)
+
+    def __getitem__(self, index):
+        if index < 1 or index > len(self._items):
+            raise _command_error(-1728)
+        return self._items[index - 1]
+
+
+class _FakeEffects(_FakeCollection):
+    def get(self):
+        raise AssertionError("the effects collection must never be materialised")
+
+    def count(self, each=None):
+        raise AssertionError("the effects collection must never be counted")
+
+
+class _FakeProperty:
+    def __init__(self, on_set, value=None):
+        self._on_set = on_set
+        self._value = value
+
+    def __call__(self):
+        return self._value
+
+    def get(self):
+        return self._value
+
+    def set(self, value):
+        self._value = value
+        self._on_set(value)
+
+
+class _FakeShape:
+    def __init__(self, deck, name):
+        self._deck = deck
+        self._name = name
+        self.animation_settings = _bag(
+            animate_text_in_reverse=False,
+            animate_background=False,
+            dim_color=None,
+        )
+        self.animation_settings.animate = _FakeProperty(self._on_animate, True)
+
+    def name(self):
+        return self._name
+
+    def _on_animate(self, value):
+        if not value:
+            self._deck.clear_shape(self._name)
+
+
+def _bag(**properties):
+    """A stand-in for one of PowerPoint's little property-only classes."""
+    holder = type("Bag", (), {})()
+    for name, value in properties.items():
+        setattr(holder, name, _FakeProperty(lambda _v: None, value))
+    return holder
+
+
+class _FakeEffect:
+    def __init__(self, shape):
+        from appscript import k
+
+        self.shape = shape
+        self.animation_effect_type = _FakeProperty(
+            lambda _v: None, k.animation_type_fade
+        )
+        self.exit_animation = _FakeProperty(lambda _v: None, False)
+        self.timing = _bag(
+            duration=0.5, repeat_count=0, autoreverse=False, rewind=False,
+            smooth_start=True, smooth_end=True,
+        )
+        self.effect_parameters = _bag(direction=k.down)
+        self.effect_information = _bag(
+            after_effect_information=k.dim,
+            build_by_level=k.text_by_no_levels,
+            text_unit_effect_information=k.by_paragraph,
+            animate_text_in_reverse_information=False,
+            animate_background_information=True,
+        )
+
+    def get(self):
+        return self
+
+
+class _FakeSequence:
+    def __init__(self, deck):
+        self._deck = deck
+
+    @property
+    def effects(self):
+        return _FakeEffects(self._deck.effects)
+
+    def count(self, each=None):
+        return len(self._deck.effects)
+
+    def add_effect(self, **kwargs):
+        self._deck.added.append(kwargs)
+        self._deck.effects.append(_FakeEffect(kwargs["for_"]))
+
+    def convert_to_text_unit_effect(self, Effect=None, unit=None):  # noqa: N803
+        self._deck.converted.append(unit)
+
+
+class _FakeDeck:
+    """One slide, one shape per distinct name, one effect per name given."""
+
+    def __init__(self, effect_shape_names, shape_names=None):
+        self.cleared: list = []
+        self.added: list = []
+        self.converted: list = []
+        self.transition_cleared = False
+        names = list(dict.fromkeys(list(shape_names or []) + list(effect_shape_names)))
+        self._shapes = {name: _FakeShape(self, name) for name in names}
+        self.effects = [
+            _FakeEffect(self._shapes[name]) for name in effect_shape_names
+        ]
+
+    def shape(self, name):
+        return self._shapes[name]
+
+    def clear_shape(self, name):
+        self.cleared.append(name)
+        self.effects = [e for e in self.effects if e.shape.name() != name]
+
+    def clear_transition(self, _value):
+        self.transition_cleared = True
+
+    @property
+    def slide(self):
+        deck = self
+        sequence = _FakeSequence(self)
+
+        transition = _bag(
+            transition_duration=None,
+            advance_on_click=None,
+            advance_on_time=None,
+            advance_time=None,
+        )
+        transition.entry_effect = _FakeProperty(deck.clear_transition)
+
+        class _Slide:
+            shapes = _FakeCollection(list(deck._shapes.values()))
+            timeline = type("Timeline", (), {"main_sequence": sequence})()
+            slide_show_transition = transition
+
+        deck.transition = transition
+        return _Slide()
+
+    @property
+    def presentation(self):
+        return type("Pres", (), {"slides": _FakeCollection([self.slide])})()
+
+
+class _fake_deck:  # noqa: N801 - reads as a context manager, not a class
+    """Point the wrapper at a fake slide for the length of a `with` block."""
+
+    def __init__(self, effect_shape_names, shape_names=None):
+        self._deck = _FakeDeck(effect_shape_names, shape_names)
+
+    def __enter__(self):
+        from backend.mac_ae import ppt
+
+        self._ppt = ppt
+        self._app = ppt._get_app_impl
+        self._pres = ppt._get_pres_impl
+        ppt._get_app_impl = lambda *a, **kw: object()
+        ppt._get_pres_impl = lambda *a, **kw: self._deck.presentation
+        return self._deck
+
+    def __exit__(self, *exc):
+        self._ppt._get_app_impl = self._app
+        self._ppt._get_pres_impl = self._pres
+        return False
+
+
 def _command_error(number):
     """Build an appscript CommandError carrying a given OSError number.
 

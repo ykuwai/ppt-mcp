@@ -320,7 +320,36 @@ even counting has to be done one at a time. Animation effects and table columns
 are the two places where getting it wrong costs the document rather than an
 error message.
 
-### 5.2 The sandbox, and where exports have to go
+### 5.2 Writes that quietly rewrite the whole slide
+
+The same shape of danger as 5.1, without the crash, and harder to notice because
+the call succeeds and returns nothing.
+
+`shape.animation settings` is the old per shape animation API. It can only hold
+one entrance per shape, and writing to any of it appears to force the slide back
+into that model. Three shapes with one entrance each:
+
+```python
+shape1.animation_settings.dim_color.set([255, 0, 0])
+# all three effects are now a plain appear
+
+shape2.animation_settings.animate.set(False)
+# shape 2's effect is gone, as asked, and shape 1's is now an appear
+
+# and with an exit animation on shape 3, that one disappears outright
+```
+
+`text unit effect` and `animate text in reverse` behave the same way.
+`animate background` is the only one of the five that leaves the slide alone.
+
+So `ppt_add_animation` and `ppt_update_animation` never write four of them and
+say so in `warnings`, and `ppt_remove_animation` refuses outright: deleting one
+effect answers -50 and changes nothing, and clearing its shape costs the rest of
+the slide. `ppt_clear_animations` is the exception that is safe, because it is
+emptying the slide anyway. It was checked against a slide holding two effects on
+one shape and two exit animations, and it left nothing behind.
+
+### 5.3 The sandbox, and where exports have to go
 
 PowerPoint for Mac is sandboxed. It carries `com.apple.security.app-sandbox` and
 `files.user-selected.read-write`, and it has no entitlement for Desktop,
@@ -351,7 +380,7 @@ One more path trap. An HFS colon path is treated as a **literal filename**,
 producing a file called `Macintosh HD:Users:…png` inside the container root.
 Always use POSIX paths.
 
-### 5.3 Automation consent
+### 5.4 Automation consent
 
 Two independent gates exist and neither substitutes for the other. Automation
 consent (TCC) governs the calling process talking to PowerPoint. The App Sandbox
@@ -558,5 +587,5 @@ Written down so nobody re-derives it.
    shape of those four tools.
 6. Whether passing a file reference rather than a path string hands PowerPoint a
    sandbox extension. If it does, arbitrary path exports work and only the text
-   typed parameters need staging, which is a much cheaper port than section 5.1
+   typed parameters need staging, which is a much cheaper port than section 5.3
    assumes.
