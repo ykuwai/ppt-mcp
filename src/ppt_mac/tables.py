@@ -10,9 +10,9 @@ the dictionary and it answers without complaining, but the reference it hands
 back does not resolve. Every cell of a fresh three by three table answers -1728
 through it, and the same nine cells read and write without a murmur through
 ``rows[r].cells[c]``, which this module builds itself. It is the same defect as
-the collection one in MACOS_PORT section 5.1, seen from the other end;
-PowerPoint returns references it cannot resolve, so none of them are taken at
-face value here.
+the collection one in MACOS_PORT section 5.1, seen from the other end. The rule
+it leaves behind is that a reference PowerPoint hands back, from a command or
+from ``make``, is not used; rows and columns are reached by index instead.
 
 **Row and column counts come from the shape, not from counting elements.**
 ``number of rows`` and ``number of columns`` are declared on ``shape table``
@@ -105,15 +105,19 @@ def _cell_text(cell):
     return "" if is_missing(content) else content
 
 
-def _refusal(tool_name: str, reason: str, alternatives=None) -> dict:
+def _refusal(tool_name: str, reason: str, alternatives=None, error=None) -> dict:
     """The body a tool returns when macOS genuinely cannot do it.
 
     ``backend.unsupported.unsupported`` builds the same payload but returns it
     already encoded, and these functions hand a dict back to a caller that
     encodes it. Same keys, same reading, one less round of JSON.
+
+    ``error`` overrides the headline for a tool that does work but has one
+    argument it cannot honour, so a reader is not told to give up on the whole
+    tool when only that argument has to go.
     """
     payload = {
-        "error": f"{tool_name} is not available on macOS",
+        "error": error or f"{tool_name} is not available on macOS",
         "reason": reason,
         "platform": "macOS",
     }
@@ -448,10 +452,11 @@ def _add_table_row_impl(slide_index, shape_name_or_index, position, height):
             "request for a column kills PowerPoint outright and takes every "
             "open deck with it, so neither is attempted.",
             [
-                "Append the row and move the values down with "
-                "ppt_set_table_data",
+                "Call ppt_add_table_row without position to append, then move "
+                "the values down with ppt_set_table_data",
                 "ppt_add_table",
             ],
+            error="ppt_add_table_row cannot insert at a position on macOS",
         )
 
     # PowerPoint's dictionary declares no command for adding a row, so this is
@@ -543,10 +548,11 @@ def _add_table_column_impl(slide_index, shape_name_or_index, position, width):
             "PowerPoint and takes every open deck with it, so it is not "
             "attempted.",
             [
-                "Append the column and move the values across with "
-                "ppt_set_table_data",
+                "Call ppt_add_table_column without position to append, then "
+                "move the values across with ppt_set_table_data",
                 "ppt_add_table",
             ],
+            error="ppt_add_table_column cannot insert at a position on macOS",
         )
 
     app.make(new=k.column, at=table.end)

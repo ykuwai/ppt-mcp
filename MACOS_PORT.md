@@ -281,12 +281,32 @@ walks it one element at a time and stops when the next is not there, which is
 slower and safe. And where the question is only whether one shape is animated,
 the older per shape API answers instantly and is what `ppt_get_shape_info` uses.
 
-This is the same defect as section 5.2's, one step worse. Asking PowerPoint for
-the elements of a collection is unreliable in general: a slide holding a text
-box and an autoshape answers `text_boxes[1]` and `shapes[2]`, and the second
-does not resolve. `positional()` counts and then indexes for that case. Animation
-effects are the one place where getting it wrong costs the document rather than
-an error message.
+There is a second one, found later and just as fatal. **Asking PowerPoint to
+make a table column before an existing one kills it**, on a plain three by three
+table, reproduced twice on its own. The row equivalent only answers -1708, so
+inserting a row is merely impossible rather than dangerous; both are refused
+now, and appending works.
+
+```python
+app.make(new=k.column, at=table.columns[2].before)   # -609, the application dies
+app.make(new=k.row, at=table.rows[2].before)         # -1708, harmless
+app.make(new=k.column, at=table.end)                 # works
+```
+
+Behind all three is one habit. **A reference PowerPoint hands back is not to be
+trusted.** Asking for the elements of a collection is unreliable in general: a
+slide holding a text box and an autoshape answers `text_boxes[1]` and
+`shapes[2]`, and the second does not resolve. So is the reference a command
+returns: `get cell from` answers with something that renders as
+`rows[1].cells[1]` and then -1728 on every cell of a fresh table, while the
+identical path built here reads and writes all nine. So is `make`'s return
+value, for a shape, a row or a column alike.
+
+The rule the port follows is to count, then index, and to build every reference
+itself. `positional()` does that for shapes, `probe_count()` for effects, where
+even counting has to be done one at a time. Animation effects and table columns
+are the two places where getting it wrong costs the document rather than an
+error message.
 
 ### 5.2 The sandbox, and where exports have to go
 
@@ -510,9 +530,9 @@ Written down so nobody re-derives it.
 1. Whether `run VB macro` actually executes. Section 6.1 has the one line test.
    The same spike should call `AddChart` once, which settles the chart question
    properly rather than resting it on a type library negative.
-2. Table cell addressing. `make new shape table` creates tables and
-   `get cell from … row … column …` reaches cells, but element indexing under
-   `shape table` did not line up on the first attempt and needs a proper pass.
+2. ~~Table cell addressing.~~ Settled. `get cell from` is the wrong route and
+   `table.rows[r].cells[c]` is the right one; see section 5.1. Every table tool
+   now runs live.
 3. Theme colours. `theme color scheme` reads back as `missing value`; whether
    `color scheme` plus the `get color from` command is a usable substitute is
    untested.
