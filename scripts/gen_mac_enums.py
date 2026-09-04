@@ -65,6 +65,15 @@ ENUM_ALIASES = {
     "PpParagraphAlignment": "MsoParagraphAlignment",
 }
 
+# Enumerations constants.py records as a friendly name map rather than as a
+# banner section of named constants. The tool arguments for these are words the
+# caller types, so the Windows side never needed the constant names, but the
+# numbers behind them are the enumeration all the same and the macOS side has
+# to translate them like any other.
+NAME_MAPS = {
+    "MsoAnimDirection": "ANIM_DIRECTION_MAP",
+}
+
 # Pairs the automatic matcher cannot reach, because the two sides genuinely use
 # different naming schemes rather than different spelling. Windows numbers its
 # theme colours as a suffix and macOS names them as an ordinal, and Windows
@@ -93,6 +102,12 @@ OVERRIDES = {
         # Windows msoLineDot is a square dot; macOS spells that out, so the
         # name matcher cannot see that they are the same thing.
         "msoLineDot": "line dash style square dot",
+    },
+    "MsoAnimDirection": {
+        # The two words neither platform spells the same way. Everything else
+        # in this enumeration matches on its own.
+        "none": "no direction",
+        "in": "inward",
     },
     "MsoAutoShapeType": {
         "msoShape4pointStar": "autoshape four point star",
@@ -187,6 +202,32 @@ def read_windows_constants():
         match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(-?\d+)\s*$", line)
         if match and current:
             sections[current][match.group(1)] = int(match.group(2))
+
+    sections.update(read_name_maps())
+    return sections
+
+
+def read_name_maps():
+    """Read the NAME_MAPS entries into the same shape as a banner section.
+
+    Evaluated rather than parsed, because these are ordinary dictionaries and
+    a regular expression over a multi line literal would be the fragile way to
+    read one. Only the names in NAME_MAPS are taken, and only if they are
+    dictionaries of str to int.
+    """
+    namespace = {}
+    exec(compile(CONSTANTS.read_text(), str(CONSTANTS), "exec"), namespace)
+    sections = {}
+    for enum_name, map_name in NAME_MAPS.items():
+        table = namespace.get(map_name)
+        if not isinstance(table, dict):
+            raise SystemExit(
+                "{} is named in NAME_MAPS but constants.py no longer has it"
+                .format(map_name)
+            )
+        sections[enum_name] = {
+            str(name): int(value) for name, value in table.items()
+        }
     return sections
 
 

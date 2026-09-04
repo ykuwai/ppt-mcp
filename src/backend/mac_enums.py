@@ -8,7 +8,7 @@ The pairing is done by name rather than by number, because the two platforms
 only sometimes agree on the number. ``ppSaveAsPNG`` is 18 on Windows while
 ``save as PNG`` is 24 on macOS, and ``ppLayoutBlank`` is 12 on both.
 
-315 constants across 39 enumerations, read from PowerPoint 16.97.2.
+341 constants across 40 enumerations, read from PowerPoint 16.97.2.
 
 Windows constants with no macOS counterpart, left out on purpose so that asking
 for one raises rather than quietly resolving to something close:
@@ -57,6 +57,36 @@ MsoAnimAfterEffect: dict = {
     1: k.dim,  # msoAnimAfterEffectDim
     2: k.hide,  # msoAnimAfterEffectHide
     3: k.hide_on_next_click,  # msoAnimAfterEffectHideOnNextClick
+}
+
+
+MsoAnimDirection: dict = {
+    0: k.no_direction,  # none
+    1: k.up,  # up
+    2: k.right,  # right
+    3: k.down,  # down
+    4: k.left,  # left
+    6: k.up_left,  # up_left
+    7: k.up_right,  # up_right
+    8: k.down_right,  # down_right
+    9: k.down_left,  # down_left
+    10: k.top,  # top
+    11: k.bottom,  # bottom
+    12: k.top_left,  # top_left
+    13: k.top_right,  # top_right
+    14: k.bottom_right,  # bottom_right
+    15: k.bottom_left,  # bottom_left
+    16: k.horizontal,  # horizontal
+    17: k.vertical,  # vertical
+    18: k.across,  # across
+    19: k.inward,  # in
+    20: k.out,  # out
+    21: k.clockwise,  # clockwise
+    22: k.counterclockwise,  # counterclockwise
+    23: k.horizontal_in,  # horizontal_in
+    24: k.horizontal_out,  # horizontal_out
+    25: k.vertical_in,  # vertical_in
+    26: k.vertical_out,  # vertical_out
 }
 
 
