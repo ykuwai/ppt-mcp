@@ -25,7 +25,7 @@ import shutil
 
 from appscript.reference import CommandError
 
-from backend.mac_ae import EXPORT_STAGING_DIR, count, ppt
+from backend.mac_ae import count, ppt, stage_into_container
 from backend.unsupported import refusal as _refusal
 from ppt_com.constants import msoTrue  # noqa: F401  (kept for signature parity)
 from utils.color import int_to_rgb, rgb_list_to_hex
@@ -62,21 +62,6 @@ def _theme_colors(pres):
     return pres.slide_master.theme.theme_color_scheme
 
 
-def _stage_for_powerpoint(path: str) -> str:
-    """Copy a file into PowerPoint's container and return the staged path.
-
-    PowerPoint is sandboxed. Handing it a path it has no grant for does not
-    fail cleanly, it blocks for tens of seconds and then the application dies,
-    so nothing outside the container is ever named to it. See MACOS_PORT
-    section 5.3.
-    """
-    os.makedirs(EXPORT_STAGING_DIR, exist_ok=True)
-    staged = os.path.join(EXPORT_STAGING_DIR, os.path.basename(path))
-    if os.path.abspath(staged) != os.path.abspath(path):
-        shutil.copy2(path, staged)
-    return staged
-
-
 # ---------------------------------------------------------------------------
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
@@ -88,7 +73,7 @@ def _apply_theme_impl(theme_path):
     if not os.path.exists(abs_path):
         raise ValueError(f"Theme file not found: {abs_path}")
 
-    staged = _stage_for_powerpoint(abs_path)
+    staged = stage_into_container(abs_path)
     before = [
         rgb_list_to_hex(_theme_colors(pres).theme_colors[i].RGB())
         for i in range(1, _THEME_COLOR_COUNT + 1)

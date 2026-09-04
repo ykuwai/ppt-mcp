@@ -209,10 +209,11 @@ def _create_presentation_impl(
     activate: bool,
 ) -> dict:
     # Creating a deck legitimately needs PowerPoint, so launch it if it is not
-    # already running. There is no Visible property and no headless mode here,
-    # so the Windows "make it visible" step becomes bringing it forward.
+    # already running. It is not brought forward, though. A new window arrives
+    # on screen by itself, and taking the front from whatever the user is
+    # working in is more than was asked for. `activate` is honoured below only
+    # when the caller asked for it.
     app = ppt._get_app_impl(allow_launch=True)
-    app.activate()
 
     warnings = []
     target_height = None
@@ -322,9 +323,10 @@ def _open_presentation_impl(
         raise FileNotFoundError(f"File not found: {file_path}")
 
     # Opening a file legitimately needs PowerPoint, so launch it if not running.
+    # `with_window` says the deck wants a window, not that PowerPoint should
+    # take the front from whatever the user is in the middle of. The window
+    # appears either way, and `activate` below is the argument that means it.
     app = ppt._get_app_impl(allow_launch=True)
-    if with_window:
-        app.activate()
 
     pres = _open_and_find(app, path)
 

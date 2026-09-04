@@ -25,6 +25,7 @@ same shape means the tool modules see one lifecycle surface on both platforms.
 
 import logging
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -155,6 +156,26 @@ def shapes_of(container) -> list:
     problem, and costs one extra Apple Event.
     """
     return positional(container.shapes)
+
+
+def stage_into_container(path: str) -> str:
+    """Copy a file into PowerPoint's container and return the copy's path.
+
+    Every path this project hands PowerPoint goes through here first. Two
+    things make that necessary rather than tidy. PowerPoint is sandboxed, so a
+    location it has no grant for either stalls until the call times out or
+    makes macOS ask the user to grant access, and a user who inserts ten
+    pictures from ten folders is asked ten times. Its own container is the one
+    place it never has to ask about.
+
+    The caller is responsible for removing the copy once PowerPoint has read
+    it, where the thing being read is embedded rather than linked.
+    """
+    os.makedirs(EXPORT_STAGING_DIR, exist_ok=True)
+    staged = os.path.join(EXPORT_STAGING_DIR, os.path.basename(path))
+    if os.path.abspath(staged) != os.path.abspath(path):
+        shutil.copy2(path, staged)
+    return staged
 
 
 def count_of(container, each) -> int:
@@ -455,10 +476,9 @@ class PowerPointAppleEventWrapper:
         """Internal: get the target presentation on the worker thread.
 
         Returns the session target when one is set and its file is still open,
-        activating its window first so later navigation lands in the right
-        place. Falls back to the active presentation, and then to the first
-        open one, because ``active presentation`` raises whenever PowerPoint's
-        start gallery is frontmost.
+        without bringing PowerPoint forward. Falls back to the active
+        presentation, and then to the first open one, because ``active
+        presentation`` raises whenever PowerPoint's start gallery is frontmost.
         """
         app_ref = self._get_app_impl()
         presentations = self._presentations(app_ref)
@@ -467,10 +487,12 @@ class PowerPointAppleEventWrapper:
             for pres in presentations:
                 try:
                     if pres.full_name() == self._target_pres_full_name:
-                        try:
-                            pres.document_windows[1].activate()
-                        except CommandError:
-                            pass
+                        # Deliberately not activated. This runs on the way into
+                        # every tool call, and activating a window brings
+                        # PowerPoint to the front of whatever the user is
+                        # actually doing. Showing the slide being edited is
+                        # what was wanted, and `goto_slide` does that by
+                        # driving this deck's own window without raising it.
                         return pres
                 except CommandError:
                     continue

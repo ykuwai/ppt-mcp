@@ -34,6 +34,7 @@ from backend.mac_ae import (
     ppt,
     raw,
     slide_at as _slide,
+    stage_into_container,
 )
 from backend.mac_enums import (
     MsoAutoShapeType,
@@ -570,22 +571,35 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height):
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
     absolute = _resolve_image_path(file_path)
-    # Insert at natural size first to obtain the true aspect ratio, the same
-    # reason Windows passes -1 for both dimensions.
-    pic = app.make(
-        new=k.picture,
-        at=slide.end,
-        with_properties={
-            k.file_name: absolute,
-            k.left_position: left,
-            k.top: top,
-        },
-    )
-    # A file PowerPoint could not read leaves a plain autoshape behind and says
-    # nothing, so the type is what proves the picture actually arrived.
-    _verify_created(
-        pic, None, None, expected_type=k.shape_type_picture, what="picture"
-    )
+    # Staged, never named where it sits. PowerPoint is sandboxed, so a folder
+    # it has no grant for makes macOS ask the user to allow access, and a deck
+    # built from ten pictures in ten folders asks ten times. The container is
+    # the one place it never has to ask about. The copy goes away again below,
+    # because a picture made this way is embedded rather than linked.
+    staged = stage_into_container(absolute)
+    try:
+        # Insert at natural size first to obtain the true aspect ratio, the same
+        # reason Windows passes -1 for both dimensions.
+        pic = app.make(
+            new=k.picture,
+            at=slide.end,
+            with_properties={
+                k.file_name: staged,
+                k.left_position: left,
+                k.top: top,
+            },
+        )
+        # A file PowerPoint could not read leaves a plain autoshape behind and
+        # says nothing, so the type is what proves the picture actually arrived.
+        _verify_created(
+            pic, None, None, expected_type=k.shape_type_picture, what="picture"
+        )
+    finally:
+        if os.path.abspath(staged) != os.path.abspath(absolute):
+            try:
+                os.remove(staged)
+            except OSError:
+                logger.debug("Could not remove the staged image at %s", staged)
     if width is not None and height is not None:
         # Both specified: user intentionally overrides aspect ratio.
         pic.lock_aspect_ratio.set(False)
