@@ -22,6 +22,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import pywintypes
 
 _src_dir = str(Path(__file__).resolve().parents[1] / "src")
 if _src_dir not in sys.path:
@@ -59,6 +60,50 @@ def test_running_operation_can_no_longer_be_cancelled():
     assert future.result() == {"ok": True}
 
 
+def test_operation_stays_cancellable_through_the_preflight_wait():
+    """A caller that times out while the worker is still waiting for a busy
+    PowerPoint must be able to cancel: nothing has been applied yet."""
+    w = PowerPointCOMWrapper()
+    app = MagicMock()
+    busy = pywintypes.com_error(-2147418111, "busy", None, None)   # RPC_E_CALL_REJECTED
+    type(app).Name = property(lambda _self: (_ for _ in ()).throw(busy))
+    w._app = app
+    func = MagicMock()
+    future: Future = Future()
+
+    cancelled_during_wait = []
+    clock = {"now": 0.0}
+
+    def _sleep(seconds):
+        # Stand in for the caller giving up mid-wait; advance a fake clock so
+        # the wait budget still bounds the loop without real waiting.
+        clock["now"] += seconds
+        if not cancelled_during_wait:
+            cancelled_during_wait.append(future.cancel())
+
+    with patch("utils.com_wrapper.time.sleep", _sleep),          patch("utils.com_wrapper.time.monotonic", lambda: clock["now"]):
+        w._run_item(func, (), {}, future, False)
+
+    assert cancelled_during_wait == [True], "must still be cancellable while waiting"
+    func.assert_not_called(), "a cancelled operation must never be applied"
+
+
+def test_timeout_error_raised_by_the_operation_is_not_mistaken_for_ours():
+    """concurrent.futures.TimeoutError *is* the builtin TimeoutError since
+    3.11, so an operation raising it must not be reported as our 45s wait."""
+    w = PowerPointCOMWrapper()
+    w._app = MagicMock()
+    future: Future = Future()
+    w._run_item(MagicMock(side_effect=TimeoutError("COM call timed out")),
+                (), {}, future, False)
+
+    with patch.object(Future, "result", side_effect=future.exception()),          patch.object(Future, "done", return_value=True),          patch.object(Future, "cancel") as cancel_mock:
+        with pytest.raises(TimeoutError, match="COM call timed out"):
+            w.execute(MagicMock())
+
+    cancel_mock.assert_not_called(), "a finished future must not be cancelled"
+
+
 def test_execute_cancels_the_future_when_it_times_out():
     w = PowerPointCOMWrapper()
 
@@ -85,7 +130,7 @@ def test_timeout_does_not_leak_a_bare_futures_timeout():
     """Tools render errors with str(e); a bare TimeoutError says nothing."""
     w = PowerPointCOMWrapper()
 
-    with patch.object(Future, "result", side_effect=FuturesTimeoutError):
+    with patch.object(Future, "result", side_effect=FuturesTimeoutError),          patch.object(Future, "done", return_value=False):
         with pytest.raises(RuntimeError) as exc:
             w.execute(MagicMock())
 

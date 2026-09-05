@@ -212,7 +212,7 @@ class PowerPointCOMWrapper:
         Split out of _com_worker so the busy-handling policy is unit-testable
         without a COM thread.
         """
-        if not future.set_running_or_notify_cancel():
+        if future.cancelled():
             logger.warning(
                 "Dropping %s: the caller stopped waiting for it",
                 getattr(func, "__name__", func),
@@ -221,13 +221,31 @@ class PowerPointCOMWrapper:
 
         deadline = time.monotonic() + _BUSY_WAIT_BUDGET
         attempt = 0
+        started = False
         while True:
             try:
                 self._wait_until_responsive(deadline)
             except pywintypes.com_error as e:
                 logger.warning("Gave up waiting for PowerPoint: %s", e)
+                if not started and not future.set_running_or_notify_cancel():
+                    # The caller gave up while we waited.  Nothing was
+                    # applied, so there is nobody to report the failure to.
+                    return
                 future.set_exception(RuntimeError(_BUSY_TIMEOUT_MESSAGE))
                 return
+
+            if not started:
+                # Only now, with PowerPoint responsive and the call about to
+                # go out, does this stop being cancellable.  Marking it
+                # earlier meant a caller timing out during the wait could not
+                # cancel, and the edit landed anyway.
+                if not future.set_running_or_notify_cancel():
+                    logger.warning(
+                        "Dropping %s: the caller stopped waiting for it",
+                        getattr(func, "__name__", func),
+                    )
+                    return
+                started = True
 
             try:
                 future.set_result(func(*args, **kwargs))
@@ -339,6 +357,13 @@ class PowerPointCOMWrapper:
         try:
             return future.result(timeout=_BUSY_WAIT_BUDGET + _CALL_TIMEOUT)
         except FuturesTimeoutError:
+            if future.done():
+                # Not our timeout: either func itself raised TimeoutError
+                # (concurrent.futures.TimeoutError *is* the builtin since
+                # 3.11, so the two are indistinguishable by type), or the
+                # operation finished in the moment the wait expired. Either
+                # way there is a real outcome to hand back.
+                return future.result()
             # Cancel so the worker skips this item if it has not started it.
             # An operation already in flight cannot be cancelled -- COM
             # outgoing calls are not interruptible -- but everything queued
