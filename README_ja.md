@@ -21,6 +21,12 @@
 
 PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）サーバーです。python-pptxのようなファイルベースのライブラリとは異なり、起動中のPowerPointアプリケーションと直接やり取りします。
 
+## 🎬 デモ
+
+エージェントが実際の PowerPoint ウィンドウでスライドを作成する様子（15倍速）:
+
+https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
+
 ## ✨ 主な特徴
 
 - **リアルタイム制御** — 起動中のPowerPointを直接操作。変更がその場で画面に反映される
@@ -28,16 +34,6 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 - **AIエージェントに安全** — `ppt_activate_presentation` で操作対象ファイルを固定。誤って別のプレゼンを編集するミスを防止
 - **[Google Material Symbols](https://fonts.google.com/icons) アイコン** — 2,500以上のアイコンをキーワード検索し、テーマカラーでSVG挿入
 - **テーマカラー連携** — RGB値のハードコードではなく `accent1`、`accent2` などのテーマカラー名で指定
-
-## 🎬 デモ
-
-エージェントが実際の PowerPoint ウィンドウでスライドを作成する様子（15倍速）:
-
-<p align="center">
-  <video src="https://github.com/ykuwai/ppt-mcp/raw/main/assets/demo/ppt-mcp-demo_15x.mp4" width="720" controls muted loop playsinline></video>
-</p>
-
-> 再生されない場合は[こちらから直接開いてください](https://github.com/ykuwai/ppt-mcp/raw/main/assets/demo/ppt-mcp-demo_15x.mp4)。
 
 ## 📋 動作環境
 

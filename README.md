@@ -21,6 +21,12 @@
 
 An MCP (Model Context Protocol) server that gives AI agents full control over a live Microsoft PowerPoint instance via COM automation. Unlike file-based libraries like python-pptx, this server interacts directly with a running PowerPoint application.
 
+## 🎬 Demo
+
+An agent building a deck in a live PowerPoint window (15x speed):
+
+https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
+
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
@@ -28,16 +34,6 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
-
-## 🎬 Demo
-
-Watch an agent build a deck in a live PowerPoint window (15x speed):
-
-<p align="center">
-  <video src="https://github.com/ykuwai/ppt-mcp/raw/main/assets/demo/ppt-mcp-demo_15x.mp4" width="720" controls muted loop playsinline></video>
-</p>
-
-> If the video does not play, [open it directly](https://github.com/ykuwai/ppt-mcp/raw/main/assets/demo/ppt-mcp-demo_15x.mp4).
 
 ## 📋 Requirements
 
