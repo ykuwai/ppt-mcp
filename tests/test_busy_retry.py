@@ -147,7 +147,7 @@ def test_idempotent_operation_gives_up_within_the_shared_budget():
 
     assert func.call_count > 1, "an idempotent operation should be retried"
     assert clock.slept <= _BUSY_WAIT_BUDGET, "retries must share one budget"
-    with pytest.raises(RuntimeError, match="not responding"):
+    with pytest.raises(RuntimeError, match="did not respond"):
         future.result()
 
 

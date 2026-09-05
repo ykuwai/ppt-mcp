@@ -43,6 +43,11 @@ _BUSY_WAIT_BUDGET = 15.0
 _BUSY_BACKOFF = (0.5, 1.0, 2.0, 3.0)
 # How long the operation itself may take, once PowerPoint is responsive.
 _CALL_TIMEOUT = 30.0
+# Shown whenever the wait budget runs out, wherever in the wait it happens.
+_BUSY_TIMEOUT_MESSAGE = (
+    "PowerPoint did not respond within %.0fs -- a dialog or menu is probably "
+    "open. Close it and retry." % _BUSY_WAIT_BUDGET
+)
 # When True, the server sends ESC to PowerPoint on the first busy rejection to
 # dismiss any blocking modal dialog automatically.
 # Opt-in: set PPT_AUTO_DISMISS_DIALOG=true in mcp.json env to enable:
@@ -190,11 +195,7 @@ class PowerPointCOMWrapper:
                 self._wait_until_responsive(deadline)
             except pywintypes.com_error as e:
                 logger.warning("Gave up waiting for PowerPoint: %s", e)
-                future.set_exception(RuntimeError(
-                    "PowerPoint did not respond within "
-                    "%.0fs -- a dialog or menu is probably open. "
-                    "Close it and retry." % _BUSY_WAIT_BUDGET
-                ))
+                future.set_exception(RuntimeError(_BUSY_TIMEOUT_MESSAGE))
                 return
 
             try:
@@ -226,10 +227,7 @@ class PowerPointCOMWrapper:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 logger.warning("Idempotent operation still busy: %s", busy_error)
-                future.set_exception(RuntimeError(
-                    "PowerPoint is not responding -- a dialog or menu is "
-                    "probably open. Close it and retry."
-                ))
+                future.set_exception(RuntimeError(_BUSY_TIMEOUT_MESSAGE))
                 return
             delay = _BUSY_BACKOFF[min(attempt, len(_BUSY_BACKOFF) - 1)]
             logger.warning(
