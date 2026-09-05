@@ -3,10 +3,12 @@
 The rule under test: PowerPoint being busy is waited out *before* an operation
 starts, and an operation rejected part-way through is NOT re-run — re-running
 it would repeat whatever it already applied.  Only callers that opt in with
-idempotent=True are retried wholesale.
+idempotent=True are retried wholesale, and all waiting for one operation shares
+a single budget.
 
-No COM and no PowerPoint required: the app object is a mock and time.sleep is
-patched out so the backoff costs nothing.
+No COM and no PowerPoint required: the app object is a mock, and a fake clock
+replaces time.sleep/time.monotonic so the backoff costs no wall-clock time
+while the budget still bounds the loops exactly as it would in production.
 """
 
 from __future__ import annotations
@@ -23,7 +25,11 @@ _src_dir = str(Path(__file__).resolve().parents[1] / "src")
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-from utils.com_wrapper import PowerPointCOMWrapper  # noqa: E402
+from utils.com_wrapper import (  # noqa: E402
+    _BUSY_WAIT_BUDGET,
+    _CALL_TIMEOUT,
+    PowerPointCOMWrapper,
+)
 
 # RPC_E_CALL_REJECTED — PowerPoint answering "busy", e.g. a modal dialog is up.
 BUSY = -2147418111
@@ -35,29 +41,64 @@ def _com_error(hresult):
     return pywintypes.com_error(hresult, "test", None, None)
 
 
-def _wrapper(name_side_effect=None):
-    """Wrapper with a mock app whose `.Name` probe can be scripted."""
+class FakeClock:
+    """Sleeping advances time, so budgets bound loops without real waiting."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps = []
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    @property
+    def slept(self):
+        return sum(self.sleeps)
+
+
+def _wrapper(probe_script=None):
+    """Wrapper with a mock app whose `.Name` probe can be scripted.
+
+    probe_script entries are returned in order; an exception entry is raised.
+    Once exhausted the probe succeeds.  Pass None for an unscripted app.
+    """
     w = PowerPointCOMWrapper()
     app = MagicMock()
-    if name_side_effect is not None:
-        type(app).Name = property(lambda self: _next(name_side_effect))
+    if probe_script is not None:
+        script = list(probe_script)
+
+        def _name(_self):
+            value = script.pop(0) if script else "PowerPoint"
+            if isinstance(value, BaseException):
+                raise value
+            return value
+
+        type(app).Name = property(_name)
     w._app = app
     return w
 
 
-def _next(script):
-    """Pop the next scripted probe result; raise it if it is an exception."""
-    value = script.pop(0) if script else "PowerPoint"
-    if isinstance(value, BaseException):
-        raise value
-    return value
+def _always_busy_wrapper():
+    w = PowerPointCOMWrapper()
+    app = MagicMock()
+    type(app).Name = property(
+        lambda _self: (_ for _ in ()).throw(_com_error(BUSY))
+    )
+    w._app = app
+    return w
 
 
 def _run(w, func, idempotent=False):
+    clock = FakeClock()
     future: Future = Future()
-    with patch("utils.com_wrapper.time.sleep") as sleep_mock:
+    with patch("utils.com_wrapper.time.sleep", clock.sleep), \
+         patch("utils.com_wrapper.time.monotonic", clock.monotonic):
         w._run_item(func, (), {}, future, idempotent)
-    return future, sleep_mock
+    return future, clock
 
 
 # ---------------------------------------------------------------------------
@@ -78,21 +119,46 @@ def test_idempotent_operation_is_retried_wholesale():
     w = _wrapper()
     func = MagicMock(side_effect=[_com_error(BUSY), {"ok": True}])
 
-    future, _ = _run(w, func, idempotent=True)
+    future, clock = _run(w, func, idempotent=True)
 
     assert func.call_count == 2
+    assert clock.sleeps, "must back off before re-running"
     assert future.result() == {"ok": True}
 
 
-def test_idempotent_operation_still_busy_on_retry_reports_clearly():
+def test_idempotent_retry_backs_off_even_when_nothing_is_connected():
+    """With _app None there is no object to probe, so the backoff between
+    attempts is the only thing giving a modal dialog time to clear."""
+    w = PowerPointCOMWrapper()  # _app is None — the probe is skipped entirely
+    func = MagicMock(side_effect=[_com_error(BUSY), {"ok": True}])
+
+    future, clock = _run(w, func, idempotent=True)
+
+    assert func.call_count == 2
+    assert clock.slept > 0, "back-to-back retries with no delay are useless"
+    assert future.result() == {"ok": True}
+
+
+def test_idempotent_operation_gives_up_within_the_shared_budget():
     w = _wrapper()
     func = MagicMock(side_effect=_com_error(BUSY))
 
-    future, _ = _run(w, func, idempotent=True)
+    future, clock = _run(w, func, idempotent=True)
 
-    assert func.call_count == 2
+    assert func.call_count > 1, "an idempotent operation should be retried"
+    assert clock.slept <= _BUSY_WAIT_BUDGET, "retries must share one budget"
     with pytest.raises(RuntimeError, match="not responding"):
         future.result()
+
+
+def test_waiting_and_retrying_share_one_budget():
+    """A retry must not start a second full budget on top of the first."""
+    w = _always_busy_wrapper()
+    func = MagicMock(side_effect=_com_error(BUSY))
+
+    _future, clock = _run(w, func, idempotent=True)
+
+    assert clock.slept <= _BUSY_WAIT_BUDGET
 
 
 # ---------------------------------------------------------------------------
@@ -103,26 +169,21 @@ def test_busy_is_waited_out_before_the_operation_runs():
     w = _wrapper([_com_error(BUSY), _com_error(BUSY), "PowerPoint"])
     func = MagicMock(return_value={"ok": True})
 
-    future, sleep_mock = _run(w, func)
+    future, clock = _run(w, func)
 
     assert func.call_count == 1
-    assert sleep_mock.call_count == 2, "should back off once per busy probe"
+    assert len(clock.sleeps) == 2, "should back off once per busy probe"
     assert future.result() == {"ok": True}
 
 
 def test_operation_is_not_started_when_the_wait_budget_runs_out():
-    w = _wrapper()
-    type(w._app).Name = property(lambda self: (_ for _ in ()).throw(_com_error(BUSY)))
+    w = _always_busy_wrapper()
     func = MagicMock()
 
-    # Budget is consumed by advancing the clock instead of really sleeping.
-    clock = iter([0.0] + [100.0] * 20)
-    with patch("utils.com_wrapper.time.sleep"), \
-         patch("utils.com_wrapper.time.monotonic", side_effect=lambda: next(clock)):
-        future: Future = Future()
-        w._run_item(func, (), {}, future, False)
+    future, clock = _run(w, func)
 
     func.assert_not_called()
+    assert clock.slept <= _BUSY_WAIT_BUDGET
     with pytest.raises(RuntimeError, match="did not respond"):
         future.result()
 
@@ -132,10 +193,10 @@ def test_non_busy_probe_error_does_not_block_the_operation():
     w = _wrapper([_com_error(NOT_BUSY)])
     func = MagicMock(return_value={"ok": True})
 
-    future, sleep_mock = _run(w, func)
+    future, clock = _run(w, func)
 
     assert func.call_count == 1
-    sleep_mock.assert_not_called()
+    assert not clock.sleeps
     assert future.result() == {"ok": True}
 
 
@@ -143,10 +204,10 @@ def test_probe_is_skipped_when_not_connected_yet():
     w = PowerPointCOMWrapper()  # _app is None
     func = MagicMock(return_value={"ok": True})
 
-    future, sleep_mock = _run(w, func)
+    future, clock = _run(w, func)
 
     assert func.call_count == 1
-    sleep_mock.assert_not_called()
+    assert not clock.sleeps
     assert future.result() == {"ok": True}
 
 
@@ -155,8 +216,7 @@ def test_probe_is_skipped_when_not_connected_yet():
 # ---------------------------------------------------------------------------
 def test_non_busy_com_error_propagates_unchanged():
     w = _wrapper()
-    err = _com_error(NOT_BUSY)
-    func = MagicMock(side_effect=err)
+    func = MagicMock(side_effect=_com_error(NOT_BUSY))
 
     future, _ = _run(w, func)
 
@@ -178,7 +238,7 @@ def test_ordinary_exception_propagates_unchanged():
 
 
 # ---------------------------------------------------------------------------
-# execute() queues the idempotent flag and keeps it away from func
+# execute(): flag plumbing and a deadline that covers the wait
 # ---------------------------------------------------------------------------
 def test_execute_queues_the_idempotent_flag():
     w = PowerPointCOMWrapper()
@@ -201,3 +261,15 @@ def test_execute_defaults_to_non_idempotent():
         w.execute(MagicMock())
     *_, idempotent = w._queue.get_nowait()
     assert idempotent is False
+
+
+def test_execute_timeout_covers_the_busy_wait_as_well_as_the_call():
+    """Otherwise the caller could abandon the future while the worker, having
+    spent its wait budget first, is still applying the edit."""
+    w = PowerPointCOMWrapper()
+    with patch.object(Future, "result", return_value=None) as result_mock:
+        w.execute(MagicMock())
+
+    timeout = result_mock.call_args.kwargs["timeout"]
+    assert timeout == _BUSY_WAIT_BUDGET + _CALL_TIMEOUT
+    assert timeout > _BUSY_WAIT_BUDGET
