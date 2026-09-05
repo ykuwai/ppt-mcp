@@ -413,7 +413,7 @@ def _set_theme_colors_impl(color_map):
     slide_count = pres.Slides.Count
     if slide_count > 0:
         try:
-            view = app.ActiveWindow.View
+            view = ppt._get_target_window_impl().View
             current = view.Slide.SlideIndex
             for i in range(1, slide_count + 1):
                 view.GotoSlide(i)

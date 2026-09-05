@@ -1267,7 +1267,13 @@ def _goto_slide_impl(slide_index: int) -> dict:
         raise ValueError(
             f"Slide index {slide_index} out of range (1-{pres.Slides.Count})"
         )
-    app.ActiveWindow.View.GotoSlide(slide_index)
+    window = ppt._get_target_window_impl()
+    if window is None:
+        raise RuntimeError(
+            "The target presentation has no window to navigate "
+            "(opened with with_window=False?)."
+        )
+    window.View.GotoSlide(slide_index)
     return {
         "success": True,
         "active_slide_index": slide_index,

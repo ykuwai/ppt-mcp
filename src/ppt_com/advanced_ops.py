@@ -920,8 +920,14 @@ def _select_shapes_impl(slide_index, shape_names):
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
-    # Navigate to the slide first
-    app.ActiveWindow.View.GotoSlide(slide_index)
+    # Shape.Select() only works on the active window ("invalid request: the
+    # view must be active to select a shape"), so this tool deliberately
+    # brings the target presentation's window to the foreground.
+    try:
+        pres.Windows(1).Activate()
+    except Exception as e:
+        logger.warning("Could not activate presentation window: %s", e)
+    goto_slide(app, slide_index)
 
     # Select first shape (replace=True is default)
     first_shape = _get_shape(slide, shape_names[0])
@@ -979,8 +985,9 @@ def _get_selection_impl():
 # View
 # ---------------------------------------------------------------------------
 def _set_view_impl(view_type, zoom):
-    app = ppt._get_app_impl()
-    window = app.ActiveWindow
+    window = ppt._get_target_window_impl()
+    if window is None:
+        raise RuntimeError("No PowerPoint window is available.")
 
     if view_type is not None:
         vt_key = view_type.strip().lower().replace(" ", "_").replace("-", "_")
@@ -1978,6 +1985,9 @@ def register_tools(mcp):
         Navigates to the specified slide and selects the listed shapes.
         The first shape replaces any existing selection; remaining shapes
         are added to the selection.
+
+        Note: this brings the PowerPoint window to the foreground, because
+        PowerPoint only allows shape selection on the active window.
         """
         return select_shapes(params)
 
