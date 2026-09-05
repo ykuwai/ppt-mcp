@@ -334,6 +334,29 @@ class PowerPointCOMWrapper:
         except Exception:
             return None
 
+    def _activate_target_window_impl(self) -> Any:
+        """Internal: bring the target presentation's window to the front.
+
+        Reserved for the handful of operations COM will only perform on an
+        active view — Shape.Select() and TextRange.Select() + ExecuteMso().
+        Everything else must use _get_target_window_impl(), which drives the
+        window without stealing focus (issue #183).
+
+        Raises RuntimeError when the target deck has no window, rather than
+        letting the caller fail later with an opaque COM error.
+        """
+        window = self._get_target_window_impl()
+        if window is None:
+            raise RuntimeError(
+                "This operation needs an active PowerPoint window, but the "
+                "target presentation has none (opened with with_window=False?)."
+            )
+        try:
+            window.Activate()
+        except Exception as e:
+            logger.warning("Could not activate presentation window: %s", e)
+        return window
+
     def _set_target_pres_impl(self, name_or_index) -> dict:
         """Internal: set session-level target presentation on COM thread."""
         app = self._get_app_impl()

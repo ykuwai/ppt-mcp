@@ -396,7 +396,6 @@ def _set_theme_colors_impl(color_map):
     Args:
         color_map: dict of {theme_color_index: bgr_int} pairs.
     """
-    app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
 
     design_count = pres.Designs.Count

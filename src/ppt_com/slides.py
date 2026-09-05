@@ -1261,7 +1261,6 @@ class GotoSlideInput(BaseModel):
 
 
 def _goto_slide_impl(slide_index: int) -> dict:
-    app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
     if slide_index < 1 or slide_index > pres.Slides.Count:
         raise ValueError(

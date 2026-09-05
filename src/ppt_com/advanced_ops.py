@@ -923,10 +923,7 @@ def _select_shapes_impl(slide_index, shape_names):
     # Shape.Select() only works on the active window ("invalid request: the
     # view must be active to select a shape"), so this tool deliberately
     # brings the target presentation's window to the foreground.
-    try:
-        pres.Windows(1).Activate()
-    except Exception as e:
-        logger.warning("Could not activate presentation window: %s", e)
+    ppt._activate_target_window_impl()
     goto_slide(app, slide_index)
 
     # Select first shape (replace=True is default)
