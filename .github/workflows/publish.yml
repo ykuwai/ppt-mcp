@@ -8,10 +8,18 @@ on:
 
 jobs:
   # ------------------------------------------------------------------ #
+  # Job 0: Gate the release on the same tests PRs run
+  # ------------------------------------------------------------------ #
+  test:
+    name: Tests
+    uses: ./.github/workflows/test.yml
+
+  # ------------------------------------------------------------------ #
   # Job 1: Build the wheel and sdist
   # ------------------------------------------------------------------ #
   build:
     name: Build distribution packages
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

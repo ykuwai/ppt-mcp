@@ -29,6 +29,16 @@ An MCP (Model Context Protocol) server that gives AI agents full control over a 
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
 
+## 🎬 Demo
+
+Watch an agent build a deck in a live PowerPoint window (15x speed):
+
+<p align="center">
+  <video src="https://github.com/ykuwai/ppt-mcp/raw/main/assets/demo/ppt-mcp-demo_15x.mp4" width="720" controls muted loop playsinline></video>
+</p>
+
+> If the video does not play, [open it directly](https://github.com/ykuwai/ppt-mcp/raw/main/assets/demo/ppt-mcp-demo_15x.mp4).
+
 ## 📋 Requirements
 
 - Windows 11
