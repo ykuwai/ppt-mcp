@@ -181,7 +181,9 @@ def connect_to_powerpoint(params: ConnectInput) -> str:
         str: JSON with connection status, PowerPoint version, and presentation count
     """
     try:
-        result = ppt.execute(_connect_impl, params.visible)
+        # Attaching/launching is idempotent, so it is safe to re-run
+        # wholesale when PowerPoint answers 'busy' (issue #200).
+        result = ppt.execute(_connect_impl, params.visible, idempotent=True)
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to connect to PowerPoint: {str(e)}"})
