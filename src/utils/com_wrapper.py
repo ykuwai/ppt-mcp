@@ -89,6 +89,25 @@ def _try_dismiss_ppt_dialog() -> None:
         logger.debug("_try_dismiss_ppt_dialog failed (ignored): %s", exc)
 
 
+def _caller_safe(exc: BaseException) -> BaseException:
+    """Return an exception the calling thread can safely receive.
+
+    The worker settles a future with whatever the operation raised, and the
+    caller gets it back from Future.result().  Every tool wraps that call in
+    `except Exception`, which does not catch SystemExit or KeyboardInterrupt:
+    those would sail past the tool, past the server's dispatch, and take the
+    event loop down with them.  Keeping the worker alive must not cost the
+    caller its process, so a non-Exception BaseException is reported as a
+    RuntimeError instead.
+    """
+    if isinstance(exc, Exception):
+        return exc
+    logger.error("Operation raised %s: %s", type(exc).__name__, exc)
+    return RuntimeError(
+        "The operation raised %s: %s" % (type(exc).__name__, exc)
+    )
+
+
 class PowerPointCOMWrapper:
     """Manages the lifecycle of a PowerPoint COM Application object.
 
@@ -234,7 +253,7 @@ class PowerPointCOMWrapper:
                 # thread while _running stayed True, leaving every later
                 # request to queue up behind a worker that no longer existed
                 # (issue #199).
-                future.set_exception(e)
+                future.set_exception(_caller_safe(e))
                 return
 
             # Idempotent (connect / attach): safe to re-run from the top.  Back
@@ -325,6 +344,10 @@ class PowerPointCOMWrapper:
             # outgoing calls are not interruptible -- but everything queued
             # behind it is dropped rather than applied after the fact.
             cancelled = future.cancel()
+            if not cancelled and future.done():
+                # It finished in the moment between the timeout and the
+                # cancel; the caller may as well have the outcome.
+                return future.result()
             raise RuntimeError(
                 "PowerPoint did not finish the operation within "
                 "%.0fs and it was %s."

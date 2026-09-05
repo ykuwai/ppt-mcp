@@ -106,8 +106,73 @@ def test_base_exception_settles_the_future_instead_of_killing_the_worker():
     w._run_item(func, (), {}, future, False)  # must not propagate
 
     assert future.done()
-    with pytest.raises(SystemExit):
+    with pytest.raises(RuntimeError, match="SystemExit"):
         future.result()
+
+
+def test_base_exception_does_not_reach_the_calling_thread_unchanged():
+    """Keeping the worker alive must not cost the caller its process.
+
+    Tools wrap execute() in `except Exception`, which does not catch
+    SystemExit or KeyboardInterrupt — those would sail past the tool, past the
+    server's dispatch, and take the event loop down. They are reported as a
+    RuntimeError instead.
+    """
+    w = PowerPointCOMWrapper()
+    w._app = MagicMock()
+
+    for raised in (SystemExit("bye"), KeyboardInterrupt()):
+        future: Future = Future()
+        w._run_item(MagicMock(side_effect=raised), (), {}, future, False)
+        with pytest.raises(Exception) as exc:   # must be catchable as Exception
+            future.result()
+        assert isinstance(exc.value, RuntimeError)
+        assert type(raised).__name__ in str(exc.value)
+
+
+def test_ordinary_exception_is_passed_through_unwrapped():
+    """Only non-Exception BaseExceptions get rewritten."""
+    w = PowerPointCOMWrapper()
+    w._app = MagicMock()
+    err = ValueError("bad slide index")
+    future: Future = Future()
+
+    w._run_item(MagicMock(side_effect=err), (), {}, future, False)
+
+    with pytest.raises(ValueError, match="bad slide index"):
+        future.result()
+
+
+def test_worker_loop_survives_an_item_that_escapes_run_item():
+    """The backstop in _com_worker: if _run_item itself blows up, the future
+    is still settled and the loop keeps going."""
+    w = PowerPointCOMWrapper()
+    w._running = True
+    future: Future = Future()
+    w._queue.put((MagicMock(), (), {}, future, False))
+    w._queue.put(None)  # sentinel so the loop exits after the bad item
+
+    with patch("utils.com_wrapper.pythoncom"):
+        with patch.object(PowerPointCOMWrapper, "_run_item",
+                          side_effect=RuntimeError("escaped")):
+            w._com_worker()
+
+    assert future.done(), "the caller must not be left waiting forever"
+    with pytest.raises(RuntimeError, match="COM worker failed"):
+        future.result()
+
+
+def test_execute_returns_the_result_if_it_lands_during_the_timeout_race():
+    """cancel() failing because the operation just finished is not a failure."""
+    w = PowerPointCOMWrapper()
+
+    with patch.object(Future, "cancel", return_value=False):
+        with patch.object(Future, "done", return_value=True):
+            with patch.object(
+                Future, "result",
+                side_effect=[FuturesTimeoutError, {"ok": True}],
+            ):
+                assert w.execute(MagicMock()) == {"ok": True}
 
 
 def test_execute_fails_fast_when_the_worker_thread_is_dead():
