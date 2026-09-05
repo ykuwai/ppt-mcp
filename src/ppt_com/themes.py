@@ -396,7 +396,6 @@ def _set_theme_colors_impl(color_map):
     Args:
         color_map: dict of {theme_color_index: bgr_int} pairs.
     """
-    app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
 
     design_count = pres.Designs.Count
@@ -413,7 +412,7 @@ def _set_theme_colors_impl(color_map):
     slide_count = pres.Slides.Count
     if slide_count > 0:
         try:
-            view = app.ActiveWindow.View
+            view = ppt._get_target_window_impl().View
             current = view.Slide.SlideIndex
             for i in range(1, slide_count + 1):
                 view.GotoSlide(i)

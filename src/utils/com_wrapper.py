@@ -267,38 +267,95 @@ class PowerPointCOMWrapper:
             self._app = None
             return self._connect_impl(allow_launch=allow_launch)
 
+    def _find_target_pres_impl(self, app) -> Optional[Any]:
+        """Internal: locate the session target presentation, or None.
+
+        Matches on FullName.  When the target is no longer open, the stored
+        target is cleared so callers fall back to ActivePresentation.
+        """
+        if not self._target_pres_full_name:
+            return None
+        for i in range(1, app.Presentations.Count + 1):
+            try:
+                p = app.Presentations(i)
+                if p.FullName == self._target_pres_full_name:
+                    return p
+            except Exception:
+                pass
+        # Target was closed since last activation — clear and fall back
+        logger.warning(
+            "Target presentation '%s' is no longer open; "
+            "falling back to ActivePresentation",
+            self._target_pres_full_name,
+        )
+        self._target_pres_full_name = None
+        return None
+
     def _get_pres_impl(self) -> Any:
         """Internal: get target presentation on COM thread.
 
         Returns the session-level target presentation if one has been set via
-        _set_target_pres_impl and the file is still open.  Also activates its
-        window so subsequent goto_slide / ActiveWindow calls use the right window.
-        Falls back to ActivePresentation when no target is set or when the
-        target was closed.
+        _set_target_pres_impl and the file is still open.  Falls back to
+        ActivePresentation when no target is set or when the target was closed.
+
+        This deliberately does NOT activate the presentation's window: doing so
+        on every tool call yanked PowerPoint to the foreground and stole focus
+        from whatever the user was doing (issue #183).  Operations that need to
+        follow the edit use _get_target_window_impl(), which drives the target
+        deck's own window without activating it.
         """
         app = self._get_app_impl()
-        if self._target_pres_full_name:
-            for i in range(1, app.Presentations.Count + 1):
-                try:
-                    p = app.Presentations(i)
-                    if p.FullName == self._target_pres_full_name:
-                        # Ensure this presentation's window is active so
-                        # goto_slide / app.ActiveWindow operate on the right deck.
-                        try:
-                            p.Windows(1).Activate()
-                        except Exception:
-                            pass
-                        return p
-                except Exception:
-                    pass
-            # Target was closed since last activation — clear and fall back
-            logger.warning(
-                "Target presentation '%s' is no longer open; "
-                "falling back to ActivePresentation",
-                self._target_pres_full_name,
-            )
-            self._target_pres_full_name = None
+        pres = self._find_target_pres_impl(app)
+        if pres is not None:
+            return pres
         return app.ActivePresentation
+
+    def _get_target_window_impl(self) -> Optional[Any]:
+        """Internal: get the DocumentWindow to drive, without activating it.
+
+        Returns the target presentation's first window when a session target is
+        set, otherwise app.ActiveWindow.  Returns None when the target deck has
+        no window (opened with with_window=False) — callers must not silently
+        fall back to ActiveWindow there, since that belongs to another deck.
+        """
+        app = self._get_app_impl()
+        pres = self._find_target_pres_impl(app)
+        if pres is not None:
+            try:
+                if pres.Windows.Count == 0:
+                    return None
+                return pres.Windows(1)
+            except Exception:
+                return None
+        try:
+            if app.Windows.Count == 0:
+                return None
+            return app.ActiveWindow
+        except Exception:
+            return None
+
+    def _activate_target_window_impl(self) -> Any:
+        """Internal: bring the target presentation's window to the front.
+
+        Reserved for the handful of operations COM will only perform on an
+        active view — Shape.Select() and TextRange.Select() + ExecuteMso().
+        Everything else must use _get_target_window_impl(), which drives the
+        window without stealing focus (issue #183).
+
+        Raises RuntimeError when the target deck has no window, rather than
+        letting the caller fail later with an opaque COM error.
+        """
+        window = self._get_target_window_impl()
+        if window is None:
+            raise RuntimeError(
+                "This operation needs an active PowerPoint window, but the "
+                "target presentation has none (opened with with_window=False?)."
+            )
+        try:
+            window.Activate()
+        except Exception as e:
+            logger.warning("Could not activate presentation window: %s", e)
+        return window
 
     def _set_target_pres_impl(self, name_or_index) -> dict:
         """Internal: set session-level target presentation on COM thread."""

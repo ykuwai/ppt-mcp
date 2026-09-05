@@ -643,7 +643,7 @@ def _copy_to_clipboard_impl(
     if slide_indices is None or len(slide_indices) == 0:
         # Default: currently viewed slide
         try:
-            current = app.ActiveWindow.View.Slide.SlideIndex
+            current = ppt._get_target_window_impl().View.Slide.SlideIndex
         except Exception:
             current = 1
         slide_indices = [current]

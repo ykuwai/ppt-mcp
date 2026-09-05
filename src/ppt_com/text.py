@@ -1164,9 +1164,12 @@ def _clear_highlight(shape, start=None, length=None):
     2. Selects the text and executes ClearFormatting (clears highlight + all formatting).
     3. Restores the saved formatting so only the highlight is removed.
 
-    Note: Requires the PowerPoint window to be visible and active, because
-    Select() + ExecuteMso("ClearFormatting") operates through the UI layer.
+    Note: Select() + ExecuteMso("ClearFormatting") operates through the UI
+    layer, so this is one of the few paths that must activate the target
+    window (and therefore brings PowerPoint to the foreground).  Everything
+    else navigates without stealing focus — see issue #183.
     """
+    ppt._activate_target_window_impl()
     app = shape.Application
     tr = shape.TextFrame.TextRange
 
