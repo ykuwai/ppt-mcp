@@ -23,10 +23,24 @@ logger = logging.getLogger(__name__)
 # HRESULTs that indicate PowerPoint is temporarily busy (e.g. modal dialog open).
 # RPC_E_CALL_REJECTED (0x80010001): server rejected the call outright.
 # RPC_E_SERVERCALL_RETRYLATER (0x8001010A): server explicitly says retry later.
-# Both mean the call was never started, so retrying is always safe.
+#
+# Both mean that *individual COM call* never started, so retrying THAT CALL is
+# safe.  It does NOT follow that re-running the whole impl function is safe:
+# an impl typically makes many COM calls, and if the rejection lands on the
+# fifth one, re-running from the top repeats the first four (issue #200 -- e.g.
+# ppt_add_slide(count=5) rejected on slide 3 would create slides 1-2 twice).
+#
+# So the worker waits for PowerPoint to become responsive BEFORE starting the
+# operation, and does not re-run an operation that was rejected part-way
+# through.  Only callers that pass idempotent=True are retried wholesale.
 _BUSY_HRESULTS = frozenset({-2147418111, -2147417846})
-_RETRY_MAX = 5       # maximum number of retries (total attempts = _RETRY_MAX + 1)
-_RETRY_INTERVAL = 3  # seconds between retries
+# Total budget for waiting out a busy PowerPoint, in seconds.  Deliberately
+# below the 30 s timeout in execute(): with the old fixed 5 x 3 s retries the
+# worker could still be working after the caller had already given up, and
+# then apply the operation the caller was told had failed.
+_BUSY_WAIT_BUDGET = 15.0
+# Backoff between busy probes.  The last value repeats until the budget runs out.
+_BUSY_BACKOFF = (0.5, 1.0, 2.0, 3.0)
 # When True, the server sends ESC to PowerPoint on the first busy rejection to
 # dismiss any blocking modal dialog automatically.
 # Opt-in: set PPT_AUTO_DISMISS_DIALOG=true in mcp.json env to enable:
@@ -105,6 +119,109 @@ class PowerPointCOMWrapper:
             self._com_thread.join(timeout=5.0)
         logger.info("COM worker thread stopped")
 
+    def _wait_until_responsive(self) -> None:
+        """Block until PowerPoint stops rejecting calls, or the budget runs out.
+
+        A cheap property read is used as the probe.  Doing this *before* the
+        operation is what makes the busy handling safe: a dialog or open menu
+        is almost always already up when the request arrives, so waiting here
+        costs nothing in the common case and avoids having to re-run a
+        partially-applied operation afterwards (issue #200).
+
+        Only busy HRESULTs are handled.  Any other com_error is left alone so
+        that _get_app_impl keeps its own stale-reference detection, and a
+        missing app object simply skips the probe -- connecting is the job of
+        _connect_impl.
+
+        Raises:
+            pywintypes.com_error: the last busy rejection, if PowerPoint is
+                still busy when the budget is exhausted.
+        """
+        if self._app is None:
+            return
+        deadline = time.monotonic() + _BUSY_WAIT_BUDGET
+        attempt = 0
+        while True:
+            try:
+                _ = self._app.Name
+                return
+            except pywintypes.com_error as e:
+                if e.hresult not in _BUSY_HRESULTS:
+                    # Stale reference or anything else: not this method's job.
+                    return
+                if attempt == 0 and AUTO_DISMISS_DIALOG:
+                    # Optionally dismiss the blocking dialog via ESC so the
+                    # next probe likely succeeds immediately.
+                    _try_dismiss_ppt_dialog()
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise
+                delay = _BUSY_BACKOFF[min(attempt, len(_BUSY_BACKOFF) - 1)]
+                logger.warning(
+                    "PowerPoint is busy (modal dialog open?). "
+                    "Waiting %.1fs before probing again (%.1fs of budget left)...",
+                    delay, remaining,
+                )
+                time.sleep(min(delay, remaining))
+                attempt += 1
+            except AttributeError:
+                return  # app went away; _get_app_impl will reconnect
+
+    def _run_item(self, func, args, kwargs, future, idempotent: bool) -> None:
+        """Run one queued operation and settle its future.
+
+        Split out of _com_worker so the busy-handling policy is unit-testable
+        without a COM thread.
+        """
+        try:
+            self._wait_until_responsive()
+        except pywintypes.com_error as e:
+            logger.warning("Gave up waiting for PowerPoint: %s", e)
+            future.set_exception(RuntimeError(
+                "PowerPoint did not respond within "
+                "%.0fs -- a dialog or menu is probably open. "
+                "Close it and retry." % _BUSY_WAIT_BUDGET
+            ))
+            return
+
+        try:
+            future.set_result(func(*args, **kwargs))
+            return
+        except pywintypes.com_error as e:
+            if e.hresult not in _BUSY_HRESULTS:
+                future.set_exception(e)
+                return
+            if not idempotent:
+                # The operation was rejected part-way through.  Re-running it
+                # would repeat whatever it already applied, so surface the
+                # failure instead of silently duplicating work (issue #200).
+                future.set_exception(RuntimeError(
+                    "PowerPoint became busy in the middle of the operation "
+                    "(a dialog or menu is open?). The operation may have been "
+                    "partially applied -- check the slide and retry."
+                ))
+                return
+            busy_error = e
+        except Exception as e:
+            future.set_exception(e)
+            return
+
+        # Idempotent operation (connect / attach): safe to re-run from the top.
+        logger.warning("Busy during an idempotent operation, retrying: %s", busy_error)
+        try:
+            self._wait_until_responsive()
+            future.set_result(func(*args, **kwargs))
+        except pywintypes.com_error as e:
+            if e.hresult in _BUSY_HRESULTS:
+                future.set_exception(RuntimeError(
+                    "PowerPoint is not responding -- a dialog or menu is "
+                    "probably open. Close it and retry."
+                ))
+            else:
+                future.set_exception(e)
+        except Exception as e:
+            future.set_exception(e)
+
     def _com_worker(self) -> None:
         """Worker thread that processes COM operations in an STA apartment."""
         pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
@@ -113,36 +230,14 @@ class PowerPointCOMWrapper:
                 item = self._queue.get()
                 if item is None:
                     break
-                func, args, kwargs, future = item
-                for attempt in range(_RETRY_MAX + 1):  # +1: initial attempt + _RETRY_MAX retries
-                    try:
-                        result = func(*args, **kwargs)
-                        future.set_result(result)
-                        break
-                    except pywintypes.com_error as e:
-                        if e.hresult in _BUSY_HRESULTS and attempt < _RETRY_MAX:
-                            logger.warning(
-                                "PowerPoint is busy (modal dialog open?). "
-                                "Retrying in %ds... (%d/%d)",
-                                _RETRY_INTERVAL, attempt + 1, _RETRY_MAX,
-                            )
-                            if attempt == 0 and AUTO_DISMISS_DIALOG:
-                                # On the very first failure, optionally dismiss
-                                # the blocking dialog via ESC so the next retry
-                                # likely succeeds immediately.
-                                _try_dismiss_ppt_dialog()
-                            time.sleep(_RETRY_INTERVAL)
-                        else:
-                            future.set_exception(e)
-                            break
-                    except Exception as e:
-                        future.set_exception(e)
-                        break
+                func, args, kwargs, future, idempotent = item
+                self._run_item(func, args, kwargs, future, idempotent)
         finally:
             self._cleanup_com()
             pythoncom.CoUninitialize()
 
-    def execute(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
+    def execute(self, func: Callable, *args: Any,
+                idempotent: bool = False, **kwargs: Any) -> Any:
         """Execute a function on the COM thread and return its result.
 
         This is the main entry point for all COM operations from async code.
@@ -150,7 +245,13 @@ class PowerPointCOMWrapper:
 
         Args:
             func: The function to execute on the COM thread
-            *args, **kwargs: Arguments to pass to the function
+            idempotent: Keyword-only, and not forwarded to func.  Pass True
+                only when re-running func from the top has no cumulative
+                effect (connecting, attaching).  Such operations are retried
+                wholesale if PowerPoint turns busy mid-call; everything else
+                fails instead, so a half-applied operation is never silently
+                repeated (issue #200).
+            *args, **kwargs: Arguments to pass to func
 
         Returns:
             The return value of func
@@ -159,7 +260,7 @@ class PowerPointCOMWrapper:
             Any exception raised by func
         """
         future: Future = Future()
-        self._queue.put((func, args, kwargs, future))
+        self._queue.put((func, args, kwargs, future, idempotent))
         return future.result(timeout=30.0)
 
     def connect(self, visible: Optional[bool] = None, allow_launch: bool = True) -> Any:
@@ -178,7 +279,9 @@ class PowerPointCOMWrapper:
         Returns:
             PowerPoint.Application COM object
         """
-        return self.execute(self._connect_impl, visible, allow_launch)
+        # Connecting is idempotent: re-running it just re-attaches.
+        return self.execute(self._connect_impl, visible, allow_launch,
+                            idempotent=True)
 
     def _connect_impl(self, visible: Optional[bool] = None, allow_launch: bool = True) -> Any:
         """Internal: connect to PowerPoint on the COM thread.
@@ -194,7 +297,7 @@ class PowerPointCOMWrapper:
                 return self._app
             except pywintypes.com_error as e:
                 if e.hresult in _BUSY_HRESULTS:
-                    raise  # PowerPoint busy — let _com_worker retry loop handle it
+                    raise  # PowerPoint busy — _run_item decides whether to retry
                 logger.warning("Stale COM reference, reconnecting...")
                 self._app = None
             except AttributeError:
@@ -222,7 +325,7 @@ class PowerPointCOMWrapper:
                 launched_new = True
             except pywintypes.com_error as e2:
                 if e2.hresult in _BUSY_HRESULTS:
-                    raise  # Let _com_worker retry loop handle it
+                    raise  # PowerPoint busy — _run_item decides whether to retry
                 raise ConnectionError(
                     f"Failed to connect to PowerPoint. Is it installed? Error: {e2.strerror}"
                 ) from e2
@@ -242,7 +345,7 @@ class PowerPointCOMWrapper:
         Defaults to attach-only; pass allow_launch=True only from tools that
         legitimately need to start PowerPoint (e.g. create/open presentation).
         """
-        return self.execute(self._get_app_impl, allow_launch)
+        return self.execute(self._get_app_impl, allow_launch, idempotent=True)
 
     def _get_app_impl(self, allow_launch: bool = False) -> Any:
         """Internal: get app on COM thread.
@@ -258,7 +361,7 @@ class PowerPointCOMWrapper:
             return self._app
         except pywintypes.com_error as e:
             if e.hresult in _BUSY_HRESULTS:
-                raise  # PowerPoint busy — let _com_worker retry loop handle it
+                raise  # PowerPoint busy — _run_item decides whether to retry
             logger.warning("COM connection lost, reconnecting...")
             self._app = None
             return self._connect_impl(allow_launch=allow_launch)
@@ -417,7 +520,7 @@ class PowerPointCOMWrapper:
 
     def ensure_presentation(self) -> Any:
         """Ensure at least one presentation is open, return the active one."""
-        return self.execute(self._ensure_presentation_impl)
+        return self.execute(self._ensure_presentation_impl, idempotent=True)
 
     def _ensure_presentation_impl(self) -> Any:
         """Internal: ensure presentation on COM thread."""
