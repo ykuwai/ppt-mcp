@@ -49,7 +49,7 @@ def refusal(
             that nobody re-derives it. Name the mechanism, not just the fact.
         alternatives: Tool names worth trying instead, best first. Omit rather
             than pad; a wrong suggestion costs more than no suggestion.
-        error: A replacement headline, for a tool that does work but has one
+        error: A replacement `error` line, for a tool that does work but has one
             argument it cannot honour. Without it a reader is told to give up
             on the whole tool when only that one argument has to go.
 

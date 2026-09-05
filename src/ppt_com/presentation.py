@@ -901,7 +901,10 @@ def register_tools(mcp):
         """Save a presentation to a new file path and/or format.
 
         Supported formats: 'pptx', 'pdf', 'png', 'jpg', 'default'.
-        Note: SaveAs changes the presentation's name to the new path.
+        Note: SaveAs changes the presentation's name to the new path. On macOS
+        a path outside PowerPoint's container cannot be held open, so the deck
+        stays in the container and the given path receives a copy that later
+        saves refresh; the result says so and names it in `also_copied_to`.
         For image formats (png/jpg), a folder of individual slide images is created.
         """
         return save_presentation_as(params)

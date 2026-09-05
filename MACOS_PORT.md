@@ -485,7 +485,7 @@ checked against the code by a test, so it cannot quietly go stale.
 | No table style, only the text direction | `ppt_set_table_style` |
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
 
-A further **13 tools work and refuse one argument**, with the headline naming
+A further **13 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`

@@ -2565,7 +2565,10 @@ def register_tools(mcp):
         """Extract all text from the presentation as pseudo-Markdown.
 
         Returns a structured overview of every slide's content:
-        - `# Heading` for slide titles
+        - `# Heading` for slide titles, meaning the layout's title
+          placeholder. A deck built on a blank layout out of plain text
+          boxes has none, so its headings come back as `##` and `###`
+          instead and nothing is a `#`.
         - `## Subheading` for all-bold full-width shapes
         - `### Subheading` for all-bold shapes in multi-column layouts
         - `**bold**` and `*italic*` inline formatting
