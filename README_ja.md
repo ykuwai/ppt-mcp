@@ -29,6 +29,16 @@ PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）
 - **[Google Material Symbols](https://fonts.google.com/icons) アイコン** — 2,500以上のアイコンをキーワード検索し、テーマカラーでSVG挿入
 - **テーマカラー連携** — RGB値のハードコードではなく `accent1`、`accent2` などのテーマカラー名で指定
 
+## 🎬 デモ
+
+エージェントが実際の PowerPoint ウィンドウでスライドを作成する様子（15倍速）:
+
+<p align="center">
+  <video src="https://github.com/ykuwai/ppt-mcp/raw/main/assets/demo/ppt-mcp-demo_15x.mp4" width="720" controls muted loop playsinline></video>
+</p>
+
+> 再生されない場合は[こちらから直接開いてください](https://github.com/ykuwai/ppt-mcp/raw/main/assets/demo/ppt-mcp-demo_15x.mp4)。
+
 ## 📋 動作環境
 
 - Windows 11
