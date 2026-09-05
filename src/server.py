@@ -87,14 +87,7 @@ insert at a `position`, for instance, but appending still works.
 Some results carry `warnings` alongside `success`. Those are parts of the
 request that did not land, listed rather than silently dropped.
 
-**The fonts named above are Windows fonts.** Segoe UI is not on macOS, and
-neither is BIZ UDPゴシック, so asking for either gets a substitute chosen by the
-system rather than the font that was asked for. Hiragino Sans reads well for
-Japanese and Hiragino Sans W6 is its heavier weight, which projects better;
-Helvetica Neue and Arial are both present for Latin. BIZ UDGothic ships here
-too, without the P.
-
-One more thing about Japanese. PowerPoint for Mac will not set the East Asian
+A note about Japanese fonts. PowerPoint for Mac will not set the East Asian
 font to a font that has no East Asian glyphs. It accepts the write, keeps the
 old value and reports nothing, so `font_name` alone leaves Japanese text in
 whatever font it was in. That now comes back as a warning; pass
@@ -111,6 +104,20 @@ scripting dictionary. Build those by hand, or on Windows.
 """ if sys.platform == "darwin" else ""
 
 
+# Naming a font PowerPoint cannot find does not fail. The system quietly
+# substitutes one, so a deck built from the Windows recommendation on a Mac
+# comes out in something nobody chose. The advice therefore has to be right
+# the first time it is read, rather than corrected further down (#194).
+_PREFERRED_FONTS = (
+    "Preferred fonts: Hiragino Sans (Japanese, ヒラギノ角ゴシック in the font "
+    "menu) with Hiragino Sans W6 for headings, and Helvetica Neue or Arial "
+    "(Latin). Segoe UI and BIZ UDPゴシック are Windows fonts and are not on "
+    "macOS; BIZ UDGothic ships here, without the P."
+    if sys.platform == "darwin"
+    else "Preferred fonts: BIZ UDPゴシック (Japanese) + Segoe UI (Latin)."
+)
+
+
 mcp = MCPServer(
     "powerpoint_mcp",
     lifespan=app_lifespan,
@@ -120,7 +127,7 @@ mcp = MCPServer(
 1. Call `ppt_activate_presentation` first — locks all tools to a specific file and prevents accidental edits to the wrong presentation.
 2. Call `ppt_get_presentation_info` to understand the presentation — slide count, dimensions, template, current default fonts, and accent colors. Use this to inform all subsequent decisions. When saving files (e.g., exported markdown, images), use the presentation's `local_dir` from `ppt_get_presentation_info` as the default save directory. To read the existing slide content, call `ppt_get_all_text` — it returns all text as pseudo-Markdown with layout analysis, heading detection, and formatting markers.
 3. When adding slides, use `ppt_add_slide` with `count` to create multiple slides at once instead of calling it repeatedly.
-4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale Windows, the slide master default is often 游ゴシック, which renders thin and illegible when projected. Preferred fonts: BIZ UDPゴシック (Japanese) + Segoe UI (Latin).
+4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale systems, the slide master default is often 游ゴシック, which renders thin and illegible when projected. """ + _PREFERRED_FONTS + """
 5. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
 6. Use `ppt_get_slide_preview` to visually inspect slides as you work.
 

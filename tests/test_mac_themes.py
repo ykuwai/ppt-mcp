@@ -468,3 +468,35 @@ class TestTheAccentsPresentationInfoReports:
         for name in ("accent1", "accent2", "accent3", "accent4", "accent5", "accent6"):
             assert f'"{name}"' in source
         assert "accent_colors[key] = None" in source
+
+
+@macos_only
+class TestTheFontAdviceSuitsThisPlatform:
+    """Naming a font PowerPoint cannot find does not fail, it substitutes.
+
+    So font advice that is wrong for the platform does not produce an error a
+    caller can act on. It produces a deck set in something nobody chose, and
+    the only sign is the look of it. The advice has to be right where it is
+    first read, which is why it is no longer corrected further down.
+    """
+
+    @staticmethod
+    def _instructions():
+        import src.server as server
+
+        return server.mcp.instructions
+
+    def test_the_windows_fonts_are_not_recommended_here(self):
+        advice = self._instructions()
+        headline = advice[advice.index("Preferred fonts:"):]
+        headline = headline[:headline.index("\n")]
+        # The first sentence is the recommendation. What follows it only
+        # says which Windows fonts are absent, so Segoe UI belongs there.
+        recommendation = headline.split(". ")[0]
+        assert "Hiragino Sans" in recommendation
+        assert "Segoe UI" not in recommendation
+        assert "BIZ UDP" not in recommendation
+
+    def test_the_advice_is_not_contradicted_later(self):
+        advice = self._instructions()
+        assert advice.count("Preferred fonts:") == 1
