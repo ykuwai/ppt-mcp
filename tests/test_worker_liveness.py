@@ -81,11 +81,13 @@ def test_operation_stays_cancellable_through_the_preflight_wait():
         if not cancelled_during_wait:
             cancelled_during_wait.append(future.cancel())
 
-    with patch("utils.com_wrapper.time.sleep", _sleep),          patch("utils.com_wrapper.time.monotonic", lambda: clock["now"]):
+    with patch("utils.com_wrapper.time.sleep", _sleep), \
+         patch("utils.com_wrapper.time.monotonic", lambda: clock["now"]):
         w._run_item(func, (), {}, future, False)
 
     assert cancelled_during_wait == [True], "must still be cancellable while waiting"
-    func.assert_not_called(), "a cancelled operation must never be applied"
+    # A cancelled operation must never be applied.
+    func.assert_not_called()
 
 
 def test_timeout_error_raised_by_the_operation_is_not_mistaken_for_ours():
@@ -97,11 +99,14 @@ def test_timeout_error_raised_by_the_operation_is_not_mistaken_for_ours():
     w._run_item(MagicMock(side_effect=TimeoutError("COM call timed out")),
                 (), {}, future, False)
 
-    with patch.object(Future, "result", side_effect=future.exception()),          patch.object(Future, "done", return_value=True),          patch.object(Future, "cancel") as cancel_mock:
+    with patch.object(Future, "result", side_effect=future.exception()), \
+         patch.object(Future, "done", return_value=True), \
+         patch.object(Future, "cancel") as cancel_mock:
         with pytest.raises(TimeoutError, match="COM call timed out"):
             w.execute(MagicMock())
 
-    cancel_mock.assert_not_called(), "a finished future must not be cancelled"
+    # A finished future must not be cancelled.
+    cancel_mock.assert_not_called()
 
 
 def test_execute_cancels_the_future_when_it_times_out():
@@ -130,7 +135,8 @@ def test_timeout_does_not_leak_a_bare_futures_timeout():
     """Tools render errors with str(e); a bare TimeoutError says nothing."""
     w = PowerPointCOMWrapper()
 
-    with patch.object(Future, "result", side_effect=FuturesTimeoutError),          patch.object(Future, "done", return_value=False):
+    with patch.object(Future, "result", side_effect=FuturesTimeoutError), \
+         patch.object(Future, "done", return_value=False):
         with pytest.raises(RuntimeError) as exc:
             w.execute(MagicMock())
 
