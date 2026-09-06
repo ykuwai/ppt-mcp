@@ -53,14 +53,52 @@ def _add_section_impl(name, slide_index):
     pres = ppt._get_pres_impl()
     sp = pres.SectionProperties
 
-    section_index = sp.AddSection(slide_index, name)
+    slide_count = pres.Slides.Count
+    if slide_count == 0:
+        raise ValueError(
+            "The presentation has no slides; add slides before creating sections"
+        )
+    if slide_index > slide_count:
+        raise ValueError(
+            f"slide_index {slide_index} is out of range: "
+            f"the presentation has {slide_count} slide(s)"
+        )
 
-    return {
+    # If a section already starts at this slide, PowerPoint keeps it (now
+    # empty) at its current index and inserts the new section right after it.
+    # Remember it so the caller can be warned.
+    prior = None
+    for i in range(1, sp.Count + 1):
+        if sp.FirstSlide(i) == slide_index:
+            prior = (i, sp.Name(i))
+            break
+
+    # AddSection's first argument is a SECTION index (valid 1..Count+1), so
+    # passing a slide index fails with "Integer out of range" for every
+    # section after the first. AddBeforeSlide takes the slide index and
+    # returns the index of the new section.
+    section_index = sp.AddBeforeSlide(slide_index, name)
+
+    result = {
         "success": True,
         "section_index": section_index,
         "name": name,
         "slide_index": slide_index,
+        "slides_count": sp.SlidesCount(section_index),
+        "sections_count": sp.Count,
     }
+
+    if prior is not None:
+        idx = section_index - 1
+        if not (idx >= 1 and sp.SlidesCount(idx) == 0):
+            idx = prior[0]
+        result["warning"] = (
+            f"Section '{prior[1]}' (index {idx}) also started at slide "
+            f"{slide_index} and is now empty. Delete or move it with "
+            f"ppt_manage_section if that was not intended."
+        )
+
+    return result
 
 
 def _list_sections_impl():
@@ -70,16 +108,22 @@ def _list_sections_impl():
 
     sections = []
     for i in range(1, sp.Count + 1):
+        first = sp.FirstSlide(i)  # -1 for an empty section
+        count = sp.SlidesCount(i)
+        empty = count == 0 or first < 1
         sections.append({
             "index": i,
             "name": sp.Name(i),
-            "first_slide": sp.FirstSlide(i),
-            "slides_count": sp.SlidesCount(i),
+            "first_slide": None if empty else first,
+            "last_slide": None if empty else first + count - 1,
+            "slides_count": count,
+            "empty": empty,
         })
 
     return {
         "success": True,
         "sections_count": sp.Count,
+        "slides_total": pres.Slides.Count,
         "sections": sections,
     }
 
@@ -201,6 +245,8 @@ def register_tools(mcp):
 
         Creates a new section starting at the specified slide.
         Sections group slides for organizational purposes.
+        If a section already starts at that slide, it is left empty and the
+        response carries a warning naming it.
         """
         return add_section(params)
 
@@ -217,7 +263,8 @@ def register_tools(mcp):
     async def tool_list_sections() -> str:
         """List all sections in the active presentation.
 
-        Returns section name, first slide index, and slide count for each section.
+        Returns section name, first/last slide index, slide count and an
+        `empty` flag for each section (empty sections have null slide indices).
         """
         return list_sections()
 
