@@ -42,6 +42,18 @@ def _com_error(hresult):
     return pywintypes.com_error(hresult, "test", None, None)
 
 
+def _execute(w, *args, **kwargs):
+    """Call execute() as if the worker had picked the item up at once.
+
+    execute() waits for the dequeue before the call budget starts, so that
+    time spent queued behind other operations is not charged to the operation
+    (issue #192).  These tests run no worker and are about what happens once
+    the operation has started.
+    """
+    with patch.object(threading.Event, "wait", return_value=True):
+        return w.execute(*args, **kwargs)
+
+
 def _wrapper(running=True):
     w = PowerPointCOMWrapper()
     w._running = running
@@ -49,7 +61,7 @@ def _wrapper(running=True):
 
 
 def _queued(future):
-    return (MagicMock(), (), {}, future, False)
+    return (MagicMock(), (), {}, future, False, threading.Event())
 
 
 # --- deciding that the worker is wedged -----------------------------------
@@ -65,7 +77,7 @@ def test_execute_replaces_the_worker_when_the_call_can_neither_be_cancelled_nor_
             patch.object(PowerPointCOMWrapper, "_recover_from_wedge",
                          return_value=True) as recover:
         with pytest.raises(RuntimeError, match="fresh connection"):
-            w.execute(MagicMock())
+            _execute(w, MagicMock())
 
     recover.assert_called_once_with(0)
 
@@ -79,7 +91,7 @@ def test_a_call_that_cancels_cleanly_does_not_replace_the_worker():
             patch.object(Future, "cancel", return_value=True), \
             patch.object(PowerPointCOMWrapper, "_recover_from_wedge") as recover:
         with pytest.raises(RuntimeError, match="was cancelled"):
-            w.execute(MagicMock())
+            _execute(w, MagicMock())
 
     recover.assert_not_called()
 
@@ -92,7 +104,7 @@ def test_a_call_that_lands_during_the_timeout_race_is_still_returned():
             patch.object(Future, "result",
                          side_effect=[FuturesTimeoutError, {"ok": True}]), \
             patch.object(PowerPointCOMWrapper, "_recover_from_wedge") as recover:
-        assert w.execute(MagicMock()) == {"ok": True}
+        assert _execute(w, MagicMock()) == {"ok": True}
 
     recover.assert_not_called()
 

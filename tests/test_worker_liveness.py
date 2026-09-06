@@ -17,6 +17,7 @@ No COM and no PowerPoint required.
 from __future__ import annotations
 
 import sys
+import threading
 from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -44,6 +45,17 @@ def test_cancelled_operation_is_not_run():
     w._run_item(func, (), {}, future, False)
 
     func.assert_not_called()
+
+def _execute(w, *args, **kwargs):
+    """Call execute() as if the worker had picked the item up at once.
+
+    execute() waits for the dequeue before the call budget starts, so that
+    time spent queued behind other operations is not charged to the operation
+    (issue #192).  These tests run no worker and are about what happens once
+    the operation has started.
+    """
+    with patch.object(threading.Event, "wait", return_value=True):
+        return w.execute(*args, **kwargs)
 
 
 def test_running_operation_can_no_longer_be_cancelled():
@@ -103,7 +115,7 @@ def test_timeout_error_raised_by_the_operation_is_not_mistaken_for_ours():
          patch.object(Future, "done", return_value=True), \
          patch.object(Future, "cancel") as cancel_mock:
         with pytest.raises(TimeoutError, match="COM call timed out"):
-            w.execute(MagicMock())
+            _execute(w, MagicMock())
 
     # A finished future must not be cancelled.
     cancel_mock.assert_not_called()
@@ -115,7 +127,7 @@ def test_execute_cancels_the_future_when_it_times_out():
     with patch.object(Future, "result", side_effect=FuturesTimeoutError), \
          patch.object(Future, "cancel", return_value=True) as cancel_mock:
         with pytest.raises(RuntimeError, match="cancelled"):
-            w.execute(MagicMock())
+            _execute(w, MagicMock())
 
     cancel_mock.assert_called_once()
 
@@ -128,7 +140,7 @@ def test_execute_says_so_when_the_operation_could_not_be_cancelled():
     with patch.object(Future, "result", side_effect=FuturesTimeoutError), \
          patch.object(Future, "cancel", return_value=False):
         with pytest.raises(RuntimeError, match="may still be applied"):
-            w.execute(MagicMock())
+            _execute(w, MagicMock())
 
 
 def test_timeout_does_not_leak_a_bare_futures_timeout():
@@ -138,7 +150,7 @@ def test_timeout_does_not_leak_a_bare_futures_timeout():
     with patch.object(Future, "result", side_effect=FuturesTimeoutError), \
          patch.object(Future, "done", return_value=False):
         with pytest.raises(RuntimeError) as exc:
-            w.execute(MagicMock())
+            _execute(w, MagicMock())
 
     assert "PowerPoint did not finish" in str(exc.value)
 
@@ -200,7 +212,7 @@ def test_worker_loop_survives_an_item_that_escapes_run_item():
     w = PowerPointCOMWrapper()
     w._running = True
     future: Future = Future()
-    w._queue.put((MagicMock(), (), {}, future, False))
+    w._queue.put((MagicMock(), (), {}, future, False, threading.Event()))
     w._queue.put(None)  # sentinel so the loop exits after the bad item
 
     with patch("utils.com_wrapper.pythoncom"):
@@ -223,7 +235,7 @@ def test_execute_returns_the_result_if_it_lands_during_the_timeout_race():
                 Future, "result",
                 side_effect=[FuturesTimeoutError, {"ok": True}],
             ):
-                assert w.execute(MagicMock()) == {"ok": True}
+                assert _execute(w, MagicMock()) == {"ok": True}
 
 
 def test_execute_fails_fast_when_the_worker_thread_is_dead():
@@ -233,7 +245,7 @@ def test_execute_fails_fast_when_the_worker_thread_is_dead():
     w._com_thread = dead
 
     with pytest.raises(RuntimeError, match="no longer running"):
-        w.execute(MagicMock())
+        _execute(w, MagicMock())
 
     assert w._queue.empty(), "nothing should be queued for a dead worker"
 
@@ -246,7 +258,7 @@ def test_execute_still_queues_while_the_worker_is_alive():
     func = MagicMock()
 
     with patch.object(Future, "result", return_value=None):
-        w.execute(func)
+        _execute(w, func)
 
     queued_func, *_ = w._queue.get_nowait()
     assert queued_func is func
