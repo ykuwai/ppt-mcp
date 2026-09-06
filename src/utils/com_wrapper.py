@@ -16,7 +16,7 @@ from concurrent.futures import (
     TimeoutError as FuturesTimeoutError,
 )
 from contextvars import ContextVar
-from queue import Queue
+from queue import Empty, Queue
 from typing import Any, Callable, Optional
 
 import pythoncom
@@ -88,8 +88,33 @@ _BUSY_BACKOFF = (0.5, 1.0, 2.0, 3.0)
 _CALL_TIMEOUT = 30.0
 # Shown whenever the wait budget runs out, wherever in the wait it happens.
 _BUSY_TIMEOUT_MESSAGE = (
-    "PowerPoint did not respond within %.0fs -- a dialog or menu is probably "
+    "PowerPoint did not respond within %.0fs. A dialog or menu is probably "
     "open. Close it and retry." % _BUSY_WAIT_BUDGET
+)
+# How long execute() gives a replacement worker to prove that PowerPoint
+# answers again before it reports the connection as still being rebuilt.
+# Short on purpose: a recovery that goes well should be invisible, and one
+# that does not should not cost every later call another full timeout.
+_HEALTH_WAIT = 2.0
+_REBUILDING_MESSAGE = (
+    "PowerPoint stopped responding and the connection is being rebuilt. "
+    "Close any dialog open in PowerPoint, then retry."
+)
+# How long a caller waits for the worker to pick its operation up.  Time spent
+# in the queue is not the operation's own time, and charging it to the call
+# budget would misreport a healthy call that simply queued behind another one
+# (issue #192).  It also matters for #199: a call that spends its whole budget
+# queued cannot be told apart from a call the worker is stuck inside, and
+# treating it as a wedge would abandon a perfectly good worker and let a
+# replacement issue overlapping edits.
+#
+# Deliberately longer than one whole call budget, so a caller behind one slow
+# but healthy operation is served rather than taken back.
+_QUEUE_WAIT = 60.0
+_QUEUE_TIMEOUT_MESSAGE = (
+    "PowerPoint did not start the operation within %.0fs because earlier "
+    "operations were still running. It was cancelled rather than left to run "
+    "later." % _QUEUE_WAIT
 )
 # When True, the server sends ESC to PowerPoint on the first busy rejection to
 # dismiss any blocking modal dialog automatically.
@@ -165,27 +190,62 @@ class PowerPointCOMWrapper:
         self._queue: Queue = Queue()
         self._running = False
         self._target_pres_full_name: Optional[str] = None  # session-level target (FullName for uniqueness)
+        # Which worker generation is the live one.  A worker abandoned after a
+        # wedge keeps its own generation, sees that it is no longer current,
+        # and stops touching shared state (issue #199).
+        self._generation = 0
+        # Clear while a replacement worker is still proving that PowerPoint
+        # answers.  execute() then fails fast instead of queueing behind a
+        # connection that may not be there.
+        self._healthy = threading.Event()
+        self._healthy.set()
+        self._recover_lock = threading.Lock()
 
     def start(self) -> None:
         """Start the COM worker thread."""
         if self._running:
             return
-        self._running = True
+        with self._recover_lock:
+            self._running = True
+            # A deliberate restart is a fresh start, not a continuation of the
+            # last wedge.  Generation 0 skips the reattach probe, so a restart
+            # that happens to catch PowerPoint busy behaves like a normal
+            # start rather than inheriting the unbounded wait meant for
+            # recovery.  A new queue cannot hand the worker a stop sentinel
+            # left over from the previous shutdown either.
+            self._generation = 0
+            self._queue = Queue()
+            self._healthy.set()
+            self._start_worker(self._queue, self._generation)
+        logger.info("COM worker thread started")
+
+    def _start_worker(self, queue: Queue, generation: int) -> None:
+        """Spawn a worker bound to one queue and one generation."""
         self._com_thread = threading.Thread(
-            target=self._com_worker, daemon=True, name="COM-Worker"
+            target=self._com_worker,
+            args=(queue, generation),
+            daemon=True,
+            name="COM-Worker-%d" % generation,
         )
         self._com_thread.start()
-        logger.info("COM worker thread started")
 
     def stop(self) -> None:
         """Stop the COM worker thread and clean up."""
         if not self._running:
             return
-        self._running = False
-        # Send a sentinel to unblock the worker
-        self._queue.put(None)
-        if self._com_thread and self._com_thread.is_alive():
-            self._com_thread.join(timeout=5.0)
+        # Under the recovery lock, and read once.  A wedge confirmed at this
+        # exact moment would otherwise swap the queue and the thread in
+        # between, leaving the sentinel on the abandoned queue and the live
+        # worker running while stop() reported success.  Clearing _running
+        # here also stops any recovery that has not started yet, since
+        # _recover_from_wedge checks it under this same lock.
+        with self._recover_lock:
+            self._running = False
+            queue = self._queue
+            thread = self._com_thread
+        queue.put(None)  # sentinel to unblock the worker
+        if thread and thread.is_alive():
+            thread.join(timeout=5.0)
         logger.info("COM worker thread stopped")
 
     def _wait_until_responsive(self, deadline: float) -> None:
@@ -334,15 +394,128 @@ class PowerPointCOMWrapper:
             time.sleep(min(delay, remaining))
             attempt += 1
 
-    def _com_worker(self) -> None:
-        """Worker thread that processes COM operations in an STA apartment."""
+    def _recover_from_wedge(self, generation: int) -> bool:
+        """Abandon a worker stuck inside a COM call and start a fresh one.
+
+        An outgoing COM call cannot be cancelled from this side, so the stuck
+        thread cannot be reclaimed.  It is a daemon thread and is left to
+        finish or not.  What recovery buys is that the next operation meets a
+        working worker instead of queueing behind the stuck one forever, which
+        previously needed a client restart (issue #199).
+
+        Args:
+            generation: the worker generation the timed-out call belonged to.
+                Recovery is skipped if that generation has already been
+                replaced, so several callers timing out together still
+                produce one replacement.
+
+        Returns:
+            True if this call performed the recovery.
+        """
+        with self._recover_lock:
+            if generation != self._generation or not self._running:
+                return False
+            old_queue = self._queue
+            self._generation = generation + 1
+            self._healthy.clear()
+            self._queue = Queue()
+            logger.error(
+                "The COM worker is stuck inside a PowerPoint call. Abandoning "
+                "it and starting worker generation %d.", self._generation,
+            )
+            self._start_worker(self._queue, self._generation)
+
+        # Outside the lock.  Everything the abandoned worker had not started
+        # is dropped rather than applied once it unwedges, long after the
+        # callers were told their operations had failed.
+        while True:
+            try:
+                item = old_queue.get_nowait()
+            except Empty:
+                break
+            if item is not None:
+                item[3].cancel()
+                item[5].set()  # stop the caller waiting out the queue budget
+        # If the abandoned worker ever does return from its call it goes back
+        # to get().  The sentinel stops it blocking there for good.
+        old_queue.put(None)
+        return True
+
+    def _reattach_after_wedge(self, generation: int) -> None:
+        """Prove PowerPoint answers again before letting traffic resume.
+
+        A replacement worker runs in a fresh apartment, so the proxy the
+        wedged worker held is useless here and is dropped.  Connecting proper
+        is still _connect_impl's job; all this does is find out whether
+        PowerPoint is answering at all.
+
+        Staying unhealthy is the point.  A busy rejection most likely means
+        the modal dialog that caused the wedge is still up, and reporting
+        health then would turn the next call into a misleading "partially
+        applied" error for an operation that never started.  Any other failure
+        is reported as healthy so that _connect_impl can relaunch PowerPoint
+        the way it always has.
+        """
+        self._app = None
+        attempt = 0
+        while self._running and generation == self._generation:
+            try:
+                app = win32com.client.GetActiveObject("PowerPoint.Application")
+                _ = app.Name
+                self._app = app
+                logger.info("Reattached to PowerPoint after a wedged call")
+                break
+            except pywintypes.com_error as e:
+                if e.hresult not in _BUSY_HRESULTS:
+                    logger.warning(
+                        "Could not reattach to PowerPoint after the wedge "
+                        "(%s). The next operation will connect normally.", e,
+                    )
+                    break
+                delay = _BUSY_BACKOFF[min(attempt, len(_BUSY_BACKOFF) - 1)]
+                logger.warning(
+                    "PowerPoint is still busy after the wedge, probing again "
+                    "in %.1fs", delay,
+                )
+                time.sleep(delay)
+                attempt += 1
+            except Exception as e:
+                logger.warning(
+                    "Could not reattach to PowerPoint after the wedge (%s). "
+                    "The next operation will connect normally.", e,
+                )
+                break
+
+        if generation == self._generation:
+            self._healthy.set()
+
+    def _com_worker(self, queue: Queue, generation: int) -> None:
+        """Worker thread that processes COM operations in an STA apartment.
+
+        Each worker owns the queue it was started with rather than reading
+        self._queue, so a worker abandoned after a wedge cannot drain the
+        queue its replacement is serving (issue #199).
+        """
         pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
         try:
-            while self._running:
-                item = self._queue.get()
+            if generation > 0:
+                self._reattach_after_wedge(generation)
+            while self._running and generation == self._generation:
+                item = queue.get()
                 if item is None:
                     break
-                func, args, kwargs, future, idempotent = item
+                func, args, kwargs, future, idempotent, dequeued = item
+                # The caller's own budget for the operation starts here, not
+                # when it was queued (issue #192).  Setting this on every path
+                # out of the queue, the drop below included, is what stops a
+                # caller waiting out the whole queue budget for an answer that
+                # already exists.
+                dequeued.set()
+                if generation != self._generation:
+                    # Abandoned while this item sat in the queue, so it
+                    # arrived after _recover_from_wedge had drained it.
+                    future.cancel()
+                    break
                 try:
                     self._run_item(func, args, kwargs, future, idempotent)
                 except BaseException:
@@ -355,7 +528,10 @@ class PowerPointCOMWrapper:
                             RuntimeError("The COM worker failed unexpectedly.")
                         )
         finally:
-            self._cleanup_com()
+            # An abandoned worker shares self._app with the live one and must
+            # not clear it on the way out.
+            if generation == self._generation:
+                self._cleanup_com()
             pythoncom.CoUninitialize()
 
     def execute(self, func: Callable, *args: Any,
@@ -378,11 +554,25 @@ class PowerPointCOMWrapper:
         Returns:
             The return value of func
 
+        The wait is in two parts.  Time spent queued behind other operations
+        belongs to the queue, not to this operation, so the call budget only
+        starts once the worker picks the item up (issue #192).  Keeping them
+        apart is also what makes a wedge identifiable at all: a call that used
+        up its budget waiting in line looks exactly like one the worker is
+        stuck inside, and abandoning the worker for it would be a bug.
+
         Raises:
-            RuntimeError: if the COM worker thread has died, or if the wait
-                times out.
+            RuntimeError: if the COM worker thread has died, if a previous
+                call wedged it and the replacement has not reconnected yet,
+                or if either wait times out.
             Any exception raised by func
         """
+        if not self._healthy.wait(_HEALTH_WAIT):
+            # A replacement worker is still probing.  Queueing here would
+            # cost another full timeout to learn what is already known
+            # (issue #199).
+            raise RuntimeError(_REBUILDING_MESSAGE)
+
         if self._com_thread is not None and not self._com_thread.is_alive():
             # Nothing is draining the queue any more, so queueing would just
             # burn the full timeout before failing (issue #199).
@@ -392,10 +582,28 @@ class PowerPointCOMWrapper:
             )
 
         future: Future = Future()
-        self._queue.put((func, args, kwargs, future, idempotent))
+        dequeued = threading.Event()
+        # Under the recovery lock, so that the generation this call is
+        # attributed to and the queue it lands on are the same pair.  Without
+        # it a recovery could swap the queue in between, and the item would
+        # sit behind the sentinel on a queue no worker serves.
+        with self._recover_lock:
+            if not self._healthy.is_set():
+                # A recovery started while the health gate was being read.
+                raise RuntimeError(_REBUILDING_MESSAGE)
+            generation = self._generation
+            self._queue.put((func, args, kwargs, future, idempotent, dequeued))
         watching = pending_com_futures.get()
         if watching is not None:
             watching.add(future)
+
+        if not dequeued.wait(_QUEUE_WAIT):
+            # Still in the queue.  Take it back rather than let it run against
+            # a deck that has moved on, long after this call reported failure.
+            if future.cancel():
+                raise RuntimeError(_QUEUE_TIMEOUT_MESSAGE)
+            # It started in the moment the wait expired, so it gets its budget
+            # after all.
         # The worker may spend up to _BUSY_WAIT_BUDGET waiting for PowerPoint
         # before it even starts, so the caller has to allow for that on top of
         # the time the operation itself gets.  Otherwise the caller could
@@ -422,17 +630,32 @@ class PowerPointCOMWrapper:
             # outgoing calls are not interruptible -- but everything queued
             # behind it is dropped rather than applied after the fact.
             cancelled = future.cancel()
-            if not cancelled and future.done():
+            if cancelled:
+                raise RuntimeError(
+                    "PowerPoint did not finish the operation within %.0fs "
+                    "and it was cancelled."
+                    % (_BUSY_WAIT_BUDGET + _CALL_TIMEOUT)
+                ) from None
+            if future.done():
                 # It finished in the moment between the timeout and the
                 # cancel; the caller may as well have the outcome.
                 return future.result()
+
+            # The future could be neither cancelled nor read, so the worker
+            # is inside the call and has been for the whole budget.  The
+            # budget started when the worker picked the item up, so this is
+            # time spent in the call and not in the queue, which is what makes
+            # it evidence of a wedge rather than of a busy worker.  Callers
+            # queued behind it cancel cleanly and must not each trigger
+            # another replacement.
+            recovered = self._recover_from_wedge(generation)
             raise RuntimeError(
-                "PowerPoint did not finish the operation within "
-                "%.0fs and it was %s."
+                "PowerPoint did not finish the operation within %.0fs and it "
+                "was left running, so it may still be applied.%s"
                 % (
                     _BUSY_WAIT_BUDGET + _CALL_TIMEOUT,
-                    "cancelled" if cancelled
-                    else "left running -- it may still be applied",
+                    " A fresh connection is being established."
+                    if recovered else "",
                 )
             ) from None
 

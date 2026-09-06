@@ -14,6 +14,7 @@ while the budget still bounds the loops exactly as it would in production.
 from __future__ import annotations
 
 import sys
+import threading
 from concurrent.futures import Future
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -113,6 +114,17 @@ def test_mid_operation_busy_does_not_rerun_the_operation():
     assert func.call_count == 1, "the operation must not be repeated"
     with pytest.raises(RuntimeError, match="partially applied"):
         future.result()
+
+def _execute(w, *args, **kwargs):
+    """Call execute() as if the worker had picked the item up at once.
+
+    execute() waits for the dequeue before the call budget starts, so that
+    time spent queued behind other operations is not charged to the operation
+    (issue #192).  These tests run no worker and are about what happens once
+    the operation has started.
+    """
+    with patch.object(threading.Event, "wait", return_value=True):
+        return w.execute(*args, **kwargs)
 
 
 def test_idempotent_operation_is_retried_wholesale():
@@ -246,9 +258,10 @@ def test_execute_queues_the_idempotent_flag():
 
     # Don't start a COM thread — inspect what execute() put on the queue.
     with patch.object(Future, "result", return_value=None):
-        w.execute(func, 1, 2, idempotent=True, keyword="x")
+        _execute(w, func, 1, 2, idempotent=True, keyword="x")
 
-    queued_func, args, kwargs, _future, idempotent = w._queue.get_nowait()
+    queued_func, args, kwargs, _future, idempotent, _dequeued = \
+        w._queue.get_nowait()
     assert queued_func is func
     assert args == (1, 2)
     assert kwargs == {"keyword": "x"}, "idempotent must not leak into func kwargs"
@@ -258,8 +271,8 @@ def test_execute_queues_the_idempotent_flag():
 def test_execute_defaults_to_non_idempotent():
     w = PowerPointCOMWrapper()
     with patch.object(Future, "result", return_value=None):
-        w.execute(MagicMock())
-    *_, idempotent = w._queue.get_nowait()
+        _execute(w, MagicMock())
+    *_, idempotent, _dequeued = w._queue.get_nowait()
     assert idempotent is False
 
 
@@ -268,7 +281,7 @@ def test_execute_timeout_covers_the_busy_wait_as_well_as_the_call():
     spent its wait budget first, is still applying the edit."""
     w = PowerPointCOMWrapper()
     with patch.object(Future, "result", return_value=None) as result_mock:
-        w.execute(MagicMock())
+        _execute(w, MagicMock())
 
     timeout = result_mock.call_args.kwargs["timeout"]
     assert timeout == _BUSY_WAIT_BUDGET + _CALL_TIMEOUT
