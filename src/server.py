@@ -527,8 +527,19 @@ def _inline_schema_defs(server) -> int:
     return rewritten
 
 
-_inlined_tool_count = _inline_schema_defs(mcp)
-logger.debug("Inlined $defs in %d tool schemas", _inlined_tool_count)
+try:
+    _inlined_tool_count = _inline_schema_defs(mcp)
+    logger.debug("Inlined $defs in %d tool schemas", _inlined_tool_count)
+except Exception:
+    # _tool_manager and Tool.parameters are SDK internals, and the SDK has
+    # renamed internals across majors before (see the MCPServer import above).
+    # Losing the inlining costs clients an extra round trip; losing the import
+    # would cost them every tool, so degrade instead of failing to start.
+    logger.warning(
+        "Could not inline $defs in tool schemas; they keep their $ref form",
+        exc_info=True,
+    )
+    _inlined_tool_count = 0
 
 
 def main():
