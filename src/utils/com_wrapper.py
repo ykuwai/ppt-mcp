@@ -205,9 +205,18 @@ class PowerPointCOMWrapper:
         """Start the COM worker thread."""
         if self._running:
             return
-        self._running = True
-        self._healthy.set()
-        self._start_worker(self._queue, self._generation)
+        with self._recover_lock:
+            self._running = True
+            # A deliberate restart is a fresh start, not a continuation of the
+            # last wedge.  Generation 0 skips the reattach probe, so a restart
+            # that happens to catch PowerPoint busy behaves like a normal
+            # start rather than inheriting the unbounded wait meant for
+            # recovery.  A new queue cannot hand the worker a stop sentinel
+            # left over from the previous shutdown either.
+            self._generation = 0
+            self._queue = Queue()
+            self._healthy.set()
+            self._start_worker(self._queue, self._generation)
         logger.info("COM worker thread started")
 
     def _start_worker(self, queue: Queue, generation: int) -> None:
@@ -224,11 +233,19 @@ class PowerPointCOMWrapper:
         """Stop the COM worker thread and clean up."""
         if not self._running:
             return
-        self._running = False
-        # Send a sentinel to unblock the worker
-        self._queue.put(None)
-        if self._com_thread and self._com_thread.is_alive():
-            self._com_thread.join(timeout=5.0)
+        # Under the recovery lock, and read once.  A wedge confirmed at this
+        # exact moment would otherwise swap the queue and the thread in
+        # between, leaving the sentinel on the abandoned queue and the live
+        # worker running while stop() reported success.  Clearing _running
+        # here also stops any recovery that has not started yet, since
+        # _recover_from_wedge checks it under this same lock.
+        with self._recover_lock:
+            self._running = False
+            queue = self._queue
+            thread = self._com_thread
+        queue.put(None)  # sentinel to unblock the worker
+        if thread and thread.is_alive():
+            thread.join(timeout=5.0)
         logger.info("COM worker thread stopped")
 
     def _wait_until_responsive(self, deadline: float) -> None:

@@ -307,3 +307,59 @@ def test_the_next_call_is_served_after_a_wedge():
         finally:
             release.set()
             w.stop()
+
+
+# --- deliberate shutdown and restart --------------------------------------
+
+class _CountingLock:
+    """A lock that says how many times it has been taken."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.entered = 0
+
+    def __enter__(self):
+        self._lock.acquire()
+        self.entered += 1
+        return self
+
+    def __exit__(self, *exc):
+        self._lock.release()
+
+
+def test_stop_reads_the_live_worker_under_the_recovery_lock():
+    """A wedge confirmed at this exact moment would otherwise swap the queue
+    and the thread in between, leaving the sentinel on the abandoned queue and
+    the live worker running while stop() reported success."""
+    w = _wrapper()
+    lock = _CountingLock()
+    w._recover_lock = lock
+    thread = MagicMock()
+    thread.is_alive.return_value = False
+    w._com_thread = thread
+
+    w.stop()
+
+    assert lock.entered == 1
+    assert w._queue.get_nowait() is None, "the sentinel goes to the live queue"
+    assert not w._running
+
+
+def test_a_deliberate_restart_is_not_treated_as_a_recovery():
+    """Generation 0 skips the reattach probe, so a restart that catches
+    PowerPoint busy behaves like a normal start rather than inheriting the
+    unbounded wait meant for a wedge."""
+    w = _wrapper(running=False)
+    w._generation = 3
+    stale = w._queue
+    stale.put(None)  # the sentinel left behind by the previous stop
+
+    with patch.object(PowerPointCOMWrapper, "_start_worker") as start:
+        w.start()
+
+    assert w._generation == 0
+    assert w._queue is not stale, (
+        "a leftover sentinel would stop the new worker the moment it started"
+    )
+    start.assert_called_once_with(w._queue, 0)
+    assert w._healthy.is_set()
