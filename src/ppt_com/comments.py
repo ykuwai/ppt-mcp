@@ -3,6 +3,7 @@
 Handles adding, listing, and deleting comments on slides.
 """
 
+import anyio
 import json
 import logging
 
@@ -194,7 +195,7 @@ def register_tools(mcp):
         Provide text, author name, and optional position.
         Uses Add2 for modern PowerPoint, falls back to Add for older versions.
         """
-        return add_comment(params)
+        return await anyio.to_thread.run_sync(add_comment, params)
 
     @mcp.tool(
         name="ppt_list_comments",
@@ -211,7 +212,7 @@ def register_tools(mcp):
 
         Returns index, author, text, datetime, and position for each comment.
         """
-        return list_comments(params)
+        return await anyio.to_thread.run_sync(list_comments, params)
 
     @mcp.tool(
         name="ppt_delete_comment",
@@ -228,4 +229,4 @@ def register_tools(mcp):
 
         Use ppt_list_comments to find the comment index first.
         """
-        return delete_comment(params)
+        return await anyio.to_thread.run_sync(delete_comment, params)

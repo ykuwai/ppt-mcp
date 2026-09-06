@@ -4,6 +4,7 @@ Handles getting and setting built-in document properties such as
 title, author, subject, keywords, comments, category, and company.
 """
 
+import anyio
 import json
 import logging
 from typing import Optional
@@ -160,7 +161,7 @@ def register_tools(mcp):
         Updates title, author, subject, keywords, comments, category,
         and/or company. Only provided values are changed.
         """
-        return set_properties(params)
+        return await anyio.to_thread.run_sync(set_properties, params)
 
     @mcp.tool(
         name="ppt_get_properties",
@@ -179,4 +180,4 @@ def register_tools(mcp):
         company, last author, creation date, and last save time.
         Properties that have never been set return null.
         """
-        return get_properties()
+        return await anyio.to_thread.run_sync(get_properties)

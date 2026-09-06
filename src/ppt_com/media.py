@@ -4,6 +4,7 @@ Handles adding video/audio files to slides and configuring media
 playback settings such as volume, looping, and fade effects.
 """
 
+import anyio
 import json
 import logging
 import os
@@ -301,7 +302,7 @@ def register_tools(mcp):
         an absolute Windows path. Supports embedding or linking.
         All positions and sizes are in points (72 points = 1 inch).
         """
-        return add_video(params)
+        return await anyio.to_thread.run_sync(add_video, params)
 
     @mcp.tool(
         name="ppt_add_audio",
@@ -320,7 +321,7 @@ def register_tools(mcp):
         to an absolute Windows path. Supports embedding or linking.
         All positions and sizes are in points (72 points = 1 inch).
         """
-        return add_audio(params)
+        return await anyio.to_thread.run_sync(add_audio, params)
 
     @mcp.tool(
         name="ppt_set_media_settings",
@@ -338,4 +339,4 @@ def register_tools(mcp):
         Adjust volume, mute state, fade-in/out duration, and looping.
         Identify the media shape by name or 1-based shape index.
         """
-        return set_media_settings(params)
+        return await anyio.to_thread.run_sync(set_media_settings, params)

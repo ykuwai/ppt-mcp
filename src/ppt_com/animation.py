@@ -4,6 +4,7 @@ Handles slide transitions, adding/listing/removing shape animations,
 and clearing all animations from a slide.
 """
 
+import anyio
 import json
 import logging
 from typing import Optional, Union
@@ -1163,7 +1164,7 @@ def register_tools(mcp):
         or a PpEntryEffect integer. Optionally set duration, advance-on-click,
         and auto-advance timing.
         """
-        return set_slide_transition(params)
+        return await anyio.to_thread.run_sync(set_slide_transition, params)
 
     @mcp.tool(
         name="ppt_add_animation",
@@ -1198,7 +1199,7 @@ def register_tools(mcp):
         For interactive sequences (click a shape to trigger animation on another),
         set trigger='on_shape_click' and trigger_shape to the clickable shape.
         """
-        return add_animation(params)
+        return await anyio.to_thread.run_sync(add_animation, params)
 
     @mcp.tool(
         name="ppt_list_animations",
@@ -1217,7 +1218,7 @@ def register_tools(mcp):
         trigger type, and duration. Interactive sequences include the
         trigger shape name and sequence index.
         """
-        return list_animations(params)
+        return await anyio.to_thread.run_sync(list_animations, params)
 
     @mcp.tool(
         name="ppt_remove_animation",
@@ -1237,7 +1238,7 @@ def register_tools(mcp):
         For interactive sequences, provide sequence_index to target a specific
         interactive sequence instead of the main sequence.
         """
-        return remove_animation(params)
+        return await anyio.to_thread.run_sync(remove_animation, params)
 
     @mcp.tool(
         name="ppt_clear_animations",
@@ -1255,7 +1256,7 @@ def register_tools(mcp):
         Optionally also clears the slide transition effect by setting
         clear_transitions=true.
         """
-        return clear_animations(params)
+        return await anyio.to_thread.run_sync(clear_animations, params)
 
     @mcp.tool(
         name="ppt_update_animation",
@@ -1283,4 +1284,4 @@ def register_tools(mcp):
         interactive sequence instead of the main sequence.
         Use ppt_list_animations first to find the correct animation index.
         """
-        return update_animation(params)
+        return await anyio.to_thread.run_sync(update_animation, params)

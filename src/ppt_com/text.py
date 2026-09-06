@@ -1,5 +1,6 @@
 """Text content, formatting, and manipulation tools for PowerPoint COM automation."""
 
+import anyio
 import json
 import logging
 import os
@@ -2268,7 +2269,7 @@ def register_tools(mcp):
         preserving bullet/indent. Use \\v for wrapping at natural word
         boundaries within one paragraph.
         """
-        return set_text(params)
+        return await anyio.to_thread.run_sync(set_text, params)
 
     @mcp.tool(
         name="ppt_get_text",
@@ -2286,7 +2287,7 @@ def register_tools(mcp):
         Returns the full text, paragraph info (alignment, indent level),
         and per-run formatting (font, size, bold, italic, color).
         """
-        return get_text(params)
+        return await anyio.to_thread.run_sync(get_text, params)
 
     @mcp.tool(
         name="ppt_format_text",
@@ -2304,7 +2305,7 @@ def register_tools(mcp):
         Sets font properties (name, size, bold, italic, underline, color)
         for the entire text content of the shape.
         """
-        return format_text(params)
+        return await anyio.to_thread.run_sync(format_text, params)
 
     @mcp.tool(
         name="ppt_format_text_range",
@@ -2325,7 +2326,7 @@ def register_tools(mcp):
         2. **search_text**: Search for the text and format the matching range.
            Use occurrence to target the Nth match (default: 1st).
         """
-        return format_text_range(params)
+        return await anyio.to_thread.run_sync(format_text_range, params)
 
     @mcp.tool(
         name="ppt_set_paragraph_format",
@@ -2343,7 +2344,7 @@ def register_tools(mcp):
         Applies alignment, line spacing, space before/after, indent level,
         and first-line indent. Omit paragraph_index to format all paragraphs.
         """
-        return set_paragraph_format(params)
+        return await anyio.to_thread.run_sync(set_paragraph_format, params)
 
     @mcp.tool(
         name="ppt_set_bullet",
@@ -2378,7 +2379,7 @@ def register_tools(mcp):
           ppt_set_bullet(..., paragraph_index=1, bullet_type='unnumbered', indent_level=1)
           ppt_set_bullet(..., paragraph_index=2, bullet_type='unnumbered', indent_level=2)
         """
-        return set_bullet(params)
+        return await anyio.to_thread.run_sync(set_bullet, params)
 
     @mcp.tool(
         name="ppt_find_replace_text",
@@ -2420,7 +2421,7 @@ def register_tools(mcp):
         not adjusted dynamically — clients that gate on the hint may prompt
         unnecessarily for find-only calls.
         """
-        return find_replace_text(params)
+        return await anyio.to_thread.run_sync(find_replace_text, params)
 
     @mcp.tool(
         name="ppt_set_textframe",
@@ -2443,7 +2444,7 @@ def register_tools(mcp):
         - vertical_anchor: 'top', 'middle', or 'bottom' — controls vertical text alignment
         Also sets inner margins (points) and text orientation.
         """
-        return set_textframe(params)
+        return await anyio.to_thread.run_sync(set_textframe, params)
 
     @mcp.tool(
         name="ppt_get_all_text",
@@ -2474,7 +2475,7 @@ def register_tools(mcp):
 
         Omit slide_indices to get all slides.
         """
-        return get_all_text(params)
+        return await anyio.to_thread.run_sync(get_all_text, params)
 
     @mcp.tool(
         name="ppt_check_typography",
@@ -2503,4 +2504,4 @@ def register_tools(mcp):
         returns at word boundaries. Unfixable shapes are reported with
         fix_status='no_break_point' or 'text_not_found'.
         """
-        return check_typography(params)
+        return await anyio.to_thread.run_sync(check_typography, params)

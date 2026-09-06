@@ -4,6 +4,7 @@ Handles shape alignment, distribution, flipping, merging,
 slide size, and slide background configuration.
 """
 
+import anyio
 import json
 import logging
 import os
@@ -705,7 +706,7 @@ def register_tools(mcp):
         Set relative_to_slide=true to align relative to the slide boundaries.
         Align options: left, center, right, top, middle, bottom.
         """
-        return align_shapes(params)
+        return await anyio.to_thread.run_sync(align_shapes, params)
 
     @mcp.tool(
         name="ppt_distribute_shapes",
@@ -724,7 +725,7 @@ def register_tools(mcp):
         Provide at least 3 shape names.
         Set relative_to_slide=true to distribute relative to the slide edges.
         """
-        return distribute_shapes(params)
+        return await anyio.to_thread.run_sync(distribute_shapes, params)
 
     @mcp.tool(
         name="ppt_get_slide_size",
@@ -742,7 +743,7 @@ def register_tools(mcp):
         Returns width and height in both points and inches,
         along with the slide size preset name and orientation.
         """
-        return get_slide_size(params)
+        return await anyio.to_thread.run_sync(get_slide_size, params)
 
     @mcp.tool(
         name="ppt_set_slide_size",
@@ -761,7 +762,7 @@ def register_tools(mcp):
         or specify exact width/height in points (72 points = 1 inch).
         Preset is applied first, then width/height, then orientation.
         """
-        return set_slide_size(params)
+        return await anyio.to_thread.run_sync(set_slide_size, params)
 
     @mcp.tool(
         name="ppt_set_slide_background",
@@ -782,7 +783,7 @@ def register_tools(mcp):
         Colors use '#RRGGBB' format.
         Use slide_indices to apply the same background to multiple slides at once.
         """
-        return set_slide_background(params)
+        return await anyio.to_thread.run_sync(set_slide_background, params)
 
     @mcp.tool(
         name="ppt_flip_shape",
@@ -801,7 +802,7 @@ def register_tools(mcp):
         Direction: 'horizontal' mirrors left-right, 'vertical' mirrors top-bottom.
         Returns the resulting flip state.
         """
-        return flip_shape(params)
+        return await anyio.to_thread.run_sync(flip_shape, params)
 
     @mcp.tool(
         name="ppt_merge_shapes",
@@ -822,4 +823,4 @@ def register_tools(mcp):
         (split at intersections).
         Optionally specify primary_shape to control which shape's formatting is kept.
         """
-        return merge_shapes(params)
+        return await anyio.to_thread.run_sync(merge_shapes, params)

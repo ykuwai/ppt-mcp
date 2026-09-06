@@ -9,6 +9,7 @@ You MUST close it with wb.Close(False) in a finally block to prevent leaked
 Excel processes.
 """
 
+import anyio
 import json
 import logging
 from typing import Literal, Optional, Union
@@ -970,7 +971,7 @@ def register_tools(mcp):
         line_markers, pie_exploded). You can also pass an XlChartType integer.
         All positions and sizes are in points (72 points = 1 inch).
         """
-        return add_chart(params)
+        return await anyio.to_thread.run_sync(add_chart, params)
 
     @mcp.tool(
         name="ppt_set_chart_data",
@@ -990,7 +991,7 @@ def register_tools(mcp):
         number of categories.
         Example series: [{"name": "Revenue", "values": [100, 200, 150, 300]}]
         """
-        return set_chart_data(params)
+        return await anyio.to_thread.run_sync(set_chart_data, params)
 
     @mcp.tool(
         name="ppt_get_chart_data",
@@ -1008,7 +1009,7 @@ def register_tools(mcp):
         Returns the category labels and all series (name + values).
         Identify the chart by shape name or 1-based shape index.
         """
-        return get_chart_data(params)
+        return await anyio.to_thread.run_sync(get_chart_data, params)
 
     @mcp.tool(
         name="ppt_format_chart",
@@ -1034,7 +1035,7 @@ def register_tools(mcp):
         Control chart title position via title_position preset ('top', 'bottom',
         'center') or explicit title_top/title_left coordinates in points.
         """
-        return format_chart(params)
+        return await anyio.to_thread.run_sync(format_chart, params)
 
     @mcp.tool(
         name="ppt_format_chart_axis",
@@ -1064,7 +1065,7 @@ def register_tools(mcp):
         `min_scale` / `max_scale` / `major_unit` / `minor_unit` / `log_scale`
         are value-axis only. `log_base` requires `log_scale=true`.
         """
-        return format_chart_axis(params)
+        return await anyio.to_thread.run_sync(format_chart_axis, params)
 
     @mcp.tool(
         name="ppt_set_chart_series",
@@ -1083,7 +1084,7 @@ def register_tools(mcp):
         line weight (in points, for line/scatter charts).
         Series are 1-based indexed.
         """
-        return set_chart_series(params)
+        return await anyio.to_thread.run_sync(set_chart_series, params)
 
     @mcp.tool(
         name="ppt_change_chart_type",
@@ -1101,4 +1102,4 @@ def register_tools(mcp):
         Accepts a friendly name (e.g. 'bar', 'line', 'pie') or XlChartType integer.
         The chart data is preserved when changing types.
         """
-        return change_chart_type(params)
+        return await anyio.to_thread.run_sync(change_chart_type, params)

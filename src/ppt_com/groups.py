@@ -4,6 +4,7 @@ Handles grouping multiple shapes, ungrouping group shapes,
 and inspecting the items within a group.
 """
 
+import anyio
 import json
 import logging
 from typing import Union
@@ -250,7 +251,7 @@ def register_tools(mcp):
         Provide at least 2 shape names to combine into a group.
         The individual shapes are replaced by a single group shape.
         """
-        return group_shapes(params)
+        return await anyio.to_thread.run_sync(group_shapes, params)
 
     @mcp.tool(
         name="ppt_ungroup_shapes",
@@ -268,7 +269,7 @@ def register_tools(mcp):
         The group shape is removed and its child shapes become
         independent shapes on the slide.
         """
-        return ungroup_shapes(params)
+        return await anyio.to_thread.run_sync(ungroup_shapes, params)
 
     @mcp.tool(
         name="ppt_get_group_items",
@@ -286,4 +287,4 @@ def register_tools(mcp):
         Returns name, type, position, and size for each item in the group.
         Identify the group by shape name or 1-based shape index.
         """
-        return get_group_items(params)
+        return await anyio.to_thread.run_sync(get_group_items, params)

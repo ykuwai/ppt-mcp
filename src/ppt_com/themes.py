@@ -4,6 +4,7 @@ Handles applying themes, reading theme colors, and setting headers/footers
 across all slides.
 """
 
+import anyio
 import colorsys
 import json
 import logging
@@ -619,7 +620,7 @@ def register_tools(mcp):
         Provide the path to a .thmx theme file or a themed presentation.
         The path will be normalized to an absolute Windows path for COM.
         """
-        return apply_theme(params)
+        return await anyio.to_thread.run_sync(apply_theme, params)
 
     @mcp.tool(
         name="ppt_get_theme_colors",
@@ -637,7 +638,7 @@ def register_tools(mcp):
         Returns all 12 theme colors (dark1, light1, dark2, light2,
         accent1-6, hyperlink, followed_hyperlink) with their hex values.
         """
-        return get_theme_colors(params)
+        return await anyio.to_thread.run_sync(get_theme_colors, params)
 
     @mcp.tool(
         name="ppt_set_theme_colors",
@@ -672,7 +673,7 @@ def register_tools(mcp):
         Colors are applied to ALL slide masters. Values are #RRGGBB hex strings.
         Only specified colors are changed; omitted colors remain unchanged.
         """
-        return set_theme_colors(params)
+        return await anyio.to_thread.run_sync(set_theme_colors, params)
 
     @mcp.tool(
         name="ppt_set_headers_footers",
@@ -691,4 +692,4 @@ def register_tools(mcp):
         Use date_fixed_text for a fixed date string, or date_format for
         an auto-updating date (PpDateTimeFormat integer).
         """
-        return set_headers_footers(params)
+        return await anyio.to_thread.run_sync(set_headers_footers, params)

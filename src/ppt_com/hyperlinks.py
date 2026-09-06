@@ -4,6 +4,7 @@ Handles adding, listing, and removing hyperlinks on shapes.
 Supports click and mouseover actions with URL, file, mailto, and slide links.
 """
 
+import anyio
 import json
 import logging
 from typing import Optional, Union
@@ -271,7 +272,7 @@ def register_tools(mcp):
         Set action_on to 'click' (default) or 'mouseover' for the trigger type.
         For slide links, use sub_address like '3,,' to link to slide 3.
         """
-        return add_hyperlink(params)
+        return await anyio.to_thread.run_sync(add_hyperlink, params)
 
     @mcp.tool(
         name="ppt_get_hyperlinks",
@@ -288,7 +289,7 @@ def register_tools(mcp):
 
         Returns address, sub-address, and type for each hyperlink found on the slide.
         """
-        return get_hyperlinks(params)
+        return await anyio.to_thread.run_sync(get_hyperlinks, params)
 
     @mcp.tool(
         name="ppt_remove_hyperlink",
@@ -306,4 +307,4 @@ def register_tools(mcp):
         Clears the click or mouseover action on the specified shape.
         Set action_on to 'click' (default) or 'mouseover' to choose which to remove.
         """
-        return remove_hyperlink(params)
+        return await anyio.to_thread.run_sync(remove_hyperlink, params)

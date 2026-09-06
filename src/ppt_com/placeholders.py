@@ -1,5 +1,6 @@
 """Placeholder operations for PowerPoint COM automation."""
 
+import anyio
 import json
 import logging
 from typing import Optional, Union
@@ -477,7 +478,7 @@ def register_tools(mcp):
         Returns index, type, name, position, size, and text preview
         for each placeholder on the specified slide.
         """
-        return list_placeholders(params)
+        return await anyio.to_thread.run_sync(list_placeholders, params)
 
     @mcp.tool(
         name="ppt_get_placeholder",
@@ -496,7 +497,7 @@ def register_tools(mcp):
         (e.g. 'title', 'body', 'subtitle', or a PpPlaceholderType int).
         Returns text content, formatting, and position info.
         """
-        return get_placeholder(params)
+        return await anyio.to_thread.run_sync(get_placeholder, params)
 
     @mcp.tool(
         name="ppt_set_placeholder_text",
@@ -514,7 +515,7 @@ def register_tools(mcp):
         Find by placeholder_index (1-based) or placeholder_type
         (e.g. 'title', 'body', 'subtitle'). Use \\n for paragraph breaks.
         """
-        return set_placeholder_text(params)
+        return await anyio.to_thread.run_sync(set_placeholder_text, params)
 
     @mcp.tool(
         name="ppt_list_designs",
@@ -533,7 +534,7 @@ def register_tools(mcp):
         Use the design_index with ppt_add_slide or ppt_list_layouts
         to work with layouts from a specific design.
         """
-        return list_designs(params)
+        return await anyio.to_thread.run_sync(list_designs, params)
 
     @mcp.tool(
         name="ppt_list_layouts",
@@ -551,7 +552,7 @@ def register_tools(mcp):
         Returns layout name, index, and placeholder info for each
         CustomLayout in the specified design (master).
         """
-        return list_layouts(params)
+        return await anyio.to_thread.run_sync(list_layouts, params)
 
     @mcp.tool(
         name="ppt_get_slide_master_info",
@@ -569,4 +570,4 @@ def register_tools(mcp):
         Returns the master name, layout count, and theme color scheme
         for the specified design.
         """
-        return get_slide_master_info(params)
+        return await anyio.to_thread.run_sync(get_slide_master_info, params)

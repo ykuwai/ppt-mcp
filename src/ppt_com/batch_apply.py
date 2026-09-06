@@ -1,5 +1,6 @@
 """Batch formatting operations for multiple shapes at once."""
 
+import anyio
 import json
 import logging
 from typing import List, Literal, Union, get_args
@@ -276,4 +277,4 @@ def register_tools(mcp):
         annotations={"readOnlyHint": False},
     )
     async def tool_batch_apply_formatting(params: BatchApplyFormattingInput) -> str:
-        return batch_apply_formatting(params)
+        return await anyio.to_thread.run_sync(batch_apply_formatting, params)

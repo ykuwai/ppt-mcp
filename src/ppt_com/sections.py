@@ -4,6 +4,7 @@ Handles adding, listing, and managing presentation sections.
 Sections group slides into logical units for organization.
 """
 
+import anyio
 import json
 import logging
 from typing import Optional
@@ -248,7 +249,7 @@ def register_tools(mcp):
         If a section already starts at that slide, it is left empty and the
         response carries a warning naming it.
         """
-        return add_section(params)
+        return await anyio.to_thread.run_sync(add_section, params)
 
     @mcp.tool(
         name="ppt_list_sections",
@@ -266,7 +267,7 @@ def register_tools(mcp):
         Returns section name, first/last slide index, slide count and an
         `empty` flag for each section (empty sections have null slide indices).
         """
-        return list_sections()
+        return await anyio.to_thread.run_sync(list_sections)
 
     @mcp.tool(
         name="ppt_manage_section",
@@ -286,4 +287,4 @@ def register_tools(mcp):
         - 'move': Move section to a new position (requires move_to_index).
         - 'delete': Remove the section without deleting its slides.
         """
-        return manage_section(params)
+        return await anyio.to_thread.run_sync(manage_section, params)

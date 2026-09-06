@@ -42,6 +42,10 @@ dependencies = [
     "mcp[cli]>=1.0.0,<3.0.0",
     "pywin32>=306",
     "pydantic>=2.0.0",
+    # Tool handlers hand their blocking COM work to anyio.to_thread so the
+    # event loop stays free (#198). mcp already pulls anyio in, but this
+    # imports it directly, so declare it.
+    "anyio>=4.0.0",
 ]
 
 [project.urls]

@@ -4,6 +4,7 @@ Handles adding connectors between shapes and formatting connector lines
 including color, weight, dash style, and arrowheads.
 """
 
+import anyio
 import json
 import logging
 from typing import Optional, Union
@@ -525,7 +526,7 @@ def register_tools(mcp):
         Connection sites can be specified as 1-based indices or direction
         names: 'top', 'bottom', 'left', 'right'.
         """
-        return add_connector(params)
+        return await anyio.to_thread.run_sync(add_connector, params)
 
     @mcp.tool(
         name="ppt_format_connector",
@@ -546,4 +547,4 @@ def register_tools(mcp):
         ('top', 'bottom', 'left', 'right').
         Identify the connector by shape name or 1-based shape index.
         """
-        return format_connector(params)
+        return await anyio.to_thread.run_sync(format_connector, params)
