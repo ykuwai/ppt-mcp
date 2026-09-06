@@ -4,7 +4,6 @@ Handles shape alignment, distribution, flipping, merging,
 slide size, and slide background configuration.
 """
 
-import anyio
 import json
 import logging
 import os
@@ -12,6 +11,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from utils.color import hex_to_int
@@ -706,7 +706,7 @@ def register_tools(mcp):
         Set relative_to_slide=true to align relative to the slide boundaries.
         Align options: left, center, right, top, middle, bottom.
         """
-        return await anyio.to_thread.run_sync(align_shapes, params)
+        return await run_offloaded(align_shapes, params)
 
     @mcp.tool(
         name="ppt_distribute_shapes",
@@ -725,7 +725,7 @@ def register_tools(mcp):
         Provide at least 3 shape names.
         Set relative_to_slide=true to distribute relative to the slide edges.
         """
-        return await anyio.to_thread.run_sync(distribute_shapes, params)
+        return await run_offloaded(distribute_shapes, params)
 
     @mcp.tool(
         name="ppt_get_slide_size",
@@ -743,7 +743,7 @@ def register_tools(mcp):
         Returns width and height in both points and inches,
         along with the slide size preset name and orientation.
         """
-        return await anyio.to_thread.run_sync(get_slide_size, params)
+        return await run_offloaded(get_slide_size, params)
 
     @mcp.tool(
         name="ppt_set_slide_size",
@@ -762,7 +762,7 @@ def register_tools(mcp):
         or specify exact width/height in points (72 points = 1 inch).
         Preset is applied first, then width/height, then orientation.
         """
-        return await anyio.to_thread.run_sync(set_slide_size, params)
+        return await run_offloaded(set_slide_size, params)
 
     @mcp.tool(
         name="ppt_set_slide_background",
@@ -783,7 +783,7 @@ def register_tools(mcp):
         Colors use '#RRGGBB' format.
         Use slide_indices to apply the same background to multiple slides at once.
         """
-        return await anyio.to_thread.run_sync(set_slide_background, params)
+        return await run_offloaded(set_slide_background, params)
 
     @mcp.tool(
         name="ppt_flip_shape",
@@ -802,7 +802,7 @@ def register_tools(mcp):
         Direction: 'horizontal' mirrors left-right, 'vertical' mirrors top-bottom.
         Returns the resulting flip state.
         """
-        return await anyio.to_thread.run_sync(flip_shape, params)
+        return await run_offloaded(flip_shape, params)
 
     @mcp.tool(
         name="ppt_merge_shapes",
@@ -823,4 +823,4 @@ def register_tools(mcp):
         (split at intersections).
         Optionally specify primary_shape to control which shape's formatting is kept.
         """
-        return await anyio.to_thread.run_sync(merge_shapes, params)
+        return await run_offloaded(merge_shapes, params)

@@ -4,13 +4,13 @@ Handles undo, redo, shape copy across slides, format painting,
 undo entry management, and MSO command execution.
 """
 
-import anyio
 import json
 import logging
 from typing import Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from ppt_com.constants import msoTrue, msoFalse
 
@@ -322,7 +322,7 @@ def register_tools(mcp):
         Performs one or more undo operations. Stops early if no more
         actions can be undone. Returns the number of actions actually undone.
         """
-        return await anyio.to_thread.run_sync(undo, params)
+        return await run_offloaded(undo, params)
 
     @mcp.tool(
         name="ppt_redo",
@@ -340,7 +340,7 @@ def register_tools(mcp):
         Performs one or more redo operations. Stops early if no more
         actions can be redone. Returns the number of actions actually redone.
         """
-        return await anyio.to_thread.run_sync(redo, params)
+        return await run_offloaded(redo, params)
 
     @mcp.tool(
         name="ppt_copy_shape_to_slide",
@@ -359,7 +359,7 @@ def register_tools(mcp):
         slide. The original shape remains on the source slide.
         Identify the shape by name (string) or 1-based index (int).
         """
-        return await anyio.to_thread.run_sync(copy_shape_to_slide, params)
+        return await run_offloaded(copy_shape_to_slide, params)
 
     @mcp.tool(
         name="ppt_copy_formatting",
@@ -378,7 +378,7 @@ def register_tools(mcp):
         formatting from the source shape to each target shape on the same slide.
         Identify shapes by name (string) or 1-based index (int).
         """
-        return await anyio.to_thread.run_sync(copy_formatting, params)
+        return await run_offloaded(copy_formatting, params)
 
     @mcp.tool(
         name="ppt_start_undo_entry",
@@ -397,7 +397,7 @@ def register_tools(mcp):
         changes can be undone with a single Ctrl+Z. Useful for grouping
         multiple tool calls into one undoable action.
         """
-        return await anyio.to_thread.run_sync(start_undo_entry)
+        return await run_offloaded(start_undo_entry)
 
     @mcp.tool(
         name="ppt_execute_mso",
@@ -423,4 +423,4 @@ def register_tools(mcp):
         Set check_enabled=false to skip the enabled check (may raise
         a COM error if the command is not available).
         """
-        return await anyio.to_thread.run_sync(execute_mso, params)
+        return await run_offloaded(execute_mso, params)

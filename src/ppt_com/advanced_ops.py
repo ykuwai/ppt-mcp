@@ -5,11 +5,11 @@ slide visibility, shape selection, view control, animation copying,
 picture insertion from URL, aspect ratio locking, and icon search.
 """
 
-import anyio
 import json
 import logging
 import os
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -17,6 +17,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from utils.color import hex_to_int, int_to_hex
@@ -39,6 +40,9 @@ logger = logging.getLogger(__name__)
 _icon_cache = None        # list of icon dicts
 _icon_cache_time = 0.0    # timestamp of last fetch
 _ICON_CACHE_TTL = 86400   # 24 hours
+# Handlers run on worker threads now (#198), so two first-time searches can
+# reach the fetch at once.  The lock keeps that to a single network call.
+_icon_cache_lock = threading.Lock()
 
 _ICON_METADATA_URL = "https://fonts.google.com/metadata/icons"
 
@@ -56,18 +60,24 @@ def _fetch_icon_metadata():
     if _icon_cache is not None and (now - _icon_cache_time) < _ICON_CACHE_TTL:
         return _icon_cache
 
-    resp = urllib.request.urlopen(_ICON_METADATA_URL)
-    raw = resp.read().decode("utf-8")
+    with _icon_cache_lock:
+        # Another thread may have filled the cache while we waited.
+        now = time.time()
+        if _icon_cache is not None and (now - _icon_cache_time) < _ICON_CACHE_TTL:
+            return _icon_cache
 
-    # Strip XSS protection prefix  )]}'
-    first_nl = raw.index("\n")
-    json_str = raw[first_nl + 1:]
-    data = json.loads(json_str)
+        resp = urllib.request.urlopen(_ICON_METADATA_URL)
+        raw = resp.read().decode("utf-8")
 
-    _icon_cache = data.get("icons", [])
-    _icon_cache_time = now
-    logger.info("Fetched %d icons from Google Fonts metadata", len(_icon_cache))
-    return _icon_cache
+        # Strip XSS protection prefix  )]}'
+        first_nl = raw.index("\n")
+        json_str = raw[first_nl + 1:]
+        data = json.loads(json_str)
+
+        _icon_cache = data.get("icons", [])
+        _icon_cache_time = now
+        logger.info("Fetched %d icons from Google Fonts metadata", len(_icon_cache))
+        return _icon_cache
 
 
 def _search_icons(query: str, max_results: int = 20):
@@ -1795,7 +1805,7 @@ def register_tools(mcp):
         For shape targets, provide slide_index and shape_name_or_index.
         For slide targets, provide slide_index.
         """
-        return await anyio.to_thread.run_sync(set_tag, params)
+        return await run_offloaded(set_tag, params)
 
     @mcp.tool(
         name="ppt_get_tags",
@@ -1813,7 +1823,7 @@ def register_tools(mcp):
         Returns a dictionary of tag name-value pairs.
         Set target_type to 'shape' (default), 'slide', or 'presentation'.
         """
-        return await anyio.to_thread.run_sync(get_tags, params)
+        return await run_offloaded(get_tags, params)
 
     # --- Fonts ---
     @mcp.tool(
@@ -1832,7 +1842,7 @@ def register_tools(mcp):
         Replaces every instance of original_font with replacement_font
         across all slides, shapes, and text ranges.
         """
-        return await anyio.to_thread.run_sync(replace_font, params)
+        return await run_offloaded(replace_font, params)
 
     @mcp.tool(
         name="ppt_list_fonts",
@@ -1849,7 +1859,7 @@ def register_tools(mcp):
 
         Returns the names of all fonts embedded or referenced in the presentation.
         """
-        return await anyio.to_thread.run_sync(list_fonts)
+        return await run_offloaded(list_fonts)
 
     @mcp.tool(
         name="ppt_set_default_fonts",
@@ -1870,7 +1880,7 @@ def register_tools(mcp):
         'east_asian' for Japanese/Chinese/Korean fonts (e.g. 'Meiryo').
         At least one of latin or east_asian must be provided.
         """
-        return await anyio.to_thread.run_sync(set_default_fonts, params)
+        return await run_offloaded(set_default_fonts, params)
 
     # --- Picture Crop ---
     @mcp.tool(
@@ -1902,7 +1912,7 @@ def register_tools(mcp):
 
         Returns current crop values and the active crop_shape integer after applying.
         """
-        return await anyio.to_thread.run_sync(crop_picture, params)
+        return await run_offloaded(crop_picture, params)
 
     # --- Picture Format ---
     @mcp.tool(
@@ -1926,7 +1936,7 @@ def register_tools(mcp):
         transparent_color: '#RRGGBB' hex — sets the color-key and enables transparency.
         transparent_background: explicitly enable/disable color-key transparency.
         """
-        return await anyio.to_thread.run_sync(set_picture_format, params)
+        return await run_offloaded(set_picture_format, params)
 
     # --- Shape Export ---
     @mcp.tool(
@@ -1945,7 +1955,7 @@ def register_tools(mcp):
         Supports formats: 'png', 'jpg', 'gif', 'bmp', 'wmf', 'emf'.
         Optionally specify width and height in pixels.
         """
-        return await anyio.to_thread.run_sync(export_shape, params)
+        return await run_offloaded(export_shape, params)
 
     # --- Slide Hidden ---
     @mcp.tool(
@@ -1964,7 +1974,7 @@ def register_tools(mcp):
         Hidden slides are skipped during slideshow playback but remain
         in the presentation. Set hidden=true to hide, hidden=false to show.
         """
-        return await anyio.to_thread.run_sync(set_slide_hidden, params)
+        return await run_offloaded(set_slide_hidden, params)
 
     # --- Select Shapes ---
     @mcp.tool(
@@ -1987,7 +1997,7 @@ def register_tools(mcp):
         Note: this brings the PowerPoint window to the foreground, because
         PowerPoint only allows shape selection on the active window.
         """
-        return await anyio.to_thread.run_sync(select_shapes, params)
+        return await run_offloaded(select_shapes, params)
 
     # --- Get Selection ---
     @mcp.tool(
@@ -2007,7 +2017,7 @@ def register_tools(mcp):
         For shapes, returns the list of selected shape names.
         For text, returns the selected text content.
         """
-        return await anyio.to_thread.run_sync(get_selection)
+        return await run_offloaded(get_selection)
 
     # --- View ---
     @mcp.tool(
@@ -2027,7 +2037,7 @@ def register_tools(mcp):
         'notes_master', 'outline', 'slide_sorter', 'title_master', 'reading'.
         Zoom range: 10-400. Returns current view_type and zoom after setting.
         """
-        return await anyio.to_thread.run_sync(set_view, params)
+        return await run_offloaded(set_view, params)
 
     # --- Copy Animation ---
     @mcp.tool(
@@ -2046,7 +2056,7 @@ def register_tools(mcp):
         Uses PickupAnimation/ApplyAnimation to transfer all animation
         settings from the source shape to the target shape.
         """
-        return await anyio.to_thread.run_sync(copy_animation, params)
+        return await run_offloaded(copy_animation, params)
 
     # --- Add Picture from URL ---
     @mcp.tool(
@@ -2069,7 +2079,7 @@ def register_tools(mcp):
         aspect ratio and centered. If width/height are not specified,
         the original image dimensions are used.
         """
-        return await anyio.to_thread.run_sync(add_picture_from_url, params)
+        return await run_offloaded(add_picture_from_url, params)
 
     # --- Add SVG Icon ---
     @mcp.tool(
@@ -2091,7 +2101,7 @@ def register_tools(mcp):
         the filled variant. Color accepts '#RRGGBB' or theme names like
         'accent1'. Use ppt_search_icons to find icon names by keyword.
         """
-        return await anyio.to_thread.run_sync(add_svg_icon, params)
+        return await run_offloaded(add_svg_icon, params)
 
     # --- Lock Aspect Ratio ---
     @mcp.tool(
@@ -2110,7 +2120,7 @@ def register_tools(mcp):
         When locked, resizing the shape maintains its proportions.
         Set locked=true to lock, locked=false to unlock.
         """
-        return await anyio.to_thread.run_sync(lock_aspect_ratio, params)
+        return await run_offloaded(lock_aspect_ratio, params)
 
     # --- Search Icons ---
     @mcp.tool(
@@ -2134,7 +2144,7 @@ def register_tools(mcp):
         'chart graph'). The metadata is fetched on first call and cached
         for 24 hours.
         """
-        return await anyio.to_thread.run_sync(search_icons, params)
+        return await run_offloaded(search_icons, params)
 
     # --- Default Shape Style ---
     @mcp.tool(
@@ -2182,12 +2192,14 @@ def register_tools(mcp):
         globally. It resets when the presentation is closed.
         """
         if params.slide_index is not None:
-            return await anyio.to_thread.run_sync(ppt.execute,
+            return await run_offloaded(
+                ppt.execute,
                 _set_default_shape_style_from_shape_impl,
                 params.slide_index,
                 params.shape_name_or_index,
             )
-        return await anyio.to_thread.run_sync(ppt.execute,
+        return await run_offloaded(
+            ppt.execute,
             _set_default_shape_style_impl,
             params.fill_type,
             params.fill_color,

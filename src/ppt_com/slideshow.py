@@ -3,7 +3,6 @@
 Start, stop, navigate, and query slide show state.
 """
 
-import anyio
 import json
 import logging
 import time
@@ -11,6 +10,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from ppt_com.constants import (
     msoTrue,
@@ -299,7 +299,7 @@ def register_tools(mcp):
         Optionally configure start/end slides, looping, and show type
         ('speaker' for fullscreen, 'window' for windowed, 'kiosk' for kiosk mode).
         """
-        return await anyio.to_thread.run_sync(slideshow_start, params)
+        return await run_offloaded(slideshow_start, params)
 
     @mcp.tool(
         name="ppt_slideshow_stop",
@@ -316,7 +316,7 @@ def register_tools(mcp):
 
         If no slide show is running, returns success with an informational message.
         """
-        return await anyio.to_thread.run_sync(slideshow_stop)
+        return await run_offloaded(slideshow_stop)
 
     @mcp.tool(
         name="ppt_slideshow_next",
@@ -333,7 +333,7 @@ def register_tools(mcp):
 
         Returns the current slide position and show state.
         """
-        return await anyio.to_thread.run_sync(slideshow_next)
+        return await run_offloaded(slideshow_next)
 
     @mcp.tool(
         name="ppt_slideshow_previous",
@@ -350,7 +350,7 @@ def register_tools(mcp):
 
         Returns the current slide position and show state.
         """
-        return await anyio.to_thread.run_sync(slideshow_previous)
+        return await run_offloaded(slideshow_previous)
 
     @mcp.tool(
         name="ppt_slideshow_goto",
@@ -367,7 +367,7 @@ def register_tools(mcp):
 
         Jumps directly to the slide at the given 1-based index.
         """
-        return await anyio.to_thread.run_sync(slideshow_goto, params)
+        return await run_offloaded(slideshow_goto, params)
 
     @mcp.tool(
         name="ppt_slideshow_get_status",
@@ -385,4 +385,4 @@ def register_tools(mcp):
         Returns whether a show is running, current slide, state
         (running/paused/black_screen/white_screen/done), and pointer type.
         """
-        return await anyio.to_thread.run_sync(slideshow_get_status)
+        return await run_offloaded(slideshow_get_status)

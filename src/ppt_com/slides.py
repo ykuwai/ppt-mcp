@@ -3,13 +3,13 @@
 Add, delete, duplicate, move, list, and query slides. Manage speaker notes.
 """
 
-import anyio
 import json
 import logging
 from typing import NamedTuple, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.color import hex_to_int
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide as nav_goto_slide
@@ -1359,7 +1359,7 @@ def register_tools(mcp):
         If layout_name matched layouts in multiple designs, the response also
         includes layout_ambiguous=true and a warning naming the candidates.
         """
-        return await anyio.to_thread.run_sync(add_slide, params)
+        return await run_offloaded(add_slide, params)
 
     @mcp.tool(
         name="ppt_delete_slide",
@@ -1384,7 +1384,7 @@ def register_tools(mcp):
         no manual bookkeeping for index shifting. Deleting all slides is
         rejected (a presentation must keep at least one).
         """
-        return await anyio.to_thread.run_sync(delete_slide, params)
+        return await run_offloaded(delete_slide, params)
 
     @mcp.tool(
         name="ppt_duplicate_slide",
@@ -1409,7 +1409,7 @@ def register_tools(mcp):
         Returns new_slide_indices / new_slide_ids (plus new_slide_index for a
         single copy).
         """
-        return await anyio.to_thread.run_sync(duplicate_slide, params)
+        return await run_offloaded(duplicate_slide, params)
 
     @mcp.tool(
         name="ppt_move_slide",
@@ -1433,7 +1433,7 @@ def register_tools(mcp):
         refer to the CURRENT numbering — the move is anchored on slide IDs so
         index shifting is handled internally.
         """
-        return await anyio.to_thread.run_sync(move_slide, params)
+        return await run_offloaded(move_slide, params)
 
     @mcp.tool(
         name="ppt_copy_slide",
@@ -1461,7 +1461,7 @@ def register_tools(mcp):
         Both presentations must already be open (use ppt_open_presentation).
         Returns new_slide_indices and the destination presentation name.
         """
-        return await anyio.to_thread.run_sync(copy_slide, params)
+        return await run_offloaded(copy_slide, params)
 
     @mcp.tool(
         name="ppt_list_slides",
@@ -1479,7 +1479,7 @@ def register_tools(mcp):
         Returns each slide's index, ID, name, layout, hidden status,
         shape count, and whether it has speaker notes.
         """
-        return await anyio.to_thread.run_sync(list_slides, params)
+        return await run_offloaded(list_slides, params)
 
     @mcp.tool(
         name="ppt_get_slide_info",
@@ -1497,7 +1497,7 @@ def register_tools(mcp):
         Returns layout, shapes count, title text, speaker notes,
         transition settings, background info, and design name.
         """
-        return await anyio.to_thread.run_sync(get_slide_info, params)
+        return await run_offloaded(get_slide_info, params)
 
     @mcp.tool(
         name="ppt_set_slide_notes",
@@ -1520,7 +1520,7 @@ def register_tools(mcp):
         export only. The Notes pane and Presenter View ignore these settings
         (Presenter View has its own A+/A- zoom controls).
         """
-        return await anyio.to_thread.run_sync(set_slide_notes, params)
+        return await run_offloaded(set_slide_notes, params)
 
     @mcp.tool(
         name="ppt_get_slide_notes",
@@ -1537,7 +1537,7 @@ def register_tools(mcp):
 
         Returns the notes text. If no notes exist, returns an empty string.
         """
-        return await anyio.to_thread.run_sync(get_slide_notes, params)
+        return await run_offloaded(get_slide_notes, params)
 
     @mcp.tool(
         name="ppt_goto_slide",
@@ -1555,4 +1555,4 @@ def register_tools(mcp):
         Changes which slide is shown in the PowerPoint editor.
         Useful for jumping to a slide you want to view or edit.
         """
-        return await anyio.to_thread.run_sync(goto_slide, params)
+        return await run_offloaded(goto_slide, params)

@@ -4,13 +4,13 @@ Handles adding, listing, modifying, duplicating, deleting shapes,
 and z-order management on PowerPoint slides.
 """
 
-import anyio
 import json
 import logging
 from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.color import hex_to_int, int_to_hex
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
@@ -1245,7 +1245,7 @@ def register_tools(mcp):
         Example: text='Label', font_size=14, bold=true, fill_color='#1E3A5F',
         line_visible=false creates a fully styled shape in one step.
         """
-        return await anyio.to_thread.run_sync(add_shape, params)
+        return await run_offloaded(add_shape, params)
 
     @mcp.tool(
         name="ppt_add_textbox",
@@ -1275,7 +1275,7 @@ def register_tools(mcp):
         font_color='#FFFFFF', align='center', vertical_anchor='middle' creates a
         fully styled, vertically centered label in one step.
         """
-        return await anyio.to_thread.run_sync(add_textbox, params)
+        return await run_offloaded(add_textbox, params)
 
     @mcp.tool(
         name="ppt_add_picture",
@@ -1293,7 +1293,7 @@ def register_tools(mcp):
         The image is embedded in the presentation. If width and height are
         omitted, the original image dimensions are preserved.
         """
-        return await anyio.to_thread.run_sync(add_picture, params)
+        return await run_offloaded(add_picture, params)
 
     @mcp.tool(
         name="ppt_add_line",
@@ -1311,7 +1311,7 @@ def register_tools(mcp):
         Draws a line from (begin_x, begin_y) to (end_x, end_y).
         All coordinates are in points (72 points = 1 inch).
         """
-        return await anyio.to_thread.run_sync(add_line, params)
+        return await run_offloaded(add_line, params)
 
     @mcp.tool(
         name="ppt_list_shapes",
@@ -1328,7 +1328,7 @@ def register_tools(mcp):
 
         Returns name, id, type, position, size, and text preview for each shape.
         """
-        return await anyio.to_thread.run_sync(list_shapes, params)
+        return await run_offloaded(list_shapes, params)
 
     @mcp.tool(
         name="ppt_get_shape_info",
@@ -1346,7 +1346,7 @@ def register_tools(mcp):
         Identify the shape by name (shape_name) or 1-based index (shape_index).
         Returns full text, fill info, line info, rotation, and z-order.
         """
-        return await anyio.to_thread.run_sync(get_shape_info, params)
+        return await run_offloaded(get_shape_info, params)
 
     @mcp.tool(
         name="ppt_update_shape",
@@ -1364,7 +1364,7 @@ def register_tools(mcp):
         Identify the shape by name or index. Only provided properties are updated.
         Can change position (left, top), size (width, height), rotation, and name.
         """
-        return await anyio.to_thread.run_sync(update_shape, params)
+        return await run_offloaded(update_shape, params)
 
     @mcp.tool(
         name="ppt_delete_shape",
@@ -1382,7 +1382,7 @@ def register_tools(mcp):
         Identify the shape by name (shape_name) or 1-based index (shape_index).
         This action cannot be undone via MCP (use PowerPoint's Ctrl+Z).
         """
-        return await anyio.to_thread.run_sync(delete_shape, params)
+        return await run_offloaded(delete_shape, params)
 
     @mcp.tool(
         name="ppt_duplicate_shape",
@@ -1400,7 +1400,7 @@ def register_tools(mcp):
         Creates a copy offset 20 points right and down from the original.
         Returns the new shape's name and index.
         """
-        return await anyio.to_thread.run_sync(duplicate_shape, params)
+        return await run_offloaded(duplicate_shape, params)
 
     @mcp.tool(
         name="ppt_set_shape_zorder",
@@ -1418,4 +1418,4 @@ def register_tools(mcp):
         Commands: 'bring_to_front', 'send_to_back', 'bring_forward', 'send_backward'.
         Identify the shape by name (shape_name) or 1-based index (shape_index).
         """
-        return await anyio.to_thread.run_sync(set_shape_zorder, params)
+        return await run_offloaded(set_shape_zorder, params)

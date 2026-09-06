@@ -5,8 +5,12 @@
 a ping, a cancellation or even `tools/list` while one COM call is in flight.
 From the client's side that is indistinguishable from a hang.
 
-Handing the call to `anyio.to_thread.run_sync` keeps the loop free. This test
-is the guard: it fails the moment a new tool is added the old way.
+`utils.offload.run_offloaded` keeps the loop free and the call cancellable.
+This module is the guard: it fails the moment a new tool is added the old way.
+
+The checks look for an awaited call to `run_offloaded`, not merely for the name
+appearing somewhere in the function, so a handler that references the helper
+without awaiting it does not slip through.
 """
 
 from __future__ import annotations
@@ -32,6 +36,18 @@ def _tool_handlers():
                 yield path, node
 
 
+def _awaits_run_offloaded(node) -> bool:
+    """True if the handler awaits a call to run_offloaded(...)."""
+    for sub in ast.walk(node):
+        if not isinstance(sub, ast.Await):
+            continue
+        call = sub.value
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Name):
+            if call.func.id == "run_offloaded":
+                return True
+    return False
+
+
 def _calls_to(node, obj, attr):
     """Every Call node in `node` of the form `obj.attr(...)`."""
     for sub in ast.walk(node):
@@ -50,39 +66,54 @@ def test_every_handler_offloads_to_a_thread():
     offenders = [
         f"{path.relative_to(_root)}:{node.lineno} {node.name}"
         for path, node in handlers
-        if "to_thread" not in ast.dump(node)
+        if not _awaits_run_offloaded(node)
     ]
     assert offenders == [], (
         "these handlers run their work on the event loop; wrap the call in "
-        f"anyio.to_thread.run_sync: {offenders}"
+        f"await run_offloaded(...): {offenders}"
     )
 
 
 def test_no_handler_calls_ppt_execute_directly():
     """`ppt.execute` blocks. Inside a handler it must go through a thread,
-    which means it appears as an argument to run_sync, never as the call."""
+    which means it appears as an argument to run_offloaded, never as the call."""
     offenders = [
         f"{path.relative_to(_root)}:{call.lineno} {node.name}"
         for path, node in _tool_handlers()
         for call in _calls_to(node, "ppt", "execute")
     ]
     assert offenders == [], (
-        "call anyio.to_thread.run_sync(ppt.execute, ...) instead of "
+        "call await run_offloaded(ppt.execute, ...) instead of "
         f"ppt.execute(...): {offenders}"
     )
 
 
-def test_modules_with_handlers_import_anyio():
+def test_modules_with_handlers_import_the_helper():
     modules = {path for path, _ in _tool_handlers()}
     missing = []
     for path in sorted(modules):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        names = {
+        imported = {
             alias.name
             for node in ast.walk(tree)
-            if isinstance(node, ast.Import)
+            if isinstance(node, ast.ImportFrom) and node.module == "utils.offload"
             for alias in node.names
         }
-        if "anyio" not in names:
+        if "run_offloaded" not in imported:
             missing.append(str(path.relative_to(_root)))
-    assert missing == [], f"handlers use anyio but the module never imports it: {missing}"
+    assert missing == [], (
+        f"handlers use run_offloaded but the module never imports it: {missing}"
+    )
+
+
+def test_handlers_do_not_call_anyio_directly():
+    """One helper owns the threading and the cancellation semantics. Calling
+    anyio.to_thread from a handler would bypass the future cancellation."""
+    offenders = []
+    for path, node in _tool_handlers():
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Attribute) and sub.attr == "run_sync":
+                offenders.append(f"{path.relative_to(_root)}:{sub.lineno} {node.name}")
+    assert offenders == [], (
+        f"use run_offloaded rather than anyio.to_thread.run_sync directly: {offenders}"
+    )

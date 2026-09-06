@@ -3,13 +3,13 @@
 Handles glow, reflection, and soft edge effects on shapes.
 """
 
-import anyio
 import json
 import logging
 from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from utils.color import hex_to_int
@@ -239,7 +239,7 @@ def register_tools(mcp):
         Configure radius, color, and transparency.
         Set radius=0 to remove the glow effect.
         """
-        return await anyio.to_thread.run_sync(set_glow, params)
+        return await run_offloaded(set_glow, params)
 
     @mcp.tool(
         name="ppt_set_reflection",
@@ -257,7 +257,7 @@ def register_tools(mcp):
         Configure reflection type (0=none, 1-9=presets), blur, offset,
         size, and transparency.
         """
-        return await anyio.to_thread.run_sync(set_reflection, params)
+        return await run_offloaded(set_reflection, params)
 
     @mcp.tool(
         name="ppt_set_soft_edge",
@@ -275,4 +275,4 @@ def register_tools(mcp):
         Configure the soft edge radius in points.
         Set radius=0 to remove the soft edge effect.
         """
-        return await anyio.to_thread.run_sync(set_soft_edge, params)
+        return await run_offloaded(set_soft_edge, params)

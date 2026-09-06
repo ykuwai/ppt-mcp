@@ -3,7 +3,6 @@
 Export presentations to PDF, images (PNG/JPG), or copy slides to clipboard.
 """
 
-import anyio
 import atexit
 import ctypes
 import ctypes.wintypes
@@ -18,6 +17,7 @@ from typing import List, Optional
 import pythoncom
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from ppt_com.constants import (
     ppFixedFormatTypePDF,
@@ -777,7 +777,7 @@ def register_tools(mcp):
         Optionally export a specific range of slides by providing
         slide_range_start and slide_range_end.
         """
-        return await anyio.to_thread.run_sync(export_pdf, params)
+        return await run_offloaded(export_pdf, params)
 
     @mcp.tool(
         name="ppt_export_images",
@@ -803,7 +803,7 @@ def register_tools(mcp):
         When exporting every slide, PowerPoint writes a folder of images and the
         width/height options do not apply.
         """
-        return await anyio.to_thread.run_sync(export_images, params)
+        return await run_offloaded(export_images, params)
 
     @mcp.tool(
         name="ppt_copy_to_clipboard",
@@ -823,4 +823,4 @@ def register_tools(mcp):
         Single slide is placed as a bitmap (paste directly as image).
         Multiple slides are placed as file drop (paste inserts all images).
         """
-        return await anyio.to_thread.run_sync(copy_to_clipboard, params)
+        return await run_offloaded(copy_to_clipboard, params)

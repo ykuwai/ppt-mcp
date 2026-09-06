@@ -1,12 +1,12 @@
 """Batch formatting operations for multiple shapes at once."""
 
-import anyio
 import json
 import logging
 from typing import List, Literal, Union, get_args
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 
 # Import impl functions from existing modules
@@ -277,4 +277,4 @@ def register_tools(mcp):
         annotations={"readOnlyHint": False},
     )
     async def tool_batch_apply_formatting(params: BatchApplyFormattingInput) -> str:
-        return await anyio.to_thread.run_sync(batch_apply_formatting, params)
+        return await run_offloaded(batch_apply_formatting, params)
