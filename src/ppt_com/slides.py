@@ -103,13 +103,22 @@ class AddSlideInput(BaseModel):
         strings become the integer constant, any other name moves to
         layout_name (unless layout_name is already set, which wins), and
         `layout` is cleared.
+
+        An empty or blank string is rejected rather than treated as "no
+        layout": it almost always means a template variable was never filled
+        in, and silently producing a blank slide hides that from the caller.
         """
         if isinstance(data, dict) and isinstance(data.get("layout"), str):
             value = data["layout"].strip()
+            if not value:
+                raise ValueError(
+                    "layout is empty. Omit it to use the default layout, or "
+                    "pass a PpSlideLayout constant or a layout name."
+                )
             if value.lstrip("+-").isdigit():
                 data["layout"] = int(value)
             else:
-                if value and not data.get("layout_name"):
+                if not data.get("layout_name"):
                     data["layout_name"] = value
                 data["layout"] = None
         return data

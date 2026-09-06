@@ -7,6 +7,9 @@ PowerPoint.
 
 import sys
 
+import pytest
+from pydantic import ValidationError
+
 sys.path.insert(0, "src")
 
 from ppt_com.slides import AddSlideInput, _find_layout_matches
@@ -99,10 +102,12 @@ def test_layout_int_unchanged():
     assert m.layout_name is None
 
 
-def test_layout_empty_string_becomes_none():
-    m = AddSlideInput(layout="")
-    assert m.layout is None
-    assert m.layout_name is None
+def test_layout_empty_string_is_rejected():
+    """An empty layout usually means an unfilled template variable. Saying so
+    beats silently handing back a blank slide."""
+    for blank in ("", "   ", "\t"):
+        with pytest.raises(ValidationError, match="layout is empty"):
+            AddSlideInput(layout=blank)
 
 
 def test_layout_schema_accepts_integer_and_string():
