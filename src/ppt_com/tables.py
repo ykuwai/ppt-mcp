@@ -10,6 +10,7 @@ from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
@@ -1104,7 +1105,7 @@ def register_tools(mcp):
         Creates a table with the specified number of rows and columns.
         All positions and sizes are in points (72 points = 1 inch).
         """
-        return add_table(params)
+        return await run_offloaded(add_table, params)
 
     @mcp.tool(
         name="ppt_get_table_data",
@@ -1122,7 +1123,7 @@ def register_tools(mcp):
         Returns a 2D array of cell text, plus row and column counts.
         Identify the table by shape name or 1-based shape index.
         """
-        return get_table_data(params)
+        return await run_offloaded(get_table_data, params)
 
     @mcp.tool(
         name="ppt_set_table_cell",
@@ -1140,7 +1141,7 @@ def register_tools(mcp):
         Access cell by 1-based row and column. Optionally set font properties,
         text alignment, and cell background color.
         """
-        return set_table_cell(params)
+        return await run_offloaded(set_table_cell, params)
 
     @mcp.tool(
         name="ppt_set_table_data",
@@ -1160,7 +1161,7 @@ def register_tools(mcp):
         Cells beyond the table boundary are silently skipped.
         Use bold_first_row=True to auto-bold the header row.
         """
-        return set_table_data(params)
+        return await run_offloaded(set_table_data, params)
 
     @mcp.tool(
         name="ppt_merge_table_cells",
@@ -1178,7 +1179,7 @@ def register_tools(mcp):
         Merges from (start_row, start_col) to (end_row, end_col).
         Uses Cell.Merge() which merges the entire rectangular range.
         """
-        return merge_table_cells(params)
+        return await run_offloaded(merge_table_cells, params)
 
     @mcp.tool(
         name="ppt_add_table_row",
@@ -1196,7 +1197,7 @@ def register_tools(mcp):
         If position is provided, inserts before that row (1-based).
         If omitted, appends at the end.
         """
-        return add_table_row(params)
+        return await run_offloaded(add_table_row, params)
 
     @mcp.tool(
         name="ppt_delete_table_row",
@@ -1214,7 +1215,7 @@ def register_tools(mcp):
         Removes the row at the specified 1-based position.
         Remaining rows re-index automatically.
         """
-        return delete_table_row(params)
+        return await run_offloaded(delete_table_row, params)
 
     @mcp.tool(
         name="ppt_add_table_column",
@@ -1232,7 +1233,7 @@ def register_tools(mcp):
         If position is provided, inserts before that column (1-based).
         If omitted, appends at the end.
         """
-        return add_table_column(params)
+        return await run_offloaded(add_table_column, params)
 
     @mcp.tool(
         name="ppt_delete_table_column",
@@ -1250,7 +1251,7 @@ def register_tools(mcp):
         Removes the column at the specified 1-based position.
         Remaining columns re-index automatically.
         """
-        return delete_table_column(params)
+        return await run_offloaded(delete_table_column, params)
 
     @mcp.tool(
         name="ppt_set_table_style",
@@ -1269,7 +1270,7 @@ def register_tools(mcp):
         '{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}' for Medium Style 2 - Accent 1).
         Optionally toggle header row, total row, banding rows/columns.
         """
-        return set_table_style(params)
+        return await run_offloaded(set_table_style, params)
 
     @mcp.tool(
         name="ppt_set_table_layout",
@@ -1290,7 +1291,7 @@ def register_tools(mcp):
         are left unchanged. Returns actual values after setting (PowerPoint may clamp
         to a minimum).
         """
-        return set_table_layout(params)
+        return await run_offloaded(set_table_layout, params)
 
     @mcp.tool(
         name="ppt_split_table_cells",
@@ -1308,7 +1309,7 @@ def register_tools(mcp):
         Use num_rows=1, num_cols=1 (default) for a simple unmerge.
         Uses Cell.Split(NumRows, NumColumns) — the inverse of ppt_merge_table_cells.
         """
-        return split_table_cells(params)
+        return await run_offloaded(split_table_cells, params)
 
     @mcp.tool(
         name="ppt_set_table_borders",
@@ -1328,4 +1329,4 @@ def register_tools(mcp):
         'top', 'bottom', 'left', 'right', 'diagonal_down', 'diagonal_up'.
         Optionally set visible, color ('#RRGGBB'), weight (points), and dash_style.
         """
-        return set_table_borders(params)
+        return await run_offloaded(set_table_borders, params)

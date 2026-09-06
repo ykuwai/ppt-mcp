@@ -110,6 +110,7 @@ Standard 16:9 slide = 960 × 540 pt. Default to light backgrounds unless the use
 # =============================================================================
 # App tools
 # =============================================================================
+from utils.offload import run_offloaded
 from ppt_com.app import (
     ConnectInput,
     SetWindowStateInput,
@@ -138,7 +139,7 @@ async def tool_ppt_connect(params: ConnectInput) -> str:
     If no instance is found, launches a new one.
     Set visible=false for headless mode (background operation).
     """
-    return connect_to_powerpoint(params)
+    return await run_offloaded(connect_to_powerpoint, params)
 
 
 @mcp.tool(
@@ -157,7 +158,7 @@ async def tool_ppt_get_app_info() -> str:
     Returns version, visibility, window state, presentation count,
     and active presentation name.
     """
-    return get_app_info()
+    return await run_offloaded(get_app_info)
 
 
 @mcp.tool(
@@ -176,7 +177,7 @@ async def tool_ppt_get_active_window() -> str:
     Returns window caption, view type, current slide index,
     and what is selected (shapes, text, or nothing).
     """
-    return get_active_window_info()
+    return await run_offloaded(get_active_window_info)
 
 
 @mcp.tool(
@@ -194,7 +195,7 @@ async def tool_ppt_list_presentations() -> str:
 
     Returns name, path, slide count, and status for each.
     """
-    return list_presentations()
+    return await run_offloaded(list_presentations)
 
 
 @mcp.tool(
@@ -213,7 +214,7 @@ async def tool_ppt_set_window_state(params: SetWindowStateInput) -> str:
     Controls whether the PowerPoint window is maximized, minimized, or
     restored to normal size.
     """
-    return set_window_state(params)
+    return await run_offloaded(set_window_state, params)
 
 
 # =============================================================================
@@ -470,7 +471,7 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
 
-    image_data = ppt.execute(_export_slide_impl, params.slide_index)
+    image_data = await run_offloaded(ppt.execute, _export_slide_impl, params.slide_index)
     return Image(data=image_data, format="png")
 
 

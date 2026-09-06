@@ -10,6 +10,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from ppt_com.constants import (
@@ -545,7 +546,7 @@ def register_tools(mcp):
                 "x2": nd.x2, "y2": nd.y2,
                 "x3": nd.x3, "y3": nd.y3,
             })
-        return ppt.execute(
+        return await run_offloaded(ppt.execute,
             _build_freeform_impl,
             params.slide_index,
             start_et_int,
@@ -579,7 +580,7 @@ def register_tools(mcp):
         Only works on freeform shapes (type=5). Use ppt_get_shape_info to check
         the shape type first.
         """
-        return ppt.execute(
+        return await run_offloaded(ppt.execute,
             _get_shape_nodes_impl,
             params.slide_index,
             params.shape_name,
@@ -605,7 +606,7 @@ def register_tools(mcp):
         control-point nodes to preserve the curve's tangent. The returned
         position reflects the actual position after the move.
         """
-        return ppt.execute(
+        return await run_offloaded(ppt.execute,
             _set_node_position_impl,
             params.slide_index,
             params.shape_name,
@@ -639,7 +640,7 @@ def register_tools(mcp):
         et_int = EDITING_TYPE_MAP.get(params.editing_type.lower())
         if et_int is None:
             raise ValueError(f"editing_type must be 'auto' or 'corner', got '{params.editing_type}'")
-        return ppt.execute(
+        return await run_offloaded(ppt.execute,
             _insert_node_impl,
             params.slide_index,
             params.shape_name,
@@ -674,7 +675,7 @@ def register_tools(mcp):
 
         Call ppt_get_shape_nodes first to verify indices before deleting.
         """
-        return ppt.execute(
+        return await run_offloaded(ppt.execute,
             _delete_node_impl,
             params.slide_index,
             params.shape_name,
@@ -708,7 +709,7 @@ def register_tools(mcp):
         et_int = EDITING_TYPE_MAP.get(params.editing_type.lower())
         if et_int is None:
             raise ValueError(f"editing_type must be 'auto', 'corner', 'smooth', or 'symmetric', got '{params.editing_type}'")
-        return ppt.execute(
+        return await run_offloaded(ppt.execute,
             _set_node_editing_type_impl,
             params.slide_index,
             params.shape_name,
@@ -741,7 +742,7 @@ def register_tools(mcp):
         seg_int = SEGMENT_TYPE_MAP.get(params.segment_type.lower())
         if seg_int is None:
             raise ValueError(f"segment_type must be 'line' or 'curve', got '{params.segment_type}'")
-        return ppt.execute(
+        return await run_offloaded(ppt.execute,
             _set_segment_type_impl,
             params.slide_index,
             params.shape_name,

@@ -8,6 +8,7 @@ import logging
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 
@@ -194,7 +195,7 @@ def register_tools(mcp):
         Provide text, author name, and optional position.
         Uses Add2 for modern PowerPoint, falls back to Add for older versions.
         """
-        return add_comment(params)
+        return await run_offloaded(add_comment, params)
 
     @mcp.tool(
         name="ppt_list_comments",
@@ -211,7 +212,7 @@ def register_tools(mcp):
 
         Returns index, author, text, datetime, and position for each comment.
         """
-        return list_comments(params)
+        return await run_offloaded(list_comments, params)
 
     @mcp.tool(
         name="ppt_delete_comment",
@@ -228,4 +229,4 @@ def register_tools(mcp):
 
         Use ppt_list_comments to find the comment index first.
         """
-        return delete_comment(params)
+        return await run_offloaded(delete_comment, params)

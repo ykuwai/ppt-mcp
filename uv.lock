@@ -393,6 +393,7 @@ name = "ppt-mcp"
 version = "1.8.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "mcp", extra = ["cli"] },
     { name = "pydantic" },
     { name = "pywin32" },
@@ -405,6 +406,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.0.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0.0,<3.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pywin32", specifier = ">=306" },

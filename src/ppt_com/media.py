@@ -11,6 +11,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from ppt_com.constants import msoTrue, msoFalse
@@ -301,7 +302,7 @@ def register_tools(mcp):
         an absolute Windows path. Supports embedding or linking.
         All positions and sizes are in points (72 points = 1 inch).
         """
-        return add_video(params)
+        return await run_offloaded(add_video, params)
 
     @mcp.tool(
         name="ppt_add_audio",
@@ -320,7 +321,7 @@ def register_tools(mcp):
         to an absolute Windows path. Supports embedding or linking.
         All positions and sizes are in points (72 points = 1 inch).
         """
-        return add_audio(params)
+        return await run_offloaded(add_audio, params)
 
     @mcp.tool(
         name="ppt_set_media_settings",
@@ -338,4 +339,4 @@ def register_tools(mcp):
         Adjust volume, mute state, fade-in/out duration, and looping.
         Identify the media shape by name or 1-based shape index.
         """
-        return set_media_settings(params)
+        return await run_offloaded(set_media_settings, params)

@@ -11,6 +11,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int
 from utils.navigation import goto_slide
@@ -728,7 +729,7 @@ def register_tools(mcp):
 
         All positions and sizes are in points (72 points = 1 inch).
         """
-        return add_smartart(params)
+        return await run_offloaded(add_smartart, params)
 
     @mcp.tool(
         name="ppt_modify_smartart",
@@ -761,7 +762,7 @@ def register_tools(mcp):
         Colors: '#RRGGBB' hex strings. Use ppt_list_smartart_layouts with
         list_type='colors' or list_type='styles' to discover available indices.
         """
-        return modify_smartart(params)
+        return await run_offloaded(modify_smartart, params)
 
     @mcp.tool(
         name="ppt_list_smartart_layouts",
@@ -793,4 +794,4 @@ def register_tools(mcp):
 
         Output is compact by default (index + name + english_name + category).
         """
-        return list_smartart_options(params)
+        return await run_offloaded(list_smartart_options, params)
