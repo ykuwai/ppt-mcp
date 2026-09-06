@@ -11,6 +11,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.color import int_to_hex
 from backend import ppt
 from utils.onedrive import resolve_local_path
@@ -844,7 +845,7 @@ def register_tools(mcp):
         clicks into another window. Pass `activate=false` to keep the
         existing target.
         """
-        return create_presentation(params)
+        return await run_offloaded(create_presentation, params)
 
     @mcp.tool(
         name="ppt_open_presentation",
@@ -867,7 +868,7 @@ def register_tools(mcp):
         so subsequent tool calls operate on it even if the user clicks into
         another window. Pass `activate=false` to keep the existing target.
         """
-        return open_presentation(params)
+        return await run_offloaded(open_presentation, params)
 
     @mcp.tool(
         name="ppt_save_presentation",
@@ -885,7 +886,7 @@ def register_tools(mcp):
         This overwrites the existing file. Use ppt_save_presentation_as to
         save to a new location or format.
         """
-        return save_presentation(params)
+        return await run_offloaded(save_presentation, params)
 
     @mcp.tool(
         name="ppt_save_presentation_as",
@@ -907,7 +908,7 @@ def register_tools(mcp):
         saves refresh; the result says so and names it in `also_copied_to`.
         For image formats (png/jpg), a folder of individual slide images is created.
         """
-        return save_presentation_as(params)
+        return await run_offloaded(save_presentation_as, params)
 
     @mcp.tool(
         name="ppt_close_presentation",
@@ -926,7 +927,7 @@ def register_tools(mcp):
         If save_changes=false (default), unsaved changes are discarded without
         prompting the user.
         """
-        return close_presentation(params)
+        return await run_offloaded(close_presentation, params)
 
     @mcp.tool(
         name="ppt_get_presentation_info",
@@ -948,7 +949,7 @@ def register_tools(mcp):
         save status, template name, default fonts (title/body,
         Latin/East Asian), and accent colors (accent1–accent6).
         """
-        return get_presentation_info(params)
+        return await run_offloaded(get_presentation_info, params)
 
     @mcp.tool(
         name="ppt_activate_presentation",
@@ -973,7 +974,7 @@ def register_tools(mcp):
 
         Returns the name, full path, and 1-based index of the activated presentation.
         """
-        return activate_presentation(params)
+        return await run_offloaded(activate_presentation, params)
 
     @mcp.tool(
         name="ppt_list_templates",
@@ -993,7 +994,7 @@ def register_tools(mcp):
         absolute paths. Use a returned file_path with
         ppt_create_presentation's template_path to create from a template.
         """
-        return list_templates(params)
+        return await run_offloaded(list_templates, params)
 
 
 # ---------------------------------------------------------------------------

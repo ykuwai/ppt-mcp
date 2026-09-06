@@ -6,6 +6,7 @@ from typing import List, Literal, Union, get_args
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from backend import ppt
 
 # The input models are imported by name because they are platform neutral. The
@@ -274,7 +275,7 @@ def register_tools(mcp):
         annotations={"readOnlyHint": False},
     )
     async def tool_batch_apply_formatting(params: BatchApplyFormattingInput) -> str:
-        return batch_apply_formatting(params)
+        return await run_offloaded(batch_apply_formatting, params)
 
 
 # ---------------------------------------------------------------------------

@@ -21,6 +21,12 @@
 
 PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）サーバーです。python-pptxのようなファイルベースのライブラリとは異なり、起動中のPowerPointアプリケーションと直接やり取りします。
 
+## 🎬 デモ
+
+エージェントが実際の PowerPoint ウィンドウでスライドを作成する様子（15倍速）:
+
+https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
+
 ## ✨ 主な特徴
 
 - **リアルタイム制御** — 起動中のPowerPointを直接操作。変更がその場で画面に反映される

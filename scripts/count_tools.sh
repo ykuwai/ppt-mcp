@@ -16,13 +16,13 @@ done
 
 echo ""
 echo "=== Total ==="
-total=$(grep -rh 'name="ppt_' "$SRC/" | grep -oP 'ppt_[^"]+' | sort -u | wc -l)
+total=$(grep -rh 'name="ppt_' "$SRC/" | grep -oE 'ppt_[^"]+' | sort -u | wc -l)
 printf "%4d  tools\n" "$total"
 
 echo ""
 echo "=== README states ==="
 readme="$(cd "$(dirname "$0")/.." && pwd)/README.md"
-stated=$(grep -oP '(?<=\*\*)\d+(?= tools\b)' "$readme" | head -1 || echo "?")
+stated=$(grep -oE '\*\*[0-9]+ tools\b' "$readme" | grep -oE '[0-9]+' | head -1 || echo "?")
 printf "%4s  tools (README.md)\n" "$stated"
 
 if [ "$total" -ne "$stated" ] 2>/dev/null; then

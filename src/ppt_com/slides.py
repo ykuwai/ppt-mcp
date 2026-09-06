@@ -5,10 +5,11 @@ Add, delete, duplicate, move, list, and query slides. Manage speaker notes.
 
 import json
 import logging
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.color import hex_to_int
 from backend import ppt
 from utils.navigation import goto_slide as nav_goto_slide
@@ -45,12 +46,13 @@ class AddSlideInput(BaseModel):
             "If omitted, the slide is added at the end."
         ),
     )
-    layout: Optional[int] = Field(
+    layout: Optional[Union[int, str]] = Field(
         default=None,
         description=(
-            "PpSlideLayout constant: 1=Title, 2=Text, 11=TitleOnly, 12=Blank, "
+            "PpSlideLayout constant (1=Title, 2=Text, 11=TitleOnly, 12=Blank, "
             "33=SectionHeader, 34=Comparison, 35=ContentWithCaption, "
-            "36=PictureWithCaption. Ignored if layout_name is provided."
+            "36=PictureWithCaption) or a layout name; a name is treated "
+            "exactly like layout_name. Ignored if layout_name is provided."
         ),
     )
     layout_name: Optional[str] = Field(
@@ -89,6 +91,38 @@ class AddSlideInput(BaseModel):
         description="Number of slides to add. All slides use the same layout. "
         "When count > 1, returns a list of created slide indices.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_layout_names_in_layout(cls, data):
+        """Accept a layout name passed via `layout`.
+
+        Callers routinely put a friendly name such as 'blank' into `layout`
+        because the tool text mentions names and integer constants side by
+        side. Rejecting that with an int-parsing error only costs a round
+        trip, so a string is treated like layout_name instead: numeric
+        strings become the integer constant, any other name moves to
+        layout_name (unless layout_name is already set, which wins), and
+        `layout` is cleared.
+
+        An empty or blank string is rejected rather than treated as "no
+        layout": it almost always means a template variable was never filled
+        in, and silently producing a blank slide hides that from the caller.
+        """
+        if isinstance(data, dict) and isinstance(data.get("layout"), str):
+            value = data["layout"].strip()
+            if not value:
+                raise ValueError(
+                    "layout is empty. Omit it to use the default layout, or "
+                    "pass a PpSlideLayout constant or a layout name."
+                )
+            if value.lstrip("+-").isdigit():
+                data["layout"] = int(value)
+            else:
+                if not data.get("layout_name"):
+                    data["layout_name"] = value
+                data["layout"] = None
+        return data
 
 
 class DeleteSlideInput(BaseModel):
@@ -1261,13 +1295,18 @@ class GotoSlideInput(BaseModel):
 
 
 def _goto_slide_impl(slide_index: int) -> dict:
-    app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
     if slide_index < 1 or slide_index > pres.Slides.Count:
         raise ValueError(
             f"Slide index {slide_index} out of range (1-{pres.Slides.Count})"
         )
-    app.ActiveWindow.View.GotoSlide(slide_index)
+    window = ppt._get_target_window_impl()
+    if window is None:
+        raise RuntimeError(
+            "The target presentation has no window to navigate "
+            "(opened with with_window=False?)."
+        )
+    window.View.GotoSlide(slide_index)
     return {
         "success": True,
         "active_slide_index": slide_index,
@@ -1307,9 +1346,10 @@ def register_tools(mcp):
         no layout-name ambiguity (this only copies the look, not the content;
         use ppt_duplicate_slide for a full copy). This is the recommended path.
 
-        Otherwise specify a layout by name (e.g. 'blank', 'title', 'title_only')
-        or by PpSlideLayout integer constant. You can also provide a custom
-        layout_name to match a layout from the slide master.
+        Otherwise pass layout_name (a friendly name such as 'blank', 'title',
+        'title_only', or a custom layout name from the slide master) or layout
+        (a PpSlideLayout integer constant; a name passed here is treated like
+        layout_name).
         Position is 1-based; omit to append at the end.
         Use design_index to pick a layout from a specific slide master/design.
         Use count to create multiple slides at once; when count > 1, returns
@@ -1319,7 +1359,7 @@ def register_tools(mcp):
         If layout_name matched layouts in multiple designs, the response also
         includes layout_ambiguous=true and a warning naming the candidates.
         """
-        return add_slide(params)
+        return await run_offloaded(add_slide, params)
 
     @mcp.tool(
         name="ppt_delete_slide",
@@ -1344,7 +1384,7 @@ def register_tools(mcp):
         no manual bookkeeping for index shifting. Deleting all slides is
         rejected (a presentation must keep at least one).
         """
-        return delete_slide(params)
+        return await run_offloaded(delete_slide, params)
 
     @mcp.tool(
         name="ppt_duplicate_slide",
@@ -1369,7 +1409,7 @@ def register_tools(mcp):
         Returns new_slide_indices / new_slide_ids (plus new_slide_index for a
         single copy).
         """
-        return duplicate_slide(params)
+        return await run_offloaded(duplicate_slide, params)
 
     @mcp.tool(
         name="ppt_move_slide",
@@ -1393,7 +1433,7 @@ def register_tools(mcp):
         refer to the CURRENT numbering — the move is anchored on slide IDs so
         index shifting is handled internally.
         """
-        return move_slide(params)
+        return await run_offloaded(move_slide, params)
 
     @mcp.tool(
         name="ppt_copy_slide",
@@ -1421,7 +1461,7 @@ def register_tools(mcp):
         Both presentations must already be open (use ppt_open_presentation).
         Returns new_slide_indices and the destination presentation name.
         """
-        return copy_slide(params)
+        return await run_offloaded(copy_slide, params)
 
     @mcp.tool(
         name="ppt_list_slides",
@@ -1439,7 +1479,7 @@ def register_tools(mcp):
         Returns each slide's index, ID, name, layout, hidden status,
         shape count, and whether it has speaker notes.
         """
-        return list_slides(params)
+        return await run_offloaded(list_slides, params)
 
     @mcp.tool(
         name="ppt_get_slide_info",
@@ -1457,7 +1497,7 @@ def register_tools(mcp):
         Returns layout, shapes count, title text, speaker notes,
         transition settings, background info, and design name.
         """
-        return get_slide_info(params)
+        return await run_offloaded(get_slide_info, params)
 
     @mcp.tool(
         name="ppt_set_slide_notes",
@@ -1480,7 +1520,7 @@ def register_tools(mcp):
         export only. The Notes pane and Presenter View ignore these settings
         (Presenter View has its own A+/A- zoom controls).
         """
-        return set_slide_notes(params)
+        return await run_offloaded(set_slide_notes, params)
 
     @mcp.tool(
         name="ppt_get_slide_notes",
@@ -1497,7 +1537,7 @@ def register_tools(mcp):
 
         Returns the notes text. If no notes exist, returns an empty string.
         """
-        return get_slide_notes(params)
+        return await run_offloaded(get_slide_notes, params)
 
     @mcp.tool(
         name="ppt_goto_slide",
@@ -1515,7 +1555,7 @@ def register_tools(mcp):
         Changes which slide is shown in the PowerPoint editor.
         Useful for jumping to a slide you want to view or edit.
         """
-        return goto_slide(params)
+        return await run_offloaded(goto_slide, params)
 
 
 # ---------------------------------------------------------------------------

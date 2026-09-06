@@ -3,6 +3,7 @@
 Real-time PowerPoint control via COM automation.
 """
 
+import json
 import logging
 import os
 import sys
@@ -165,6 +166,7 @@ Standard 16:9 slide = 960 × 540 pt. Default to light backgrounds unless the use
 # =============================================================================
 # App tools
 # =============================================================================
+from utils.offload import run_offloaded
 from ppt_com.app import (
     ConnectInput,
     SetWindowStateInput,
@@ -193,7 +195,7 @@ async def tool_ppt_connect(params: ConnectInput) -> str:
     If no instance is found, launches a new one.
     Set visible=false for headless mode (background operation).
     """
-    return connect_to_powerpoint(params)
+    return await run_offloaded(connect_to_powerpoint, params)
 
 
 @mcp.tool(
@@ -212,7 +214,7 @@ async def tool_ppt_get_app_info() -> str:
     Returns version, visibility, window state, presentation count,
     and active presentation name.
     """
-    return get_app_info()
+    return await run_offloaded(get_app_info)
 
 
 @mcp.tool(
@@ -231,7 +233,7 @@ async def tool_ppt_get_active_window() -> str:
     Returns window caption, view type, current slide index,
     and what is selected (shapes, text, or nothing).
     """
-    return get_active_window_info()
+    return await run_offloaded(get_active_window_info)
 
 
 @mcp.tool(
@@ -249,7 +251,7 @@ async def tool_ppt_list_presentations() -> str:
 
     Returns name, path, slide count, and status for each.
     """
-    return list_presentations()
+    return await run_offloaded(list_presentations)
 
 
 @mcp.tool(
@@ -268,7 +270,7 @@ async def tool_ppt_set_window_state(params: SetWindowStateInput) -> str:
     Controls whether the PowerPoint window is maximized, minimized, or
     restored to normal size.
     """
-    return set_window_state(params)
+    return await run_offloaded(set_window_state, params)
 
 
 # =============================================================================
@@ -533,8 +535,76 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
 
-    image_data = ppt.execute(_export_slide_impl, params.slide_index)
+    image_data = await run_offloaded(ppt.execute, _export_slide_impl, params.slide_index)
     return Image(data=image_data, format="png")
+
+
+# =============================================================================
+# Tool schema post-processing
+# =============================================================================
+
+
+def _inline_schema_defs(server) -> int:
+    """Inline ``$defs`` references in every registered tool's input schema.
+
+    Every tool takes a single Pydantic model (``params: XInput``), and the SDK
+    renders that as ``{"params": {"$ref": "#/$defs/XInput"}}`` with the model's
+    fields tucked away under ``$defs``. MCP clients such as Claude Desktop do
+    not dereference ``$ref``, so ``params`` showed up as an empty object and
+    callers had to guess field names from validation errors. Inlining keeps
+    the wire schema self-contained; validation still runs against the Pydantic
+    model and is unaffected.
+
+    Returns the number of tools whose schema was rewritten.
+    """
+
+    def _resolve(node, defs, stack):
+        if isinstance(node, list):
+            return [_resolve(item, defs, stack) for item in node]
+        if not isinstance(node, dict):
+            return node
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/$defs/"):
+            name = ref[len("#/$defs/"):]
+            target = defs.get(name)
+            if target is not None and name not in stack:
+                merged = dict(target)
+                # Keep sibling keys (e.g. a field-level description) next to
+                # the inlined definition.
+                merged.update({k: v for k, v in node.items() if k != "$ref"})
+                return _resolve(merged, defs, stack + [name])
+            # Unknown target or a recursive schema: leave the reference alone.
+        return {key: _resolve(value, defs, stack) for key, value in node.items()}
+
+    rewritten = 0
+    for tool in server._tool_manager.list_tools():
+        schema = tool.parameters
+        if not isinstance(schema, dict) or "$defs" not in schema:
+            continue
+        defs = schema["$defs"]
+        inlined = _resolve({k: v for k, v in schema.items() if k != "$defs"}, defs, [])
+        if "$ref" in json.dumps(inlined):
+            # Something could not be resolved (recursive model); keep $defs so
+            # the remaining references stay valid.
+            inlined["$defs"] = defs
+        tool.parameters = inlined
+        rewritten += 1
+    return rewritten
+
+
+try:
+    _inlined_tool_count = _inline_schema_defs(mcp)
+    logger.debug("Inlined $defs in %d tool schemas", _inlined_tool_count)
+except Exception:
+    # _tool_manager and Tool.parameters are SDK internals, and the SDK has
+    # renamed internals across majors before (see the MCPServer import above).
+    # Losing the inlining costs clients an extra round trip; losing the import
+    # would cost them every tool, so degrade instead of failing to start.
+    logger.warning(
+        "Could not inline $defs in tool schemas; they keep their $ref form",
+        exc_info=True,
+    )
+    _inlined_tool_count = 0
 
 
 def main():

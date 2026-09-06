@@ -25,6 +25,7 @@ if _WINDOWS:
     import ctypes.wintypes
     import pythoncom
 
+from utils.offload import run_offloaded
 from backend import ppt
 from ppt_com.constants import (
     ppFixedFormatTypePDF,
@@ -652,7 +653,7 @@ def _copy_to_clipboard_impl(
     if slide_indices is None or len(slide_indices) == 0:
         # Default: currently viewed slide
         try:
-            current = app.ActiveWindow.View.Slide.SlideIndex
+            current = ppt._get_target_window_impl().View.Slide.SlideIndex
         except Exception:
             current = 1
         slide_indices = [current]
@@ -785,7 +786,7 @@ def register_tools(mcp):
         Optionally export a specific range of slides by providing
         slide_range_start and slide_range_end.
         """
-        return export_pdf(params)
+        return await run_offloaded(export_pdf, params)
 
     @mcp.tool(
         name="ppt_export_images",
@@ -811,7 +812,7 @@ def register_tools(mcp):
         When exporting every slide, PowerPoint writes a folder of images and the
         width/height options do not apply.
         """
-        return export_images(params)
+        return await run_offloaded(export_images, params)
 
     @mcp.tool(
         name="ppt_copy_to_clipboard",
@@ -831,7 +832,7 @@ def register_tools(mcp):
         Single slide is placed as a bitmap (paste directly as image).
         Multiple slides are placed as file drop (paste inserts all images).
         """
-        return copy_to_clipboard(params)
+        return await run_offloaded(copy_to_clipboard, params)
 
 
 # ---------------------------------------------------------------------------

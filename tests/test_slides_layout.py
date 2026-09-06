@@ -7,6 +7,9 @@ PowerPoint.
 
 import sys
 
+import pytest
+from pydantic import ValidationError
+
 sys.path.insert(0, "src")
 
 from ppt_com.slides import AddSlideInput, _find_layout_matches
@@ -69,6 +72,48 @@ def test_like_slide_index_zero_accepted_by_model():
     # check is enforced at runtime in _add_slide_impl, not at the model level.
     m = AddSlideInput(like_slide_index=0)
     assert m.like_slide_index == 0
+
+
+# --- layout accepts names as well as PpSlideLayout constants ---------------
+
+def test_layout_name_string_moves_to_layout_name():
+    # Callers put friendly names into `layout`; treat that like layout_name
+    # instead of failing validation with int_parsing.
+    m = AddSlideInput(layout="blank")
+    assert m.layout is None
+    assert m.layout_name == "blank"
+
+
+def test_layout_numeric_string_becomes_int():
+    m = AddSlideInput(layout="12")
+    assert m.layout == 12
+    assert m.layout_name is None
+
+
+def test_layout_name_field_wins_over_layout_string():
+    m = AddSlideInput(layout="blank", layout_name="Titelfolie")
+    assert m.layout_name == "Titelfolie"
+    assert m.layout is None
+
+
+def test_layout_int_unchanged():
+    m = AddSlideInput(layout=12)
+    assert m.layout == 12
+    assert m.layout_name is None
+
+
+def test_layout_empty_string_is_rejected():
+    """An empty layout usually means an unfilled template variable. Saying so
+    beats silently handing back a blank slide."""
+    for blank in ("", "   ", "\t"):
+        with pytest.raises(ValidationError, match="layout is empty"):
+            AddSlideInput(layout=blank)
+
+
+def test_layout_schema_accepts_integer_and_string():
+    layout_schema = AddSlideInput.model_json_schema()["properties"]["layout"]
+    types = {arm.get("type") for arm in layout_schema["anyOf"]}
+    assert {"integer", "string"} <= types
 
 
 # --- _find_layout_matches --------------------------------------------------

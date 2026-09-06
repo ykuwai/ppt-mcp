@@ -21,6 +21,12 @@
 
 An MCP (Model Context Protocol) server that gives AI agents full control over a live Microsoft PowerPoint instance via COM automation. Unlike file-based libraries like python-pptx, this server interacts directly with a running PowerPoint application.
 
+## 🎬 Demo
+
+An agent building a deck in a live PowerPoint window (15x speed):
+
+https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
+
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen

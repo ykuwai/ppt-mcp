@@ -437,9 +437,10 @@ wheels = [
 
 [[package]]
 name = "ppt-mcp"
-version = "1.7.0"
+version = "1.10.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "appscript", marker = "sys_platform == 'darwin'" },
     { name = "mcp", extra = ["cli"] },
     { name = "pydantic" },
@@ -454,6 +455,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.0.0" },
     { name = "appscript", marker = "sys_platform == 'darwin'", specifier = ">=1.4.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0.0,<3.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
