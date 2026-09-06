@@ -25,8 +25,41 @@ import win32com.client
 
 logger = logging.getLogger(__name__)
 
-# Futures queued by the call currently running on this context, so that
-# utils.offload can cancel them if the caller goes away (issues #198, #199).
+class QueuedCalls:
+    """The COM futures one tool call has queued, so they can be cancelled.
+
+    utils.offload puts one of these on pending_com_futures for the duration of
+    a request and cancels it if the caller goes away.  A tool wrapper is free
+    to call execute() several times, and the worker thread keeps running for a
+    moment after cancellation, so registration and cancellation can genuinely
+    overlap.  The lock makes that deterministic, and anything queued after the
+    cancellation is cancelled on arrival rather than quietly running.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._futures = []
+        self._cancelled = False
+
+    def add(self, future) -> None:
+        """Register a queued future, or cancel it if we are already too late."""
+        with self._lock:
+            if not self._cancelled:
+                self._futures.append(future)
+                return
+        future.cancel()
+
+    def cancel_all(self) -> None:
+        """Cancel everything queued so far, and everything queued from now on."""
+        with self._lock:
+            self._cancelled = True
+            futures = list(self._futures)
+        for future in futures:
+            future.cancel()
+
+
+# The QueuedCalls for the request running on this context, so that
+# utils.offload can cancel its COM work if the caller goes away (#198, #199).
 # None means nobody is watching, which is the case for internal callers.
 pending_com_futures: ContextVar = ContextVar("pending_com_futures", default=None)
 
@@ -362,7 +395,7 @@ class PowerPointCOMWrapper:
         self._queue.put((func, args, kwargs, future, idempotent))
         watching = pending_com_futures.get()
         if watching is not None:
-            watching.append(future)
+            watching.add(future)
         # The worker may spend up to _BUSY_WAIT_BUDGET waiting for PowerPoint
         # before it even starts, so the caller has to allow for that on top of
         # the time the operation itself gets.  Otherwise the caller could

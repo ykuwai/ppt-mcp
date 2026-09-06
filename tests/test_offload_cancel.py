@@ -26,7 +26,7 @@ _src_dir = str(Path(__file__).resolve().parents[1] / "src")
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-from utils.com_wrapper import pending_com_futures  # noqa: E402
+from utils.com_wrapper import QueuedCalls, pending_com_futures  # noqa: E402
 from utils.offload import run_offloaded  # noqa: E402
 
 
@@ -56,7 +56,7 @@ def test_cancellation_cancels_the_queued_com_work():
 
     def blocking():
         # Stand in for ppt.execute: register the future, then block on it.
-        pending_com_futures.get().append(queued)
+        pending_com_futures.get().add(queued)
         entered.set()
         release.wait(5)
         return "finished"
@@ -82,7 +82,7 @@ def test_cancellation_leaves_work_already_started_alone():
     release = threading.Event()
 
     def blocking():
-        pending_com_futures.get().append(started)
+        pending_com_futures.get().add(started)
         entered.set()
         release.wait(5)
 
@@ -105,3 +105,27 @@ def test_the_registry_is_cleared_afterwards():
         return pending_com_futures.get()
 
     assert anyio.run(main) is None
+
+
+def test_work_queued_after_the_cancellation_is_cancelled_on_arrival():
+    """A wrapper may queue more than one COM call, and the worker thread runs
+    on for a moment after the cancellation. Anything arriving late must not
+    quietly execute."""
+    queued = QueuedCalls()
+    queued.cancel_all()
+
+    late: Future = Future()
+    queued.add(late)
+
+    assert late.cancelled()
+
+
+def test_queued_calls_cancels_everything_registered_so_far():
+    queued = QueuedCalls()
+    first, second = Future(), Future()
+    queued.add(first)
+    queued.add(second)
+
+    queued.cancel_all()
+
+    assert first.cancelled() and second.cancelled()

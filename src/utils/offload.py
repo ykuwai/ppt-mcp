@@ -21,7 +21,7 @@ from typing import Any, Callable, TypeVar
 
 import anyio
 
-from utils.com_wrapper import pending_com_futures
+from utils.com_wrapper import QueuedCalls, pending_com_futures
 
 T = TypeVar("T")
 
@@ -39,16 +39,16 @@ async def run_offloaded(func: Callable[..., T], *args: Any) -> T:
     Returns:
         Whatever func returns.
     """
-    queued: list = []
+    queued = QueuedCalls()
     token = pending_com_futures.set(queued)
     try:
         return await anyio.to_thread.run_sync(func, *args, abandon_on_cancel=True)
     except anyio.get_cancelled_exc_class():
         # The thread keeps running, so drop whatever it queued but has not
-        # started.  Cancelling a future the worker already picked up is a
-        # no-op, which is the honest outcome for work COM cannot recall.
-        for future in queued:
-            future.cancel()
+        # started, and anything it queues from here on.  Cancelling a future
+        # the worker already picked up is a no-op, which is the honest outcome
+        # for work COM cannot recall.
+        queued.cancel_all()
         raise
     finally:
         pending_com_futures.reset(token)
