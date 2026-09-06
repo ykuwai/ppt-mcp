@@ -10,7 +10,7 @@ import logging
 import os
 import threading
 import time
-from concurrent.futures import Future
+from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 from queue import Queue
 from typing import Any, Callable, Optional
 
@@ -87,6 +87,25 @@ def _try_dismiss_ppt_dialog() -> None:
         logger.info("Sent ESC to PowerPoint to dismiss open dialog")
     except Exception as exc:
         logger.debug("_try_dismiss_ppt_dialog failed (ignored): %s", exc)
+
+
+def _caller_safe(exc: BaseException) -> BaseException:
+    """Return an exception the calling thread can safely receive.
+
+    The worker settles a future with whatever the operation raised, and the
+    caller gets it back from Future.result().  Every tool wraps that call in
+    `except Exception`, which does not catch SystemExit or KeyboardInterrupt:
+    those would sail past the tool, past the server's dispatch, and take the
+    event loop down with them.  Keeping the worker alive must not cost the
+    caller its process, so a non-Exception BaseException is reported as a
+    RuntimeError instead.
+    """
+    if isinstance(exc, Exception):
+        return exc
+    logger.error("Operation raised %s: %s", type(exc).__name__, exc)
+    return RuntimeError(
+        "The operation raised %s: %s" % (type(exc).__name__, exc)
+    )
 
 
 class PowerPointCOMWrapper:
@@ -181,6 +200,11 @@ class PowerPointCOMWrapper:
     def _run_item(self, func, args, kwargs, future, idempotent: bool) -> None:
         """Run one queued operation and settle its future.
 
+        Returns immediately if the caller already gave up on this operation:
+        execute() cancels the future on timeout, so anything still queued
+        behind a slow operation is dropped instead of being applied minutes
+        later, after the caller was told it had failed (issue #199).
+
         All waiting for one operation shares a single _BUSY_WAIT_BUDGET
         deadline, so however many times we probe or retry, the worker starts
         the operation within the window execute() allows for waiting.
@@ -188,15 +212,40 @@ class PowerPointCOMWrapper:
         Split out of _com_worker so the busy-handling policy is unit-testable
         without a COM thread.
         """
+        if future.cancelled():
+            logger.warning(
+                "Dropping %s: the caller stopped waiting for it",
+                getattr(func, "__name__", func),
+            )
+            return
+
         deadline = time.monotonic() + _BUSY_WAIT_BUDGET
         attempt = 0
+        started = False
         while True:
             try:
                 self._wait_until_responsive(deadline)
             except pywintypes.com_error as e:
                 logger.warning("Gave up waiting for PowerPoint: %s", e)
+                if not started and not future.set_running_or_notify_cancel():
+                    # The caller gave up while we waited.  Nothing was
+                    # applied, so there is nobody to report the failure to.
+                    return
                 future.set_exception(RuntimeError(_BUSY_TIMEOUT_MESSAGE))
                 return
+
+            if not started:
+                # Only now, with PowerPoint responsive and the call about to
+                # go out, does this stop being cancellable.  Marking it
+                # earlier meant a caller timing out during the wait could not
+                # cancel, and the edit landed anyway.
+                if not future.set_running_or_notify_cancel():
+                    logger.warning(
+                        "Dropping %s: the caller stopped waiting for it",
+                        getattr(func, "__name__", func),
+                    )
+                    return
+                started = True
 
             try:
                 future.set_result(func(*args, **kwargs))
@@ -216,8 +265,13 @@ class PowerPointCOMWrapper:
                     ))
                     return
                 busy_error = e
-            except Exception as e:
-                future.set_exception(e)
+            except BaseException as e:
+                # BaseException, not Exception: a SystemExit or
+                # KeyboardInterrupt escaping here used to end the worker
+                # thread while _running stayed True, leaving every later
+                # request to queue up behind a worker that no longer existed
+                # (issue #199).
+                future.set_exception(_caller_safe(e))
                 return
 
             # Idempotent (connect / attach): safe to re-run from the top.  Back
@@ -246,7 +300,17 @@ class PowerPointCOMWrapper:
                 if item is None:
                     break
                 func, args, kwargs, future, idempotent = item
-                self._run_item(func, args, kwargs, future, idempotent)
+                try:
+                    self._run_item(func, args, kwargs, future, idempotent)
+                except BaseException:
+                    # _run_item settles the future itself; reaching here means
+                    # something escaped it entirely.  Log and keep the worker
+                    # alive rather than silently abandoning the queue.
+                    logger.exception("COM worker item failed unexpectedly")
+                    if not future.done():
+                        future.set_exception(
+                            RuntimeError("The COM worker failed unexpectedly.")
+                        )
         finally:
             self._cleanup_com()
             pythoncom.CoUninitialize()
@@ -272,15 +336,52 @@ class PowerPointCOMWrapper:
             The return value of func
 
         Raises:
+            RuntimeError: if the COM worker thread has died, or if the wait
+                times out.
             Any exception raised by func
         """
+        if self._com_thread is not None and not self._com_thread.is_alive():
+            # Nothing is draining the queue any more, so queueing would just
+            # burn the full timeout before failing (issue #199).
+            raise RuntimeError(
+                "The COM worker thread is no longer running. "
+                "Restart the MCP server to reconnect to PowerPoint."
+            )
+
         future: Future = Future()
         self._queue.put((func, args, kwargs, future, idempotent))
         # The worker may spend up to _BUSY_WAIT_BUDGET waiting for PowerPoint
         # before it even starts, so the caller has to allow for that on top of
         # the time the operation itself gets.  Otherwise the caller could
         # abandon the future while the worker is still applying the edit.
-        return future.result(timeout=_BUSY_WAIT_BUDGET + _CALL_TIMEOUT)
+        try:
+            return future.result(timeout=_BUSY_WAIT_BUDGET + _CALL_TIMEOUT)
+        except FuturesTimeoutError:
+            if future.done():
+                # Not our timeout: either func itself raised TimeoutError
+                # (concurrent.futures.TimeoutError *is* the builtin since
+                # 3.11, so the two are indistinguishable by type), or the
+                # operation finished in the moment the wait expired. Either
+                # way there is a real outcome to hand back.
+                return future.result()
+            # Cancel so the worker skips this item if it has not started it.
+            # An operation already in flight cannot be cancelled -- COM
+            # outgoing calls are not interruptible -- but everything queued
+            # behind it is dropped rather than applied after the fact.
+            cancelled = future.cancel()
+            if not cancelled and future.done():
+                # It finished in the moment between the timeout and the
+                # cancel; the caller may as well have the outcome.
+                return future.result()
+            raise RuntimeError(
+                "PowerPoint did not finish the operation within "
+                "%.0fs and it was %s."
+                % (
+                    _BUSY_WAIT_BUDGET + _CALL_TIMEOUT,
+                    "cancelled" if cancelled
+                    else "left running -- it may still be applied",
+                )
+            ) from None
 
     def _connect_impl(self, visible: Optional[bool] = None, allow_launch: bool = True) -> Any:
         """Internal: connect to PowerPoint on the COM thread.
