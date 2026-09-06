@@ -206,7 +206,7 @@ def test_worker_loop_survives_an_item_that_escapes_run_item():
     with patch("utils.com_wrapper.pythoncom"):
         with patch.object(PowerPointCOMWrapper, "_run_item",
                           side_effect=RuntimeError("escaped")):
-            w._com_worker()
+            w._com_worker(w._queue, 0)
 
     assert future.done(), "the caller must not be left waiting forever"
     with pytest.raises(RuntimeError, match="COM worker failed"):
