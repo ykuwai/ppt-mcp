@@ -6,6 +6,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from utils.color import hex_to_int
@@ -311,7 +312,7 @@ def register_tools(mcp):
         For solid fills, provide a color hex. For gradients, provide
         gradient_color1, gradient_color2, and gradient_style.
         """
-        return set_fill(params)
+        return await run_offloaded(set_fill, params)
 
     @mcp.tool(
         name="ppt_set_line",
@@ -328,7 +329,7 @@ def register_tools(mcp):
 
         Configure color, weight, dash style, visibility, and transparency.
         """
-        return set_line(params)
+        return await run_offloaded(set_line, params)
 
     @mcp.tool(
         name="ppt_set_shadow",
@@ -346,4 +347,4 @@ def register_tools(mcp):
         Configure blur, offset, color, and transparency.
         Set visible=false to remove the shadow.
         """
-        return set_shadow(params)
+        return await run_offloaded(set_shadow, params)

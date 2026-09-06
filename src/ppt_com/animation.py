@@ -10,6 +10,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from ppt_com.constants import (
@@ -1163,7 +1164,7 @@ def register_tools(mcp):
         or a PpEntryEffect integer. Optionally set duration, advance-on-click,
         and auto-advance timing.
         """
-        return set_slide_transition(params)
+        return await run_offloaded(set_slide_transition, params)
 
     @mcp.tool(
         name="ppt_add_animation",
@@ -1198,7 +1199,7 @@ def register_tools(mcp):
         For interactive sequences (click a shape to trigger animation on another),
         set trigger='on_shape_click' and trigger_shape to the clickable shape.
         """
-        return add_animation(params)
+        return await run_offloaded(add_animation, params)
 
     @mcp.tool(
         name="ppt_list_animations",
@@ -1217,7 +1218,7 @@ def register_tools(mcp):
         trigger type, and duration. Interactive sequences include the
         trigger shape name and sequence index.
         """
-        return list_animations(params)
+        return await run_offloaded(list_animations, params)
 
     @mcp.tool(
         name="ppt_remove_animation",
@@ -1237,7 +1238,7 @@ def register_tools(mcp):
         For interactive sequences, provide sequence_index to target a specific
         interactive sequence instead of the main sequence.
         """
-        return remove_animation(params)
+        return await run_offloaded(remove_animation, params)
 
     @mcp.tool(
         name="ppt_clear_animations",
@@ -1255,7 +1256,7 @@ def register_tools(mcp):
         Optionally also clears the slide transition effect by setting
         clear_transitions=true.
         """
-        return clear_animations(params)
+        return await run_offloaded(clear_animations, params)
 
     @mcp.tool(
         name="ppt_update_animation",
@@ -1283,4 +1284,4 @@ def register_tools(mcp):
         interactive sequence instead of the main sequence.
         Use ppt_list_animations first to find the correct animation index.
         """
-        return update_animation(params)
+        return await run_offloaded(update_animation, params)

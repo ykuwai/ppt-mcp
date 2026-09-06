@@ -10,6 +10,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.color import hex_to_int
 from utils.navigation import goto_slide
@@ -525,7 +526,7 @@ def register_tools(mcp):
         Connection sites can be specified as 1-based indices or direction
         names: 'top', 'bottom', 'left', 'right'.
         """
-        return add_connector(params)
+        return await run_offloaded(add_connector, params)
 
     @mcp.tool(
         name="ppt_format_connector",
@@ -546,4 +547,4 @@ def register_tools(mcp):
         ('top', 'bottom', 'left', 'right').
         Identify the connector by shape name or 1-based shape index.
         """
-        return format_connector(params)
+        return await run_offloaded(format_connector, params)

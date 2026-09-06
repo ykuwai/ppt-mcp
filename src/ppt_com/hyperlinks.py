@@ -10,6 +10,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.offload import run_offloaded
 from utils.com_wrapper import ppt
 from utils.navigation import goto_slide
 from ppt_com.constants import (
@@ -271,7 +272,7 @@ def register_tools(mcp):
         Set action_on to 'click' (default) or 'mouseover' for the trigger type.
         For slide links, use sub_address like '3,,' to link to slide 3.
         """
-        return add_hyperlink(params)
+        return await run_offloaded(add_hyperlink, params)
 
     @mcp.tool(
         name="ppt_get_hyperlinks",
@@ -288,7 +289,7 @@ def register_tools(mcp):
 
         Returns address, sub-address, and type for each hyperlink found on the slide.
         """
-        return get_hyperlinks(params)
+        return await run_offloaded(get_hyperlinks, params)
 
     @mcp.tool(
         name="ppt_remove_hyperlink",
@@ -306,4 +307,4 @@ def register_tools(mcp):
         Clears the click or mouseover action on the specified shape.
         Set action_on to 'click' (default) or 'mouseover' to choose which to remove.
         """
-        return remove_hyperlink(params)
+        return await run_offloaded(remove_hyperlink, params)

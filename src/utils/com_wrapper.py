@@ -10,7 +10,12 @@ import logging
 import os
 import threading
 import time
-from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
+from concurrent.futures import (
+    CancelledError as FuturesCancelledError,
+    Future,
+    TimeoutError as FuturesTimeoutError,
+)
+from contextvars import ContextVar
 from queue import Queue
 from typing import Any, Callable, Optional
 
@@ -19,6 +24,44 @@ import pywintypes
 import win32com.client
 
 logger = logging.getLogger(__name__)
+
+class QueuedCalls:
+    """The COM futures one tool call has queued, so they can be cancelled.
+
+    utils.offload puts one of these on pending_com_futures for the duration of
+    a request and cancels it if the caller goes away.  A tool wrapper is free
+    to call execute() several times, and the worker thread keeps running for a
+    moment after cancellation, so registration and cancellation can genuinely
+    overlap.  The lock makes that deterministic, and anything queued after the
+    cancellation is cancelled on arrival rather than quietly running.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._futures = []
+        self._cancelled = False
+
+    def add(self, future) -> None:
+        """Register a queued future, or cancel it if we are already too late."""
+        with self._lock:
+            if not self._cancelled:
+                self._futures.append(future)
+                return
+        future.cancel()
+
+    def cancel_all(self) -> None:
+        """Cancel everything queued so far, and everything queued from now on."""
+        with self._lock:
+            self._cancelled = True
+            futures = list(self._futures)
+        for future in futures:
+            future.cancel()
+
+
+# The QueuedCalls for the request running on this context, so that
+# utils.offload can cancel its COM work if the caller goes away (#198, #199).
+# None means nobody is watching, which is the case for internal callers.
+pending_com_futures: ContextVar = ContextVar("pending_com_futures", default=None)
 
 # HRESULTs that indicate PowerPoint is temporarily busy (e.g. modal dialog open).
 # RPC_E_CALL_REJECTED (0x80010001): server rejected the call outright.
@@ -350,12 +393,22 @@ class PowerPointCOMWrapper:
 
         future: Future = Future()
         self._queue.put((func, args, kwargs, future, idempotent))
+        watching = pending_com_futures.get()
+        if watching is not None:
+            watching.add(future)
         # The worker may spend up to _BUSY_WAIT_BUDGET waiting for PowerPoint
         # before it even starts, so the caller has to allow for that on top of
         # the time the operation itself gets.  Otherwise the caller could
         # abandon the future while the worker is still applying the edit.
         try:
             return future.result(timeout=_BUSY_WAIT_BUDGET + _CALL_TIMEOUT)
+        except FuturesCancelledError:
+            # The caller went away and utils.offload cancelled this before the
+            # worker started it.  Report it as an ordinary error so the tool
+            # wrapper can render it; nobody is waiting for the answer anyway.
+            raise RuntimeError(
+                "The operation was cancelled before PowerPoint started it."
+            ) from None
         except FuturesTimeoutError:
             if future.done():
                 # Not our timeout: either func itself raised TimeoutError
