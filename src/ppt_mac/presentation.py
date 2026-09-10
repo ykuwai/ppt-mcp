@@ -620,6 +620,14 @@ def _save_presentation_as_impl(
     # PowerPoint just wrote, which is the one thing known for certain.
     pres = _presentation_at(app, staged) or pres
     full_name = pres.full_name()
+
+    # Saving renames the deck, and the session target is held by name. Without
+    # this the target no longer matches anything open, so the next call falls
+    # back to the active presentation, which with two decks open is the wrong
+    # one and says nothing about the switch.
+    if ppt._target_pres_full_name:
+        ppt._target_pres_full_name = str(full_name)
+
     warnings = []
     if os.path.abspath(str(full_name)) == os.path.abspath(staged):
         # PowerPoint is holding the staged file now, not the caller's. Saying

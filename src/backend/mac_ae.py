@@ -748,6 +748,32 @@ ppt = PowerPointAppleEventWrapper()
 # ---------------------------------------------------------------------------
 
 
+def target_window(pres):
+    """The window a deck is edited through, or a refusal naming what is wrong.
+
+    A document can outlive its window. PowerPoint's own logs show it closing a
+    window and never freeing the document behind it, and the deck then sits in
+    `presentations` answering questions, holding all its slides, and invisible
+    to the person at the machine. Every tool here that shows a slide reaches
+    for `document_windows[1]`, which in that state raises -1728 and says
+    nothing about why.
+
+    The state is recoverable: closing the deck and opening the file again
+    brings a window back, and a saved file is untouched by any of it.
+    """
+    if count_of(pres, k.document_window) == 0:
+        raise AppleEventError(
+            "This presentation is still open inside PowerPoint but has no "
+            "window, so there is no editor to drive and nothing on screen. "
+            "That happens when a window is closed and the document behind it "
+            "is not, which PowerPoint does on its own. Its slides are intact "
+            "and a saved file is untouched. Close it with "
+            "ppt_close_presentation(save_changes=false) and open it again "
+            "with ppt_open_presentation."
+        )
+    return pres.document_windows[1]
+
+
 def slide_at(pres, slide_index: int):
     """Return a slide reference, checking the index first.
 
@@ -756,6 +782,24 @@ def slide_at(pres, slide_index: int):
     checked here where the number is still in hand.
     """
     total = count(pres.slides)
+    if total == 0:
+        # `elements` turns -1728 into an empty list, so "this deck has no
+        # slides" and "this reference no longer reaches a deck" arrive here
+        # looking identical. A caller once read "The presentation has 0 slides"
+        # while PowerPoint was in the act of dying underneath it, and went
+        # looking for the missing slides rather than the missing application
+        # (#191). Asking the deck its own name separates the two.
+        try:
+            pres.name()
+        except CommandError as exc:
+            raise AppleEventError(
+                "The presentation this call was working on can no longer be "
+                f"reached (Apple Event error {error_number(exc)}). It is not "
+                "an empty deck; the reference itself is dead, which happens "
+                "when the file is renamed by a save, closed, or PowerPoint "
+                "restarts underneath the session. Call "
+                "ppt_list_presentations to see what is open now."
+            ) from exc
     if slide_index < 1 or slide_index > total:
         raise ValueError(
             f"Slide index {slide_index} is out of range. "

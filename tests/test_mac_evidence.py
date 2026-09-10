@@ -1359,3 +1359,81 @@ class TestWhatTheCodexReviewFound:
         assert result["also_copied_to"] == os.path.abspath(str(outside))
         # And the deck is gone, so nothing should still be pointing at it.
         assert mac_pres._EXTERNAL_COPIES == {}
+
+
+@macos_only
+class TestADocumentThatOutlivedItsWindow:
+    """PowerPoint closes a window and sometimes does not free the document.
+
+    Its own diagnostic log shows the close completing without the matching
+    `Document::~Document` and `RemoveFromGlobalList`. The deck then sits in
+    `presentations` answering questions, holding all nine of its slides, and
+    invisible to the person at the machine. Everything here reaches the editor
+    through `document_windows[1]`, which in that state raises -1728 and
+    explains nothing (#191).
+    """
+
+    def test_a_deck_with_no_window_is_named_as_the_problem(self, monkeypatch):
+        from backend import mac_ae
+
+        monkeypatch.setattr(mac_ae, "count_of", lambda container, each: 0)
+        with pytest.raises(mac_ae.AppleEventError) as caught:
+            mac_ae.target_window(object())
+
+        said = str(caught.value)
+        assert "no window" in said
+        assert "ppt_close_presentation" in said, "no way out was offered"
+        assert "intact" in said, "a caller would think the slides were lost"
+
+    def test_a_deck_with_a_window_hands_it_over(self, monkeypatch):
+        from backend import mac_ae
+
+        class _Pres:
+            document_windows = {1: "the window"}
+
+        monkeypatch.setattr(mac_ae, "count_of", lambda container, each: 1)
+        assert mac_ae.target_window(_Pres()) == "the window"
+
+
+@macos_only
+class TestAnEmptyDeckAndADeadReference:
+    """`elements` folds -1728 into an empty list, so the two arrive alike.
+
+    A caller was told "The presentation has 0 slides" while PowerPoint was in
+    the act of dying underneath it, and went looking for the missing slides
+    rather than the missing application.
+    """
+
+    class _Slides:
+        def get(self):
+            return []
+
+    def test_a_reference_that_cannot_answer_says_so(self):
+        from appscript.reference import CommandError
+
+        from backend import mac_ae
+
+        class _Dead:
+            slides = TestAnEmptyDeckAndADeadReference._Slides()
+
+            def name(self):
+                raise _command_error(-1728)
+
+        with pytest.raises(mac_ae.AppleEventError) as caught:
+            mac_ae.slide_at(_Dead(), 1)
+
+        said = str(caught.value)
+        assert "not an empty deck" in said
+        assert "ppt_list_presentations" in said
+
+    def test_a_genuinely_empty_deck_still_reads_as_out_of_range(self):
+        from backend import mac_ae
+
+        class _Empty:
+            slides = TestAnEmptyDeckAndADeadReference._Slides()
+
+            def name(self):
+                return "empty.pptx"
+
+        with pytest.raises(ValueError, match="out of range"):
+            mac_ae.slide_at(_Empty(), 1)
