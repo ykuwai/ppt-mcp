@@ -21,8 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      # Write, not read. Claude's whole output is a review comment, and with
+      # read-only tokens the run does the work and is then denied at the last
+      # step: a six minute review of #210 ended in 14 permission denials and
+      # posted nothing, which reads exactly like "found no problems".
+      pull-requests: write
+      issues: write
       id-token: write
 
     steps:
