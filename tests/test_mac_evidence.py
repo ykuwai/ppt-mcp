@@ -630,7 +630,8 @@ class TestExportEvidence:
             )
             monkeypatch.setattr(
                 mac_export, "_render_pdf_pages",
-                lambda pdf, pages, width=None, height=None: [
+                lambda pdf, pages, width=None, height=None,
+                uti="public.png", suffix=".png": [
                     (1, str(staged_png), 100, 100)
                 ],
             )
@@ -1226,3 +1227,135 @@ class TestBatchCallsMatchTheImplementations:
             )
             checked += 1
         assert checked == len(batch_apply.SUPPORTED_OPERATIONS)
+
+
+@macos_only
+class TestWhatTheCodexReviewFound:
+    """Three defects found by review on #210, each with the evidence for it."""
+
+    def test_a_jpg_export_holds_jpeg_bytes(self, tmp_path):
+        """The format was accepted, named in the file, and then ignored.
+
+        `uti` was worked out from the caller's `format` and never reached
+        Quartz, which had "public.png" written into it, so a file called
+        Slide1.jpg held PNG bytes. Anything decoding by the format it asked
+        for refuses that.
+        """
+        import Quartz
+
+        from ppt_mac.export import _render_pdf_pages
+
+        pdf = str(tmp_path / "probe.pdf")
+        box = Quartz.CGRectMake(0, 0, 200, 100)
+        url = Quartz.CFURLCreateFromFileSystemRepresentation(
+            None, pdf.encode(), len(pdf.encode()), False
+        )
+        ctx = Quartz.CGPDFContextCreateWithURL(url, box, None)
+        Quartz.CGContextBeginPage(ctx, box)
+        Quartz.CGContextSetRGBFillColor(ctx, 1, 0, 0, 1)
+        Quartz.CGContextFillRect(ctx, Quartz.CGRectMake(10, 10, 50, 50))
+        Quartz.CGContextEndPage(ctx)
+        Quartz.CGPDFContextClose(ctx)
+
+        (_, png, _, _) = _render_pdf_pages(pdf, [1])[0]
+        assert open(png, "rb").read(4) == b"\x89PNG"
+
+        (_, jpg, _, _) = _render_pdf_pages(
+            pdf, [1], uti="public.jpeg", suffix=".jpg"
+        )[0]
+        assert open(jpg, "rb").read(2) == b"\xff\xd8", "a .jpg holding PNG bytes"
+
+    def test_two_decks_of_one_name_get_two_staged_paths(self, monkeypatch, tmp_path):
+        """A basename is not unique, and both halves of the bug followed.
+
+        Staging `~/a/report.pptx` and `~/b/report.pptx` wrote one over the
+        other in the container, and keyed both external copies the same, so a
+        save on either refreshed whichever registered last.
+        """
+        from ppt_mac import presentation as mac_pres
+
+        staging = tmp_path / "container"
+        staging.mkdir()
+        monkeypatch.setattr(mac_pres, "EXPORT_STAGING_DIR", str(staging))
+        monkeypatch.setattr(mac_pres, "_full_names", lambda app: [])
+        monkeypatch.setattr(mac_pres, "_EXTERNAL_COPIES", {})
+
+        first = mac_pres._free_staged_path(None, str(tmp_path / "a" / "report.pptx"))
+        mac_pres._EXTERNAL_COPIES[os.path.abspath(first)] = os.path.abspath(
+            str(tmp_path / "a" / "report.pptx")
+        )
+        second = mac_pres._free_staged_path(None, str(tmp_path / "b" / "report.pptx"))
+
+        assert first != second
+        assert os.path.basename(first) == "report.pptx", "the first keeps the name"
+        assert os.path.basename(second) == "report-2.pptx"
+
+    def test_saving_the_same_deck_again_reuses_its_own_staged_file(
+        self, monkeypatch, tmp_path
+    ):
+        from ppt_mac import presentation as mac_pres
+
+        staging = tmp_path / "container"
+        staging.mkdir()
+        monkeypatch.setattr(mac_pres, "EXPORT_STAGING_DIR", str(staging))
+        monkeypatch.setattr(mac_pres, "_full_names", lambda app: [])
+        monkeypatch.setattr(mac_pres, "_EXTERNAL_COPIES", {})
+
+        target = str(tmp_path / "a" / "report.pptx")
+        first = mac_pres._free_staged_path(None, target)
+        mac_pres._EXTERNAL_COPIES[os.path.abspath(first)] = os.path.abspath(target)
+
+        assert mac_pres._free_staged_path(None, target) == first
+
+    def test_closing_with_save_carries_the_last_edits_out(self, monkeypatch, tmp_path):
+        """The save on the way out is the one most worth copying.
+
+        `ppt_close_presentation(save_changes=True)` wrote the container file
+        and closed, so the caller's own copy kept everything except the edits
+        they had just asked to keep, and the deck was gone before anyone could
+        notice.
+        """
+        from ppt_mac import presentation as mac_pres
+
+        inside = tmp_path / "container" / "deck.pptx"
+        inside.parent.mkdir()
+        outside = tmp_path / "Desktop" / "deck.pptx"
+        outside.parent.mkdir()
+        outside.write_bytes(b"stale")
+
+        class _Saved:
+            def set(self, value):
+                pass
+
+        class _Pres:
+            saved = _Saved()
+
+            def name(self):
+                return "deck.pptx"
+
+            def full_name(self):
+                return str(inside)
+
+            def path(self):
+                return str(inside.parent)
+
+            def save(self):
+                inside.write_bytes(b"the edits made just before closing")
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(mac_pres.ppt, "_get_app_impl", lambda: object())
+        monkeypatch.setattr(mac_pres, "_resolve_presentation", lambda *a, **k: _Pres())
+        monkeypatch.setattr(mac_pres, "_full_names", lambda app: [])
+        monkeypatch.setattr(
+            mac_pres, "_EXTERNAL_COPIES",
+            {os.path.abspath(str(inside)): os.path.abspath(str(outside))},
+        )
+
+        result = mac_pres._close_presentation_impl(True, None, None)
+
+        assert outside.read_bytes() == b"the edits made just before closing"
+        assert result["also_copied_to"] == os.path.abspath(str(outside))
+        # And the deck is gone, so nothing should still be pointing at it.
+        assert mac_pres._EXTERNAL_COPIES == {}

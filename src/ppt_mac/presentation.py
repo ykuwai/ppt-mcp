@@ -434,6 +434,44 @@ def _save_presentation_impl(
 _EXTERNAL_COPIES: dict = {}
 
 
+def _free_staged_path(app, target: str) -> str:
+    """A container path for `target` that no other open deck is already using.
+
+    The basename alone is not unique. Two decks called `report.pptx` living in
+    different folders staged to the same container path, so saving the second
+    wrote over the first while it was still open, and both then shared one key
+    in `_EXTERNAL_COPIES`, which left a save on either one refreshing whichever
+    copy registered last.
+
+    The plain name is kept whenever it is free, because PowerPoint puts it in
+    the title bar and a suffix on every deck would be noise. Saving the same
+    deck to the same place twice reuses its own staged file rather than
+    growing a new one each time.
+    """
+    base = os.path.basename(target)
+    stem, ext = os.path.splitext(base)
+    wanted = os.path.abspath(target)
+    taken = set(_full_names(app))
+
+    for attempt in range(1, 100):
+        name = base if attempt == 1 else f"{stem}-{attempt}{ext}"
+        candidate = os.path.join(EXPORT_STAGING_DIR, name)
+        key = os.path.abspath(candidate)
+        registered = _EXTERNAL_COPIES.get(key)
+        if registered is not None and registered != wanted:
+            # Held by a different deck that still wants its own copy refreshed.
+            continue
+        if registered is None and candidate in taken:
+            # Open under this name without a copy outside; do not write over it.
+            continue
+        return candidate
+
+    raise RuntimeError(
+        f"A hundred decks called {base} are already staged in PowerPoint's "
+        "container. Close some, or save under a different name."
+    )
+
+
 def _refresh_external_copy(local: Optional[str]) -> Optional[str]:
     """Bring the caller's own copy back up to date after a save.
 
@@ -552,7 +590,7 @@ def _save_presentation_as_impl(
     # A POSIX path, always. An HFS colon path is taken as a literal filename
     # and produces a file called "Macintosh HD:Users:..." in the container root.
     os.makedirs(EXPORT_STAGING_DIR, exist_ok=True)
-    staged = os.path.join(EXPORT_STAGING_DIR, os.path.basename(target))
+    staged = _free_staged_path(app, target)
     if "as_" not in kwargs:
         kwargs["as_"] = to_keyword(
             PpSaveAsFileType,
@@ -636,6 +674,8 @@ def _close_presentation_impl(
     )
     name = pres.name()
     full_name = pres.full_name()
+    local = _local_path(full_name)
+    closed_copy = None
 
     if save_changes:
         path = pres.path()
@@ -647,9 +687,12 @@ def _close_presentation_impl(
                 "save_changes=false."
             )
         pres.save()
-        local = _local_path(full_name)
         if local and (not os.path.exists(local) or os.path.getsize(local) == 0):
             raise _sandbox_error(local)
+        # The last save of all, and the one most worth carrying out of the
+        # container. Without this the deck closes with the caller's own file
+        # holding everything except the edits they just asked to keep.
+        closed_copy = _refresh_external_copy(local)
     else:
         # Suppress the "save changes?" sheet, which would otherwise leave
         # PowerPoint waiting on a click nobody is there to make.
@@ -663,7 +706,13 @@ def _close_presentation_impl(
             "probably waiting on a dialog."
         )
 
-    return {"success": True, "closed": name}
+    if local:
+        _EXTERNAL_COPIES.pop(os.path.abspath(local), None)
+
+    result = {"success": True, "closed": name}
+    if closed_copy:
+        result["also_copied_to"] = closed_copy
+    return result
 
 
 def _get_presentation_info_impl(

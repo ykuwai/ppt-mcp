@@ -73,12 +73,17 @@ def _save_pdf(pres, destination: str) -> None:
         )
 
 
-def _render_pdf_pages(pdf_path, pages, width=None, height=None):
-    """Render chosen PDF pages to PNG bytes with Quartz.
+def _render_pdf_pages(pdf_path, pages, width=None, height=None,
+                      uti="public.png", suffix=".png"):
+    """Render chosen PDF pages to image files with Quartz.
 
     ``pages`` is 1 based, matching slide numbering everywhere else. When no
     size is given the page is rendered at twice its natural size, which for a
     standard 960 by 540 point deck is 1920 by 1080.
+
+    ``uti`` and ``suffix`` have to agree. They were once fixed at PNG while the
+    caller was free to ask for jpg, so a file named .jpg held PNG bytes and
+    anything decoding by the format it asked for choked on it.
     """
     try:
         import Quartz
@@ -138,9 +143,9 @@ def _render_pdf_pages(pdf_path, pages, width=None, height=None):
         Quartz.CGContextDrawPDFPage(context, page)
         image = Quartz.CGBitmapContextCreateImage(context)
 
-        out_path = _staging_path(".png")
+        out_path = _staging_path(suffix)
         destination = Quartz.CGImageDestinationCreateWithURL(
-            _url(out_path), "public.png", 1, None
+            _url(out_path), uti, 1, None
         )
         Quartz.CGImageDestinationAddImage(destination, image, None)
         if not Quartz.CGImageDestinationFinalize(destination):
@@ -320,8 +325,10 @@ def _export_images_impl(
     exported = []
     try:
         _save_pdf(pres, staged_pdf)
-        rendered = _render_pdf_pages(staged_pdf, targets, width, height)
-        for (number, temp_png, out_w, out_h) in rendered:
+        rendered = _render_pdf_pages(
+            staged_pdf, targets, width, height, uti, "." + fmt_key
+        )
+        for (number, temp_image, out_w, out_h) in rendered:
             if file_name and len(targets) == 1:
                 name = file_name
             elif file_name:
@@ -330,7 +337,7 @@ def _export_images_impl(
             else:
                 name = f"Slide{number}.{fmt_key}"
             final = os.path.join(abs_dir, name)
-            shutil.move(temp_png, final)
+            shutil.move(temp_image, final)
             # The size as well as the file, the same pair `_save_pdf` checks.
             # An empty file is what a move onto a full disk leaves behind, and
             # it reads as a written image to anything checking existence alone.
