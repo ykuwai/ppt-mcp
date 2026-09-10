@@ -957,7 +957,11 @@ class TestFontSizeWarning:
         result = font_size_warning(15.9)
         assert result is not None
         assert "15.9pt" in result
-        assert "below the recommended minimum" in result
+        # Worded as an instruction. A caller that reads this as a preference
+        # answers it by saying the size was deliberate, which is the whole
+        # reason the soft wording was dropped.
+        assert "You should" in result
+        assert "16pt" in result
 
     def test_small_size_returns_warning(self):
         result = font_size_warning(8)

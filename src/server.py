@@ -152,7 +152,7 @@ Standard 16:9 slide = 960 × 540 pt. Default to light backgrounds unless the use
 
 **Consistency across slides:** use the same heading size, card style, and spacing throughout. `ppt_set_default_shape_style` and `ppt_batch_apply_formatting` are your tools for this. For rounded rectangles, use `corner_radius_pt` (e.g. `10`) to keep the same corner radius across shapes.
 
-**Font sizes** — prefer larger sizes for projected readability:
+**Font sizes** — you should use these. They are what makes a slide readable when projected:
 - Slide title: 40–48 pt
 - Section heading / subheading: 24–32 pt
 - Body text: 20–28 pt

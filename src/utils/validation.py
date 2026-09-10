@@ -1,20 +1,17 @@
 """Shared validation helpers for MCP tool functions."""
 
-# One line, and the same line every time.
+# An instruction rather than a preference, and no longer than it has to be.
 #
-# A deck laid out with deliberate 15pt table text drew this warning about
-# seventy times in one build, and every copy carried three lines of sizing
-# advice the caller had already read in the server's instructions. A warning
-# that cannot be acted on and cannot be switched off buries the ones that can,
-# so the advice stays where it is read once and this says only what happened.
+# "Below the recommended minimum" was read as a note and argued with: callers
+# shrink text to make a layout fit, then answer the warning by saying the size
+# was deliberate. "You should" says what to do instead.
 #
-# Deduplicating it by wording was the other option and is worse: the flag would
-# live as long as the server process, which serves many conversations, so the
-# short form would reach callers that never saw the long one. Two wordings for
-# one condition also read as two different warnings to anything parsing them.
+# Length matters. This fires once per undersized write and a deck can draw it
+# dozens of times, so the sizing table stays in the server instructions rather
+# than being repeated here.
 FONT_SIZE_WARNING = (
-    "Warning: font_size {size}pt is below the recommended minimum of 16pt, "
-    "which is where text stops being readable when projected."
+    "Warning: font_size {size}pt is too small. You should use 16pt or more, "
+    "20pt+ for body text."
 )
 
 
