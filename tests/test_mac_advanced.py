@@ -1480,6 +1480,12 @@ class TestTheVisibilityStandInIsExplainedOnce:
         assert "visible=False" in second
 
 
+# Guarded because the checks below reach into `ppt_mac.text`, which imports
+# appscript, and appscript only installs on macOS. CI runs on Windows, where an
+# unguarded class fails at collection rather than skipping. The two classes in
+# this file that are deliberately not guarded test `ppt_com` code that runs on
+# both platforms.
+@macos_only
 class TestShapesThatWalkOffTheSlide:
     """A box set to grow with its text never overflows. It grows past the
     slide edge instead, and nothing used to say so."""
