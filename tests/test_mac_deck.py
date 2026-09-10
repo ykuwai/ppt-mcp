@@ -577,7 +577,12 @@ class TestEditOps:
 
         assert result["actions_undone"] == 3
         assert deck.undone == [3]
-        assert "rather than a measurement" in result["warnings"][0]
+        # The warning used to say fewer than three might have happened. The
+        # danger measured on a real deck runs the other way: one undo takes
+        # back every edit this server made, whatever number is passed.
+        warning = result["warnings"][0]
+        assert "takes back everything this server has edited" in warning
+        assert "not a measurement" in warning
 
     def test_redo_says_the_same_about_its_count(self):
         from ppt_mac.edit_ops import _redo_impl

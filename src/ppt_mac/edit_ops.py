@@ -45,19 +45,38 @@ from utils.navigation import goto_slide
 logger = logging.getLogger(__name__)
 
 
-def _count_warning(verb: str, times: int) -> str:
-    """The warning both counting tools carry.
+def _undo_warning(times: int) -> str:
+    """What one undo really costs here, which is not what the count implies.
 
-    Written once because it is the same sentence twice. It is a warning rather
-    than a refusal because the work itself does happen and only the count is
-    beyond reach.
+    The old wording had this backwards. It warned that fewer than `times`
+    actions might have been taken back, and the danger runs the other way:
+    `undo(times=1)` on a deck this server has been editing takes back **every**
+    edit it made, not one. Measured on a fresh deck (a slide plus two shapes
+    went in, one undo removed the slide) and on a deck opened from a file (two
+    shapes added, one undo removed both), with a save in between making no
+    difference. Where a person's own edits sit in that boundary is untested.
     """
     return (
-        f"PowerPoint for Mac takes the number of actions to {verb} as one "
-        "command and answers nothing about how many of them it carried out, "
-        "and no property reads the undo stack back. So this number is what "
-        f"was asked for rather than a measurement, and fewer than {times} may "
-        "have happened."
+        f"undo(times={times}) is not {times} steps here. PowerPoint for Mac "
+        "takes back everything this server has edited in one go, whatever "
+        "number is passed, and answers nothing about what it did. The count "
+        "below is what was asked for, not a measurement. Look at the deck "
+        "before doing anything else."
+    )
+
+
+def _redo_warning(times: int) -> str:
+    """Redo's own version, which is only about the count.
+
+    Kept separate from undo's because undo was measured and this was not. It
+    claims no more than that the number cannot be read back.
+    """
+    return (
+        "PowerPoint for Mac takes the number of actions to redo as one command "
+        "and answers nothing about how many of them it carried out, and no "
+        "property reads the stack back. So this number is what was asked for "
+        f"rather than a measurement, and fewer than {times} may have happened. "
+        "Undo on this platform is all or nothing, so redo may be too."
     )
 
 
@@ -76,7 +95,7 @@ def _undo_impl(times):
     return {
         "success": True,
         "actions_undone": times,
-        "warnings": [_count_warning("undo", times)],
+        "warnings": [_undo_warning(times)],
     }
 
 
@@ -89,7 +108,7 @@ def _redo_impl(times):
     return {
         "success": True,
         "actions_redone": times,
-        "warnings": [_count_warning("redo", times)],
+        "warnings": [_redo_warning(times)],
     }
 
 
