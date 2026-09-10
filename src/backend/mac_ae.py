@@ -294,12 +294,17 @@ class _Job:
     worker agree on exactly one of two outcomes before any of it runs.
     """
 
-    __slots__ = ("func", "args", "kwargs", "future", "started", "_lock", "_dropped")
+    __slots__ = (
+        "func", "args", "kwargs", "idempotent",
+        "future", "started", "_lock", "_dropped",
+    )
 
-    def __init__(self, func: Callable, args: tuple, kwargs: dict):
+    def __init__(self, func: Callable, args: tuple, kwargs: dict,
+                 idempotent: bool = False):
         self.func = func
         self.args = args
         self.kwargs = kwargs
+        self.idempotent = idempotent
         self.future: Future = Future()
         self.started = threading.Event()
         self._lock = threading.Lock()
@@ -387,6 +392,20 @@ class PowerPointAppleEventWrapper:
                     break
                 except CommandError as exc:
                     number = error_number(exc)
+                    if number in _RETRYABLE and not item.idempotent:
+                        # One impl is many Apple Events. PowerPoint may have
+                        # applied the first few before it stopped answering, so
+                        # running the whole thing again adds a second shape
+                        # rather than recovering the first. Windows reached the
+                        # same conclusion in #200 and refuses here too; only
+                        # callers that say they are safe to repeat are retried.
+                        future.set_exception(AppleEventError(
+                            "PowerPoint stopped answering part-way through "
+                            f"(Apple Event error {number}). Some of the request "
+                            "may already have been applied, so it was not sent "
+                            "again. Look at the slide before retrying."
+                        ))
+                        break
                     if number in _RETRYABLE and attempt < _RETRY_MAX:
                         logger.warning(
                             "PowerPoint did not answer (error %s). "
@@ -446,13 +465,23 @@ class PowerPointAppleEventWrapper:
             )
         return AppleEventError(str(exc), number)
 
-    def execute(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
+    def execute(self, func: Callable, *args: Any,
+                idempotent: bool = False, **kwargs: Any) -> Any:
         """Run ``func`` on the worker thread and return its result.
 
         The single entry point for every operation, matching the Windows
         wrapper. Blocks until the work finishes or the worker gives up.
+
+        Args:
+            func: The work to run.
+            *args: Positional arguments for func.
+            idempotent: Keyword-only, and not forwarded to func. Pass True
+                only when running func twice is the same as running it once,
+                which is what allows the worker to retry it whole. Connecting
+                is the case that qualifies; anything that edits a deck is not.
+            **kwargs: Keyword arguments for func.
         """
-        job = _Job(func, args, kwargs)
+        job = _Job(func, args, kwargs, idempotent)
         self._queue.put(job)
 
         # Two waits, not one. The first is for the queue, and it is the caller's

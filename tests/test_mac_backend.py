@@ -919,3 +919,68 @@ class TestTheWaitsAreTheRightWayRound:
         attempts = mac_ae.DEFAULT_TIMEOUT * (mac_ae._RETRY_MAX + 1)
         pauses = mac_ae._RETRY_INTERVAL * mac_ae._RETRY_MAX
         assert mac_ae._CALL_BUDGET >= attempts + pauses
+
+
+@macos_only
+class TestWhatIsSafeToRunTwice:
+    """One impl is many Apple Events, so a failure part-way through is not a
+    failure to start. Re-running it repeats whatever already landed, which is
+    how a caller once got two copies of the same picture. Windows reached the
+    same conclusion in #200; this is the macOS half of it.
+    """
+
+    @staticmethod
+    def _wrapper():
+        from backend.mac_ae import PowerPointAppleEventWrapper
+
+        ppt = PowerPointAppleEventWrapper()
+        ppt.start()
+        return ppt
+
+    def test_an_editing_call_is_not_sent_again(self):
+        from backend.mac_ae import AE_TIMED_OUT, AppleEventError
+
+        calls = []
+
+        def edits_the_deck():
+            calls.append(1)
+            raise _command_error(AE_TIMED_OUT)
+
+        ppt = self._wrapper()
+        with pytest.raises(AppleEventError) as caught:
+            ppt.execute(edits_the_deck)
+
+        assert calls == [1], "the deck was edited twice"
+        assert "may already have been applied" in str(caught.value)
+
+    def test_a_caller_that_says_it_is_safe_is_retried(self):
+        from backend.mac_ae import AE_TIMED_OUT
+
+        calls = []
+
+        def connecting():
+            calls.append(1)
+            if len(calls) < 3:
+                raise _command_error(AE_TIMED_OUT)
+            return "connected"
+
+        ppt = self._wrapper()
+        assert ppt.execute(connecting, idempotent=True) == "connected"
+        assert len(calls) == 3
+
+    def test_idempotent_is_not_passed_to_the_work(self):
+        """`ppt_connect` passes it, and every impl would choke on it.
+
+        Develop added `idempotent=True` at that call site while this backend
+        forwarded unknown keywords straight through, so the tool raised a
+        TypeError on macOS until the keyword became one this wrapper owns.
+        """
+        seen = {}
+
+        def takes_one_argument(visible):
+            seen["visible"] = visible
+            return "ok"
+
+        ppt = self._wrapper()
+        assert ppt.execute(takes_one_argument, True, idempotent=True) == "ok"
+        assert seen == {"visible": True}
