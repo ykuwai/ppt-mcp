@@ -1285,6 +1285,9 @@ class _FakeDeck:
 
         if each == k.font:
             return len(self.font_names)
+        if each == k.document_window:
+            # What `target_window` asks before it hands the window over.
+            return 0 if self.window is None else 1
         raise _command_error(-1708)
 
     @property

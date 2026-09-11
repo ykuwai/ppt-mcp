@@ -1394,6 +1394,72 @@ class TestADocumentThatOutlivedItsWindow:
         monkeypatch.setattr(mac_ae, "count_of", lambda container, each: 1)
         assert mac_ae.target_window(_Pres()) == "the window"
 
+    def test_nothing_reaches_the_window_around_the_guard(self):
+        """The explanation is only worth writing if every call site uses it.
+
+        Two places address `document_windows[1]` directly and both are meant
+        to. `target_window` is the guard itself, and `presentation.py` has a
+        deck that was just created or just opened, where a caller who passed
+        `with_window=False` asked for no window on purpose and would be told
+        to close the deck and open it again for no reason.
+        """
+        import pathlib
+
+        reaching = {
+            str(path)
+            for path in sorted(pathlib.Path("src").rglob("*.py"))
+            for line in path.read_text().splitlines()
+            # Comments about the trap are the point of the routing, not a
+            # breach of it.
+            if "document_windows[1]" in line and not line.strip().startswith("#")
+        }
+
+        assert reaching == {
+            "src/backend/mac_ae.py",
+            "src/ppt_mac/presentation.py",
+        }
+
+    def test_targeting_a_windowless_deck_is_refused_rather_than_done(self):
+        """It used to activate the window and log whatever came back.
+
+        So a deck that had outlived its window became the session target
+        anyway, and every tool after it failed with a bare -1728 instead.
+        """
+        from backend import mac_ae
+        from backend.mac_ae import ppt
+
+        class _Pres:
+            def count(self, each=None):
+                from appscript import k
+
+                assert each == k.document_window
+                return 0
+
+            def name(self):
+                return "第二部.pptx"
+
+            def full_name(self):
+                return "/deck/第二部.pptx"
+
+        was = ppt._target_pres_full_name
+        original = ppt._get_app_impl
+        ppt._get_app_impl = lambda *a, **kw: object()
+        original_list = mac_ae.PowerPointAppleEventWrapper._presentations
+        mac_ae.PowerPointAppleEventWrapper._presentations = (
+            lambda self, app_ref: [_Pres()]
+        )
+        try:
+            with pytest.raises(mac_ae.AppleEventError) as caught:
+                ppt._set_target_pres_impl(1)
+            # The session still points where it did, so the next call is not
+            # quietly working on a deck nobody can see.
+            assert ppt._target_pres_full_name == was
+        finally:
+            ppt._get_app_impl = original
+            mac_ae.PowerPointAppleEventWrapper._presentations = original_list
+
+        assert "no window" in str(caught.value)
+
 
 @macos_only
 class TestAnEmptyDeckAndADeadReference:

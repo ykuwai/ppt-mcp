@@ -31,8 +31,16 @@ def goto_slide(app, slide_index: int) -> None:
             # one. There is an `active window` here too, but it raises whenever
             # PowerPoint's start gallery is in front, and it can belong to a
             # different deck than the one being edited.
+            from backend.mac_ae import target_window
+
             pres = ppt._get_pres_impl()
-            pres.document_windows[1].view.go_to_slide(number=slide_index)
+            # A deck can outlive its window, and `document_windows[1]` then
+            # raises a bare -1728. This still swallows it, because showing the
+            # slide is a courtesy and no tool should fail for want of it, but
+            # going through `target_window` means the call sites that do need a
+            # window meet the written explanation rather than assuming this
+            # worked.
+            target_window(pres).view.go_to_slide(number=slide_index)
         else:
             window = ppt._get_target_window_impl()
             if window is None:

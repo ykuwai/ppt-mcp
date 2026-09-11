@@ -666,9 +666,18 @@ class PowerPointAppleEventWrapper:
                 )
             pres = matches[0]
 
+        # Reported, not silently targeted. This used to activate
+        # `document_windows[1]` and log whatever came back, so a deck that had
+        # outlived its window became the session target anyway and every tool
+        # after it failed with a bare -1728 instead. `target_window` raises
+        # with the explanation, and it raises before the target is set, so a
+        # refused call leaves the session pointing where it already was.
+        window = target_window(pres)
         try:
-            pres.document_windows[1].activate()
+            window.activate()
         except CommandError as exc:
+            # A window that exists and will not come forward is a nuisance, not
+            # a reason to refuse; the deck is still editable either way.
             logger.warning("Could not activate presentation window: %s", exc)
 
         full_name = pres.full_name()

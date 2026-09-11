@@ -1005,6 +1005,16 @@ class _FakeDeck:
             document_windows = _FakeCollection([deck.window])
             slide_show_settings = _FakeSettings(deck)
 
+            def count(self, each=None):
+                from appscript import k
+
+                # What `target_window` asks before it hands the window over.
+                # A deck can outlive its window, and every one of these tools
+                # reaches the editor through it.
+                if each == k.document_window:
+                    return 1
+                raise AssertionError(f"unexpected count of {each}")
+
             def undo(self, times=None):
                 deck.undone.append(times)
 

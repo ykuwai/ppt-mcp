@@ -60,6 +60,7 @@ from backend.mac_ae import (
     is_missing,
     ppt,
     shapes_of,
+    target_window,
 )
 from backend.mac_enums import (
     MsoAutoShapeType,
@@ -922,7 +923,10 @@ def _get_selection_impl():
     """
     ppt._get_app_impl()
     pres = ppt._get_pres_impl()
-    selection = pres.document_windows[1].selection
+    # A deck can outlive its window, and there is nothing to read a selection
+    # out of when it has. `target_window` says that in a sentence rather than
+    # letting -1728 stand in for it.
+    selection = target_window(pres).selection
 
     sel_word = selection.selection_type()
     sel_type = _WIN_SELECTION_TYPE.get(sel_word)
@@ -1002,7 +1006,9 @@ def _set_view_impl(view_type, zoom):
 
     ppt._get_app_impl()
     pres = ppt._get_pres_impl()
-    window = pres.document_windows[1]
+    # The view and the zoom both live on the window, so a deck without one has
+    # nothing this tool can set or report.
+    window = target_window(pres)
 
     warnings = []
     if view_type is not None:

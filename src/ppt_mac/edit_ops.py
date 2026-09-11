@@ -37,7 +37,14 @@ import logging
 
 from appscript.reference import CommandError
 
-from backend.mac_ae import count, error_number, ppt, shapes_of, slide_at as _slide
+from backend.mac_ae import (
+    count,
+    error_number,
+    ppt,
+    shapes_of,
+    slide_at as _slide,
+    target_window,
+)
 from backend.unsupported import refusal as _refusal
 from ppt_mac.shapes import _get_shape
 from utils.navigation import goto_slide
@@ -136,8 +143,13 @@ def _copy_shape_to_slide_impl(src_slide_index, shape_name_or_index, dst_slide_in
     # Apple Event `goto_slide` sends, written out here because that helper
     # swallows its own failures, and a navigation that quietly did not happen
     # would drop the copy on whichever slide the window was still showing.
+    # `target_window` first, because a deck with no window at all has its own
+    # explanation and an answer, while the refusal below can only report a
+    # number. It raises rather than returning, and the tool function turns that
+    # into the same error body.
+    window = target_window(pres)
     try:
-        pres.document_windows[1].view.go_to_slide(number=dst_slide_index)
+        window.view.go_to_slide(number=dst_slide_index)
     except CommandError as exc:
         return _refusal(
             "ppt_copy_shape_to_slide",
@@ -148,7 +160,7 @@ def _copy_shape_to_slide_impl(src_slide_index, shape_name_or_index, dst_slide_in
             ["ppt_add_shape", "ppt_duplicate_slide"],
         )
 
-    pres.document_windows[1].view.paste_object()
+    window.view.paste_object()
 
     # Nothing is trusted because it did not raise. `paste object` declares no
     # result at all, so the shape count is the only evidence there is.

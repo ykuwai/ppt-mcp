@@ -39,6 +39,7 @@ from backend.mac_ae import (
     positional,
     ppt,
     resolve_presentation as _resolve_presentation,
+    target_window,
     windows_constant,
 )
 from backend.mac_enums import (
@@ -823,7 +824,10 @@ def _goto_slide_impl(slide_index: int) -> dict:
     if slide_index < 1 or slide_index > total:
         raise ValueError(f"Slide index {slide_index} out of range (1-{total})")
 
-    view = pres.document_windows[1].view
+    # Showing a slide needs a window, and a deck can outlive its own.
+    # `target_window` explains that state and says how to get out of it, which
+    # the bare -1728 from `document_windows[1]` does not.
+    view = target_window(pres).view
     view.go_to_slide(number=slide_index)
 
     # Read the window back. A view that did not move is the silent no-op this
