@@ -446,72 +446,347 @@ class TestCommentDeleting:
 # Media
 # ---------------------------------------------------------------------------
 @macos_only
-class TestMediaRefusals:
-    """All three refuse, and the three reasons are not the same reason."""
+class TestMediaInsertion:
+    """`media2 object` is an element of nothing and `make` accepts it anyway.
 
-    def test_video_and_audio_name_the_missing_insert_route(self):
-        from ppt_mac.media import _add_audio_impl, _add_video_impl
+    Run on this machine before any of this was written: an `.aiff` and an
+    `.mp4` both arrive on the slide as `shape type media`, and both are inside
+    the saved `.pptx` under `ppt/media/` at the file's own byte size. The
+    module used to refuse all three media tools on the grounds that nothing in
+    the dictionary could put a file on a slide, which was a reading of the
+    dictionary rather than a measurement.
+    """
 
-        for payload in (
-            _add_video_impl(1, "/tmp/clip.mp4", 0, 0, None, None, False),
-            _add_audio_impl(1, "/tmp/clip.m4a", 0, 0, None, None, False),
-        ):
-            assert payload["platform"] == "macOS"
-            assert "elements of no container" in payload["reason"]
-            assert "insert from file" in payload["reason"]
-            assert "sandboxed" in payload["reason"]
-        assert _add_video_impl(1, "x", 0, 0, None, None, False)["error"] == (
-            "ppt_add_video is not available on macOS"
-        )
+    def test_a_movie_arrives_as_a_media_shape(self, monkeypatch):
+        from ppt_mac.media import _add_video_impl
 
-    def test_audio_says_what_import_sound_file_actually_does(self):
-        """It is close enough to look like the answer, and it is not."""
+        with _fake_media_deck(monkeypatch) as deck:
+            clip = deck.a_file("intro.mp4")
+            result = _add_video_impl(1, clip, 60, 40, None, None, False)
+
+        assert result["success"] is True
+        assert result["shape_name"] == "intro"
+        # The caller's own path, not the container copy it was read from.
+        assert result["file_path"] == clip
+        assert deck.made == [("media2 object", 60, 40)]
+
+    def test_the_view_is_sent_to_the_slide_before_the_insert(self, monkeypatch):
+        """Every write here shows the slide it is editing, and this is a write."""
         from ppt_mac.media import _add_audio_impl
 
-        payload = _add_audio_impl(1, "/tmp/clip.m4a", 0, 0, None, None, False)
+        with _fake_media_deck(monkeypatch) as deck:
+            _add_audio_impl(2, deck.a_file("bell.aiff"), 0, 0, None, None, False)
 
-        assert "import sound file" in payload["reason"]
-        assert any("transition" in item for item in payload["alternatives"])
+        assert deck.navigated_to == [2]
 
-    def test_playback_says_loop_and_hide_exist_and_are_left_alone(self):
-        """Refusing because it is unsafe reads differently from refusing an absence."""
+    def test_the_file_is_read_from_inside_powerpoints_container(self, monkeypatch):
+        """A path outside it raises the Grant Access sheet.
+
+        In #191 that sheet closed every open document and took PowerPoint with
+        it, so nothing is ever named where the caller left it.
+        """
+        from ppt_mac.media import _add_video_impl
+
+        with _fake_media_deck(monkeypatch) as deck:
+            clip = deck.a_file("intro.mp4")
+            _add_video_impl(1, clip, 0, 0, None, None, False)
+
+        handed_over = deck.files_named[0]
+        assert handed_over != clip
+        assert handed_over.startswith(str(deck.container))
+
+    def test_the_staged_copy_is_removed_once_the_shape_exists(self, monkeypatch):
+        """The embed happens at insert time, not at save time.
+
+        Checked rather than assumed, because a copy deleted too early would
+        have produced a deck that lost its audio when it was saved. The two
+        staged files were deleted, the deck was saved afterwards, and both
+        media parts were in the archive whole.
+        """
+        import os
+
+        from ppt_mac.media import _add_audio_impl
+
+        with _fake_media_deck(monkeypatch) as deck:
+            source = deck.a_file("bell.aiff")
+            _add_audio_impl(1, source, 0, 0, None, None, False)
+            staged = deck.files_named[0]
+            # It existed while PowerPoint was reading it, and is gone by the
+            # time the call returns. The caller's own file is untouched.
+            assert deck.existed_when_named == [True]
+            assert not os.path.exists(staged)
+            assert os.path.exists(source)
+
+    def test_a_make_that_added_nothing_is_refused(self, monkeypatch):
+        """MACOS_PORT section 5. Success and an unchanged slide arrive alike."""
+        from ppt_mac.media import _add_video_impl
+
+        with _fake_media_deck(monkeypatch, make="nothing") as deck:
+            result = _add_video_impl(1, deck.a_file("intro.mp4"), 0, 0, None, None, False)
+
+        assert "error" in result
+        assert "still holds" in result["reason"]
+
+    def test_a_make_that_left_an_autoshape_is_refused(self, monkeypatch):
+        """A declined `make` comes back as an empty autoshape and says nothing."""
+        from ppt_mac.media import _add_video_impl
+
+        with _fake_media_deck(monkeypatch, make="stray") as deck:
+            with pytest.raises(RuntimeError, match="rather than a"):
+                _add_video_impl(1, deck.a_file("intro.mp4"), 0, 0, None, None, False)
+
+    def test_the_default_25_point_height_is_reported(self, monkeypatch):
+        """PowerPoint sizes media at 25 points tall, not at its native size.
+
+        A 320 by 240 movie arrives 33.3 by 25 and a 640 by 360 one 44.4 by 25,
+        so the aspect ratio is the file's and the height is always 25. Windows
+        would have used the native size, so the difference is said out loud.
+        """
+        from ppt_mac.media import _add_video_impl
+
+        with _fake_media_deck(monkeypatch, landed_size=(44.44, 25.0)) as deck:
+            result = _add_video_impl(1, deck.a_file("intro.mp4"), 0, 0, None, None, False)
+
+        assert any("44.44 by 25.0" in w for w in result["warnings"])
+        assert any("native size" in w for w in result["warnings"])
+
+    def test_a_size_that_was_asked_for_is_read_back_not_echoed(self, monkeypatch):
+        from ppt_mac.media import _add_video_impl
+
+        with _fake_media_deck(monkeypatch) as deck:
+            result = _add_video_impl(1, deck.a_file("intro.mp4"), 0, 0, 320, 180, False)
+
+        assert deck.shape.width() == 320
+        assert deck.shape.height() == 180
+        assert deck.shape.lock_aspect_ratio() is False
+        assert "warnings" not in result
+
+    def test_one_dimension_keeps_the_aspect_ratio(self, monkeypatch):
+        from ppt_mac.media import _add_video_impl
+
+        with _fake_media_deck(monkeypatch) as deck:
+            _add_video_impl(1, deck.a_file("intro.mp4"), 0, 0, 320, None, False)
+
+        assert deck.shape.lock_aspect_ratio() is True
+        assert deck.shape.width() == 320
+
+    def test_a_size_that_did_not_land_is_reported(self, monkeypatch):
+        from ppt_mac.media import _add_video_impl
+
+        with _fake_media_deck(monkeypatch, size_is_frozen=True) as deck:
+            result = _add_video_impl(1, deck.a_file("intro.mp4"), 0, 0, 320, 180, False)
+
+        assert any("320 was asked for" in w for w in result["warnings"])
+        assert any("180 was asked for" in w for w in result["warnings"])
+
+    def test_a_second_clip_of_the_same_name_is_warned_about(self, monkeypatch):
+        """PowerPoint names a media shape after its file and does not number it.
+
+        Two clips called `intro.mp4` from two folders both arrive as `intro`,
+        and every tool that addresses a shape by name then acts on the first.
+        """
+        from ppt_mac.media import _add_video_impl
+
+        with _fake_media_deck(monkeypatch, existing=["intro"]) as deck:
+            result = _add_video_impl(1, deck.a_file("intro.mp4"), 0, 0, None, None, False)
+
+        assert any("already had a shape called 'intro'" in w
+                   for w in result["warnings"])
+
+    def test_link_to_file_is_refused_by_name_before_anything_is_copied(self, monkeypatch):
+        """`link to file` reads back `missing value`, so embedding is the only mode.
+
+        Named as an argument rather than as the tool, so dropping it and
+        calling again works, and refused before the file is staged so that a
+        refused call leaves the container alone.
+        """
+        from ppt_mac.media import _add_audio_impl, _add_video_impl
+
+        with _fake_media_deck(monkeypatch) as deck:
+            clip = deck.a_file("intro.mp4")
+            video = _add_video_impl(1, clip, 0, 0, None, None, True)
+            audio = _add_audio_impl(1, clip, 0, 0, None, None, True)
+
+        assert video["error"] == "ppt_add_video cannot link to a file on macOS"
+        assert audio["error"] == "ppt_add_audio cannot link to a file on macOS"
+        assert deck.files_named == []
+        assert deck.made == []
+
+    def test_a_file_that_is_not_there_is_named_before_powerpoint_is_touched(self, monkeypatch):
+        from ppt_mac.media import _add_audio_impl
+
+        with _fake_media_deck(monkeypatch) as deck:
+            with pytest.raises(FileNotFoundError, match="Audio file not found"):
+                _add_audio_impl(
+                    1, str(deck.container / "nothing.aiff"), 0, 0, None, None, False,
+                )
+            assert deck.navigated_to == []
+
+
+@macos_only
+class TestMediaPlaybackSettings:
+    """Two of the eight settings exist here, and only one of them is safe.
+
+    Volume, mute, trim and fade have no words anywhere in the dictionary.
+    `loop until stopped` and `hide while not playing` both read and write, and
+    the difference between them was measured on a slide holding a fly in, a
+    bounce and an exit fade: three writes of loop left all three effects
+    exactly as they were, and one write of hide dropped the exit outright and
+    turned the bounce into a plain appear.
+    """
+
+    def test_volume_and_the_rest_are_refused_by_name_and_nothing_is_written(self, monkeypatch):
         from ppt_mac.media import _set_media_settings_impl
 
-        payload = _set_media_settings_impl(
-            1, "Movie 1", 0.5, None, None, None, None, None, True, True
-        )
-
-        assert payload["error"] == "ppt_set_media_settings is not available on macOS"
-        assert "no volume, mute, trim or fade" in payload["reason"]
-        assert "do exist" in payload["reason"]
-        assert "5.2" in payload["reason"]
-        assert payload["alternatives"] == [
-            "ppt_get_shape_info, which reports a media shape's type",
-            "ppt_update_shape, which moves and resizes it",
-        ]
-
-    def test_no_media_tool_ever_reaches_powerpoint(self):
-        """Nothing here opens a file or edits a slide, so nothing connects."""
-        from backend.mac_ae import ppt
-        from ppt_mac.media import (
-            _add_audio_impl,
-            _add_video_impl,
-            _set_media_settings_impl,
-        )
-
-        def _explode(*args, **kwargs):
-            raise AssertionError("a refusal must not touch PowerPoint")
-
-        original = ppt._get_app_impl
-        ppt._get_app_impl = _explode
-        try:
-            assert "error" in _add_video_impl(1, "x", 0, 0, None, None, False)
-            assert "error" in _add_audio_impl(1, "x", 0, 0, None, None, False)
-            assert "error" in _set_media_settings_impl(
-                1, 1, None, None, None, None, None, None, None, None
+        with _fake_media_deck(monkeypatch, existing=["clip"]) as deck:
+            result = _set_media_settings_impl(
+                1, "clip", 0.5, True, None, None, None, 200, True, None,
             )
-        finally:
-            ppt._get_app_impl = original
+
+        assert result["error"] == (
+            "ppt_set_media_settings cannot set volume, muted, fade_out on macOS"
+        )
+        assert "no volume, mute, trim or fade" in result["reason"]
+        # Refused whole. A call that set loop and dropped the volume would be
+        # the silent half success MACOS_PORT section 5 is about.
+        assert deck.journal == []
+
+    def test_loop_is_written_and_read_back(self, monkeypatch):
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"]) as deck:
+            result = _set_media_settings_impl(
+                1, "clip", None, None, None, None, None, None, True, None,
+            )
+
+        assert result == {"success": True, "shape_name": "clip"}
+        assert deck.play.loop_until_stopped() is True
+
+    def test_a_loop_that_did_not_land_is_reported(self, monkeypatch):
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"], playback_is_frozen=True):
+            result = _set_media_settings_impl(
+                1, "clip", None, None, None, None, None, None, True, None,
+            )
+
+        assert result["error"] == "ppt_set_media_settings could not set loop"
+        assert "silent no-op" in result["reason"]
+
+    def test_hiding_the_frame_lands_on_a_slide_with_no_animations(self, monkeypatch):
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"], effects=0) as deck:
+            result = _set_media_settings_impl(
+                1, "clip", None, None, None, None, None, None, None, True,
+            )
+
+        assert result["success"] is True
+        assert deck.play.hide_while_not_playing() is True
+
+    def test_hiding_the_frame_is_refused_on_a_slide_that_has_animations(self, monkeypatch):
+        """One write of it dropped an exit effect and flattened a bounce.
+
+        Measured on a slide holding three effects, and reproduced: writing
+        `False` over a value that was already `False` did it too. That is the
+        flattening of MACOS_PORT section 5.2, so the argument is refused by
+        name rather than paid for with the slide.
+        """
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"], effects=3) as deck:
+            result = _set_media_settings_impl(
+                1, "clip", None, None, None, None, None, None, True, True,
+            )
+
+        assert result["error"] == (
+            "ppt_set_media_settings cannot set hide_while_not_playing on "
+            "slide 1 because it has animations"
+        )
+        assert "holds 3 animation effects" in result["reason"]
+        assert "5.2" in result["reason"]
+        # Refused before the loop write, so the whole call is one decision.
+        assert deck.journal == []
+
+    def test_the_timelines_own_sequences_are_never_counted(self, monkeypatch):
+        """Counting those looked free and is not, so the gate must not use them.
+
+        A media shape creates one `sequence` on the timeline for its own
+        playback. The count answered 0 on a fresh slide, 0 after a text box, 0
+        with one effect in the main sequence, and 1 as soon as a movie was
+        inserted, so a gate that added it in would refuse the write on every
+        slide this tool is ever called about. The stand-in below raises if it
+        is ever asked.
+        """
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"], effects=0) as deck:
+            result = _set_media_settings_impl(
+                1, "clip", None, None, None, None, None, None, None, True,
+            )
+
+        assert result["success"] is True
+        assert deck.play.hide_while_not_playing() is True
+
+    def test_the_hide_that_did_land_says_what_the_count_cannot_see(self, monkeypatch):
+        """Degrade honestly. The guard has an edge and the caller is told."""
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"], effects=0):
+            result = _set_media_settings_impl(
+                1, "clip", None, None, None, None, None, None, None, True,
+            )
+
+        assert any("triggered by clicking a shape" in w
+                   for w in result["warnings"])
+
+    def test_effects_that_cannot_be_counted_are_treated_as_animations(self, monkeypatch):
+        """The count guards a write that destroys what it cannot see."""
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"], effects=None) as deck:
+            result = _set_media_settings_impl(
+                1, "clip", None, None, None, None, None, None, None, True,
+            )
+
+        assert "could not be counted" in result["reason"]
+        assert deck.journal == []
+
+    def test_loop_is_written_on_an_animated_slide(self, monkeypatch):
+        """Three writes of it left a slide of three effects untouched."""
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"], effects=3) as deck:
+            result = _set_media_settings_impl(
+                1, "clip", None, None, None, None, None, None, False, None,
+            )
+
+        assert result["success"] is True
+        assert deck.play.loop_until_stopped() is False
+
+    def test_a_shape_that_is_not_media_is_named_before_the_first_write(self, monkeypatch):
+        """`play settings` exists on every shape, so a picture would take it.
+
+        It would report success and change nothing anybody could ever see.
+        """
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"]) as deck:
+            with pytest.raises(ValueError, match="is not a media shape"):
+                _set_media_settings_impl(
+                    1, "Title", None, None, None, None, None, None, True, None,
+                )
+            assert deck.journal == []
+
+    def test_a_call_that_asked_for_nothing_says_so(self, monkeypatch):
+        from ppt_mac.media import _set_media_settings_impl
+
+        with _fake_media_deck(monkeypatch, existing=["clip"]):
+            result = _set_media_settings_impl(
+                1, "clip", None, None, None, None, None, None, None, None,
+            )
+
+        assert "nothing was changed" in result["warnings"][0]
 
 
 @macos_only
@@ -821,3 +1096,232 @@ def _command_error(number):
             return f"stub error {number}"
 
     return _Stub()
+
+
+# ---------------------------------------------------------------------------
+# A slide that holds media, for the tools that put a file on one. Separate from
+# the deck above because these three need things the other two modules never
+# touch: a container to stage into, a shape that appears only when `make` is
+# answered, and an animation timeline whose count decides whether one of the
+# writes is allowed at all.
+# ---------------------------------------------------------------------------
+class _FakePlaySettings:
+    """`play settings`, reached only through `shape animation settings`."""
+
+    def __init__(self, journal, frozen):
+        self.loop_until_stopped = _FakeProperty(
+            False, journal=journal, label="loop until stopped", frozen=frozen,
+        )
+        self.hide_while_not_playing = _FakeProperty(
+            False, journal=journal, label="hide while not playing", frozen=frozen,
+        )
+
+
+class _FakeMediaShape:
+    def __init__(self, deck, name, shape_type, size=(44.44, 25.0), frozen=False):
+        self._name = name
+        self._shape_type = shape_type
+        self.width = _FakeProperty(size[0], frozen=frozen)
+        self.height = _FakeProperty(size[1], frozen=frozen)
+        self.lock_aspect_ratio = _FakeProperty(False)
+        self.animation_settings = type(
+            "AnimationSettings", (),
+            {"animation_play_settings": _FakePlaySettings(
+                deck.journal, deck.playback_is_frozen,
+            )},
+        )()
+
+    def name(self):
+        return self._name
+
+    def shape_type(self):
+        return self._shape_type
+
+
+class _FakeShapesCollection(_FakeCollection):
+    """A slide's shapes, which also answer a bulk read of their names.
+
+    `elements(slide.shapes.name)` is one Apple Event for every name, which is
+    how the port reads them, so the stand-in has to offer the same route.
+    """
+
+    @property
+    def name(self):
+        return _FakeCollection([shape.name() for shape in self._items])
+
+
+class _FakeTimeline:
+    """A slide's animation timeline, counted the one way that is safe and right.
+
+    `effects.count()` and `effects.get()` both kill PowerPoint with -609.
+    Asking the sequence how many `effect` elements it holds does not, so that
+    is the only question this answers. Asking the timeline how many `sequence`
+    elements it holds is safe too and is the wrong question, because a media
+    shape brings one of those with it, so it raises here rather than answering.
+    """
+
+    def __init__(self, effects, sequences=0):
+        self._effects = effects
+        self._sequences = sequences
+
+    def count(self, each=None):
+        raise AssertionError(
+            "the timeline's sequences are not what decides; a media shape "
+            "creates one of them for its own playback"
+        )
+
+    @property
+    def main_sequence(self):
+        sequence = self
+
+        class _Sequence:
+            def count(self, each=None):
+                from appscript import k
+
+                assert each == k.effect, "the effects collection is never asked"
+                if sequence._effects is None:
+                    raise _command_error(-1728)
+                return sequence._effects
+
+        return _Sequence()
+
+
+class _FakeMediaSlide:
+    def __init__(self, deck, shapes, effects, sequences=0):
+        self._deck = deck
+        self.shapes_list = shapes
+        self.end = "the end of the slide"
+        self.timeline = _FakeTimeline(effects, sequences)
+
+    @property
+    def shapes(self):
+        return _FakeShapesCollection(self.shapes_list)
+
+
+class _FakeMediaDeck:
+    """One slide, a container to stage into, and a `make` that can decline."""
+
+    def __init__(self, tmp_path, make="media", existing=(),
+                 landed_size=(44.44, 25.0), size_is_frozen=False,
+                 playback_is_frozen=False, effects=0, sequences=0):
+        from appscript import k
+
+        self.journal: list = []
+        self.playback_is_frozen = playback_is_frozen
+        self._make = make
+        self._landed_size = landed_size
+        self._size_is_frozen = size_is_frozen
+        self.container = tmp_path / "container"
+        self.container.mkdir()
+        self.source = tmp_path / "elsewhere"
+        self.source.mkdir()
+        self.made: list = []
+        self.files_named: list = []
+        self.existed_when_named: list = []
+        self.navigated_to: list = []
+        self.shape = None
+        self.play = None
+
+        shapes = [_FakeMediaShape(self, "Title", k.shape_type_text_box)]
+        for name in existing:
+            shape = _FakeMediaShape(self, name, k.shape_type_media)
+            shapes.append(shape)
+            self.shape = shape
+            self.play = shape.animation_settings.animation_play_settings
+        self.slide = _FakeMediaSlide(self, shapes, effects, sequences)
+        self.app = self
+
+    def a_file(self, name):
+        """A real file, outside the container, the way a caller would name one."""
+        path = self.source / name
+        path.write_bytes(b"not really a movie, but really a file")
+        return str(path)
+
+    # -- the application ---------------------------------------------------
+    def make(self, new=None, at=None, with_properties=None):
+        import os
+
+        from appscript import k
+
+        path = with_properties[k.file_name]
+        self.files_named.append(path)
+        self.existed_when_named.append(os.path.exists(path))
+        if self._make == "nothing":
+            return object()
+        shape_type = (
+            k.shape_type_auto if self._make == "stray" else k.shape_type_media
+        )
+        shape = _FakeMediaShape(
+            self, os.path.splitext(os.path.basename(path))[0], shape_type,
+            size=self._landed_size, frozen=self._size_is_frozen,
+        )
+        self.slide.shapes_list.append(shape)
+        self.shape = shape
+        self.play = shape.animation_settings.animation_play_settings
+        self.made.append(("media2 object", with_properties[k.left_position],
+                          with_properties[k.top]))
+        return object()
+
+    # -- the presentation --------------------------------------------------
+    @property
+    def presentation(self):
+        deck = self
+
+        class _Pres:
+            slides = _FakeCollection([deck.slide, deck.slide])
+
+            def count(self, each=None):
+                from appscript import k
+
+                # What `target_window` asks before handing the window over.
+                assert each == k.document_window
+                return 1
+
+            @property
+            def document_windows(self):
+                return _FakeCollection([deck._window()])
+
+        return _Pres()
+
+    def _window(self):
+        deck = self
+
+        class _View:
+            def go_to_slide(self, number=None):
+                deck.navigated_to.append(number)
+
+        return type("Window", (), {"view": _View()})()
+
+
+class _fake_media_deck:  # noqa: N801 - reads as a context manager, not a class
+    """Point the wrapper and the staging directory at a fake deck."""
+
+    def __init__(self, monkeypatch, **kwargs):
+        import pathlib
+        import tempfile
+
+        self._monkeypatch = monkeypatch
+        self._tmp = tempfile.TemporaryDirectory()
+        self._deck = _FakeMediaDeck(pathlib.Path(self._tmp.name), **kwargs)
+
+    def __enter__(self):
+        from backend import mac_ae
+        from backend.mac_ae import ppt
+
+        self._ppt = ppt
+        self._app = ppt._get_app_impl
+        self._pres = ppt._get_pres_impl
+        ppt._get_app_impl = lambda *a, **kw: self._deck.app
+        ppt._get_pres_impl = lambda *a, **kw: self._deck.presentation
+        # The staging directory is the real container everywhere else, and a
+        # test has no business writing into it.
+        self._monkeypatch.setattr(
+            mac_ae, "EXPORT_STAGING_DIR", str(self._deck.container),
+        )
+        return self._deck
+
+    def __exit__(self, *exc):
+        self._ppt._get_app_impl = self._app
+        self._ppt._get_pres_impl = self._pres
+        self._tmp.cleanup()
+        return False

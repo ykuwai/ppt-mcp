@@ -304,7 +304,7 @@ ESC cancels without committing, so there are no destructive side effects. This i
 
 ## 🍎 macOS support
 
-125 of the 155 tools work. The 30 that do not are listed by name in
+128 of the 155 tools work. The 27 that do not are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what
@@ -319,8 +319,6 @@ Not available on macOS:
   and deleted.
 - **Grouping shapes.** Ungrouping works. Grouping needs a selection a script
   cannot build.
-- **Inserting video and audio.** An existing media shape can still be moved,
-  resized and read.
 - **Removing one animation.** Clearing a slide's animations works.
 
 Smaller differences:
@@ -332,6 +330,9 @@ Smaller differences:
 - A few tools accept an argument that has no counterpart, a screen tip on a
   hyperlink for instance. Those refuse with a message naming the argument, so
   dropping it and retrying works.
+- **Video and audio go in embedded, never linked**, and of the eight playback
+  settings only looping and hiding the frame exist. Hiding the frame is refused
+  on a slide that already has animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.
 - Slide images come from a PDF render rather than PNG export, which is sharper

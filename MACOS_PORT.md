@@ -220,6 +220,7 @@ round trip.
 | sections count through `section properties` | works |
 | **export the deck to PDF, from the container** | **0.19 s, file verified** |
 | **export one shape to PNG, into the container** | **0.15 s, 28 KB verified** |
+| **insert a movie or a sound from a path, verified as `shape type media`** | **`make new media2 object`, embedded in `ppt/media/` at the file's own byte size** |
 | a chart already in the deck, seen as a shape | name, type and geometry all readable |
 
 Per operation cost on the live object model settles around **0.5 ms for a simple
@@ -356,6 +357,41 @@ costs the rest of the slide. `ppt_clear_animations` is the exception that is saf
 emptying the slide anyway. It was checked against a slide holding two effects on
 one shape and two exit animations, and it left nothing behind.
 
+The same container holds `play settings`, and the two media playback settings
+on it turned out not to be alike, which is worth knowing before assuming that
+everything hanging off `animation settings` is equally dangerous. Measured on a
+slide holding a fly in, a bounce and an exit fade:
+
+```python
+media.animation_settings.animation_play_settings.loop_until_stopped.set(True)
+# all three effects untouched, entrance types and exit flag included,
+# through three writes
+
+media.animation_settings.animation_play_settings.hide_while_not_playing.set(True)
+# the exit fade is gone outright and the bounce is now a plain appear.
+# Writing False over a value that was already False did it too
+```
+
+So `ppt_set_media_settings` writes `loop` freely and writes
+`hide_while_not_playing` only on a slide whose main sequence is empty, refusing
+that one argument by name anywhere else.
+
+Counting the timeline's own `sequence` elements as a second gate looked free and
+is not, which is worth writing down before someone tries it again.
+
+```python
+count_of(slide.timeline, k.sequence)   # 0 on a fresh slide, 0 after a text box,
+                                       # 0 with one effect in the main sequence,
+                                       # and 1 as soon as a movie is inserted
+count(slide.timeline.sequences)        # 0 through all four, so the two disagree
+```
+
+A media shape brings a sequence of its own for its playback, so a gate that
+counted those would refuse the write on every slide the tool is ever called
+about. The main sequence is the only count that means what it looks like, and
+an animation triggered by clicking a shape is the case it cannot see, which the
+successful write says in `warnings`.
+
 ### 5.3 The sandbox, and where exports have to go
 
 PowerPoint for Mac is sandboxed. It carries `com.apple.security.app-sandbox` and
@@ -470,14 +506,13 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**155 tools. 125 do the job. 30 always refuse.**
+**155 tools. 128 do the job. 27 always refuse.**
 
 | Why | Tools |
 |---|---|
 | No `chart` class | `ppt_add_chart`, `ppt_set_chart_data`, `ppt_get_chart_data`, `ppt_change_chart_type`, `ppt_format_chart`, `ppt_format_chart_axis`, `ppt_set_chart_series` |
 | No freeform builder and no `nodes` | `ppt_build_freeform`, `ppt_get_shape_nodes`, `ppt_insert_node`, `ppt_delete_node`, `ppt_set_node_position`, `ppt_set_node_editing_type`, `ppt_set_segment_type` |
 | No `smart art` class | `ppt_add_smartart`, `ppt_modify_smartart`, `ppt_list_smartart_options` |
-| Nothing puts a media file on a slide | `ppt_add_video`, `ppt_add_audio`, `ppt_set_media_settings` |
 | No `select` command, so no shape range | `ppt_group_shapes`, `ppt_select_shapes` |
 | A group will not say what is in it | `ppt_get_group_items` |
 | No tags anywhere in the dictionary | `ppt_set_tag`, `ppt_get_tags` |
@@ -485,13 +520,15 @@ checked against the code by a test, so it cannot quietly go stale.
 | No table style, only the text direction | `ppt_set_table_style` |
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
 
-A further **13 tools work and refuse one argument**, with `error` naming
+A further **16 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
 cannot take a `trigger_shape`, `ppt_set_reflection` cannot take the four
-numeric arguments, and the rest are checks that report a write which did not
-land rather than a capability that is missing.
+numeric arguments, `ppt_add_video` and `ppt_add_audio` cannot take
+`link_to_file`, `ppt_set_media_settings` cannot take volume, mute, trim or
+fade, and the rest are checks that report a write which did not land rather
+than a capability that is missing.
 
 Everything else that differs comes back in `warnings` beside a success, which
 is where to look for the smaller gaps: a glow with no transparency, a line
