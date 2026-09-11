@@ -1,46 +1,54 @@
-"""Chart tools, on Apple Events.
+"""Chart tools, on Apple Events and the clipboard.
 
-Mirrors ``ppt_com/charts.py``. All seven tools refuse, and the reason is the
-same one seven times, so it is stated once here and named once in each refusal.
+Mirrors ``ppt_com/charts.py``. ``ppt_add_chart`` and ``ppt_get_chart_data``
+work; the five that edit an existing chart still refuse, and the reason is
+stated once here.
 
 **There is no chart in this dictionary.** Not a thin one, not a read only one,
-none. Parsing ``PowerPoint.sdef`` into the tables appscript itself builds gives
-a reference table, which holds every property, element and command PowerPoint
-answers to, and the only word in it containing "chart" is ``chart unit effect``,
-which sets whether an animation reveals a chart by series or by category. There
-is no ``chart`` class, no ``has chart`` beside ``has table`` on ``shape``, no
-``series``, no ``axis``, no ``chart data``. Windows reaches all seven of these
-tools through ``Shape.Chart``, and that one step has no counterpart.
+none. The only word in it containing "chart" is ``chart unit effect``, an
+animation setting. There is no ``chart`` class, no ``has chart`` beside ``has
+table`` on ``shape``, no ``series``, no ``axis``, no ``chart data``. Windows
+reaches all seven tools through ``Shape.Chart``, and that step has no
+counterpart.
 
-**What is not missing is the shape.** ``shape type chart`` is a real enumerator,
-code ``0x008c0003``, which is the Windows ``msoChart`` constant 3 in the low
-byte, so a chart already in the deck reports itself as a chart. That is enough
-to find it, name it, move it, resize it, read its box and delete it through the
-ordinary shape tools, and it is why every refusal here points at those rather
-than saying charts are absent altogether. The chart is on the slide. Only its
-contents are out of reach.
+**The clipboard has one.** A chart copied with ``copy shape`` lands on the
+pasteboard as a DrawingML package holding ``chart1.xml``, caches and all, and
+``paste object`` takes such a package back and makes a real chart of it,
+without a workbook. So a chart is added by writing ``chart1.xml`` from the
+``XlChartType`` integer and pasting it, and its data is read by copying it
+and reading the caches. Both were measured before they were written
+(docs/gvml-design.md section 0). The XML writer and reader are in
+``gvml/charts.py``, the paste procedure in ``ppt_mac/gvml_paste.py``.
 
-**A chart shape is still checked before it is refused.** A caller who names the
-wrong shape hears that, with the same message Windows gives, because being told
-a platform cannot do something is no use when the real mistake was the shape
-name. Only once the shape is found and is a chart does the refusal follow.
+**What is not yet written is the editing.** ``ppt_set_chart_data``,
+``ppt_change_chart_type``, ``ppt_format_chart``, ``ppt_format_chart_axis``
+and ``ppt_set_chart_series`` are the design's second tier: copy, rewrite the
+XML, paste, delete the original, restore position and z order. They refuse
+until then, naming the shape they were asked about first, so a caller who
+picked the wrong shape hears that rather than a platform note.
 
-MACOS_PORT section 6.2 leaves one question open, whether ``AddChart`` exists in
-the Mac VBA type library, and the honest answer there is that it was not found
-by a method whose negatives are unreliable. Nothing here contradicts that. The
-Apple Event dictionary is settled and empty; VBA is a separate route that would
-still need ``run VB macro`` to be proven to execute at all.
-
-Nothing here edits a slide, so nothing calls ``goto_slide``, and a refused call
-leaves the user's view where it was.
+Nothing that refuses moves the view, so a refused call leaves the user
+looking where they were.
 """
 
 import logging
 
 from backend.mac_ae import ppt, slide_at as _slide
+from backend.mac_enums import MsoShapeType
 from backend.unsupported import refusal as _refusal
+from gvml import PackageError
+from gvml import canvas as _canvas
+from gvml import charts as _gvml_charts
 from ppt_com.constants import msoChart
-from ppt_mac.shapes import _WIN_SHAPE_TYPE, _get_shape, _win_constant
+from ppt_mac.gvml_paste import (
+    Clipboard,
+    Refused,
+    copy_shape_package,
+    paste_package,
+    unused_name,
+    with_warnings,
+)
+from ppt_mac.shapes import _WIN_SHAPE_TYPE, _get_shape, _shape_names, _win_constant
 
 logger = logging.getLogger(__name__)
 
@@ -54,33 +62,37 @@ def _com_charts():
     silently finds nothing to swap. The tables are only wanted inside a call,
     by which point both modules are finished, so the import waits until then.
 
-    ``_resolve_chart_type`` and ``AXIS_TYPE_MAP`` are taken from there rather
-    than copied so a chart type added on the Windows side is still spelled the
-    same way in the error a Mac caller reads.
+    ``_resolve_chart_type``, ``CHART_TYPE_NAMES`` and ``AXIS_TYPE_MAP`` are
+    taken from there rather than copied so a chart type added on the Windows
+    side is still spelled the same way in a Mac caller's error.
     """
     from ppt_com import charts
 
     return charts
 
 
-# The one finding every refusal in this module rests on, kept in one place so
-# that a reader who meets it twice recognises it as the same finding.
+# The one finding every remaining refusal in this module rests on.
 _NO_CHART_OBJECT = (
     "PowerPoint for Mac has no `chart` class in its Apple Event dictionary. "
     "The only property, element or command in it containing \"chart\" is "
     "`chart unit effect`, which is an animation setting, and `shape` carries "
-    "`has table` with no `has chart` "
-    "beside it. Windows reaches this through Shape.Chart, and that step does "
-    "not exist here."
+    "`has table` with no `has chart` beside it. Windows reaches this through "
+    "Shape.Chart, and that step does not exist here. The chart's XML can be "
+    "reached through the clipboard, which is how ppt_add_chart and "
+    "ppt_get_chart_data work, and rewriting it that way is not yet written."
 )
 
-# What survives, said the same way each time. An existing chart is a shape like
-# any other, and these are the tools that treat it as one.
+# What survives, said the same way each time.
 _SHAPE_TOOLS = [
+    "ppt_get_chart_data, which reads the categories and series",
     "ppt_get_shape_info, which reports a chart shape's type, name and box",
     "ppt_update_shape, which moves and resizes it",
-    "ppt_list_shapes",
     "ppt_delete_shape",
+]
+
+_ADD_ALTERNATIVES = [
+    "ppt_add_table, which carries the same numbers as a grid",
+    "ppt_add_picture, for a chart rendered elsewhere",
 ]
 
 
@@ -91,8 +103,7 @@ def _chart_shape(slide, name_or_index):
     ``HasChart``. There is no such property here, so the shape type carries the
     answer instead, read through the generated table so the comparison is
     against the Windows constant a caller already knows. The message is the one
-    Windows gives, word for word, because a caller who moves between the two
-    should not have to learn it twice.
+    Windows gives, word for word.
     """
     shape = _get_shape(slide, name_or_index)
     type_val = _win_constant(_WIN_SHAPE_TYPE, shape.shape_type())
@@ -102,12 +113,7 @@ def _chart_shape(slide, name_or_index):
 
 
 def _refuse_for_shape(tool_name, slide_index, shape_name_or_index, detail, extra=None):
-    """Find the chart, then refuse, naming it.
-
-    Every tool but ``ppt_add_chart`` takes a shape identifier, and resolving it
-    first is what separates a caller who picked the wrong shape from a caller
-    who picked a platform that cannot help. The first hears about the shape.
-    """
+    """Find the chart, then refuse, naming it."""
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
     shape = _chart_shape(slide, shape_name_or_index)
@@ -124,65 +130,117 @@ def _refuse_for_shape(tool_name, slide_index, shape_name_or_index, detail, extra
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
 def _add_chart_impl(slide_index, chart_type, left, top, width, height):
-    """Refuse, because nothing in the dictionary makes a chart.
+    """Write ``chart1.xml`` for the type and paste it as a chart.
 
-    The chart type is resolved first even though it is about to be thrown
-    away, so a caller who wrote 'colunm' hears about the spelling rather than
-    reading a platform note and going away to fix the wrong thing.
+    The type is resolved through the Windows table first, so a caller who
+    wrote 'colunm' hears about the spelling. A type the XML writer has no
+    template for is refused by argument, not by tool.
     """
-    type_int = _com_charts()._resolve_chart_type(chart_type)
-    logger.debug("chart type %r resolved to %d before refusing", chart_type, type_int)
+    com = _com_charts()
+    type_int = com._resolve_chart_type(chart_type)
+    type_name = com.CHART_TYPE_NAMES.get(type_int, str(type_int))
+    try:
+        chart_xml = _gvml_charts.chart_xml(type_int)
+    except _gvml_charts.ChartTypeError as exc:
+        supported = sorted(
+            com.CHART_TYPE_NAMES[t] for t in _gvml_charts.supported_types()
+            if t in com.CHART_TYPE_NAMES
+        )
+        return _refusal(
+            "ppt_add_chart",
+            f"{exc} On macOS a chart is made by writing its XML and pasting "
+            "it, and no template exists yet for this type. Types that can be "
+            f"drawn: {', '.join(supported)}.",
+            _ADD_ALTERNATIVES,
+            error=f"ppt_add_chart cannot draw chart_type {chart_type!r} on macOS",
+        )
 
-    return _refusal(
-        "ppt_add_chart",
-        f"{_NO_CHART_OBJECT} There is no `make new chart`, and no other "
-        "command takes a chart type, so a chart cannot be put on a slide from "
-        "a script at all. A chart inserted by hand is a different matter. It "
-        "reports `shape type chart` and behaves as an ordinary shape from "
-        "then on.",
-        [
-            "Insert the chart once by hand in PowerPoint, then position it "
-            "with ppt_update_shape",
-            "ppt_add_table, which carries the same numbers as a grid",
-            "ppt_add_picture, for a chart rendered elsewhere",
-        ],
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+    name = unused_name(_shape_names(slide), "Chart")
+    raw = _gvml_charts.chart_package(
+        name, _canvas.emu(left), _canvas.emu(top), _canvas.emu(width), _canvas.emu(height), chart_xml,
     )
+
+    clip = Clipboard.take()
+    try:
+        try:
+            pasted = paste_package(
+                pres, slide, slide_index, raw, clip, "ppt_add_chart",
+                MsoShapeType[msoChart], left, top, _ADD_ALTERNATIVES,
+            )
+        except Refused as refused:
+            return refused.payload
+    finally:
+        clip.restore()
+
+    return with_warnings({
+        "success": True,
+        "shape_name": pasted.name,
+        "shape_index": pasted.shape.z_order_position(),
+        "chart_type": type_name,
+        "chart_type_int": type_int,
+    }, clip, pasted.warnings)
 
 
 def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
-    """Refuse, because the data sheet behind a chart is not addressable.
-
-    Windows opens the chart's Excel workbook and writes cells. There is no
-    ``chart data`` and no workbook here, and no route to Excel either, since
-    the two applications are separate Apple Event targets with nothing linking
-    a shape on a slide to a sheet in a book.
-    """
+    """Refuse, because rewriting a chart's XML is not yet written here."""
     return _refuse_for_shape(
         "ppt_set_chart_data",
         slide_index,
         shape_name_or_index,
-        "its data sheet cannot be reached. Windows writes the numbers into the "
-        "chart's Excel workbook through Chart.ChartData, and there is no "
-        "`chart data` and no workbook in this dictionary.",
+        "its data cannot be written yet. Windows writes the numbers into the "
+        "chart's Excel workbook through Chart.ChartData; there is no `chart "
+        "data` and no workbook here, and rewriting the caches in the chart's "
+        "XML through the clipboard is the design's next step.",
+        ["ppt_add_chart, then delete the old chart, until then"],
     )
 
 
 def _get_chart_data_impl(slide_index, shape_name_or_index):
-    """Refuse, because the numbers cannot be read back either.
+    """Copy the chart and read its categories and series out of ``chart1.xml``.
 
-    Symmetrical with the write. Worth its own refusal rather than a shared one,
-    because a caller reading a chart is usually trying to find out what is in
-    the deck, and the useful answer names the tool that does report something.
+    The numbers come from the caches PowerPoint keeps in the XML, which are
+    what the chart draws from; a chart without a workbook still has them.
+    Nothing on the slide changes and the clipboard is put back afterwards.
     """
-    return _refuse_for_shape(
-        "ppt_get_chart_data",
-        slide_index,
-        shape_name_or_index,
-        "its categories and series cannot be read. There is no `series`, no "
-        "`axis` and no `chart data` anywhere in the dictionary, so the only "
-        "thing PowerPoint will say about it is that it is a chart, how big it "
-        "is and where it sits.",
-    )
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+    shape = _chart_shape(slide, shape_name_or_index)
+    name = shape.name()
+
+    clip = Clipboard.take()
+    try:
+        try:
+            package = copy_shape_package(shape, clip, "ppt_get_chart_data")
+        except Refused as refused:
+            return refused.payload
+        chart_bytes = package.chart()
+        if chart_bytes is None:
+            return _refusal(
+                "ppt_get_chart_data",
+                f"'{name}' reports `shape type chart`, but the package "
+                "PowerPoint wrote for it holds no chart part, so there are no "
+                "categories or series to read.",
+                _SHAPE_TOOLS[1:],
+            )
+        try:
+            data = _gvml_charts.read_chart(chart_bytes)
+        except PackageError as exc:
+            return _refusal(
+                "ppt_get_chart_data",
+                f"'{name}' is a chart, but its chart1.xml could not be read: {exc}",
+                _SHAPE_TOOLS[1:],
+            )
+    finally:
+        clip.restore()
+
+    return with_warnings({
+        "success": True,
+        "shape_name": name,
+        "categories": data["categories"],
+        "series": data["series"],
+    }, clip)
 
 
 def _format_chart_impl(
@@ -191,12 +249,7 @@ def _format_chart_impl(
     legend_top, legend_left,
     title_position, title_top, title_left,
 ):
-    """Refuse, because a chart's title and legend are parts of the chart.
-
-    Every argument this tool takes hangs off ``Chart``. None of them is a
-    property of the shape, so there is nothing here to honour partially and no
-    argument worth singling out with ``error=``.
-    """
+    """Refuse, because a chart's title and legend are parts of the chart."""
     return _refuse_for_shape(
         "ppt_format_chart",
         slide_index,

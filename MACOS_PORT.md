@@ -506,11 +506,11 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**155 tools. 132 do the job. 23 always refuse.**
+**155 tools. 134 do the job. 21 always refuse.**
 
 | Why | Tools |
 |---|---|
-| No `chart` class | `ppt_add_chart`, `ppt_set_chart_data`, `ppt_get_chart_data`, `ppt_change_chart_type`, `ppt_format_chart`, `ppt_format_chart_axis`, `ppt_set_chart_series` |
+| No `chart` class, and rewriting a chart's XML through the clipboard is not yet written | `ppt_set_chart_data`, `ppt_change_chart_type`, `ppt_format_chart`, `ppt_format_chart_axis`, `ppt_set_chart_series` |
 | No `nodes`, and rewriting a path through the clipboard is not yet written. `ppt_set_node_editing_type` will stay refused: corner, smooth and symmetric are not stored in the XML either | `ppt_insert_node`, `ppt_delete_node`, `ppt_set_node_position`, `ppt_set_node_editing_type`, `ppt_set_segment_type` |
 | No `smart art` class | `ppt_add_smartart`, `ppt_modify_smartart`, `ppt_list_smartart_options` |
 | No `select` command, so no shape range | `ppt_select_shapes` |

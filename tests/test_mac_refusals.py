@@ -262,28 +262,10 @@ class TestTheSwapActuallyHappened:
 # ---------------------------------------------------------------------------
 @macos_only
 class TestAddChart:
-    """Nothing puts a chart on a slide, so this refuses without asking."""
+    """The chart is pasted from XML now; the typo check still comes first.
 
-    def test_it_refuses_and_says_why(self):
-        from ppt_mac.charts import _add_chart_impl
-
-        with _no_powerpoint():
-            result = _add_chart_impl(1, "column", 50, 50, 500, 350)
-
-        assert result["error"] == "ppt_add_chart is not available on macOS"
-        assert result["platform"] == "macOS"
-        assert "no `chart` class" in result["reason"]
-        assert "success" not in result
-
-    def test_it_offers_a_route_the_caller_can_take(self):
-        from ppt_mac.charts import _add_chart_impl
-
-        with _no_powerpoint():
-            result = _add_chart_impl(1, "column", 50, 50, 500, 350)
-
-        assert "ppt_add_table, which carries the same numbers as a grid" in (
-            result["alternatives"]
-        )
+    What happens after the type resolves is in test_mac_gvml.py.
+    """
 
     def test_a_misspelled_chart_type_is_still_heard(self):
         """The typo is the caller's real problem, so it comes first."""
@@ -296,18 +278,7 @@ class TestAddChart:
 
 @macos_only
 class TestChartToolsThatTakeAShape:
-    """Six tools name a chart, so the chart is found before it is refused."""
-
-    def test_reading_data_refuses_and_names_the_shape(self):
-        from ppt_mac.charts import _get_chart_data_impl
-
-        with _fake_deck(["Title", "Q3 Revenue"]) as deck:
-            deck.set_type("Q3 Revenue", "chart")
-            result = _get_chart_data_impl(1, "Q3 Revenue")
-
-        assert result["error"] == "ppt_get_chart_data is not available on macOS"
-        assert "'Q3 Revenue' on slide 1 is a chart" in result["reason"]
-        assert "success" not in result
+    """Five tools name a chart and refuse; the chart is found first."""
 
     def test_writing_data_says_the_workbook_is_the_missing_piece(self):
         from ppt_mac.charts import _set_chart_data_impl
@@ -384,12 +355,11 @@ class TestChartToolsThatTakeAShape:
         """An existing chart is a shape, and that is the part not missing."""
         from ppt_mac.charts import (
             _change_chart_type_impl, _format_chart_axis_impl, _format_chart_impl,
-            _get_chart_data_impl, _set_chart_data_impl, _set_chart_series_impl,
+            _set_chart_data_impl, _set_chart_series_impl,
         )
 
         calls = [
             (_set_chart_data_impl, (1, "C", ["Q1"], [])),
-            (_get_chart_data_impl, (1, "C")),
             (_format_chart_impl, (1, "C") + (None,) * 10),
             (_format_chart_axis_impl, (1, "C", "value") + (None,) * 14),
             (_set_chart_series_impl, (1, "C", 1, None, None, None)),

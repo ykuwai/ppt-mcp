@@ -47,12 +47,228 @@ def _fixture_bytes(name):
 # The swap
 # ---------------------------------------------------------------------------
 @macos_only
-class TestGvmlPasteIsNotATool:
+class TestTheSixToolsAreTheClipboardOnes:
+    @pytest.mark.parametrize(
+        "module_name,impl_name",
+        [
+            ("ppt_com.charts", "_add_chart_impl"),
+            ("ppt_com.charts", "_get_chart_data_impl"),
+            ("ppt_com.freeform", "_build_freeform_impl"),
+            ("ppt_com.freeform", "_get_shape_nodes_impl"),
+            ("ppt_com.groups", "_group_shapes_impl"),
+            ("ppt_com.groups", "_get_group_items_impl"),
+        ],
+    )
+    def test_the_com_module_answers_with_the_apple_event_one(self, module_name, impl_name):
+        import importlib
+
+        module = importlib.import_module(module_name)
+        assert getattr(module, impl_name).__module__ == module_name.replace("ppt_com", "ppt_mac")
+
     def test_gvml_paste_defines_no_impl_of_its_own(self):
         """MACOS_PORT's tool count walks every `_impl` in ppt_mac."""
         from ppt_mac import gvml_paste
 
         assert not [n for n in dir(gvml_paste) if n.endswith("_impl")]
+
+
+# ---------------------------------------------------------------------------
+# The procedure
+# ---------------------------------------------------------------------------
+@macos_only
+class TestThePasteProcedure:
+    """One order of steps, and every place it stops."""
+
+    def test_the_steps_run_in_order_and_the_clipboard_comes_back(self):
+        from ppt_mac.freeform import _build_freeform_impl
+
+        with _fake_deck(shapes=[("Title", "auto")]) as deck:
+            payload = json.loads(_build_freeform_impl(1, 1, 10.0, 20.0, _LINE_NODES, True, "Zig"))
+
+        assert payload["success"] is True
+        assert payload["shape_name"] == "Zig"
+        assert payload["left"] == 10.0 and payload["top"] == 20.0
+        assert deck.order == [
+            "snapshot", "write", "goto", "unselect", "paste", "position", "restore",
+        ]
+        assert deck.board.contents == {"public.utf8-plain-text": b"kept"}
+        assert "warnings" not in payload
+
+    def test_a_paste_that_added_nothing_is_a_refusal_without_success(self):
+        from ppt_mac.freeform import _build_freeform_impl
+
+        with _fake_deck(shapes=[("Title", "auto")], deaf=True) as deck:
+            payload = json.loads(_build_freeform_impl(1, 1, 0.0, 0.0, _LINE_NODES, False, None))
+
+        assert payload["error"] == "ppt_build_freeform is not available on macOS"
+        assert "silent no-op" in payload["reason"]
+        assert "success" not in payload
+        assert [s.name() for s in deck.shapes] == ["Title"]
+        assert deck.order[-1] == "restore"
+
+    def test_a_clipboard_rewritten_after_the_write_stops_the_paste(self):
+        from ppt_mac.freeform import _build_freeform_impl
+
+        with _fake_deck(shapes=[], rewrite_after_write=True) as deck:
+            payload = json.loads(_build_freeform_impl(1, 1, 0.0, 0.0, _LINE_NODES, False, None))
+
+        assert "paste" not in deck.order
+        assert "written to by something else" in payload["reason"]
+        assert "success" not in payload
+        # Not ours any more, so not overwritten with the old contents either.
+        assert deck.board.contents != {"public.utf8-plain-text": b"kept"}
+
+    def test_a_navigation_that_failed_stops_the_paste(self):
+        from ppt_mac.freeform import _build_freeform_impl
+
+        with _fake_deck(shapes=[], goto_error=-1728) as deck:
+            payload = json.loads(_build_freeform_impl(1, 1, 0.0, 0.0, _LINE_NODES, False, None))
+
+        assert "paste" not in deck.order
+        assert "-1728" in payload["reason"]
+
+    def test_what_landed_as_the_wrong_type_is_removed_before_the_refusal(self):
+        from ppt_mac.charts import _add_chart_impl
+
+        with _fake_deck(shapes=[("Title", "auto")], lands_as="auto") as deck:
+            result = _add_chart_impl(1, "column", 50, 50, 500, 350)
+
+        assert "shape_type_auto" in result["reason"]
+        assert "removed again" in result["reason"]
+        assert [s.name() for s in deck.shapes] == ["Title"]
+        assert "success" not in result
+
+    def test_two_shapes_where_one_was_expected_are_both_removed(self):
+        from ppt_mac.charts import _add_chart_impl
+
+        with _fake_deck(shapes=[], lands_twice=True) as deck:
+            result = _add_chart_impl(1, "column", 50, 50, 500, 350)
+
+        assert "put 2 shapes" in result["reason"]
+        assert deck.shapes == []
+
+    def test_a_position_that_did_not_stick_is_a_warning_not_a_refusal(self):
+        from ppt_mac.charts import _add_chart_impl
+
+        with _fake_deck(shapes=[], stuck_position=(380.0, 210.0)):
+            result = _add_chart_impl(1, "column", 50, 50, 500, 350)
+
+        assert result["success"] is True
+        assert "(380.0, 210.0)" in result["warnings"][0]
+
+    def test_the_clipboard_is_left_alone_when_someone_else_wrote_meanwhile(self):
+        from ppt_mac.charts import _add_chart_impl
+
+        with _fake_deck(shapes=[], rewrite_after_paste=True) as deck:
+            result = _add_chart_impl(1, "column", 50, 50, 500, 350)
+
+        assert result["success"] is True
+        assert "restore" not in deck.order
+        assert "not put back" in result["warnings"][0]
+
+    def test_a_clipboard_too_large_to_save_is_said_so(self):
+        from ppt_mac.charts import _add_chart_impl
+
+        with _fake_deck(shapes=[], too_large=True) as deck:
+            result = _add_chart_impl(1, "column", 50, 50, 500, 350)
+
+        assert result["success"] is True
+        assert "restore" not in deck.order
+        assert "could not be put back" in result["warnings"][0]
+
+    def test_the_selection_is_cleared_before_every_paste(self):
+        """The finding that a chart selection swallows the next paste."""
+        from ppt_mac.charts import _add_chart_impl
+
+        with _fake_deck(shapes=[]) as deck:
+            _add_chart_impl(1, "column", 50, 50, 500, 350)
+            _add_chart_impl(1, "pie", 50, 400, 300, 200)
+
+        pastes = [i for i, step in enumerate(deck.order) if step == "paste"]
+        assert len(pastes) == 2
+        for i in pastes:
+            assert deck.order[i - 1] == "unselect"
+        assert [s.name() for s in deck.shapes] == ["Chart 1", "Chart 2"]
+
+
+# ---------------------------------------------------------------------------
+# Charts
+# ---------------------------------------------------------------------------
+@macos_only
+class TestAddChart:
+    def test_it_returns_what_windows_returns(self):
+        from ppt_mac.charts import _add_chart_impl
+
+        with _fake_deck(shapes=[("Title", "auto")]) as deck:
+            result = _add_chart_impl(1, "pie", 50, 60, 500, 350)
+
+        assert result == {
+            "success": True, "shape_name": "Chart 1", "shape_index": 2,
+            "chart_type": "pie", "chart_type_int": 5,
+        }
+        assert deck.shapes[-1].shape_type().AS_name == "shape_type_chart"
+        assert (deck.shapes[-1].left_position(), deck.shapes[-1].top()) == (50, 60)
+
+    def test_a_chart_type_without_a_template_refuses_by_argument(self):
+        """An XlChartType the writer cannot draw names the argument, not the tool."""
+        from ppt_mac.charts import _add_chart_impl
+
+        with _no_powerpoint():
+            result = _add_chart_impl(1, -4100, 50, 50, 500, 350)
+
+        assert result["error"] == "ppt_add_chart cannot draw chart_type -4100 on macOS"
+        assert "column" in result["reason"] and "pie" in result["reason"]
+        assert "success" not in result
+
+    def test_a_misspelled_type_is_still_heard_first(self):
+        from ppt_mac.charts import _add_chart_impl
+
+        with _no_powerpoint():
+            with pytest.raises(ValueError, match="Unknown chart type 'colunm'"):
+                _add_chart_impl(1, "colunm", 50, 50, 500, 350)
+
+
+@macos_only
+class TestGetChartData:
+    def test_it_reads_the_caches_out_of_the_copied_package(self):
+        from ppt_mac.charts import _get_chart_data_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            result = _get_chart_data_impl(1, "Sales")
+
+        assert result["success"] is True
+        assert result["shape_name"] == "Sales"
+        assert result["categories"] == ["Category 1", "Category 2", "Category 3", "Category 4"]
+        assert result["series"][0] == {"name": "Series 1", "values": [4.3, 2.5, 3.5, 4.5]}
+        assert deck.order == ["snapshot", "copy", "claim", "restore"]
+        assert deck.board.contents == {"public.utf8-plain-text": b"kept"}
+
+    def test_a_chart_whose_package_holds_no_chart_part_is_refused(self):
+        from ppt_mac.charts import _get_chart_data_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("rect"))]):
+            result = _get_chart_data_impl(1, "Sales")
+
+        assert "holds no chart part" in result["reason"]
+        assert "success" not in result
+
+    def test_a_copy_that_left_no_package_is_refused(self):
+        from ppt_mac.charts import _get_chart_data_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", None)]):
+            result = _get_chart_data_impl(1, "Sales")
+
+        assert "put nothing of type" in result["reason"]
+        assert "success" not in result
+
+    def test_a_shape_that_is_not_a_chart_says_so_before_the_clipboard_is_touched(self):
+        from ppt_mac.charts import _get_chart_data_impl
+
+        with _fake_deck(shapes=[("Title", "auto")]) as deck:
+            with pytest.raises(ValueError, match="'Title' is not a chart"):
+                _get_chart_data_impl(1, "Title")
+
+        assert deck.order == []
 
 
 # ---------------------------------------------------------------------------
