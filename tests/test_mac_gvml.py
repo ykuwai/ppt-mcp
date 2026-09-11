@@ -56,6 +56,56 @@ class TestGvmlPasteIsNotATool:
 
 
 # ---------------------------------------------------------------------------
+# Freeforms
+# ---------------------------------------------------------------------------
+@macos_only
+class TestFreeformTools:
+    def test_building_returns_a_json_string_in_the_windows_shape(self):
+        from ppt_mac.freeform import _build_freeform_impl
+
+        with _fake_deck(shapes=[]):
+            raw = _build_freeform_impl(1, 1, 100.0, 150.0, _CURVE_NODES, True, None)
+
+        assert isinstance(raw, str)
+        payload = json.loads(raw)
+        assert set(payload) == {"success", "shape_name", "shape_index", "left", "top", "width", "height"}
+        assert payload["shape_name"] == "Freeform 1"
+        assert (payload["left"], payload["top"]) == (100.0, 100.0)
+        # The auto curve's control points reach past x=250, and the box holds them.
+        assert (payload["width"], payload["height"]) == (163.33, 160.0)
+
+    def test_reading_nodes_numbers_them_as_windows_does(self):
+        from ppt_mac.freeform import _get_shape_nodes_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]) as deck:
+            payload = json.loads(_get_shape_nodes_impl(1, "Blob", None))
+
+        assert payload["shape_name"] == "Blob"
+        assert payload["node_count"] == 9
+        assert payload["nodes"][2]["segment_type"] == "inaccessible"
+        assert payload["nodes"][2]["note"].startswith("Metadata not accessible")
+        assert deck.order == ["snapshot", "copy", "claim", "restore"]
+
+    def test_reading_a_shape_that_is_not_a_freeform_says_so_first(self):
+        from ppt_mac.freeform import _get_shape_nodes_impl
+
+        with _fake_deck(shapes=[("Title", "auto")]) as deck:
+            with pytest.raises(ValueError, match="is not a freeform"):
+                _get_shape_nodes_impl(1, "Title", None)
+
+        assert deck.order == []
+
+    def test_the_editing_type_tool_says_the_xml_has_no_word_for_it_either(self):
+        from ppt_mac.freeform import _set_node_editing_type_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", None)]):
+            payload = json.loads(_set_node_editing_type_impl(1, "Blob", None, 2, 2))
+
+        assert "no such attribute either" in payload["reason"]
+        assert "success" not in payload
+
+
+# ---------------------------------------------------------------------------
 # Groups
 # ---------------------------------------------------------------------------
 @macos_only

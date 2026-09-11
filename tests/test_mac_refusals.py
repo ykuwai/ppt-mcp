@@ -609,7 +609,7 @@ class TestListingSmartArtLayouts:
 # ---------------------------------------------------------------------------
 @macos_only
 class TestFreeformWireForm:
-    """These seven return a JSON string, and the other ten return a dict.
+    """These five return a JSON string, and the other tools return a dict.
 
     The freeform tool wrappers hand back whatever ``ppt.execute`` returns
     without encoding it, so a dict here would reach the model as a Python repr
@@ -629,63 +629,8 @@ class TestFreeformWireForm:
 
 
 @macos_only
-class TestBuildFreeform:
-    """No builder, and three near misses that had to be ruled out."""
-
-    def test_it_refuses_without_asking_powerpoint_anything(self):
-        from ppt_mac.freeform import _build_freeform_impl
-
-        with _no_powerpoint():
-            payload = json.loads(_build_freeform_impl(
-                1, 1, 0.0, 0.0,
-                [{"seg_int": 0, "et_int": 1, "x1": 10.0, "y1": 10.0}],
-                False, "Star",
-            ))
-
-        assert payload["error"] == "ppt_build_freeform is not available on macOS"
-        assert "no `build freeform` command" in payload["reason"]
-
-    def test_it_reports_the_path_it_was_asked_for(self):
-        """Enough for a caller to judge whether ppt_add_line is worth it."""
-        from ppt_mac.freeform import _build_freeform_impl
-
-        nodes = [{"seg_int": 0, "et_int": 1, "x1": float(i), "y1": 0.0} for i in range(4)]
-        with _no_powerpoint():
-            payload = json.loads(_build_freeform_impl(1, 1, 0.0, 0.0, nodes, True, None))
-
-        assert "4 segment(s)" in payload["reason"]
-        assert "close_path=True" in payload["reason"]
-
-    def test_it_names_the_near_misses_rather_than_substituting_one(self):
-        """A polyline of `line shape`s is not a freeform and is not drawn."""
-        from ppt_mac.freeform import _build_freeform_impl
-
-        with _no_powerpoint():
-            payload = json.loads(_build_freeform_impl(
-                1, 1, 0.0, 0.0, [{"seg_int": 0, "et_int": 1, "x1": 1.0, "y1": 1.0}],
-                False, None,
-            ))
-
-        assert "`line shape` does exist" in payload["reason"]
-        assert "motion effect" in payload["reason"]
-        assert "ppt_add_line" in payload["alternatives"][1]
-
-
-@macos_only
 class TestFreeformNodeTools:
-    """Six tools name a shape, so the shape is found before it is refused."""
-
-    def test_reading_nodes_says_the_shape_reads_and_the_outline_does_not(self):
-        from ppt_mac.freeform import _get_shape_nodes_impl
-
-        with _fake_deck(["Arrow"]) as deck:
-            deck.set_type("Arrow", "freeform")
-            payload = json.loads(_get_shape_nodes_impl(1, "Arrow", None))
-
-        assert "'Arrow' on slide 1 is a freeform" in payload["reason"]
-        assert "its outline cannot be read" in payload["reason"]
-        assert "nodes" not in payload
-        assert "node_count" not in payload
+    """Five tools name a shape and refuse; the shape is found first."""
 
     def test_deleting_a_node_says_the_outline_is_untouched(self):
         """The destructive one, where a believed no-op costs the most."""
@@ -736,7 +681,7 @@ class TestFreeformNodeTools:
                 _get_shape_nodes_impl(1, None, 9)
 
     def test_they_all_point_at_the_shape_tools(self):
-        for result in _all_freeform_refusals(include_build=False):
+        for result in _all_freeform_refusals():
             payload = json.loads(result)
             assert "ppt_list_shapes" in payload["alternatives"]
 
@@ -744,24 +689,19 @@ class TestFreeformNodeTools:
 # ---------------------------------------------------------------------------
 # The fake object graph
 # ---------------------------------------------------------------------------
-def _all_freeform_refusals(include_build=True):
-    """Run every freeform impl against a freeform and collect what came back."""
+def _all_freeform_refusals():
+    """Run every refusing freeform impl against a freeform; collect the answers.
+
+    ``_build_freeform_impl`` and ``_get_shape_nodes_impl`` go through the
+    clipboard now and are covered in test_mac_gvml.py.
+    """
     from ppt_mac.freeform import (
-        _build_freeform_impl, _delete_node_impl, _get_shape_nodes_impl,
-        _insert_node_impl, _set_node_editing_type_impl, _set_node_position_impl,
-        _set_segment_type_impl,
+        _delete_node_impl, _insert_node_impl, _set_node_editing_type_impl,
+        _set_node_position_impl, _set_segment_type_impl,
     )
 
     results = []
-    if include_build:
-        with _no_powerpoint():
-            results.append(_build_freeform_impl(
-                1, 1, 0.0, 0.0,
-                [{"seg_int": 0, "et_int": 1, "x1": 1.0, "y1": 1.0}], False, None,
-            ))
-
     calls = [
-        (_get_shape_nodes_impl, (1, "Arrow", None)),
         (_set_node_position_impl, (1, "Arrow", None, 1, 5.0, 6.0)),
         (_insert_node_impl, (1, "Arrow", None, 1, 0, 1, 1.0, 1.0, None, None, None, None)),
         (_delete_node_impl, (1, "Arrow", None, 1)),

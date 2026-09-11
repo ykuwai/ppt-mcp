@@ -1,85 +1,76 @@
-"""Freeform path tools, on Apple Events.
+"""Freeform path tools, on Apple Events and the clipboard.
 
 Mirrors ``ppt_com/freeform.py``. Same function names, same signatures, and the
 same wire form, which in this one module is a JSON string rather than a dict,
 because the freeform tools return what ``ppt.execute`` hands back without
 encoding it again.
 
-All seven tools refuse. Four near misses were checked before concluding that,
-and each is named below so nobody spends an afternoon re-deriving them.
+**There is no node anywhere in the dictionary.** No ``node``, no ``vertex``,
+no ``vertices``, no ``segment`` on a shape and no ``build freeform``. The
+near misses were checked: ``line shape`` is two points and not a path,
+``motion effect`` has a writable ``path`` that is an animation route rather
+than an outline, ``text frame``'s ``path format`` bends text, and
+``adjustment`` parametrises a built-in shape and a freeform has none.
 
-**There is no node anywhere in the object model.** Parsing ``PowerPoint.sdef``
-into the tables appscript builds gives a reference table of every property,
-element and command PowerPoint answers to, and it holds no ``node``, no
-``vertex``, no ``vertices``, no ``segment`` on a shape and no ``build
-freeform``. The word
-``node`` survives only as enumerator values, and those belong to SmartArt. So
-``Shapes.BuildFreeform`` has no counterpart and neither does ``Shape.Nodes``,
-which is what the other six tools walk.
+**The clipboard carries what the dictionary does not.** A freeform copied with
+``copy shape`` lands on the pasteboard as a DrawingML package whose
+``a:custGeom`` holds every point, and ``paste object`` takes such a package
+back. So ``ppt_build_freeform`` writes the path as ``a:custGeom`` and pastes
+it, and ``ppt_get_shape_nodes`` copies the shape and reads the path out. The
+numbering is the Windows one, one node per straight segment and three per
+curve; see ``gvml/freeform.py``. The procedure and its checks are in
+``ppt_mac/gvml_paste.py``.
 
-**``line shape`` is real and it is not a freeform.** It is a declared class
-inheriting ``shape``, with ``begin line X``, ``begin line Y``, ``end line X``
-and ``end line Y`` all writable, and ``ppt_add_line`` already makes one. Two
-points and a straight segment is genuinely reachable. What it is not is a path.
-Each segment would be its own shape, so a five segment outline is five shapes
-rather than one, it cannot be closed into a region, it cannot be filled, and it
-cannot be moved or scaled as a unit. Drawing one silently and calling it a
-freeform would be the substitution this port exists to refuse, so
-``ppt_build_freeform`` names ``ppt_add_line`` as a route the caller can choose
-rather than taking it for them.
-
-**``motion effect`` has a writable ``path`` and it draws nothing.** It is the
-only place in the dictionary where a path is handed over as data, a text
-property reached through an animation behaviour on an animation effect. What it
-describes is where a shape travels during an animation, not what the shape looks
-like, and PowerPoint also ships sixty odd ``animation type ... path``
-enumerators for the same purpose. Close enough to look like the answer, and not
-the answer.
-
-**``text frame`` has a ``path format`` and that is not it either.** Four preset
-curves for text to follow, chosen from an enumeration. It bends the text inside
-a shape and leaves the shape's outline where it was.
-
-**``adjustment`` is the one piece of shape geometry that is writable.** ``shape``
-really does have an ``adjustment`` element, and an ``adjustment`` really does
-carry a writable ``adjustment value``, which is why ``ppt_update_shape`` can
-already drag an autoshape's yellow handles. It is not a way in here. Adjustments
-parametrise a built-in shape, an arrow's head width or a rounded rectangle's
-corner, and a freeform has none, because its geometry is its node list and there
-is no word for that.
-
-**What is not missing is the shape.** ``shape type free form`` is a real
-enumerator, code ``0x008c0005``, which is the Windows ``msoFreeform`` constant 5
-in the low byte, so a freeform already in the deck reports itself as one and can
-be found, named, moved, resized, read and deleted through the ordinary shape
-tools. Its outline is what cannot be read or edited, not the shape.
-
-Nothing here edits a slide, so nothing calls ``goto_slide``, and a refused call
-leaves the user's view where it was.
+**The five tools that edit nodes still refuse.** They are the design's third
+tier (docs/gvml-design.md section 6): copy, edit the path, paste, delete the
+original, put position and z order back. The parts are all here now, and
+those tools are not yet written. ``ppt_set_node_editing_type`` will not be:
+corner, smooth and symmetric are not in the dictionary and not in the XML
+either. PowerPoint's UI derives them from where the handles sit, and there is
+nowhere to write one.
 """
 
 import json
 import logging
 
 from backend.mac_ae import ppt, slide_at as _slide
+from backend.mac_enums import MsoShapeType
 from backend.unsupported import refusal as _refusal
+from gvml import PackageError, build
+from gvml import canvas as _canvas
+from gvml import freeform as _gvml_freeform
+from gvml import shapes as _gvml_shapes
 from ppt_com.constants import msoFreeform
-from ppt_mac.shapes import _WIN_SHAPE_TYPE, _get_shape, _win_constant
+from ppt_mac.gvml_paste import (
+    Clipboard,
+    Refused,
+    copy_shape_package,
+    paste_package,
+    unused_name,
+    with_warnings,
+)
+from ppt_mac.shapes import _WIN_SHAPE_TYPE, _get_shape, _shape_names, _win_constant
 
 logger = logging.getLogger(__name__)
 
-# The one finding every refusal in this module rests on, kept in one place so
-# that a reader who meets it twice recognises it as the same finding.
+# The one finding every remaining refusal in this module rests on.
 _NO_NODES = (
     "PowerPoint for Mac's Apple Event dictionary has no `node`, no `vertex`, "
-    "no `vertices` and no `segment` on a shape, and no `build freeform` "
-    "command. Windows walks Shape.Nodes and Shape.Vertices for this, and "
-    "neither has a counterpart here."
+    "no `vertices` and no `segment` on a shape. Windows walks Shape.Nodes for "
+    "this, and it has no counterpart here. The path can be read with "
+    "ppt_get_shape_nodes, which goes through the clipboard; editing it the "
+    "same way is not yet written."
 )
 
-# What survives, said the same way each time. An existing freeform is a shape
-# like any other, and these are the tools that treat it as one.
+_BUILD_ALTERNATIVES = [
+    "ppt_add_shape, which reaches every built-in autoshape",
+    "ppt_add_line, one call per straight segment",
+    "Draw the path by hand in PowerPoint, then position it with ppt_update_shape",
+]
+
+# What survives, said the same way each time.
 _SHAPE_TOOLS = [
+    "ppt_get_shape_nodes, which reads the outline",
     "ppt_get_shape_info, which reports a freeform's type, name and box",
     "ppt_update_shape, which moves and resizes it",
     "ppt_list_shapes",
@@ -131,49 +122,87 @@ def _refuse_for_node_tool(tool_name, slide_index, shape_name, shape_index, detai
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
 def _build_freeform_impl(slide_index, start_et_int, start_x, start_y, nodes_data, close_path, shape_name):
-    """Refuse, because there is no builder and no honest stand-in for one.
+    """Write the path as ``a:custGeom`` and paste it.
 
-    The segment count and whether the path closes both go into the message.
-    They are what decides whether the ``ppt_add_line`` route is worth taking,
-    so a caller can tell from the refusal alone rather than by trying it.
+    ``start_et_int`` is accepted for signature parity and has no effect: the
+    editing type of a node is not stored in the XML, on either platform, and
+    Windows only uses it to choose between the two ``AddNodes`` forms.
+    Control points for an ``auto`` curve are computed here (a Catmull-Rom
+    spline through the anchors) where Windows computes its own.
     """
-    logger.debug("refusing a freeform of %d segment(s)", len(nodes_data))
+    logger.debug("building a freeform of %d segment(s), start editing type %r",
+                 len(nodes_data), start_et_int)
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
 
-    return json.dumps(_refusal(
-        "ppt_build_freeform",
-        f"{_NO_NODES} The path asked for here has {len(nodes_data)} segment(s) "
-        f"and close_path={close_path}, and none of it can be drawn as one "
-        "shape. `line shape` does exist and is writable, so a straight segment "
-        "can be drawn on its own, but each one is a separate shape, so a "
-        "polyline built that way cannot be closed, filled, moved or scaled as "
-        "a unit, and calling it a freeform would be untrue. `motion effect` "
-        "has a writable `path`, and that is the route an animation takes "
-        "across the slide rather than an outline.",
-        [
-            "Draw the path once by hand in PowerPoint, then position it with "
-            "ppt_update_shape",
-            "ppt_add_line, one call per straight segment, when separate lines "
-            "are acceptable",
-            "ppt_add_shape, which reaches every built-in autoshape including "
-            "the arrows, stars and flowchart outlines",
-        ],
-    ))
+    geometry, x, y, cx, cy = _gvml_freeform.build_geometry(start_x, start_y, nodes_data, close_path)
+    name = shape_name or unused_name(_shape_names(slide), "Freeform")
+    drawing = _canvas.wrap(_gvml_shapes.shape_xml(2, name, x, y, cx, cy, geometry), x, y, cx, cy)
+    raw = build(drawing)
+
+    clip = Clipboard.take()
+    try:
+        try:
+            pasted = paste_package(
+                pres, slide, slide_index, raw, clip, "ppt_build_freeform",
+                MsoShapeType[msoFreeform], _canvas.pt(x), _canvas.pt(y),
+                _BUILD_ALTERNATIVES,
+            )
+        except Refused as refused:
+            return json.dumps(refused.payload)
+    finally:
+        clip.restore()
+
+    shape = pasted.shape
+    return json.dumps(with_warnings({
+        "success": True,
+        "shape_name": pasted.name,
+        "shape_index": shape.z_order_position(),
+        "left": round(shape.left_position(), 2),
+        "top": round(shape.top(), 2),
+        "width": round(shape.width(), 2),
+        "height": round(shape.height(), 2),
+    }, clip, pasted.warnings))
 
 
 def _get_shape_nodes_impl(slide_index, shape_name, shape_index):
-    """Refuse, because a freeform will not say what its outline is.
+    """Copy the freeform and read its path out of the package.
 
-    Worth its own wording rather than the shared one. A caller reading nodes is
-    usually trying to find out what is on the slide, and the useful answer is
-    that the shape itself reads fine and only its outline does not.
+    Nothing on the slide changes and the view is not moved. The clipboard is
+    put back afterwards.
     """
-    return _refuse_for_node_tool(
-        "ppt_get_shape_nodes",
-        slide_index, shape_name, shape_index,
-        "its outline cannot be read. The shape answers for its name, type, "
-        "position, size, fill and line, and there is no property anywhere that "
-        "reports the points those are drawn between.",
-    )
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+    shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
+    _check_freeform(shape)
+    name = shape.name()
+
+    clip = Clipboard.take()
+    try:
+        try:
+            package = copy_shape_package(shape, clip, "ppt_get_shape_nodes")
+        except Refused as refused:
+            return json.dumps(refused.payload)
+        try:
+            element = _gvml_shapes.only_child(
+                _canvas.children(_canvas.parse(package.drawing())), "freeform"
+            )
+            nodes = _gvml_freeform.read_nodes(element)
+        except PackageError as exc:
+            return json.dumps(_refusal(
+                "ppt_get_shape_nodes",
+                f"'{name}' reports itself as a freeform, but the path in the "
+                f"package PowerPoint wrote for it could not be read: {exc}",
+                _SHAPE_TOOLS[1:],
+            ))
+    finally:
+        clip.restore()
+
+    return json.dumps(with_warnings({
+        "shape_name": name,
+        "node_count": len(nodes),
+        "nodes": nodes,
+    }, clip))
 
 
 def _set_node_position_impl(slide_index, shape_name, shape_index, node_index, x, y):
@@ -213,23 +242,28 @@ def _delete_node_impl(slide_index, shape_name, shape_index, node_index):
 
 
 def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index, et_int):
-    """Refuse, because a node's editing type has no representation.
+    """Refuse, because a node's editing type has no representation anywhere.
 
-    Nothing in the dictionary pairs with ``MsoEditingType``. The nearest thing
-    is ``adjustment value``, which is a number on a built-in shape rather than
-    a corner or smooth flag on a point.
+    Nothing in the dictionary pairs with ``MsoEditingType``, and nothing in
+    the XML does either. ``a:custGeom`` stores points; corner, smooth and
+    symmetric are what PowerPoint's UI calls the geometry of the two handles
+    at a point, and there is no attribute to write one into. So this one
+    stays refused even now that the path can be rewritten through the
+    clipboard.
     """
     return _refuse_for_node_tool(
         "ppt_set_node_editing_type",
         slide_index, shape_name, shape_index,
         f"the editing type of node {node_index} cannot be set. Nothing in the "
-        "dictionary pairs with MsoEditingType, so corner, smooth and symmetric "
-        "have no spelling here.",
+        "dictionary pairs with MsoEditingType, and the DrawingML the clipboard "
+        "carries has no such attribute either: corner, smooth and symmetric "
+        "are read off the handle geometry, not stored. Move the handles "
+        "instead, once ppt_set_node_position is written for this platform.",
     )
 
 
 def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg_int):
-    """Refuse, because a segment has no representation either."""
+    """Refuse, because a segment cannot yet be rewritten here."""
     return _refuse_for_node_tool(
         "ppt_set_segment_type",
         slide_index, shape_name, shape_index,
