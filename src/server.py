@@ -100,8 +100,12 @@ the cause is not yet known (issue #191). `ppt_save_presentation_as` right after
 creating a deck, and `ppt_save_presentation` at each break, costs almost
 nothing and is the difference between a hiccup and starting over.
 
-Charts, SmartArt and freeform paths have no words at all in PowerPoint for Mac's
-scripting dictionary. Build those by hand, or on Windows.
+Charts, freeform paths and groups are made through the clipboard here, because
+PowerPoint for Mac's scripting dictionary has no words for them. `ppt_add_chart`,
+`ppt_build_freeform` and `ppt_group_shapes` work, and so do reading a chart's
+data, a freeform's nodes and a group's members. Editing an existing chart or
+path in place does not yet; those tools say so. SmartArt has no route at all.
+The user's clipboard is saved and put back around each of these calls.
 """ if sys.platform == "darwin" else ""
 
 

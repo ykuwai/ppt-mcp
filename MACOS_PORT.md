@@ -53,9 +53,13 @@ cannot drive Office on a Mac. It can.
 appscript 1.4.0 (October 2025) publishes universal2 wheels for CPython 3.10
 through 3.14, so there is no build step and no compiler on the user's machine.
 
-Three things are genuinely absent from the Mac side. Charts, SmartArt and
-freeform path building have no words in the dictionary at all. Section 6 says
-what to do about that.
+Three things are absent from the dictionary. Charts, SmartArt and freeform
+path building have no words in it at all. Two of them come back another way:
+the clipboard carries a DrawingML package for any shape, PowerPoint pastes one
+back whatever it holds, and `ppt_add_chart`, `ppt_get_chart_data`,
+`ppt_build_freeform`, `ppt_get_shape_nodes`, `ppt_group_shapes` and
+`ppt_get_group_items` go through it (`docs/gvml-design.md`). Section 6 says
+what is still missing.
 
 One risk outranks every missing feature, and it is section 5.
 
@@ -222,6 +226,8 @@ round trip.
 | **export one shape to PNG, into the container** | **0.15 s, 28 KB verified** |
 | **insert a movie or a sound from a path, verified as `shape type media`** | **`make new media2 object`, embedded in `ppt/media/` at the file's own byte size** |
 | a chart already in the deck, seen as a shape | name, type and geometry all readable |
+| **a chart, a freeform or a group, pasted from a DrawingML package we wrote** | **`paste object` takes `com.microsoft.Art--GVML-ClipFormat` in 5 to 65 ms; the shape reports its own type; the clipboard is put back afterwards** |
+| **a chart's numbers or a freeform's points, read from the package `copy shape` writes** | **`chart1.xml` carries the caches with no workbook; `a:custGeom` carries every point** |
 
 Per operation cost on the live object model settles around **0.5 ms for a simple
 read** and **2 to 3 ms for a four level chained write**.
@@ -487,9 +493,10 @@ This is the honest part. These are not workarounds waiting to be found.
 
 | Area | Windows | macOS | Lines affected |
 |---|---|---|---|
-| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. An existing chart is visible as a plain shape, so it can be moved, resized and read, but not created or given data | `charts.py` 1,126 |
+| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. A chart is added by writing its XML and pasting it through the clipboard, and its data is read the same way (`docs/gvml-design.md`). Editing an existing chart that way is not yet written | `charts.py` 1,126 |
 | SmartArt | `SmartArt` object model | **no class, no command**. `shape type smartart graphic` exists, so an existing graphic is a shape like any other | `smartart.py` 810 |
-| Freeform paths | `Shapes.BuildFreeform` | **no builder** | `freeform.py` 765 |
+| Freeform paths | `Shapes.BuildFreeform` | **no builder**. A path is written as `a:custGeom` and pasted through the clipboard, and read back the same way. Editing nodes in place is not yet written | `freeform.py` 765 |
+| Grouping | `ShapeRange.Group` | **no `select` command, so no shape range**. The members are copied off the slide one by one, wrapped in one `a:grpSp` and pasted back as a group; the originals are deleted only once the group is verified | `groups.py` |
 | Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all. Solved another way, by exporting the deck to PDF and rendering pages with Quartz, which is what shipped | `export.py` 848 |
 | Line visibility | `Shape.Line.Visible = False` | `line format` has **no `visible` property**. Weight 0 and transparency 1.0 both apply cleanly and are the practical stand-ins | every tool taking `line_visible` |
 | Screen redraw suppression | `LockWindowUpdate` on `PPTFrameClass` | no equivalent. Less needed, because a whole tool call is 80 ms rather than a visible sequence, but the flicker fix from #164 does not transfer | `utils/redraw.py` 91 |
@@ -633,10 +640,16 @@ exists and burns turns looking for it. The tool stays listed and returns a
 structured refusal naming the platform, the reason and a route to take instead.
 
 ```json
-{"error": "ppt_add_chart is not available on macOS",
- "reason": "PowerPoint for Mac exposes no chart object, to Apple Events or to VBA",
- "alternatives": ["ppt_add_shape", "ppt_add_table"]}
+{"error": "ppt_set_chart_data is not available on macOS",
+ "reason": "'Chart 1' on slide 2 is a chart and its data cannot be written yet. ...",
+ "alternatives": ["ppt_add_chart, then delete the old chart, until then", "ppt_get_chart_data, which reads the categories and series"]}
 ```
+
+The tools that go through the clipboard follow the same rule from the other
+side. `paste object` reports nothing, so every paste is checked by counting
+the slide's shapes and reading the new shape's type; none landed is a
+refusal, the wrong thing landed is removed and then refused, and a paste that
+went inside a selected chart is prevented by clearing the selection first.
 
 The server `instructions` string should carry a short platform note too, since
 that is what the model reads before planning a deck.
@@ -679,9 +692,14 @@ lives.
 
 **Phase 3, the rest, and the honest refusals.**
 
+**Phase 4, the clipboard.** Charts, freeforms and groups through
+`com.microsoft.Art--GVML-ClipFormat`, in the order `docs/gvml-design.md`
+section 6 gives: the six tools that create or read first, then the ones that
+edit a chart, then the ones that edit a path.
+
 **Spike, in parallel and not on the critical path.** Whether a shipped `.ppam`
-plus `run VB macro` can reach the VBA object model. If it can, SmartArt,
-freeform and slide image export come back. Charts do not, either way.
+plus `run VB macro` can reach the VBA object model. If it can, SmartArt comes
+back that way. Charts and freeforms no longer depend on it.
 
 ---
 
@@ -690,8 +708,7 @@ freeform and slide image export come back. Charts do not, either way.
 Written down so nobody re-derives it.
 
 1. Whether `run VB macro` actually executes. Section 6.1 has the one line test.
-   The same spike should call `AddChart` once, which settles the chart question
-   properly rather than resting it on a type library negative.
+   It matters for SmartArt now; charts are made through the clipboard instead.
 2. ~~Table cell addressing.~~ Settled. `get cell from` is the wrong route and
    `table.rows[r].cells[c]` is the right one; see section 5.1. Every table tool
    now runs live.
