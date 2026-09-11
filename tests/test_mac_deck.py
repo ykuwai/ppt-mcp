@@ -604,7 +604,12 @@ class TestEditOps:
         assert result["new_shape_name"] == "Title"
         assert result["destination_slide"] == 2
         assert deck.viewed_slide == 2
-        assert deck.order == ["copy", "goto", "paste"]
+        # The selection is cleared between the navigation and the paste. A
+        # paste leaves what it pasted selected, and `paste object` puts the
+        # next one inside that selection when it is a chart, which changes no
+        # shape count and so passes every check here while rewriting the chart.
+        assert deck.order == ["copy", "goto", "unselect", "paste"]
+        assert deck.selection_cleared
 
     def test_a_paste_is_never_attempted_from_the_wrong_slide(self):
         """A navigation that failed would drop the copy on the source slide."""
@@ -937,6 +942,15 @@ class _FakeView:
         self._deck.shapes[self._deck.viewed_slide].append(self._deck.clipboard)
 
 
+class _FakeSelection:
+    def __init__(self, deck):
+        self._deck = deck
+
+    def unselect(self):
+        self._deck.order.append("unselect")
+        self._deck.selection_cleared = True
+
+
 class _FakeDeck:
     def __init__(
         self, slides=1, shapes=None, properties=None, sections=None,
@@ -958,6 +972,7 @@ class _FakeDeck:
         self.show = running
         self.settings = {}
         self.run_result_touched = False
+        self.selection_cleared = False
         self.inserted = []
         self.deleted_with_slides = []
         self.undone = []
@@ -1025,7 +1040,13 @@ class _FakeDeck:
 
     @property
     def window(self):
-        return type("Window", (), {"view": _FakeView(self)})()
+        return type("Window", (), {
+            "view": _FakeView(self),
+            # A paste leaves what it pasted selected, and the next one then
+            # lands inside it when it is a chart. The tool clears the
+            # selection first, so the fake has to have one to clear.
+            "selection": _FakeSelection(self),
+        })()
 
     def slide(self, index):
         deck = self

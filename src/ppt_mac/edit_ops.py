@@ -160,6 +160,20 @@ def _copy_shape_to_slide_impl(src_slide_index, shape_name_or_index, dst_slide_in
             ["ppt_add_shape", "ppt_duplicate_slide"],
         )
 
+    # Clear the selection first. A paste leaves what it pasted selected, and
+    # `paste object` puts the next one *inside* the selection when that
+    # selection is a chart, as one of the chart's own `userShapes`. The slide's
+    # shape count does not change, so the check below reads it as a silent
+    # no-op, while the chart has in fact been rewritten. Measured on this
+    # machine: after a paste the window's selection type is `shapes`, and
+    # `unselect` returns it to `none` without disturbing the paste that
+    # follows. A selection that cannot be cleared is not worth failing over,
+    # because the ordinary case has nothing selected at all.
+    try:
+        window.selection.unselect()
+    except CommandError as exc:
+        logger.debug("Could not clear the selection before pasting: %s", exc)
+
     window.view.paste_object()
 
     # Nothing is trusted because it did not raise. `paste object` declares no
