@@ -1,31 +1,31 @@
-"""Shape grouping tools, on Apple Events.
+"""Shape grouping tools, on Apple Events and the clipboard.
 
 Mirrors ``ppt_com/groups.py``. Same function names, same signatures, same
 returned shapes.
 
 Three things about groups on this side are worth knowing before reading on.
 
-**Nothing can be gathered into a shape range, so nothing can be grouped.**
-``group`` takes a shape range, and the only shape range PowerPoint for Mac hands
-out is the one already selected in a window. Its dictionary has an ``unselect``
-command and no ``select``, so a script has no way to put shapes into a selection
-to act on them. ``ppt_group_shapes`` refuses on exactly the grounds
-``ppt_merge_shapes`` does, and borrows layout.py's wording so the two agree.
+**Nothing can be gathered into a shape range, so ``group`` cannot be sent.**
+``group`` takes a shape range, and the only shape range PowerPoint for Mac
+hands out is the one already selected in a window. Its dictionary has an
+``unselect`` command and no ``select``. So the group is not made by PowerPoint
+at all. Each member is copied with ``copy shape``, which puts a DrawingML
+package on the clipboard, the members are wrapped in one ``a:grpSp`` and
+pasted back as a single group, and only once the group is on the slide and
+verified are the originals deleted. See ``ppt_mac/gvml_paste.py`` for the
+procedure and ``docs/gvml-design.md`` for the measurements behind it.
 
-**A group's members cannot be read.** The dictionary gives ``shape`` a ``shape``
-element, which reads as though a group's members are reached the way a slide's
-shapes are. They are not. A group of two text boxes answers 0 for its ``shapes``,
-0 for its ``text boxes``, 0 for every other subclass collection, and -1728 for
-``shapes[1]``. ``has child`` answers ``missing value``. So
-``ppt_get_group_items`` refuses rather than returning an empty list, which would
-read as a group with nothing in it.
+**A group's members cannot be read through the dictionary.** ``shape`` has a
+``shape`` element, which reads as though a group's members are reached the
+way a slide's shapes are. They are not. A group of two text boxes answers 0
+for its ``shapes`` and -1728 for ``shapes[1]``. The same clipboard package
+carries them, though, with names, positions and sizes, and that is where
+``ppt_get_group_items`` reads them from.
 
-**Ungrouping works, and it is the only thing here that does.** ``ungroup`` is
-declared to take a shape range like ``group`` is, but its description reads "the
-specified shape or range of shapes" and a single group shape is accepted.
-Verified live, on a group of two that came apart with both members appearing on
-the slide by name. The check is the group's own disappearance and the slide
-growing, because the members cannot be listed beforehand to compare against.
+**Ungrouping works through the dictionary.** ``ungroup`` is declared to take a
+shape range but accepts a single group shape. Verified live, on a group of two
+that came apart with both members appearing on the slide by name. The check is
+the group's own disappearance and the slide growing.
 """
 
 import logging
@@ -33,12 +33,25 @@ import logging
 from appscript.reference import CommandError
 
 from backend.mac_ae import ppt
+from backend.mac_enums import MsoShapeType
 from backend.unsupported import refusal as _refusal
+from gvml import PackageError, build
+from gvml import canvas as _canvas
+from gvml import shapes as _gvml_shapes
+from gvml.package import Graft
 from ppt_com.constants import msoGroup
-from ppt_mac.layout import _NO_SHAPE_RANGE
+from ppt_mac.gvml_paste import (
+    Clipboard,
+    Refused,
+    copy_shape_package,
+    paste_package,
+    unused_name,
+    with_warnings,
+)
 from ppt_mac.shapes import (
     _WIN_SHAPE_TYPE,
     _get_shape,
+    _shape_index,
     _shape_names,
     _slide,
     _win_constant,
@@ -46,6 +59,12 @@ from ppt_mac.shapes import (
 from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)
+
+_GROUP_ALTERNATIVES = [
+    "Group the shapes by hand in PowerPoint",
+    "ppt_align_shapes",
+    "ppt_distribute_shapes",
+]
 
 
 def _require_group(shape, verb: str):
@@ -67,17 +86,95 @@ def _require_group(shape, verb: str):
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
 def _group_shapes_impl(slide_index, shape_names):
-    """Refuse, because there is no way to build the shape range grouping needs."""
-    return _refusal(
-        "ppt_group_shapes",
-        "PowerPoint for Mac's `group` command takes a shape range and there is "
-        "no way for a script to build one. " + _NO_SHAPE_RANGE,
-        [
-            "Group the shapes by hand in PowerPoint",
-            "ppt_align_shapes",
-            "ppt_distribute_shapes",
-        ],
-    )
+    ppt._get_app_impl()
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+
+    # Every name is checked before anything is copied, the same message as
+    # Windows, so a misspelling costs nothing.
+    names_on_slide = _shape_names(slide)
+    for name in shape_names:
+        if name not in names_on_slide:
+            raise ValueError(f"Shape '{name}' not found on slide {slide_index}")
+
+    clip = Clipboard.take()
+    try:
+        # Each member comes off the slide as its own package. Anything a
+        # member refers to (a picture's image, a chart's XML) is carried into
+        # the group's package by the graft, with the ids rewritten to match.
+        graft = Graft.empty()
+        infos = []
+        children_xml = []
+        for name in shape_names:
+            member = _get_shape(slide, name)
+            package = copy_shape_package(member, clip, "ppt_group_shapes")
+            try:
+                element = _gvml_shapes.only_child(
+                    _canvas.children(_canvas.parse(package.drawing())), f"shape '{name}'"
+                )
+                element = graft.take(package, _gvml_shapes.strip_creation_ids(element))
+                infos.append(_gvml_shapes.describe(element))
+            except PackageError as exc:
+                return _refusal(
+                    "ppt_group_shapes",
+                    f"The package PowerPoint wrote for '{name}' could not be "
+                    f"read as one shape: {exc}. Nothing was changed.",
+                    _GROUP_ALTERNATIVES,
+                )
+            children_xml.append(_canvas.serialize(element))
+
+        x, y, cx, cy = _gvml_shapes.bounding_box(infos)
+        group_name = unused_name(names_on_slide, "Group")
+        drawing = _canvas.wrap(
+            _gvml_shapes.group_xml(2, group_name, x, y, cx, cy, children_xml), x, y, cx, cy,
+        )
+        raw = build(
+            drawing,
+            parts=graft.parts,
+            drawing_rels=graft.drawing_rels,
+            overrides=graft.overrides,
+            defaults=graft.defaults,
+            nested_rels=graft.nested_rels,
+        )
+
+        # Paste, verify, and only then delete the originals. The other order
+        # leaves nothing behind when the paste is silently dropped.
+        try:
+            pasted = paste_package(
+                pres, slide, slide_index, raw, clip, "ppt_group_shapes",
+                MsoShapeType[msoGroup], _canvas.pt(x), _canvas.pt(y),
+                _GROUP_ALTERNATIVES,
+            )
+        except Refused as refused:
+            return refused.payload
+
+        left_behind = []
+        for name in shape_names:
+            try:
+                slide.shapes[_shape_index(slide, name)].delete()
+            except (CommandError, ValueError) as exc:
+                logger.warning("Could not delete '%s' after grouping: %s", name, exc)
+            if name in _shape_names(slide):
+                left_behind.append(name)
+        if left_behind:
+            return _refusal(
+                "ppt_group_shapes",
+                f"The group '{pasted.name}' was pasted onto slide {slide_index} "
+                f"and verified, but the original shape(s) {left_behind} could "
+                "not be deleted afterwards, so both are on the slide now. "
+                "Delete one or the other with ppt_delete_shape.",
+                ["ppt_delete_shape"],
+                error="ppt_group_shapes left both the group and its originals on the slide",
+            )
+    finally:
+        clip.restore()
+
+    group = _get_shape(slide, pasted.name)
+    return with_warnings({
+        "success": True,
+        "group_name": pasted.name,
+        "shape_index": group.z_order_position(),
+    }, clip, pasted.warnings)
 
 
 def _ungroup_shapes_impl(slide_index, shape_name_or_index):
@@ -126,28 +223,44 @@ def _ungroup_shapes_impl(slide_index, shape_name_or_index):
 
 
 def _get_group_items_impl(slide_index, shape_name_or_index):
-    """Refuse, because a group will not say what is inside it.
+    """Read a group's members out of the package ``copy shape`` writes.
 
-    The dictionary reads as though this works. ``shape`` has a ``shape``
-    element, and a group is a shape. Against a real group of two text boxes,
-    every route answers nothing. ``shapes`` counts 0, so does ``text boxes``
-    and every other subclass collection, ``shapes[1]`` answers -1728, and
-    ``has child`` answers ``missing value``. An empty list would read as a
-    group with nothing in it, which is worse than saying so.
+    The dictionary reads as though ``shape.shapes`` works on a group, and
+    against a real group every route answers nothing: ``shapes`` counts 0,
+    ``shapes[1]`` answers -1728, ``has child`` answers ``missing value``. The
+    clipboard package carries every member with its name, type and box, so
+    the group is copied and the package is read. Nothing on the slide changes;
+    the clipboard is put back afterwards.
     """
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
     shape = _get_shape(slide, shape_name_or_index)
     _require_group(shape, "inspected")
+    group_name = shape.name()
 
-    return _refusal(
-        "ppt_get_group_items",
-        f"'{shape.name()}' is a group and PowerPoint for Mac will not say what "
-        "is in it. Its `shapes` collection counts zero, so does every subclass "
-        "collection, and indexing into it fails with Apple Event error "
-        "-1728, which is PowerPoint saying the reference does not resolve. "
-        "Ungrouping it does "
-        "work, and the members can be read individually once they are on the "
-        "slide in their own right.",
-        ["ppt_ungroup_shapes", "ppt_list_shapes"],
-    )
+    clip = Clipboard.take()
+    try:
+        try:
+            package = copy_shape_package(shape, clip, "ppt_get_group_items")
+        except Refused as refused:
+            return refused.payload
+        try:
+            group = _gvml_shapes.only_child(
+                _canvas.children(_canvas.parse(package.drawing())), "group"
+            )
+            items = _gvml_shapes.group_items(group)
+        except PackageError as exc:
+            return _refusal(
+                "ppt_get_group_items",
+                f"'{group_name}' is a group, but the package PowerPoint wrote "
+                f"for it could not be read as one: {exc}",
+                ["ppt_ungroup_shapes", "ppt_list_shapes"],
+            )
+    finally:
+        clip.restore()
+
+    return with_warnings({
+        "success": True,
+        "group_name": group_name,
+        "items": items,
+    }, clip)

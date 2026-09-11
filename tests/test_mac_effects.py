@@ -265,50 +265,8 @@ class TestSoftEdge:
 # ---------------------------------------------------------------------------
 # Groups
 # ---------------------------------------------------------------------------
-@macos_only
-class TestGrouping:
-    """Making a group needs a shape range, and there is no way to build one."""
-
-    def test_grouping_is_refused_on_the_shape_range_grounds(self):
-        from ppt_mac.groups import _group_shapes_impl
-
-        result = _group_shapes_impl(1, ["Box", "Circle"])
-
-        assert result["error"] == "ppt_group_shapes is not available on macOS"
-        assert result["platform"] == "macOS"
-        assert "no `select` command" in result["reason"]
-        assert "ppt_align_shapes" in result["alternatives"]
-
-    def test_it_says_the_same_thing_layout_says(self):
-        """Two modules refusing for one reason should not word it two ways."""
-        from ppt_mac.groups import _group_shapes_impl
-        from ppt_mac.layout import _NO_SHAPE_RANGE
-
-        assert _NO_SHAPE_RANGE in _group_shapes_impl(1, ["Box", "Circle"])["reason"]
-
-    def test_the_refusal_never_reaches_powerpoint(self):
-        from ppt_mac.groups import _group_shapes_impl
-
-        with _no_powerpoint():
-            assert "error" in _group_shapes_impl(1, ["Box", "Circle"])
-
-
-@macos_only
 class TestGroupItems:
-    """A group will not say what is in it, so this refuses rather than lying."""
-
-    def test_a_group_refuses_rather_than_answering_an_empty_list(self):
-        """Against a real group every route answers nothing. See the module."""
-        from ppt_mac.groups import _get_group_items_impl
-
-        with _fake_deck(["Diagram"]) as deck:
-            deck.make_group("Diagram", ["Box", "Circle"])
-            result = _get_group_items_impl(1, "Diagram")
-
-        assert result["error"] == "ppt_get_group_items is not available on macOS"
-        assert "Diagram" in result["reason"]
-        assert "-1728" in result["reason"]
-        assert result["alternatives"] == ["ppt_ungroup_shapes", "ppt_list_shapes"]
+    """The shape check comes first. Reading the members is in test_mac_gvml."""
 
     def test_a_shape_that_is_not_a_group_says_so_with_its_type(self):
         from ppt_mac.groups import _get_group_items_impl
@@ -316,17 +274,6 @@ class TestGroupItems:
         with _fake_deck(["Title"]):
             with pytest.raises(ValueError, match=r"is not a group \(type=1\)"):
                 _get_group_items_impl(1, "Title")
-
-    def test_the_refusal_carries_no_success_key(self):
-        """An empty `items` list would read as a group with nothing in it."""
-        from ppt_mac.groups import _get_group_items_impl
-
-        with _fake_deck(["Diagram"]) as deck:
-            deck.make_group("Diagram", [])
-            result = _get_group_items_impl(1, "Diagram")
-
-        assert "success" not in result
-        assert "items" not in result
 
 
 @macos_only

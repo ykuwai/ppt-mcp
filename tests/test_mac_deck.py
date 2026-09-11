@@ -39,7 +39,7 @@ class TestImplementationsAreSwapped:
 
     @pytest.mark.parametrize(
         "module_name",
-        ["properties", "sections", "slideshow", "edit_ops"],
+        ["properties", "sections", "slideshow", "edit_ops", "charts", "freeform", "groups"],
     )
     def test_every_impl_is_the_apple_event_one(self, module_name):
         import importlib
