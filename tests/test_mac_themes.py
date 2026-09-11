@@ -500,3 +500,53 @@ class TestTheFontAdviceSuitsThisPlatform:
     def test_the_advice_is_not_contradicted_later(self):
         advice = self._instructions()
         assert advice.count("Preferred fonts:") == 1
+
+
+class TestEveryMacTestSaysItIsAMacTest:
+    """Not a macOS test itself. It runs everywhere, and that is the point.
+
+    CI runs the suite on Windows, where appscript is not installed, so a test
+    class that reaches into `ppt_mac` without `@macos_only` fails there and
+    nowhere else. That has now happened three times, each time as a surprise
+    from a change that looked unrelated: `TestShapesThatWalkOffTheSlide` when
+    it was written, and `TestGroupItems` when `ppt_mac/groups.py` stopped
+    refusing and started importing appscript to do the work.
+
+    A class is exempt when it never mentions the macOS side at all, which is
+    how the handful of cross-platform checks living in these files stay
+    running on both.
+    """
+
+    @staticmethod
+    def _offenders():
+        import ast
+        import pathlib
+
+        found = []
+        for path in sorted(pathlib.Path("tests").glob("test_mac_*.py")):
+            text = path.read_text()
+            for node in ast.parse(text).body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                if not node.name.startswith("Test"):
+                    continue
+                if node.name == "TestEveryMacTestSaysItIsAMacTest":
+                    # This class names the thing it looks for, in prose, and
+                    # would otherwise be its own only finding.
+                    continue
+                if any(
+                    isinstance(d, ast.Name) and d.id == "macos_only"
+                    for d in node.decorator_list
+                ):
+                    continue
+                body = ast.get_source_segment(text, node) or ""
+                if "ppt_mac" in body or "mac_ae" in body:
+                    found.append(f"{path}:{node.lineno} {node.name}")
+        return found
+
+    def test_no_class_reaches_into_ppt_mac_unguarded(self):
+        offenders = self._offenders()
+        assert not offenders, (
+            "these will fail on Windows, where appscript is not installed. "
+            "Add @macos_only:\n  " + "\n  ".join(offenders)
+        )

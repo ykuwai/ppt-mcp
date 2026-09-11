@@ -265,6 +265,7 @@ class TestSoftEdge:
 # ---------------------------------------------------------------------------
 # Groups
 # ---------------------------------------------------------------------------
+@macos_only
 class TestGroupItems:
     """The shape check comes first. Reading the members is in test_mac_gvml."""
 

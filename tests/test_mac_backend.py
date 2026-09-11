@@ -161,6 +161,7 @@ class TestErrorTranslation:
         assert translated.errornumber == -2700
 
 
+@macos_only
 class TestUnsupportedTools:
     """What a tool says when the platform genuinely cannot do it."""
 
