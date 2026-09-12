@@ -304,7 +304,7 @@ ESC cancels without committing, so there are no destructive side effects. This i
 
 ## 🍎 macOS support
 
-128 of the 155 tools work. The 27 that do not are listed by name in
+**21 tools refuse on macOS. The rest work.** The 21 are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what
@@ -313,13 +313,15 @@ something the tool says so rather than doing something unexpected.
 
 Not available on macOS:
 
-- **Charts, SmartArt and freeform paths.** The dictionary has no class and no
-  command for any of them, so they cannot be created or edited from a script.
-  An existing one is still an ordinary shape and can be moved, resized, read
-  and deleted.
-- **Grouping shapes.** Ungrouping works. Grouping needs a selection a script
-  cannot build.
+- **SmartArt.** The dictionary has no class and no command for it, so it
+  cannot be created or edited from a script. An existing graphic is still an
+  ordinary shape and can be moved, resized, read and deleted.
+- **Editing a chart or a freeform path after it is made.** Both can be
+  created, and a chart's data and a path's nodes can be read back, but the
+  tools that change one in place are not written yet.
 - **Removing one animation.** Clearing a slide's animations works.
+- **Tags, `ppt_select_shapes`, `ppt_set_table_style` and `ppt_execute_mso`.**
+  Nothing in the dictionary reaches any of them.
 
 Smaller differences:
 
@@ -339,9 +341,12 @@ Smaller differences:
   than the Windows route.
 - Automation consent belongs to whichever application launched the server, so
   running it from a different terminal or editor raises the prompt again.
-- Save the deck early and at each break. A deck that has never been saved has
-  been seen to disappear mid-session, and the cause is not yet known
-  ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
+- Save the deck early and at each break. It costs nothing, and PowerPoint has
+  been seen to close every open document and then exit when a sandbox prompt
+  went up behind a script ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
+- **Charts, freeform paths and grouping go through the clipboard**, which
+  means the operation takes it for a moment and puts back what was there. This
+  is how those three reach a dictionary that has no words for them.
 - Icons are rasterised with `sips` before they are inserted, because
   PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
   systems get a refusal naming the reason rather than a blank box.
