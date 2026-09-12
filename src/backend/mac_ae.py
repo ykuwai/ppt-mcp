@@ -516,8 +516,16 @@ class PowerPointAppleEventWrapper:
     # -- connection --------------------------------------------------------
 
     def connect(self, visible: Optional[bool] = None, allow_launch: bool = True) -> Any:
-        """Connect to PowerPoint, launching it when allowed."""
-        return self.execute(self._connect_impl, visible, allow_launch)
+        """Connect to PowerPoint, launching it when allowed.
+
+        Idempotent, and says so. Connecting twice is connecting once, and it
+        edits nothing, so it is one of the few things the worker may safely run
+        again after a retryable failure. `ppt_com/app.py` passes the same flag
+        for `ppt_connect`; these two were left without it and the difference
+        was an oversight rather than a distinction.
+        """
+        return self.execute(self._connect_impl, visible, allow_launch,
+                            idempotent=True)
 
     def _connect_impl(
         self, visible: Optional[bool] = None, allow_launch: bool = True
@@ -565,8 +573,13 @@ class PowerPointAppleEventWrapper:
         return self._app
 
     def get_app(self, allow_launch: bool = False) -> Any:
-        """Get the application reference, reconnecting if needed."""
-        return self.execute(self._get_app_impl, allow_launch)
+        """Get the application reference, reconnecting if needed.
+
+        Idempotent for the same reason as `connect`: it reaches for the
+        application and reconnects when the reference is stale, and touches no
+        deck on the way.
+        """
+        return self.execute(self._get_app_impl, allow_launch, idempotent=True)
 
     def _get_app_impl(self, allow_launch: bool = False) -> Any:
         """Internal: get the application on the worker thread.
