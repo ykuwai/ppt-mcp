@@ -11,7 +11,7 @@ from typing import List, Optional, Union
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide
 from utils.color import hex_to_int, int_to_hex, int_to_rgb, get_theme_color_index
 from utils.validation import font_size_warning
@@ -927,7 +927,43 @@ def _group_into_columns(shapes: list, threshold: float = 50.0) -> list:
 
     # Sort columns left-to-right
     columns.sort(key=lambda col: sum(s["left"] for s in col) / len(col))
+
+    # Reading down the columns is right for a layout that is columns. It is
+    # badly wrong for a layout that is rows, and clustering on the left edge
+    # cannot tell them apart on its own.
+    #
+    # The case that broke it: three labels down the left, each with a number at
+    # the end of its own bar. The numbers sat at three unrelated X positions,
+    # so each became a column of one, and the columns were then sorted by X.
+    # The output paired every label with the wrong number and read as fact.
+    rows = _group_into_rows(shapes)
+    if _columns_would_scramble(columns, rows):
+        return [[s for row in rows for s in row]]
     return columns
+
+
+def _columns_would_scramble(columns: list, rows: list) -> bool:
+    """Whether reading down these columns would break up what sits on a row.
+
+    A column holding one shape that shares its row with something else is not
+    a column at all; it is one cell of a row that happened to land at its own
+    X. Reading down the columns then separates it from the shape it belongs
+    with and files it by X, which is how a label met the wrong number.
+
+    Columns of two or more are left alone. Two headings side by side, each
+    over its own paragraph, is the layout the column reading exists for, and
+    nothing here disturbs it.
+    """
+    lone = [col[0] for col in columns if len(col) == 1]
+    if not lone:
+        return False
+    for row in rows:
+        if len(row) < 2:
+            continue
+        for shape in lone:
+            if any(other is shape for other in row):
+                return True
+    return False
 
 
 def _slide_to_markdown(slide, slide_index: int) -> str:
@@ -998,6 +1034,16 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
         _flush_columns()
 
     return "\n".join(parts)
+
+
+def _slide_count_impl() -> int:
+    """How many slides the target presentation has.
+
+    A named impl rather than an inline lambda so that macOS can swap it like
+    everything else. A lambda in the public function would keep reaching for
+    COM's `Slides.Count` whatever platform it ran on.
+    """
+    return ppt._get_pres_impl().Slides.Count
 
 
 def _get_all_text_impl(slide_indices) -> str:
@@ -1832,7 +1878,7 @@ def get_all_text(params: GetAllTextInput) -> str:
             indices = params.slide_indices
         else:
             # Get total slide count first
-            total = ppt.execute(lambda: ppt._get_pres_impl().Slides.Count)
+            total = ppt.execute(_slide_count_impl)
             indices = list(range(1, total + 1))
 
         # Process in batches to stay under the 30s COM timeout
@@ -2042,11 +2088,47 @@ def _right_neighbor_gap(shape, slide):
     return min_gap
 
 
+# A shape is allowed to sit right on the slide edge, so a fraction of a point
+# past it is rounding rather than a mistake.
+_OFF_SLIDE_TOLERANCE = 0.5
+
+
+def _off_slide_edges(shape, slide_w, slide_h) -> list:
+    """Which slide edges a shape hangs over, by name, or an empty list."""
+    if not slide_w or not slide_h:
+        return []
+    try:
+        left, top = _shape_left_top(shape)
+        width, height = _shape_width_height(shape)
+    except Exception:  # noqa: BLE001 - a shape that will not answer is skipped
+        return []
+    edges = []
+    if left < -_OFF_SLIDE_TOLERANCE:
+        edges.append("left")
+    if top < -_OFF_SLIDE_TOLERANCE:
+        edges.append("top")
+    if left + width > slide_w + _OFF_SLIDE_TOLERANCE:
+        edges.append("right")
+    if top + height > slide_h + _OFF_SLIDE_TOLERANCE:
+        edges.append("bottom")
+    return edges
+
+
+def _shape_left_top(shape):
+    return shape.Left, shape.Top
+
+
+def _shape_width_height(shape):
+    return shape.Width, shape.Height
+
+
 def _check_typography_impl(slide_indices, max_chars, max_words,
                            fix, max_expand_pt):
-    """Scan shapes for widow lines; optionally fix by widening."""
+    """Scan shapes for widow lines and for text that does not fit its box."""
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
+    slide_w = pres.PageSetup.SlideWidth
+    slide_h = pres.PageSetup.SlideHeight
     issues = []
     fixed = []
 
@@ -2058,6 +2140,22 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
 
         for j in range(1, slide.Shapes.Count + 1):
             shape = slide.Shapes(j)
+
+            # Before the text frame check, because a picture hanging off the
+            # slide is as wrong as a paragraph doing it. A box set to grow with
+            # its text is the usual way in: nothing overflows, because the box
+            # keeps growing, and it walks off the bottom of the slide instead.
+            edges = _off_slide_edges(shape, slide_w, slide_h)
+            if edges:
+                issues.append({
+                    "slide_index": si,
+                    "shape_name": shape.Name,
+                    "shape_width": round(shape.Width, 2),
+                    "type": "off_slide",
+                    "edges": edges,
+                    "fixable": False,
+                })
+
             if not shape.HasTextFrame:
                 continue
             tr = shape.TextFrame.TextRange
@@ -2066,25 +2164,36 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
 
             # Detect auto-shrink — only when text is actually being
             # compressed (natural height exceeds available space).
+            # The same measurement answers two questions. Text that does not
+            # fit is either being shrunk to make it fit, which is worth saying
+            # because the reader gets smaller than the deck was designed for,
+            # or it is spilling out of the box, which is worse and used to go
+            # unreported. Only shrink-to-fit has to be turned off first, so
+            # that the natural height is what gets measured.
             try:
                 tf2 = shape.TextFrame2
-                if tf2.AutoSize == ppAutoSizeTextToFitShape:
-                    # Temporarily disable shrink to measure natural height
+                shrinking = tf2.AutoSize == ppAutoSizeTextToFitShape
+                if shrinking:
                     tf2.AutoSize = ppAutoSizeNone
+                try:
                     natural_h = tf2.TextRange.BoundHeight
                     margin_h = tf2.MarginTop + tf2.MarginBottom
                     avail_h = shape.Height - margin_h
-                    tf2.AutoSize = ppAutoSizeTextToFitShape  # restore
-                    if natural_h > avail_h:
-                        issues.append({
-                            "slide_index": si,
-                            "shape_name": shape.Name,
-                            "shape_width": round(shape.Width, 2),
-                            "type": "auto_shrink",
-                            "fixable": False,
-                        })
+                finally:
+                    if shrinking:
+                        tf2.AutoSize = ppAutoSizeTextToFitShape
+                if natural_h > avail_h:
+                    issues.append({
+                        "slide_index": si,
+                        "shape_name": shape.Name,
+                        "shape_width": round(shape.Width, 2),
+                        "type": "auto_shrink" if shrinking else "overflow",
+                        "natural_height": round(natural_h, 2),
+                        "available_height": round(avail_h, 2),
+                        "fixable": False,
+                    })
             except Exception:
-                logger.debug("Cannot check AutoSize for shape '%s'",
+                logger.debug("Cannot measure text height for shape '%s'",
                              shape.Name, exc_info=True)
 
             widows = _get_widows(shape, max_chars, max_words)
@@ -2230,7 +2339,7 @@ def check_typography(params: CheckTypographyInput) -> str:
         if params.slide_index is not None:
             indices = [params.slide_index]
         else:
-            total = ppt.execute(lambda: ppt._get_pres_impl().Slides.Count)
+            total = ppt.execute(_slide_count_impl)
             indices = list(range(1, total + 1))
 
         result = ppt.execute(
@@ -2460,7 +2569,10 @@ def register_tools(mcp):
         """Extract all text from the presentation as pseudo-Markdown.
 
         Returns a structured overview of every slide's content:
-        - `# Heading` for slide titles
+        - `# Heading` for slide titles, meaning the layout's title
+          placeholder. A deck built on a blank layout out of plain text
+          boxes has none, so its headings come back as `##` and `###`
+          instead and nothing is a `#`.
         - `## Subheading` for all-bold full-width shapes
         - `### Subheading` for all-bold shapes in multi-column layouts
         - `**bold**` and `*italic*` inline formatting
@@ -2480,7 +2592,7 @@ def register_tools(mcp):
     @mcp.tool(
         name="ppt_check_typography",
         annotations={
-            "title": "Check Typography (Widow Lines)",
+            "title": "Check Typography",
             "readOnlyHint": False,
             "destructiveHint": False,
             "idempotentHint": False,
@@ -2490,13 +2602,20 @@ def register_tools(mcp):
     async def tool_ppt_check_typography(params: CheckTypographyInput) -> str:
         """Detect and optionally fix typography issues on slides.
 
-        Detects three issue types:
+        Detects five issue types:
         - **widow**: a line with only 1-3 characters caused by word
           wrapping (e.g. "サー / バー" — "バー" alone on the last line).
         - **short_after_vbreak**: a line that is too short after an
           explicit soft return. Often a side-effect of widow fixes.
         - **auto_shrink**: text silently compressed by PowerPoint's
           shrink_to_fit setting (reported with fixable=false).
+        - **overflow**: text taller than the box it is in, spilling out
+          of the shape (reported with fixable=false). Both this and
+          auto_shrink carry natural_height and available_height.
+        - **off_slide**: a shape hanging over a slide edge, so part of it
+          will not be seen (reported with fixable=false, and `edges`
+          naming which sides). A box set to grow with its text is the
+          usual way in; it never overflows, it walks off the slide.
 
         With fix=false (default), detection is read-only. Set fix=true
         to auto-fix widows: first tries widening shapes (left edge
@@ -2505,3 +2624,17 @@ def register_tools(mcp):
         fix_status='no_break_point' or 'text_not_found'.
         """
         return await run_offloaded(check_typography, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import text as _mac_text
+
+    use_mac_impls(globals(), _mac_text)

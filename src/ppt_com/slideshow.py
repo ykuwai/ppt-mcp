@@ -11,7 +11,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from ppt_com.constants import (
     msoTrue,
     msoFalse,
@@ -386,3 +386,17 @@ def register_tools(mcp):
         (running/paused/black_screen/white_screen/done), and pointer type.
         """
         return await run_offloaded(slideshow_get_status)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import slideshow as _mac_slideshow
+
+    use_mac_impls(globals(), _mac_slideshow)

@@ -11,7 +11,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 
 logger = logging.getLogger(__name__)
 
@@ -181,3 +181,17 @@ def register_tools(mcp):
         Properties that have never been set return null.
         """
         return await run_offloaded(get_properties)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import properties as _mac_properties
+
+    use_mac_impls(globals(), _mac_properties)

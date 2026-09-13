@@ -7,7 +7,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide
 from utils.color import int_to_hex
 from ppt_com.constants import (
@@ -571,3 +571,17 @@ def register_tools(mcp):
         for the specified design.
         """
         return await run_offloaded(get_slide_master_info, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import placeholders as _mac_placeholders
+
+    use_mac_impls(globals(), _mac_placeholders)

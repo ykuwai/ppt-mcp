@@ -13,15 +13,17 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide
 from utils.color import hex_to_int, int_to_hex
 from ppt_com.constants import (
+    ICON_PACKAGE_BASE,
     msoTrue, msoFalse,
     msoShapeRectangle,
     msoLinkedPicture, msoPicture,
@@ -147,7 +149,66 @@ def _search_icons(query: str, max_results: int = 20):
             })
 
     results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:max_results]
+    return _drop_what_cannot_be_inserted(results, max_results)
+
+
+# The icon set ppt_add_svg_icon downloads from. Searching went to Google Fonts
+# and inserting came from here, and the two do not hold the same names, so a
+# search could offer `auto_awesome`, which the site lists and this package has
+# never shipped, and inserting it answered 404. The search is the one that has
+# to give, because it is the one with somewhere else to go: it drops a name
+# this package cannot serve and offers the next match instead.
+
+# Checked one name at a time rather than by pulling the package's file listing,
+# which is 2.7 MB for 21,789 files and would be paid on a search that needs
+# twenty answers.
+_icon_on_cdn_cache = {}
+
+
+def _icon_is_on_cdn(name: str) -> bool:
+    """Whether the icon package actually serves this name.
+
+    Only the outlined, unfilled name is asked. The package pairs every icon
+    with its filled variant exactly, 3,631 of each under `outlined`, with no
+    name on one side missing from the other, so one answer settles both. A
+    machine that cannot reach the CDN at all is told nothing rather than no.
+    """
+    cached = _icon_on_cdn_cache.get(name)
+    if cached is not None:
+        return cached
+
+    url = f"{ICON_PACKAGE_BASE}/outlined/{name}.svg"
+    request = urllib.request.Request(url, method="HEAD")
+    try:
+        with urllib.request.urlopen(request, timeout=5):
+            available = True
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            return True
+        available = False
+    except Exception:  # noqa: BLE001 - a network that is down is not an answer
+        return True
+
+    _icon_on_cdn_cache[name] = available
+    return available
+
+
+def _drop_what_cannot_be_inserted(results, max_results):
+    """Keep the best matches the icon package can actually serve."""
+    kept = []
+    remaining = list(results)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        while remaining and len(kept) < max_results:
+            # A few spare on each pass, so a run of misses does not cost a
+            # round trip per name.
+            batch = remaining[: (max_results - len(kept)) + 4]
+            del remaining[: len(batch)]
+            for icon, available in zip(
+                batch, pool.map(lambda i: _icon_is_on_cdn(i["name"]), batch)
+            ):
+                if available:
+                    kept.append(icon)
+    return kept[:max_results]
 
 
 # ---------------------------------------------------------------------------
@@ -1293,7 +1354,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
     hex_color = _resolve_color(pres, color)
 
     # Build CDN URL (append -fill suffix for filled variant)
-    base = "https://cdn.jsdelivr.net/npm/@material-symbols/svg-400@0.31.3"
+    base = ICON_PACKAGE_BASE
     file_name = f"{icon_name}-fill" if filled else icon_name
     svg_url = f"{base}/{style}/{file_name}.svg"
 
@@ -2212,3 +2273,17 @@ def register_tools(mcp):
             params.font_italic,
             params.font_color,
         )
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import advanced_ops as _mac_advanced_ops
+
+    use_mac_impls(globals(), _mac_advanced_ops)

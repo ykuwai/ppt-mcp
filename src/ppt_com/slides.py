@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.offload import run_offloaded
 from utils.color import hex_to_int
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide as nav_goto_slide
 from ppt_com.constants import ppLayoutBlank, msoTrue, msoFalse
 
@@ -756,7 +756,7 @@ def _delete_slide_impl(
         )
     if len(targets) >= total:
         raise ValueError(
-            "Cannot delete every slide — a presentation must keep at least "
+            "Cannot delete every slide. A presentation must keep at least "
             f"one slide (requested {len(targets)} of {total})"
         )
 
@@ -1556,3 +1556,17 @@ def register_tools(mcp):
         Useful for jumping to a slide you want to view or edit.
         """
         return await run_offloaded(goto_slide, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import slides as _mac_slides
+
+    use_mac_impls(globals(), _mac_slides)

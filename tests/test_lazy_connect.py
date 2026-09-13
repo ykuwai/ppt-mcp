@@ -11,7 +11,13 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
-import pywintypes
+
+# pywin32 only installs on Windows, and this module tests the COM wrapper
+# directly, so the whole module is skipped elsewhere (#185). The macOS backend
+# has its own tests.
+pywintypes = pytest.importorskip(
+    "pywintypes", reason="COM wrapper tests need pywin32 (Windows only)"
+)
 
 _src_dir = str(Path(__file__).resolve().parents[1] / "src")
 if _src_dir not in sys.path:

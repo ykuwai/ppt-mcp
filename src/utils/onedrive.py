@@ -8,11 +8,19 @@ actual local path by checking the Windows registry and environment variables.
 
 import logging
 import os
-import winreg
+import sys
 from typing import Optional
 from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
+
+# OneDrive URLs only ever come back from Windows COM, and winreg only exists
+# there. Imported at module scope on Windows so it stays patchable in tests,
+# and left as None elsewhere so this module still imports on macOS (#185).
+if sys.platform == "win32":
+    import winreg
+else:  # pragma: no cover - non-Windows
+    winreg = None
 
 
 def resolve_local_path(full_name: str) -> Optional[str]:
@@ -54,7 +62,12 @@ def _resolve_via_registry(full_name: str) -> Optional[str]:
 
     Enumerates HKCU\\Software\\SyncEngines\\Providers\\OneDrive subkeys.
     Each subkey has UrlNamespace (URL prefix) and MountPoint (local dir).
+
+    Returns None off Windows, where there is no registry to read and no
+    OneDrive URL to resolve in the first place.
     """
+    if winreg is None:  # pragma: no cover - non-Windows
+        return None
     try:
         reg_path = r"Software\SyncEngines\Providers\OneDrive"
         try:

@@ -12,7 +12,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide
 from utils.color import hex_to_int
 from ppt_com.constants import (
@@ -824,3 +824,17 @@ def register_tools(mcp):
         Optionally specify primary_shape to control which shape's formatting is kept.
         """
         return await run_offloaded(merge_shapes, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import layout as _mac_layout
+
+    use_mac_impls(globals(), _mac_layout)

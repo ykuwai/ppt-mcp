@@ -447,3 +447,72 @@ class TestCrossUnitConsistency:
         direct = cm_to_emu(1)
         # Allow small rounding difference because points_to_emu rounds
         assert via_points == pytest.approx(direct, abs=1)
+
+
+class TestReadingOrderForMarkdownExport:
+    """`ppt_get_all_text` groups shapes by X to read side-by-side columns in
+    the right order. On a layout that is rows rather than columns, that used to
+    pair a label with another row's number and present it as fact."""
+
+    @staticmethod
+    def _shape(text, left, top, width=120.0, height=30.0):
+        return {
+            "text": text, "left": left, "top": top,
+            "width": width, "height": height,
+            "bold": False, "italic": False, "is_title": False,
+        }
+
+    def _order(self, shapes):
+        from ppt_com.text import _group_into_columns
+
+        return [
+            s["text"]
+            for col in _group_into_columns(shapes)
+            for s in col
+        ]
+
+    def test_a_label_stays_with_the_number_on_its_own_row(self):
+        """The bar chart that broke it. Each number sits at the end of its own
+        bar, so the three of them share no X at all."""
+        shapes = [
+            self._shape("works", 60, 100), self._shape("112", 782, 100),
+            self._shape("one argument", 60, 200), self._shape("13", 340, 200),
+            self._shape("whole tool", 60, 300), self._shape("30", 416, 300),
+        ]
+
+        assert self._order(shapes) == [
+            "works", "112",
+            "one argument", "13",
+            "whole tool", "30",
+        ]
+
+    def test_two_real_columns_are_still_read_down_each_one(self):
+        """A heading over its paragraph, twice, side by side. This is the
+        layout the column reading exists for and it must not change."""
+        shapes = [
+            self._shape("Before", 60, 100), self._shape("After", 520, 100),
+            self._shape("was empty", 60, 160), self._shape("is a picture", 520, 160),
+        ]
+
+        assert self._order(shapes) == [
+            "Before", "was empty",
+            "After", "is a picture",
+        ]
+
+    def test_three_cards_are_read_down_each_card(self):
+        shapes = [
+            self._shape("155", 60, 100), self._shape("125", 400, 100),
+            self._shape("30", 740, 100),
+            self._shape("tools", 60, 160), self._shape("work", 400, 160),
+            self._shape("refuse", 740, 160),
+        ]
+
+        assert self._order(shapes) == [
+            "155", "tools", "125", "work", "30", "refuse",
+        ]
+
+    def test_nothing_to_group_is_not_an_error(self):
+        from ppt_com.text import _group_into_columns
+
+        assert _group_into_columns([]) == []
+        assert self._order([self._shape("alone", 60, 100)]) == ["alone"]

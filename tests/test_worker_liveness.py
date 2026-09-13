@@ -23,7 +23,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import pywintypes
+
+# pywin32 only installs on Windows, and everything below drives the COM
+# worker directly, so there is nothing here to run on a Mac. Same guard as
+# test_lazy_connect, which reaches the same wrapper (#185).
+pywintypes = pytest.importorskip(
+    "pywintypes", reason="COM wrapper tests need pywin32 (Windows only)"
+)
 
 _src_dir = str(Path(__file__).resolve().parents[1] / "src")
 if _src_dir not in sys.path:

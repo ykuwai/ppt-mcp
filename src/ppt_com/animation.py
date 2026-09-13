@@ -11,7 +11,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.navigation import goto_slide
 from ppt_com.constants import (
     msoTrue, msoFalse,
@@ -1285,3 +1285,17 @@ def register_tools(mcp):
         Use ppt_list_animations first to find the correct animation index.
         """
         return await run_offloaded(update_animation, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import animation as _mac_animation
+
+    use_mac_impls(globals(), _mac_animation)

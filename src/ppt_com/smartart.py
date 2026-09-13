@@ -12,7 +12,7 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.color import hex_to_int
 from utils.navigation import goto_slide
 from utils.validation import font_size_warning
@@ -795,3 +795,17 @@ def register_tools(mcp):
         Output is compact by default (index + name + english_name + category).
         """
         return await run_offloaded(list_smartart_options, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import smartart as _mac_smartart
+
+    use_mac_impls(globals(), _mac_smartart)

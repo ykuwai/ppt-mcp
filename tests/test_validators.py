@@ -957,7 +957,11 @@ class TestFontSizeWarning:
         result = font_size_warning(15.9)
         assert result is not None
         assert "15.9pt" in result
-        assert "below the recommended minimum" in result
+        # Worded as an instruction. A caller that reads this as a preference
+        # answers it by saying the size was deliberate, which is the whole
+        # reason the soft wording was dropped.
+        assert "You should" in result
+        assert "16pt" in result
 
     def test_small_size_returns_warning(self):
         result = font_size_warning(8)
@@ -2037,6 +2041,10 @@ class TestUpdateAnimationInputSequenceIndex:
 from utils.onedrive import resolve_local_path
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="OneDrive URL resolution reads the Windows registry (#185)",
+)
 class TestOneDriveResolver:
     """Tests for OneDrive URL to local path resolution."""
 
@@ -3510,6 +3518,14 @@ class TestFindReplaceTextShapeNameEmpty:
             FindReplaceTextInput(find_text="x", shape_name="")
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason=(
+        "drives a COM mock through TextRange.Replace, which only exists on "
+        "Windows. macOS has no Find and no Replace in its dictionary, so "
+        "_find_replace_text_impl walks the text in Python there instead"
+    ),
+)
 class TestFindReplaceReplaceLoopCursor:
     """Regression: Replace loop must advance the After cursor (issue #151 review).
 

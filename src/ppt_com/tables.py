@@ -11,7 +11,7 @@ from typing import List, Optional, Union
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from utils.validation import font_size_warning
@@ -249,8 +249,8 @@ class SplitTableCellsInput(BaseModel):
     )
     row: int = Field(..., ge=1, description="1-based row of the cell to split")
     col: int = Field(..., ge=1, description="1-based column of the cell to split")
-    num_rows: int = Field(default=1, ge=1, description="Number of rows in the resulting split (default 1 = simple unmerge)")
-    num_cols: int = Field(default=1, ge=1, description="Number of columns in the resulting split (default 1 = simple unmerge)")
+    num_rows: int = Field(default=1, ge=1, description="Rows the cell becomes. To undo a merge, pass the number of rows it covered. 1 leaves the rows as they are")
+    num_cols: int = Field(default=1, ge=1, description="Columns the cell becomes. To undo a merge, pass the number of columns it covered. 1 leaves the columns as they are")
 
 
 class SetTableBordersInput(BaseModel):
@@ -1306,7 +1306,10 @@ def register_tools(mcp):
     async def tool_split_table_cells(params: SplitTableCellsInput) -> str:
         """Split (unmerge) a merged table cell.
 
-        Use num_rows=1, num_cols=1 (default) for a simple unmerge.
+        num_rows and num_cols are the grid the cell becomes, not how many
+        pieces to add, so the 1 by 1 default splits nothing. To undo a merge,
+        pass the size the merge covered, num_cols=2 for two cells merged
+        across or num_rows=3 for three merged down.
         Uses Cell.Split(NumRows, NumColumns) — the inverse of ppt_merge_table_cells.
         """
         return await run_offloaded(split_table_cells, params)
@@ -1330,3 +1333,17 @@ def register_tools(mcp):
         Optionally set visible, color ('#RRGGBB'), weight (points), and dash_style.
         """
         return await run_offloaded(set_table_borders, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import tables as _mac_tables
+
+    use_mac_impls(globals(), _mac_tables)

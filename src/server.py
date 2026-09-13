@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 # When installed via PyPI (entry point: src.server:main), ensure the src/
 # directory is in sys.path so that internal imports like
-# `from utils.com_wrapper import ppt` resolve correctly.
+# `from backend import ppt` resolve correctly.
 _src_dir = str(Path(__file__).parent)
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
@@ -47,9 +47,9 @@ logger = logging.getLogger("ppt-mcp")
 @asynccontextmanager
 async def app_lifespan(server: MCPServer):
     """Manage COM lifecycle for the MCP server."""
-    from utils.com_wrapper import ppt
+    from backend import ppt
 
-    from utils.com_wrapper import AUTO_DISMISS_DIALOG
+    from backend import AUTO_DISMISS_DIALOG
     logger.info("AUTO_DISMISS_DIALOG=%s (set PPT_AUTO_DISMISS_DIALOG=true to enable)", AUTO_DISMISS_DIALOG)
     logger.info("Starting PowerPoint COM worker thread...")
     ppt.start()
@@ -64,6 +64,65 @@ async def app_lifespan(server: MCPServer):
         ppt.stop()
 
 
+# Appended to the server instructions only when the backend is the Apple Event
+# one. On Windows it is empty, so nothing about it reaches a Windows reader.
+_MACOS_NOTE = """
+## On macOS
+
+This server is driving PowerPoint for Mac over Apple Events rather than COM.
+Almost everything works the same, and where it does not, a tool answers with
+`error`, `reason`, `platform` and often `alternatives` instead of doing
+something unexpected. Read the `reason`; it says what PowerPoint for Mac does
+not have and what to do instead, and one retry along that route usually works.
+
+**Call these tools one after another, not several in the same turn.** Only one
+request at a time reaches PowerPoint here, so the rest queue behind it, and the
+order they come out in is whatever order they arrived. A call that adds a slide
+and a call that reads it, sent together, can run the wrong way round. A call
+left waiting too long is taken back and says so, having changed nothing.
+
+A refusal whose `error` names an argument rather than the tool means the tool
+itself is fine and only that argument has to go. `ppt_add_table_row` cannot
+insert at a `position`, for instance, but appending still works.
+
+Some results carry `warnings` alongside `success`. Those are parts of the
+request that did not land, listed rather than silently dropped.
+
+A note about Japanese fonts. PowerPoint for Mac will not set the East Asian
+font to a font that has no East Asian glyphs. It accepts the write, keeps the
+old value and reports nothing, so `font_name` alone leaves Japanese text in
+whatever font it was in. That now comes back as a warning; pass
+`font_name_fareast` to choose the Japanese font yourself.
+
+**Save early and at each natural break.** A deck that has never been saved has
+been seen to disappear mid-session on macOS, taking every slide with it, and
+the cause is not yet known (issue #191). `ppt_save_presentation_as` right after
+creating a deck, and `ppt_save_presentation` at each break, costs almost
+nothing and is the difference between a hiccup and starting over.
+
+Charts, freeform paths and groups are made through the clipboard here, because
+PowerPoint for Mac's scripting dictionary has no words for them. `ppt_add_chart`,
+`ppt_build_freeform` and `ppt_group_shapes` work, and so do reading a chart's
+data, a freeform's nodes and a group's members. Editing an existing chart or
+path in place does not yet; those tools say so. SmartArt has no route at all.
+The user's clipboard is saved and put back around each of these calls.
+""" if sys.platform == "darwin" else ""
+
+
+# Naming a font PowerPoint cannot find does not fail. The system quietly
+# substitutes one, so a deck built from the Windows recommendation on a Mac
+# comes out in something nobody chose. The advice therefore has to be right
+# the first time it is read, rather than corrected further down (#194).
+_PREFERRED_FONTS = (
+    "Preferred fonts: Hiragino Sans (Japanese, ヒラギノ角ゴシック in the font "
+    "menu) with Hiragino Sans W6 for headings, and Helvetica Neue or Arial "
+    "(Latin). Segoe UI and BIZ UDPゴシック are Windows fonts and are not on "
+    "macOS; BIZ UDGothic ships here, without the P."
+    if sys.platform == "darwin"
+    else "Preferred fonts: BIZ UDPゴシック (Japanese) + Segoe UI (Latin)."
+)
+
+
 mcp = MCPServer(
     "powerpoint_mcp",
     lifespan=app_lifespan,
@@ -73,7 +132,7 @@ mcp = MCPServer(
 1. Call `ppt_activate_presentation` first — locks all tools to a specific file and prevents accidental edits to the wrong presentation.
 2. Call `ppt_get_presentation_info` to understand the presentation — slide count, dimensions, template, current default fonts, and accent colors. Use this to inform all subsequent decisions. When saving files (e.g., exported markdown, images), use the presentation's `local_dir` from `ppt_get_presentation_info` as the default save directory. To read the existing slide content, call `ppt_get_all_text` — it returns all text as pseudo-Markdown with layout analysis, heading detection, and formatting markers.
 3. When adding slides, use `ppt_add_slide` with `count` to create multiple slides at once instead of calling it repeatedly.
-4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale Windows, the slide master default is often 游ゴシック, which renders thin and illegible when projected. Preferred fonts: BIZ UDPゴシック (Japanese) + Segoe UI (Latin).
+4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale systems, the slide master default is often 游ゴシック, which renders thin and illegible when projected. """ + _PREFERRED_FONTS + """
 5. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
 6. Use `ppt_get_slide_preview` to visually inspect slides as you work.
 
@@ -97,13 +156,14 @@ Standard 16:9 slide = 960 × 540 pt. Default to light backgrounds unless the use
 
 **Consistency across slides:** use the same heading size, card style, and spacing throughout. `ppt_set_default_shape_style` and `ppt_batch_apply_formatting` are your tools for this. For rounded rectangles, use `corner_radius_pt` (e.g. `10`) to keep the same corner radius across shapes.
 
-**Font sizes** — prefer larger sizes for projected readability:
+**Font sizes** — you should use these. They are what makes a slide readable when projected:
 - Slide title: 40–48 pt
 - Section heading / subheading: 24–32 pt
 - Body text: 20–28 pt
 - Caption / annotation: 16–20 pt
 - **Never go below 16 pt.** Smaller text is unreadable when projected.
-""",
+"""
+    + _MACOS_NOTE,
 )
 
 
@@ -437,10 +497,18 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
     Returns:
         Image: PNG image of the slide for visual inspection
     """
-    from utils.com_wrapper import ppt
+    from backend import IS_MACOS, ppt
     from utils.navigation import goto_slide
 
     def _export_slide_impl(slide_idx: int):
+        if IS_MACOS:
+            # PowerPoint for Mac has no Slide.Export. The preview is rendered
+            # from the deck's PDF export instead; see ppt_mac/export.py.
+            from ppt_mac.export import render_slide_png
+
+            goto_slide(ppt._get_app_impl(), slide_idx)
+            return render_slide_png(slide_idx)
+
         app = ppt._get_app_impl()
         pres = ppt._get_pres_impl()
         goto_slide(app, slide_idx)

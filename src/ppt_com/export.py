@@ -5,20 +5,28 @@ Export presentations to PDF, images (PNG/JPG), or copy slides to clipboard.
 
 import atexit
 import ctypes
-import ctypes.wintypes
 import json
 import logging
 import os
 import shutil
 import struct
+import sys
 import tempfile
 from typing import List, Optional
 
-import pythoncom
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
+# Everything below the export tools themselves is Win32. `ctypes.wintypes`
+# raises on macOS at import time, and pythoncom does not exist there, so both
+# are conditional and the clipboard bindings are skipped entirely. The tools
+# that need them are Windows only and fail loudly when called elsewhere (#185).
+_WINDOWS = sys.platform == "win32"
+if _WINDOWS:
+    import ctypes.wintypes
+    import pythoncom
+
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from ppt_com.constants import (
     ppFixedFormatTypePDF,
     ppSaveAsPDF,
@@ -424,26 +432,27 @@ CF_DIB = 8
 CF_HDROP = 15
 GHND = 0x0042  # GMEM_MOVEABLE | GMEM_ZEROINIT
 
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
-ole32 = ctypes.windll.ole32
+if _WINDOWS:
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    ole32 = ctypes.windll.ole32
 
-OpenClipboard = user32.OpenClipboard
-CloseClipboard = user32.CloseClipboard
-EmptyClipboard = user32.EmptyClipboard
-SetClipboardData = user32.SetClipboardData
-SetClipboardData.argtypes = [ctypes.wintypes.UINT, ctypes.wintypes.HANDLE]
-SetClipboardData.restype = ctypes.wintypes.HANDLE
-GlobalAlloc = kernel32.GlobalAlloc
-GlobalAlloc.argtypes = [ctypes.wintypes.UINT, ctypes.c_size_t]
-GlobalAlloc.restype = ctypes.wintypes.HGLOBAL
-GlobalLock = kernel32.GlobalLock
-GlobalLock.argtypes = [ctypes.wintypes.HGLOBAL]
-GlobalLock.restype = ctypes.c_void_p
-GlobalUnlock = kernel32.GlobalUnlock
-GlobalUnlock.argtypes = [ctypes.wintypes.HGLOBAL]
-GlobalFree = kernel32.GlobalFree
-GlobalFree.argtypes = [ctypes.wintypes.HGLOBAL]
+    OpenClipboard = user32.OpenClipboard
+    CloseClipboard = user32.CloseClipboard
+    EmptyClipboard = user32.EmptyClipboard
+    SetClipboardData = user32.SetClipboardData
+    SetClipboardData.argtypes = [ctypes.wintypes.UINT, ctypes.wintypes.HANDLE]
+    SetClipboardData.restype = ctypes.wintypes.HANDLE
+    GlobalAlloc = kernel32.GlobalAlloc
+    GlobalAlloc.argtypes = [ctypes.wintypes.UINT, ctypes.c_size_t]
+    GlobalAlloc.restype = ctypes.wintypes.HGLOBAL
+    GlobalLock = kernel32.GlobalLock
+    GlobalLock.argtypes = [ctypes.wintypes.HGLOBAL]
+    GlobalLock.restype = ctypes.c_void_p
+    GlobalUnlock = kernel32.GlobalUnlock
+    GlobalUnlock.argtypes = [ctypes.wintypes.HGLOBAL]
+    GlobalFree = kernel32.GlobalFree
+    GlobalFree.argtypes = [ctypes.wintypes.HGLOBAL]
 
 
 def _png_to_dib(png_path: str) -> bytes:
@@ -824,3 +833,17 @@ def register_tools(mcp):
         Multiple slides are placed as file drop (paste inserts all images).
         """
         return await run_offloaded(copy_to_clipboard, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# PowerPoint for Mac has no slide export command, so the Apple Event versions
+# go through the deck's PDF export and render the pages with Quartz. Same
+# function names and signatures, so nothing else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import export as _mac_export
+
+    use_mac_impls(globals(), _mac_export)

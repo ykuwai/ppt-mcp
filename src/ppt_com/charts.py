@@ -11,13 +11,21 @@ Excel processes.
 
 import json
 import logging
+import sys
 from typing import Literal, Optional, Union
 
-import pythoncom
+# pythoncom does not exist on macOS, and this module has to stay importable
+# there so the Apple Event implementations at the bottom can take the place of
+# the COM ones (#185, the same guard ppt_com/export.py already carries). The
+# only use of it is inside _set_chart_data_impl, which is replaced wholesale on
+# macOS and never runs.
+if sys.platform == "win32":
+    import pythoncom
+
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from ppt_com.constants import msoChart
@@ -1103,3 +1111,17 @@ def register_tools(mcp):
         The chart data is preserved when changing types.
         """
         return await run_offloaded(change_chart_type, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import charts as _mac_charts
+
+    use_mac_impls(globals(), _mac_charts)

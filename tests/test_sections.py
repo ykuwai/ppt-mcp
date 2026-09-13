@@ -18,6 +18,16 @@ sys.path.insert(0, "src")
 
 from ppt_com import sections  # noqa: E402
 
+# The fakes below are a COM SectionProperties, and on macOS these impls have
+# been replaced by their Apple Event counterparts, which reach for
+# `section_properties` and `insert_section` instead. The two platforms agree on
+# what `slide_index` means, which is what #193 was about, and
+# tests/test_mac_deck.py covers the Apple Event side against its own fakes.
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="drives the COM SectionProperties object directly (#185)",
+)
+
 
 # --- Fake COM object graph -------------------------------------------------
 

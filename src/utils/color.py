@@ -63,6 +63,44 @@ def int_to_hex(color_int: int) -> str:
     return f"#{r:02X}{g:02X}{b:02X}"
 
 
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# Apple Events take and return a three element list of 0 to 255 integers rather
+# than one packed number. Passing a 16 bit value gets clamped to 255, so the
+# scale really is 8 bit. Everything above this layer keeps speaking #RRGGBB.
+
+
+def hex_to_rgb_list(hex_str: str) -> list[int]:
+    """Convert a hex colour string to the [R, G, B] list Apple Events take."""
+    return list(hex_to_rgb(hex_str))
+
+
+def rgb_list_to_hex(rgb) -> str:
+    """Convert an Apple Event [R, G, B] list to a #RRGGBB string.
+
+    PowerPoint answers ``missing value`` rather than a colour for a shape that
+    has none, which arrives as None. That is not an error, so it comes back as
+    None here too and the caller decides what to say about it.
+    """
+    if not rgb or len(rgb) < 3:
+        return None
+    r, g, b = (int(c) for c in rgb[:3])
+    return f"#{r:02X}{g:02X}{b:02X}"
+
+
+def rgb_list_to_int(rgb) -> int:
+    """Convert an Apple Event [R, G, B] list to the BGR integer Windows uses.
+
+    Tools that report a colour numerically keep doing so identically on both
+    platforms, so a deck inspected on a Mac reads the same as on Windows.
+    """
+    if not rgb or len(rgb) < 3:
+        return None
+    r, g, b = (int(c) for c in rgb[:3])
+    return rgb_to_int(r, g, b)
+
+
 def get_theme_color_index(name: str) -> int:
     """Convert a theme color name to its MsoThemeColorIndex constant value.
 

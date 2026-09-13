@@ -7,14 +7,13 @@ import glob as glob_mod
 import json
 import logging
 import os
-import winreg
 from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
 from utils.color import int_to_hex
-from utils.com_wrapper import ppt
+from backend import ppt
 from utils.onedrive import resolve_local_path
 from ppt_com.constants import (
     msoTrue,
@@ -614,8 +613,11 @@ def _get_default_templates_dir() -> Optional[str]:
     2. Fallback: check common paths and return the first that exists
     3. Return None if no directory is found
     """
-    # 1. Try registry
+    # 1. Try registry. Imported lazily so this module stays importable on
+    # macOS, which has no registry and reaches the fallback below instead.
     try:
+        import winreg
+
         key = winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
             r"Software\Microsoft\Office\16.0\PowerPoint\Options",
@@ -624,7 +626,7 @@ def _get_default_templates_dir() -> Optional[str]:
         winreg.CloseKey(key)
         if path and os.path.isdir(path):
             return path
-    except (FileNotFoundError, OSError):
+    except (ImportError, FileNotFoundError, OSError):
         pass
 
     # 2. Fallback: check common paths in order
@@ -900,7 +902,10 @@ def register_tools(mcp):
         """Save a presentation to a new file path and/or format.
 
         Supported formats: 'pptx', 'pdf', 'png', 'jpg', 'default'.
-        Note: SaveAs changes the presentation's name to the new path.
+        Note: SaveAs changes the presentation's name to the new path. On macOS
+        a path outside PowerPoint's container cannot be held open, so the deck
+        stays in the container and the given path receives a copy that later
+        saves refresh; the result says so and names it in `also_copied_to`.
         For image formats (png/jpg), a folder of individual slide images is created.
         """
         return await run_offloaded(save_presentation_as, params)
@@ -990,3 +995,17 @@ def register_tools(mcp):
         ppt_create_presentation's template_path to create from a template.
         """
         return await run_offloaded(list_templates, params)
+
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+# The implementations above walk COM. Their Apple Event counterparts have the
+# same names and signatures, so on macOS they simply take their place; nothing
+# else in this module changes.
+from backend import IS_MACOS, use_mac_impls  # noqa: E402
+
+if IS_MACOS:  # pragma: no cover - platform specific
+    from ppt_mac import presentation as _mac_presentation
+
+    use_mac_impls(globals(), _mac_presentation)

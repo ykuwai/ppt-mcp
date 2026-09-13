@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  <img src="https://img.shields.io/badge/Platform-Windows-0078d4.svg" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
 
@@ -37,9 +37,13 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 
 ## 📋 Requirements
 
-- Windows 11
+- Windows 11, or macOS with Apple Silicon or Intel
 - Microsoft PowerPoint
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+On macOS the server drives PowerPoint over Apple Events instead of COM. The
+first tool call raises the system's automation prompt, and PowerPoint has to be
+allowed there once. See [macOS support](#-macos-support) for what differs.
 
 ## 🚀 Getting Started
 
@@ -298,6 +302,55 @@ When PowerPoint has a modal dialog open (e.g., SmartArt layout picker, Save dial
 
 ESC cancels without committing, so there are no destructive side effects. This is particularly useful in automated workflows where no human is present to close dialogs.
 
+## 🍎 macOS support
+
+**21 tools refuse on macOS. The rest work.** The 21 are listed by name in
+[MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
+
+The same tools, the same arguments, the same answers. What differs is what
+PowerPoint for Mac's scripting dictionary can reach, and where it cannot reach
+something the tool says so rather than doing something unexpected.
+
+Not available on macOS:
+
+- **SmartArt.** The dictionary has no class and no command for it, so it
+  cannot be created or edited from a script. An existing graphic is still an
+  ordinary shape and can be moved, resized, read and deleted.
+- **Editing a chart or a freeform path after it is made.** Both can be
+  created, and a chart's data and a path's nodes can be read back, but the
+  tools that change one in place are not written yet.
+- **Removing one animation.** Clearing a slide's animations works.
+- **Tags, `ppt_select_shapes`, `ppt_set_table_style` and `ppt_execute_mso`.**
+  Nothing in the dictionary reaches any of them.
+
+Smaller differences:
+
+- **Call the tools one after another, not several in the same turn.** Only one
+  request at a time reaches PowerPoint, so the rest queue behind it and come
+  out in whatever order they arrived. A call left waiting too long is taken
+  back and says so, having changed nothing.
+- A few tools accept an argument that has no counterpart, a screen tip on a
+  hyperlink for instance. Those refuse with a message naming the argument, so
+  dropping it and retrying works.
+- **Video and audio go in embedded, never linked**, and of the eight playback
+  settings only looping and hiding the frame exist. Hiding the frame is refused
+  on a slide that already has animations, because writing it rewrites them.
+- Exports are staged through PowerPoint's own container and moved out, because
+  the application is sandboxed and cannot write to arbitrary folders.
+- Slide images come from a PDF render rather than PNG export, which is sharper
+  than the Windows route.
+- Automation consent belongs to whichever application launched the server, so
+  running it from a different terminal or editor raises the prompt again.
+- Save the deck early and at each break. It costs nothing, and PowerPoint has
+  been seen to close every open document and then exit when a sandbox prompt
+  went up behind a script ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
+- **Charts, freeform paths and grouping go through the clipboard**, which
+  means the operation takes it for a moment and puts back what was there. This
+  is how those three reach a dictionary that has no words for them.
+- Icons are rasterised with `sips` before they are inserted, because
+  PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
+  systems get a refusal naming the reason rather than a blank box.
+
 ## 📄 License
 
 MIT
@@ -306,4 +359,5 @@ MIT
 
 - [FastMCP](https://github.com/jlowin/fastmcp) — Pythonic MCP server framework
 - [pywin32](https://github.com/mhammond/pywin32) — Windows COM automation
+- [appscript](https://github.com/hhas/appscript) — macOS Apple Event bridge
 - [Model Context Protocol](https://modelcontextprotocol.io/) — by Anthropic
