@@ -513,11 +513,11 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**155 tools. 139 do the job. 16 always refuse.**
+**155 tools. 143 do the job. 12 always refuse.**
 
 | Why | Tools |
 |---|---|
-| No `nodes`, and rewriting a path through the clipboard is not yet written. `ppt_set_node_editing_type` will stay refused: corner, smooth and symmetric are not stored in the XML either | `ppt_insert_node`, `ppt_delete_node`, `ppt_set_node_position`, `ppt_set_node_editing_type`, `ppt_set_segment_type` |
+| No `nodes`, and a node's editing type (corner, smooth, symmetric) is not stored in the XML the clipboard carries either; PowerPoint reads it off the handle geometry. Moving the handles with the node position tool is the way to change it | `ppt_set_node_editing_type` |
 | No `smart art` class | `ppt_add_smartart`, `ppt_modify_smartart`, `ppt_list_smartart_options` |
 | No `select` command, so no shape range | `ppt_select_shapes` |
 | No tags anywhere in the dictionary | `ppt_set_tag`, `ppt_get_tags` |

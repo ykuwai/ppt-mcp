@@ -47,7 +47,7 @@ def _fixture_bytes(name):
 # The swap
 # ---------------------------------------------------------------------------
 @macos_only
-class TestTheElevenToolsAreTheClipboardOnes:
+class TestTheFifteenToolsAreTheClipboardOnes:
     @pytest.mark.parametrize(
         "module_name,impl_name",
         [
@@ -62,6 +62,10 @@ class TestTheElevenToolsAreTheClipboardOnes:
             ("ppt_com.charts", "_format_chart_impl"),
             ("ppt_com.charts", "_format_chart_axis_impl"),
             ("ppt_com.charts", "_set_chart_series_impl"),
+            ("ppt_com.freeform", "_set_node_position_impl"),
+            ("ppt_com.freeform", "_insert_node_impl"),
+            ("ppt_com.freeform", "_delete_node_impl"),
+            ("ppt_com.freeform", "_set_segment_type_impl"),
         ],
     )
     def test_the_com_module_answers_with_the_apple_event_one(self, module_name, impl_name):
@@ -656,6 +660,118 @@ class TestChartEditors:
                 _set_chart_series_impl(1, "Sales", 7, "#FF0000", None, None)
 
         assert "paste" not in deck.order
+
+
+# ---------------------------------------------------------------------------
+# The four freeform editors
+# ---------------------------------------------------------------------------
+@macos_only
+class TestFreeformEditors:
+    """JSON strings, in the Windows shape, with the path read back."""
+
+    def test_set_node_position_reads_the_position_back(self):
+        from ppt_mac.freeform import _set_node_position_impl
+
+        deck_shapes = [("A", "auto"), ("Blob", "freeform", _fixture_bytes("freeform"))]
+        with _fake_deck(shapes=deck_shapes) as deck:
+            payload = json.loads(_set_node_position_impl(1, "Blob", None, 2, 300.0, 70.0))
+
+        assert {k: v for k, v in payload.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Blob", "node_index": 2, "x": 300.0, "y": 70.0,
+        }
+        assert payload["warnings"][0].startswith("'Blob' was recreated")
+        assert [s.name() for s in deck.shapes] == ["A", "Blob"]
+        # The moved node is the leftmost and topmost point now, so the shape's
+        # box starts there, and that position was written after the paste.
+        assert (deck.shapes[1].left_position(), deck.shapes[1].top()) == (300.0, 70.0)
+
+    def test_insert_node(self):
+        from ppt_mac.freeform import _get_shape_nodes_impl, _insert_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]):
+            payload = json.loads(_insert_node_impl(1, "Blob", None, 2, 0, 0, 10.0, 20.0, None, None, None, None))
+            nodes = json.loads(_get_shape_nodes_impl(1, "Blob", None))
+
+        assert {k: v for k, v in payload.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Blob", "new_node_count": 10,
+        }
+        assert nodes["node_count"] == 10
+        assert (nodes["nodes"][2]["x"], nodes["nodes"][2]["y"]) == (10.0, 20.0)
+
+    def test_delete_node(self):
+        from ppt_mac.freeform import _delete_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]):
+            payload = json.loads(_delete_node_impl(1, "Blob", None, 3))
+
+        assert {k: v for k, v in payload.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Blob", "remaining_node_count": 7,
+        }
+
+    def test_set_segment_type_carries_the_windows_note_when_the_count_changes(self):
+        from ppt_mac.freeform import _set_segment_type_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]):
+            to_curve = json.loads(_set_segment_type_impl(1, "Blob", None, 1, 1))
+            same = json.loads(_set_segment_type_impl(1, "Blob", None, 1, 1))
+
+        assert {k: v for k, v in to_curve.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Blob", "node_index": 1, "segment_type": "curve",
+            "old_node_count": 9, "new_node_count": 11,
+            "note": "Node count changed — switching line↔curve adds or removes control-point nodes. "
+                    "Re-call ppt_get_shape_nodes to see updated indices.",
+        }
+        assert same["old_node_count"] == same["new_node_count"] == 11
+        assert "note" not in same
+
+    def test_an_index_out_of_range_raises_before_anything_is_pasted(self):
+        from ppt_mac.freeform import _delete_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]) as deck:
+            with pytest.raises(ValueError, match="node_index 99 out of range \\(shape has 9 nodes\\)"):
+                _delete_node_impl(1, "Blob", None, 99)
+
+        assert "paste" not in deck.order and deck.order[-1] == "restore"
+        assert [s.name() for s in deck.shapes] == ["Blob"]
+
+    def test_a_dropped_paste_leaves_the_path_untouched(self):
+        from ppt_mac.freeform import _delete_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))], deaf=True) as deck:
+            payload = json.loads(_delete_node_impl(1, "Blob", None, 3))
+
+        assert "success" not in payload
+        assert deck.shapes[0].package == _fixture_bytes("freeform")
+
+    def test_a_path_that_reads_back_differently_is_removed_and_refused(self):
+        from ppt_mac.freeform import _set_node_position_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))],
+                        stale_package=_fixture_bytes("freeform")) as deck:
+            payload = json.loads(_set_node_position_impl(1, "Blob", None, 2, 1.0, 1.0))
+
+        assert payload["error"] == "ppt_set_node_position pasted a freeform that did not carry the edit"
+        assert "9 node(s) read back where 9 were written, or at other positions" in payload["reason"]
+        assert [s.name() for s in deck.shapes] == ["Blob"]
+
+    def test_lost_animations_are_counted_here_too(self):
+        from ppt_mac.freeform import _delete_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))], effects=["Blob"]):
+            payload = json.loads(_delete_node_impl(1, "Blob", None, 2))
+
+        assert "1 animation effect(s) on 'Blob' were lost" in payload["warnings"][1]
+
+    def test_the_editing_type_tool_still_says_the_xml_has_no_word_for_it(self):
+        from ppt_mac.freeform import _set_node_editing_type_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", None)]) as deck:
+            payload = json.loads(_set_node_editing_type_impl(1, "Blob", None, 2, 2))
+
+        assert "no such attribute either" in payload["reason"]
+        assert "ppt_set_node_position" in payload["reason"]
+        assert "success" not in payload
+        assert deck.order == []
 
 
 # ---------------------------------------------------------------------------
