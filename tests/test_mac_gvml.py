@@ -47,7 +47,7 @@ def _fixture_bytes(name):
 # The swap
 # ---------------------------------------------------------------------------
 @macos_only
-class TestTheSixToolsAreTheClipboardOnes:
+class TestTheFifteenToolsAreTheClipboardOnes:
     @pytest.mark.parametrize(
         "module_name,impl_name",
         [
@@ -57,6 +57,15 @@ class TestTheSixToolsAreTheClipboardOnes:
             ("ppt_com.freeform", "_get_shape_nodes_impl"),
             ("ppt_com.groups", "_group_shapes_impl"),
             ("ppt_com.groups", "_get_group_items_impl"),
+            ("ppt_com.charts", "_set_chart_data_impl"),
+            ("ppt_com.charts", "_change_chart_type_impl"),
+            ("ppt_com.charts", "_format_chart_impl"),
+            ("ppt_com.charts", "_format_chart_axis_impl"),
+            ("ppt_com.charts", "_set_chart_series_impl"),
+            ("ppt_com.freeform", "_set_node_position_impl"),
+            ("ppt_com.freeform", "_insert_node_impl"),
+            ("ppt_com.freeform", "_delete_node_impl"),
+            ("ppt_com.freeform", "_set_segment_type_impl"),
         ],
     )
     def test_the_com_module_answers_with_the_apple_event_one(self, module_name, impl_name):
@@ -311,16 +320,6 @@ class TestFreeformTools:
 
         assert deck.order == []
 
-    def test_the_editing_type_tool_says_the_xml_has_no_word_for_it_either(self):
-        from ppt_mac.freeform import _set_node_editing_type_impl
-
-        with _fake_deck(shapes=[("Blob", "freeform", None)]):
-            payload = json.loads(_set_node_editing_type_impl(1, "Blob", None, 2, 2))
-
-        assert "no such attribute either" in payload["reason"]
-        assert "success" not in payload
-
-
 # ---------------------------------------------------------------------------
 # Groups
 # ---------------------------------------------------------------------------
@@ -391,6 +390,388 @@ class TestGroupShapes:
 
         assert "expected a group" in result["reason"]
         assert "items" not in result
+
+
+# ---------------------------------------------------------------------------
+# Replacing a shape with a rewritten copy of itself
+# ---------------------------------------------------------------------------
+_CHART_STEPS = [
+    "snapshot", "copy", "claim", "effects", "write", "goto", "unselect", "paste",
+    "position", "copy", "claim", "delete",
+]
+
+
+@macos_only
+class TestTheReplaceProcedure:
+    """Copy, rewrite, paste, read back, then delete the original, then walk
+    the new shape back down the z order. Every stop on that road."""
+
+    def test_the_steps_run_in_order_and_the_chart_keeps_its_place(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("A", "auto"), ("Sales", "chart", _fixture_bytes("chart")), ("B", "auto")]
+        with _fake_deck(shapes=deck_shapes) as deck:
+            result = _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert result["success"] is True
+        assert result["shape_name"] == "Sales"
+        # Pasted last, so one step back puts it where the original was.
+        assert deck.order == _CHART_STEPS + ["backward", "restore"]
+        assert [s.name() for s in deck.shapes] == ["A", "Sales", "B"]
+        assert deck.shapes[1].shape_type().AS_name == "shape_type_chart"
+        assert (deck.shapes[1].left_position(), deck.shapes[1].top()) == (10.0, 20.0)
+        assert deck.board.contents == {"public.utf8-plain-text": b"kept"}
+
+    def test_the_walk_back_is_one_send_backward_per_step(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("Sales", "chart", _fixture_bytes("chart")), ("A", "auto"), ("B", "auto"), ("C", "auto")]
+        with _fake_deck(shapes=deck_shapes) as deck:
+            _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert deck.order.count("backward") == 3
+        assert [s.name() for s in deck.shapes] == ["Sales", "A", "B", "C"]
+
+    def test_the_caller_is_told_the_shape_was_recreated_in_full_then_briefly(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("Sales", "chart", _fixture_bytes("chart"))]
+        with _fake_deck(shapes=deck_shapes):
+            first = _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S", "values": [1]}])
+            second = _set_chart_data_impl(1, "Sales", ["Q2"], [{"name": "S", "values": [2]}])
+
+        assert first["warnings"] == [
+            "'Sales' was recreated rather than edited in place. PowerPoint for Mac "
+            "cannot reach inside a chart from a script, so the shape was copied, its "
+            "XML rewritten and pasted back, and the original deleted. Its name, "
+            "position and z order were put back. Its animations were not, because "
+            "the clipboard package does not carry them, and anything else that "
+            "pointed at the old object (a comment anchor, an animation trigger on "
+            "another shape) now points at nothing."
+        ]
+        assert second["warnings"] == [
+            "'Sales' was recreated by paste; name, position and z order kept, animations not."
+        ]
+
+    def test_lost_animations_are_counted_before_the_original_goes(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("Sales", "chart", _fixture_bytes("chart")), ("A", "auto")]
+        with _fake_deck(shapes=deck_shapes, effects=["Sales", "A", "Sales"]) as deck:
+            result = _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert result["warnings"][1] == (
+            "2 animation effect(s) on 'Sales' were lost with the original; the "
+            "clipboard package does not carry them."
+        )
+        assert deck.order.index("effects") < deck.order.index("delete")
+
+    def test_a_sequence_that_cannot_be_read_is_said_to_be_unknown_not_empty(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("Sales", "chart", _fixture_bytes("chart"))]
+        with _fake_deck(shapes=deck_shapes, no_timeline=True):
+            result = _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert "could not be read, so any it had are gone" in result["warnings"][1]
+
+    def test_a_dropped_paste_leaves_the_original_untouched(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("Sales", "chart", _fixture_bytes("chart"))]
+        with _fake_deck(shapes=deck_shapes, deaf=True) as deck:
+            result = _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert "success" not in result
+        assert "silent no-op" in result["reason"]
+        assert "delete" not in deck.order
+        assert [s.name() for s in deck.shapes] == ["Sales"]
+        assert deck.shapes[0].package == _fixture_bytes("chart")
+
+    def test_a_paste_that_reads_back_without_the_edit_is_removed_and_refused(self):
+        """The read-back is the evidence. When it does not carry the change,
+        the new shape goes and the original stays, and the refusal says both."""
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("Sales", "chart", _fixture_bytes("chart"))]
+        with _fake_deck(shapes=deck_shapes, stale_package=_fixture_bytes("chart")) as deck:
+            result = _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert result["error"] == "ppt_set_chart_data pasted a chart that did not carry the edit"
+        assert "categories read back as" in result["reason"]
+        assert "The pasted copy was removed again. The original is untouched." in result["reason"]
+        assert "success" not in result
+        assert [s.name() for s in deck.shapes] == ["Sales"]
+        assert deck.order[-1] == "restore" and "backward" not in deck.order
+
+    def test_an_original_that_would_not_delete_is_named_beside_its_replacement(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("A", "auto"), ("Sales", "chart", _fixture_bytes("chart"))]
+        with _fake_deck(shapes=deck_shapes, undeletable={"Sales"}) as deck:
+            result = _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert result["error"] == "ppt_set_chart_data left both the original and its replacement on the slide"
+        assert "the original at position 2 and the new one at position 3" in result["reason"]
+        assert [s.name() for s in deck.shapes] == ["A", "Sales", "Sales"]
+
+    def test_a_z_order_that_would_not_move_is_a_warning_with_the_position(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("Sales", "chart", _fixture_bytes("chart")), ("A", "auto")]
+        with _fake_deck(shapes=deck_shapes, stuck_z=True) as deck:
+            result = _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert result["success"] is True
+        assert result["warnings"][-1] == (
+            "'Sales' could not be put back at z order position 1; it is at position 2 now."
+        )
+        assert [s.name() for s in deck.shapes] == ["A", "Sales"]
+
+    def test_a_shape_that_is_not_a_chart_says_so_before_the_clipboard_is_touched(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        with _fake_deck(shapes=[("Title", "auto")]) as deck:
+            with pytest.raises(ValueError, match="'Title' is not a chart"):
+                _set_chart_data_impl(1, "Title", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert deck.order == []
+
+
+# ---------------------------------------------------------------------------
+# The five chart editors
+# ---------------------------------------------------------------------------
+@macos_only
+class TestChartEditors:
+    """Each returns what Windows returns, plus the warnings, and what it
+    wrote is what a second copy reads back."""
+
+    def test_set_chart_data(self):
+        from ppt_mac.charts import _get_chart_data_impl, _set_chart_data_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]):
+            result = _set_chart_data_impl(1, "Sales", ["Q1", "Q2"], [
+                {"name": "North", "values": [1, 2]}, {"name": "South", "values": [3, 4]},
+            ])
+            data = _get_chart_data_impl(1, "Sales")
+
+        assert {k: v for k, v in result.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Sales", "categories_count": 2, "series_count": 2,
+        }
+        assert data["categories"] == ["Q1", "Q2"]
+        assert data["series"] == [
+            {"name": "North", "values": [1.0, 2.0]}, {"name": "South", "values": [3.0, 4.0]},
+        ]
+
+    def test_a_series_without_values_is_refused_before_anything_is_copied(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            with pytest.raises(ValueError, match="'name' and a 'values'"):
+                _set_chart_data_impl(1, "Sales", ["Q1"], [{"name": "S"}])
+
+        assert deck.order == []
+
+    def test_change_chart_type(self):
+        from ppt_mac.charts import _change_chart_type_impl, _get_chart_data_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            result = _change_chart_type_impl(1, "Sales", "pie")
+            data = _get_chart_data_impl(1, "Sales")
+
+        assert {k: v for k, v in result.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Sales", "new_chart_type": "pie", "new_chart_type_int": 5,
+        }
+        from gvml import Package, charts
+
+        assert charts.kind_of(Package.from_bytes(deck.shapes[0].package).chart()) == "pieChart"
+        assert data["series"][0]["values"] == [4.3, 2.5, 3.5, 4.5]
+
+    def test_format_chart(self):
+        from ppt_mac.charts import _format_chart_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]):
+            result = _format_chart_impl(
+                1, "Sales", "Revenue", None, "top", None, None, None, None, None, None, None,
+            )
+            gone = _format_chart_impl(
+                1, "Sales", None, False, None, None, None, None, None, None, None, None,
+            )
+
+        assert {k: v for k, v in result.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Sales", "has_title": True, "has_legend": True,
+        }
+        assert gone["has_legend"] is False and gone["has_title"] is True
+
+    def test_a_legend_position_with_no_legend_is_the_windows_error_and_changes_nothing(self):
+        from ppt_mac.charts import _format_chart_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            _format_chart_impl(1, "Sales", None, False, None, None, None, None, None, None, None, None)
+            with pytest.raises(ValueError, match="Cannot set legend position when chart has no legend"):
+                _format_chart_impl(1, "Sales", None, None, "left", None, None, None, None, None, None, None)
+
+        assert deck.order.count("paste") == 1
+
+    def test_format_chart_axis(self):
+        from ppt_mac.charts import _format_chart_axis_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]):
+            result = _format_chart_axis_impl(
+                1, "Sales", "value", "Yen",
+                0.0, 100.0, 25.0, None, None, None, "cross", None,
+                True, False, None, None, "0.0",
+            )
+
+        assert {k: v for k, v in result.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Sales", "axis": "value",
+            "applied": ["title", "min_scale", "max_scale", "major_unit", "major_tick_mark",
+                        "reverse_order", "log_scale", "number_format"],
+        }
+
+    def test_an_axis_the_chart_does_not_have_is_the_windows_error(self):
+        from ppt_mac.charts import _change_chart_type_impl, _format_chart_axis_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]):
+            _change_chart_type_impl(1, "Sales", "pie")
+            with pytest.raises(ValueError, match="Axis 'value' is not available on this chart type"):
+                _format_chart_axis_impl(1, "Sales", "value", "x", *([None] * 13))
+
+    def test_set_chart_series(self):
+        from ppt_mac.charts import _set_chart_series_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            result = _set_chart_series_impl(1, "Sales", 2, "#FF0000", True, 2.0)
+
+        assert {k: v for k, v in result.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Sales", "series_index": 2,
+        }
+        from gvml import Package, charts
+
+        assert charts.read_series(Package.from_bytes(deck.shapes[0].package).chart(), 2) == {
+            "color": "#FF0000", "line_weight": 2.0, "show_data_labels": True,
+        }
+
+    def test_a_series_past_the_end_is_the_windows_error(self):
+        from ppt_mac.charts import _set_chart_series_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            with pytest.raises(ValueError, match="series_index 7 out of range"):
+                _set_chart_series_impl(1, "Sales", 7, "#FF0000", None, None)
+
+        assert "paste" not in deck.order
+
+
+# ---------------------------------------------------------------------------
+# The four freeform editors
+# ---------------------------------------------------------------------------
+@macos_only
+class TestFreeformEditors:
+    """JSON strings, in the Windows shape, with the path read back."""
+
+    def test_set_node_position_reads_the_position_back(self):
+        from ppt_mac.freeform import _set_node_position_impl
+
+        deck_shapes = [("A", "auto"), ("Blob", "freeform", _fixture_bytes("freeform"))]
+        with _fake_deck(shapes=deck_shapes) as deck:
+            payload = json.loads(_set_node_position_impl(1, "Blob", None, 2, 300.0, 70.0))
+
+        assert {k: v for k, v in payload.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Blob", "node_index": 2, "x": 300.0, "y": 70.0,
+        }
+        assert payload["warnings"][0].startswith("'Blob' was recreated")
+        assert [s.name() for s in deck.shapes] == ["A", "Blob"]
+        # The moved node is the leftmost and topmost point now, so the shape's
+        # box starts there, and that position was written after the paste.
+        assert (deck.shapes[1].left_position(), deck.shapes[1].top()) == (300.0, 70.0)
+
+    def test_insert_node(self):
+        from ppt_mac.freeform import _get_shape_nodes_impl, _insert_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]):
+            payload = json.loads(_insert_node_impl(1, "Blob", None, 2, 0, 0, 10.0, 20.0, None, None, None, None))
+            nodes = json.loads(_get_shape_nodes_impl(1, "Blob", None))
+
+        assert {k: v for k, v in payload.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Blob", "new_node_count": 10,
+        }
+        assert nodes["node_count"] == 10
+        assert (nodes["nodes"][2]["x"], nodes["nodes"][2]["y"]) == (10.0, 20.0)
+
+    def test_delete_node(self):
+        from ppt_mac.freeform import _delete_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]):
+            payload = json.loads(_delete_node_impl(1, "Blob", None, 3))
+
+        assert {k: v for k, v in payload.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Blob", "remaining_node_count": 7,
+        }
+
+    def test_set_segment_type_carries_the_windows_note_when_the_count_changes(self):
+        from ppt_mac.freeform import _set_segment_type_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]):
+            to_curve = json.loads(_set_segment_type_impl(1, "Blob", None, 1, 1))
+            same = json.loads(_set_segment_type_impl(1, "Blob", None, 1, 1))
+
+        assert {k: v for k, v in to_curve.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Blob", "node_index": 1, "segment_type": "curve",
+            "old_node_count": 9, "new_node_count": 11,
+            "note": "Node count changed — switching line↔curve adds or removes control-point nodes. "
+                    "Re-call ppt_get_shape_nodes to see updated indices.",
+        }
+        assert same["old_node_count"] == same["new_node_count"] == 11
+        assert "note" not in same
+
+    def test_an_index_out_of_range_raises_before_anything_is_pasted(self):
+        from ppt_mac.freeform import _delete_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]) as deck:
+            with pytest.raises(ValueError, match="node_index 99 out of range \\(shape has 9 nodes\\)"):
+                _delete_node_impl(1, "Blob", None, 99)
+
+        assert "paste" not in deck.order and deck.order[-1] == "restore"
+        assert [s.name() for s in deck.shapes] == ["Blob"]
+
+    def test_a_dropped_paste_leaves_the_path_untouched(self):
+        from ppt_mac.freeform import _delete_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))], deaf=True) as deck:
+            payload = json.loads(_delete_node_impl(1, "Blob", None, 3))
+
+        assert "success" not in payload
+        assert deck.shapes[0].package == _fixture_bytes("freeform")
+
+    def test_a_path_that_reads_back_differently_is_removed_and_refused(self):
+        from ppt_mac.freeform import _set_node_position_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))],
+                        stale_package=_fixture_bytes("freeform")) as deck:
+            payload = json.loads(_set_node_position_impl(1, "Blob", None, 2, 1.0, 1.0))
+
+        assert payload["error"] == "ppt_set_node_position pasted a freeform that did not carry the edit"
+        assert "9 node(s) read back where 9 were written, or at other positions" in payload["reason"]
+        assert [s.name() for s in deck.shapes] == ["Blob"]
+
+    def test_lost_animations_are_counted_here_too(self):
+        from ppt_mac.freeform import _delete_node_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))], effects=["Blob"]):
+            payload = json.loads(_delete_node_impl(1, "Blob", None, 2))
+
+        assert "1 animation effect(s) on 'Blob' were lost" in payload["warnings"][1]
+
+    def test_the_editing_type_tool_still_says_the_xml_has_no_word_for_it(self):
+        from ppt_mac.freeform import _set_node_editing_type_impl
+
+        with _fake_deck(shapes=[("Blob", "freeform", None)]) as deck:
+            payload = json.loads(_set_node_editing_type_impl(1, "Blob", None, 2, 2))
+
+        assert "no such attribute either" in payload["reason"]
+        assert "ppt_set_node_position" in payload["reason"]
+        assert "success" not in payload
+        assert deck.order == []
 
 
 # ---------------------------------------------------------------------------
@@ -515,14 +896,44 @@ class _FakeShape:
         if self.package is None:
             self.deck.board.contents = {"public.utf8-plain-text": b"a copy with no package"}
         else:
-            self.deck.board.contents = {"com.microsoft.Art--GVML-ClipFormat": self.package}
+            self.deck.board.contents = {"com.microsoft.Art--GVML-ClipFormat": self._named(self.package)}
         self.deck.board.count += 1
+
+    def _named(self, raw):
+        """The package with this shape's name in it, as PowerPoint writes it.
+
+        A fixture recorded from a shape called HandChart stands in for a
+        shape called Sales; PowerPoint stamps the current name on every copy.
+        """
+        import xml.etree.ElementTree as ET
+
+        from gvml import Package, canvas, shapes
+
+        package = Package.from_bytes(raw)
+        root = ET.fromstring(package.drawing())
+        for element in canvas.children(canvas.canvas_of(root)):
+            shapes.rename(element, self._name)
+        package.parts[package.drawing_part()] = canvas.serialize_drawing(root).encode()
+        return package.to_bytes()
 
     def delete(self):
         self.deck.order.append("delete")
         if self._name in self.deck.undeletable:
             return
         self.deck.shapes.remove(self)
+
+    def z_order(self, z_order_position=None):
+        """Only `send shape backward` is sent here: one step down."""
+        from appscript import k
+
+        assert z_order_position == k.send_shape_backward
+        self.deck.order.append("backward")
+        if self.deck.stuck_z:
+            return
+        shapes = self.deck.shapes
+        i = shapes.index(self)
+        if i > 0:
+            shapes[i - 1], shapes[i] = shapes[i], shapes[i - 1]
 
     def _own_package(self):
         """What `copy shape` would put on the pasteboard for this shape."""
@@ -590,6 +1001,9 @@ class _FakeView:
         # package's own offset.
         landed = _FakeShape(deck, info.name, kind, left=380.0, top=210.0,
                             width=canvas.pt(info.cx), height=canvas.pt(info.cy))
+        # What `copy shape` on the new shape answers: the package pasted,
+        # unless the test wants PowerPoint to have kept something else.
+        landed.package = deck.stale_package or raw
         if deck.stuck_position:
             landed.left_position = _Property(deck.stuck_position[0], on_set=lambda: deck.order.append("position"))
             landed.left_position.set = lambda v: deck.order.append("position")
@@ -618,8 +1032,14 @@ class _FakeWindow:
 class _FakeDeck:
     def __init__(self, shapes, deaf=False, goto_error=None, lands_as=None, lands_twice=False,
                  stuck_position=None, rewrite_after_write=False, rewrite_after_paste=False,
-                 too_large=False, undeletable=()):
+                 too_large=False, undeletable=(), effects=(), stale_package=None,
+                 stuck_z=False, no_timeline=False):
         self.order = []
+        # Shape names, one per effect of the slide's main sequence.
+        self.effects = list(effects)
+        self.stale_package = stale_package
+        self.stuck_z = stuck_z
+        self.no_timeline = no_timeline
         self.deaf = deaf
         self.goto_error = goto_error
         self.lands_as = lands_as
@@ -642,8 +1062,25 @@ class _FakeDeck:
     def slide(self):
         deck = self
 
+        class _Effect:
+            def __init__(self, name):
+                self.shape = mock.Mock()
+                self.shape.name = mock.Mock(return_value=name)
+
+        class _Sequence:
+            def count(self, each=None):
+                deck.order.append("effects")
+                return len(deck.effects)
+
+            effects = _FakeShapesLike([_Effect(n) for n in deck.effects])
+
+        class _Timeline:
+            main_sequence = _Sequence()
+
         class _Slide:
             shapes = _FakeShapes(deck)
+            if not deck.no_timeline:
+                timeline = _Timeline()
 
         return _Slide()
 
@@ -700,6 +1137,7 @@ def _fake_deck(**kwargs):
     with mock.patch.object(ppt, "_get_pres_impl", return_value=deck.presentation), \
             mock.patch.object(ppt, "_get_app_impl", return_value=mock.Mock()), \
             mock.patch.object(gvml_paste, "pasteboard", _Pasteboard), \
+            mock.patch.object(gvml_paste, "_recreation_explained", False), \
             mock.patch.object(gvml_paste.Clipboard, "claim", claim):
         yield deck
     gvml_paste.Clipboard.claim = original_claim

@@ -277,51 +277,79 @@ class TestAddChart:
 
 
 @macos_only
-class TestChartToolsThatTakeAShape:
-    """Five tools name a chart and refuse; the chart is found first."""
+class TestChartArgumentsRefusedByName:
+    """The five editing tools work now (test_mac_gvml.py). What is left to
+    refuse is the odd argument, and each one is named before the chart is
+    touched, so dropping it and calling again costs nothing."""
 
-    def test_writing_data_says_the_workbook_is_the_missing_piece(self):
-        from ppt_mac.charts import _set_chart_data_impl
-
-        with _fake_deck(["Q3 Revenue"]) as deck:
-            deck.set_type("Q3 Revenue", "chart")
-            result = _set_chart_data_impl(1, "Q3 Revenue", ["Q1"], [{"name": "a"}])
-
-        assert "Excel workbook" in result["reason"]
-        assert "chart data" in result["reason"]
-
-    def test_formatting_refuses_every_argument_together(self):
-        """None of them is a shape property, so none is singled out."""
+    def test_formatting_refuses_the_unmapped_arguments_by_name(self):
         from ppt_mac.charts import _format_chart_impl
 
-        with _fake_deck(["Q3 Revenue"]) as deck:
-            deck.set_type("Q3 Revenue", "chart")
+        with _no_powerpoint():
             result = _format_chart_impl(
                 1, "Q3 Revenue", "Revenue", True, "bottom", 3, 12.0,
                 None, None, None, None, None,
             )
 
-        assert result["error"] == "ppt_format_chart is not available on macOS"
-        assert "error" in result and "warnings" not in result
+        assert result["error"] == "ppt_format_chart cannot set chart_style, legend_font_size on macOS"
+        assert "drop the argument" in result["reason"]
+        assert "success" not in result
 
-    def test_the_axis_refusal_repeats_the_axis_asked_for(self):
-        from ppt_mac.charts import _format_chart_axis_impl
+    def test_an_eight_direction_legend_position_is_refused_by_argument(self):
+        from ppt_mac.charts import _format_chart_impl
 
-        with _fake_deck(["Q3 Revenue"]) as deck:
-            deck.set_type("Q3 Revenue", "chart")
-            result = _format_chart_axis_impl(
-                1, "Q3 Revenue", "Value", None,
-                0.0, 100.0, None, None, None, None, None, None,
+        with _no_powerpoint():
+            result = _format_chart_impl(
+                1, "Q3 Revenue", None, None, "top-left", None, None,
                 None, None, None, None, None,
             )
 
-        assert "no addressable 'value' axis" in result["reason"]
+        assert result["error"] == "ppt_format_chart cannot set an 8-direction legend_position on macOS"
+        assert "'bottom', 'left', 'right', 'top' or 'corner'" in result["alternatives"][0]
+
+    def test_a_misspelled_legend_position_is_heard_the_windows_way(self):
+        from ppt_mac.charts import _format_chart_impl
+
+        with _no_powerpoint():
+            with pytest.raises(ValueError, match="Unknown legend position 'botom'"):
+                _format_chart_impl(
+                    1, "Q3 Revenue", None, None, "botom", None, None,
+                    None, None, None, None, None,
+                )
+
+    def test_the_axis_font_size_is_refused_by_name(self):
+        from ppt_mac.charts import _format_chart_axis_impl
+
+        with _no_powerpoint():
+            result = _format_chart_axis_impl(
+                1, "Q3 Revenue", "value", None,
+                None, None, None, None, None, None, None, None,
+                None, None, None, 9.0, None,
+            )
+
+        assert result["error"] == "ppt_format_chart_axis cannot set tick_label_font_size on macOS"
+
+    def test_the_windows_axis_guards_come_before_powerpoint(self):
+        from ppt_mac.charts import _format_chart_axis_impl
+
+        with _no_powerpoint():
+            with pytest.raises(ValueError, match="min_scale/max_scale are only valid for value axes"):
+                _format_chart_axis_impl(
+                    1, "Q3 Revenue", "category", None,
+                    0.0, 100.0, None, None, None, None, None, None,
+                    None, None, None, None, None,
+                )
+            with pytest.raises(ValueError, match="log_base requires log_scale=true"):
+                _format_chart_axis_impl(
+                    1, "Q3 Revenue", "value", None,
+                    None, None, None, None, None, None, None, None,
+                    None, None, 2.0, None, None,
+                )
 
     def test_a_misspelled_axis_is_still_heard(self):
         from ppt_mac.charts import _format_chart_axis_impl
 
-        with _fake_deck(["Q3 Revenue"]) as deck:
-            deck.set_type("Q3 Revenue", "chart")
+        with _no_powerpoint():
             with pytest.raises(ValueError, match="Unknown axis 'catagory'"):
                 _format_chart_axis_impl(
                     1, "Q3 Revenue", "catagory", None,
@@ -329,76 +357,16 @@ class TestChartToolsThatTakeAShape:
                     None, None, None, None, None,
                 )
 
-    def test_the_series_refusal_names_the_fill_that_would_have_lied(self):
-        """`fill format` exists on the chart shape and paints the wrong thing."""
-        from ppt_mac.charts import _set_chart_series_impl
-
-        with _fake_deck(["Q3 Revenue"]) as deck:
-            deck.set_type("Q3 Revenue", "chart")
-            result = _set_chart_series_impl(1, "Q3 Revenue", 2, "#FF0000", None, None)
-
-        assert "series 2 cannot be addressed" in result["reason"]
-        assert "fill format" in result["reason"]
-
-    def test_changing_the_type_refuses_and_still_hears_a_typo(self):
+    def test_changing_the_type_hears_a_typo_and_refuses_an_unknown_kind_by_argument(self):
         from ppt_mac.charts import _change_chart_type_impl
 
-        with _fake_deck(["Q3 Revenue"]) as deck:
-            deck.set_type("Q3 Revenue", "chart")
-            result = _change_chart_type_impl(1, "Q3 Revenue", "pie")
-            assert "chart type cannot be changed" in result["reason"]
-
+        with _no_powerpoint():
             with pytest.raises(ValueError, match="Unknown chart type 'pei'"):
                 _change_chart_type_impl(1, "Q3 Revenue", "pei")
+            result = _change_chart_type_impl(1, "Q3 Revenue", -4100)
 
-    def test_every_chart_refusal_points_at_the_shape_tools(self):
-        """An existing chart is a shape, and that is the part not missing."""
-        from ppt_mac.charts import (
-            _change_chart_type_impl, _format_chart_axis_impl, _format_chart_impl,
-            _set_chart_data_impl, _set_chart_series_impl,
-        )
-
-        calls = [
-            (_set_chart_data_impl, (1, "C", ["Q1"], [])),
-            (_format_chart_impl, (1, "C") + (None,) * 10),
-            (_format_chart_axis_impl, (1, "C", "value") + (None,) * 14),
-            (_set_chart_series_impl, (1, "C", 1, None, None, None)),
-            (_change_chart_type_impl, (1, "C", "pie")),
-        ]
-        for impl, args in calls:
-            with _fake_deck(["C"]) as deck:
-                deck.set_type("C", "chart")
-                result = impl(*args)
-            assert "ppt_update_shape, which moves and resizes it" in (
-                result["alternatives"]
-            ), impl.__name__
-            assert "success" not in result, impl.__name__
-
-
-@macos_only
-class TestChartArgumentsAreCheckedFirst:
-    """A caller who named the wrong thing hears about the wrong thing."""
-
-    def test_a_shape_that_is_not_a_chart_says_so_the_way_windows_does(self):
-        from ppt_mac.charts import _get_chart_data_impl
-
-        with _fake_deck(["Title"]):
-            with pytest.raises(ValueError, match="'Title' is not a chart"):
-                _get_chart_data_impl(1, "Title")
-
-    def test_a_shape_that_is_not_there_says_so(self):
-        from ppt_mac.charts import _get_chart_data_impl
-
-        with _fake_deck(["Title"]):
-            with pytest.raises(ValueError, match="'Ghost' not found"):
-                _get_chart_data_impl(1, "Ghost")
-
-    def test_a_slide_index_out_of_range_says_so(self):
-        from ppt_mac.charts import _get_chart_data_impl
-
-        with _fake_deck(["Title"]):
-            with pytest.raises(ValueError, match="Slide index 4 is out of range"):
-                _get_chart_data_impl(4, "Title")
+        assert result["error"] == "ppt_change_chart_type cannot draw chart_type -4100 on macOS"
+        assert "success" not in result
 
 
 # ---------------------------------------------------------------------------
@@ -579,58 +547,35 @@ class TestListingSmartArtLayouts:
 # ---------------------------------------------------------------------------
 @macos_only
 class TestFreeformWireForm:
-    """These five return a JSON string, and the other tools return a dict.
+    """The one freeform refusal left returns a JSON string, like the rest.
 
     The freeform tool wrappers hand back whatever ``ppt.execute`` returns
     without encoding it, so a dict here would reach the model as a Python repr
     rather than as JSON. Worth its own test because nothing else would catch it.
     """
 
-    def test_every_freeform_impl_returns_a_string(self):
-        for result in _all_freeform_refusals():
-            assert isinstance(result, str)
-            assert json.loads(result)["platform"] == "macOS"
+    def test_the_editing_type_refusal_is_a_string(self):
+        result = _editing_type_refusal()
+        assert isinstance(result, str)
+        assert json.loads(result)["platform"] == "macOS"
 
-    def test_none_of_them_looks_like_a_success(self):
-        for result in _all_freeform_refusals():
-            payload = json.loads(result)
-            assert "success" not in payload
-            assert payload["error"].endswith("is not available on macOS")
+    def test_it_does_not_look_like_a_success(self):
+        payload = json.loads(_editing_type_refusal())
+        assert "success" not in payload
+        assert payload["error"].endswith("is not available on macOS")
 
 
 @macos_only
 class TestFreeformNodeTools:
-    """Five tools name a shape and refuse; the shape is found first."""
+    """Four of the five node editors work now (test_mac_gvml.py). The
+    editing type is the one with nowhere to be written, and it says so."""
 
-    def test_deleting_a_node_says_the_outline_is_untouched(self):
-        """The destructive one, where a believed no-op costs the most."""
-        from ppt_mac.freeform import _delete_node_impl
-
-        with _fake_deck(["Arrow"]) as deck:
-            deck.set_type("Arrow", "freeform")
-            payload = json.loads(_delete_node_impl(1, "Arrow", None, 3))
-
-        assert "node 3 cannot be deleted" in payload["reason"]
-        assert "untouched" in payload["reason"]
-
-    def test_each_of_the_six_repeats_the_index_it_was_given(self):
-        from ppt_mac.freeform import (
-            _delete_node_impl, _insert_node_impl, _set_node_editing_type_impl,
-            _set_node_position_impl, _set_segment_type_impl,
-        )
-
-        calls = [
-            (_set_node_position_impl, (1, "Arrow", None, 2, 5.0, 6.0), "node 2"),
-            (_insert_node_impl, (1, "Arrow", None, 3, 0, 1, 1.0, 1.0, None, None, None, None), "node 3"),
-            (_delete_node_impl, (1, "Arrow", None, 4), "node 4"),
-            (_set_node_editing_type_impl, (1, "Arrow", None, 5, 2), "node 5"),
-            (_set_segment_type_impl, (1, "Arrow", None, 6, 1), "node 6"),
-        ]
-        for impl, args, wanted in calls:
-            with _fake_deck(["Arrow"]) as deck:
-                deck.set_type("Arrow", "freeform")
-                payload = json.loads(impl(*args))
-            assert wanted in payload["reason"], impl.__name__
+    def test_the_editing_type_names_the_shape_and_the_node(self):
+        payload = json.loads(_editing_type_refusal())
+        assert "'Arrow' on slide 1 is a freeform" in payload["reason"]
+        assert "node 5" in payload["reason"]
+        assert "no such attribute either" in payload["reason"]
+        assert "ppt_set_node_position" in payload["reason"]
 
     def test_a_shape_that_is_not_a_freeform_says_so_the_way_windows_does(self):
         from ppt_mac.freeform import _get_shape_nodes_impl
@@ -650,39 +595,21 @@ class TestFreeformNodeTools:
             with pytest.raises(ValueError, match="Shape index 9 is out of range"):
                 _get_shape_nodes_impl(1, None, 9)
 
-    def test_they_all_point_at_the_shape_tools(self):
-        for result in _all_freeform_refusals():
-            payload = json.loads(result)
-            assert "ppt_list_shapes" in payload["alternatives"]
+    def test_it_points_at_the_shape_tools(self):
+        payload = json.loads(_editing_type_refusal())
+        assert "ppt_list_shapes" in payload["alternatives"]
 
 
 # ---------------------------------------------------------------------------
 # The fake object graph
 # ---------------------------------------------------------------------------
-def _all_freeform_refusals():
-    """Run every refusing freeform impl against a freeform; collect the answers.
+def _editing_type_refusal():
+    """Run the one refusing freeform impl against a freeform."""
+    from ppt_mac.freeform import _set_node_editing_type_impl
 
-    ``_build_freeform_impl`` and ``_get_shape_nodes_impl`` go through the
-    clipboard now and are covered in test_mac_gvml.py.
-    """
-    from ppt_mac.freeform import (
-        _delete_node_impl, _insert_node_impl, _set_node_editing_type_impl,
-        _set_node_position_impl, _set_segment_type_impl,
-    )
-
-    results = []
-    calls = [
-        (_set_node_position_impl, (1, "Arrow", None, 1, 5.0, 6.0)),
-        (_insert_node_impl, (1, "Arrow", None, 1, 0, 1, 1.0, 1.0, None, None, None, None)),
-        (_delete_node_impl, (1, "Arrow", None, 1)),
-        (_set_node_editing_type_impl, (1, "Arrow", None, 1, 2)),
-        (_set_segment_type_impl, (1, "Arrow", None, 1, 1)),
-    ]
-    for impl, args in calls:
-        with _fake_deck(["Arrow"]) as deck:
-            deck.set_type("Arrow", "freeform")
-            results.append(impl(*args))
-    return results
+    with _fake_deck(["Arrow"]) as deck:
+        deck.set_type("Arrow", "freeform")
+        return _set_node_editing_type_impl(1, "Arrow", None, 5, 2)
 
 
 def _command_error(number):

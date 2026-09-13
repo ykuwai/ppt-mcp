@@ -56,10 +56,12 @@ through 3.14, so there is no build step and no compiler on the user's machine.
 Three things are absent from the dictionary. Charts, SmartArt and freeform
 path building have no words in it at all. Two of them come back another way:
 the clipboard carries a DrawingML package for any shape, PowerPoint pastes one
-back whatever it holds, and `ppt_add_chart`, `ppt_get_chart_data`,
-`ppt_build_freeform`, `ppt_get_shape_nodes`, `ppt_group_shapes` and
-`ppt_get_group_items` go through it (`docs/gvml-design.md`). Section 6 says
-what is still missing.
+back whatever it holds, and every chart, freeform and group tool goes through
+it (`docs/gvml-design.md`). Creating and reading is a paste or a copy; editing
+an existing chart or path is a copy, a rewrite and a paste back, after which
+the original is deleted and the new shape put back in its place. That makes
+it a new object with the old name, and the tool says so. Section 6 says what
+is still missing.
 
 One risk outranks every missing feature, and it is section 5.
 
@@ -493,9 +495,9 @@ This is the honest part. These are not workarounds waiting to be found.
 
 | Area | Windows | macOS | Lines affected |
 |---|---|---|---|
-| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. A chart is added by writing its XML and pasting it through the clipboard, and its data is read the same way (`docs/gvml-design.md`). Editing an existing chart that way is not yet written | `charts.py` 1,126 |
+| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. A chart is added by writing its XML and pasting it through the clipboard, and its data is read the same way (`docs/gvml-design.md`). An existing chart is edited by copying it, rewriting its `chart1.xml` and pasting it back over the original, which keeps name, position and z order and loses animations, said in `warnings` | `charts.py` 1,126 |
 | SmartArt | `SmartArt` object model | **no class, no command**. `shape type smartart graphic` exists, so an existing graphic is a shape like any other | `smartart.py` 810 |
-| Freeform paths | `Shapes.BuildFreeform` | **no builder**. A path is written as `a:custGeom` and pasted through the clipboard, and read back the same way. Editing nodes in place is not yet written | `freeform.py` 765 |
+| Freeform paths | `Shapes.BuildFreeform` | **no builder**. A path is written as `a:custGeom` and pasted through the clipboard, and read back the same way. Nodes are moved, inserted, deleted and switched between line and curve by rewriting the path and pasting it back over the original. The editing type (corner, smooth, symmetric) is not in the XML either and stays refused | `freeform.py` 765 |
 | Grouping | `ShapeRange.Group` | **no `select` command, so no shape range**. The members are copied off the slide one by one, wrapped in one `a:grpSp` and pasted back as a group; the originals are deleted only once the group is verified | `groups.py` |
 | Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all. Solved another way, by exporting the deck to PDF and rendering pages with Quartz, which is what shipped | `export.py` 848 |
 | Line visibility | `Shape.Line.Visible = False` | `line format` has **no `visible` property**. Weight 0 and transparency 1.0 both apply cleanly and are the practical stand-ins | every tool taking `line_visible` |
@@ -513,12 +515,11 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**155 tools. 134 do the job. 21 always refuse.**
+**155 tools. 143 do the job. 12 always refuse.**
 
 | Why | Tools |
 |---|---|
-| No `chart` class, and rewriting a chart's XML through the clipboard is not yet written | `ppt_set_chart_data`, `ppt_change_chart_type`, `ppt_format_chart`, `ppt_format_chart_axis`, `ppt_set_chart_series` |
-| No `nodes`, and rewriting a path through the clipboard is not yet written. `ppt_set_node_editing_type` will stay refused: corner, smooth and symmetric are not stored in the XML either | `ppt_insert_node`, `ppt_delete_node`, `ppt_set_node_position`, `ppt_set_node_editing_type`, `ppt_set_segment_type` |
+| No `nodes`, and a node's editing type (corner, smooth, symmetric) is not stored in the XML the clipboard carries either; PowerPoint reads it off the handle geometry. Moving the handles with the node position tool is the way to change it | `ppt_set_node_editing_type` |
 | No `smart art` class | `ppt_add_smartart`, `ppt_modify_smartart`, `ppt_list_smartart_options` |
 | No `select` command, so no shape range | `ppt_select_shapes` |
 | No tags anywhere in the dictionary | `ppt_set_tag`, `ppt_get_tags` |
@@ -526,15 +527,27 @@ checked against the code by a test, so it cannot quietly go stale.
 | No table style, only the text direction | `ppt_set_table_style` |
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
 
-A further **16 tools work and refuse one argument**, with `error` naming
+A further **18 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
 cannot take a `trigger_shape`, `ppt_set_reflection` cannot take the four
 numeric arguments, `ppt_add_video` and `ppt_add_audio` cannot take
 `link_to_file`, `ppt_set_media_settings` cannot take volume, mute, trim or
-fade, and the rest are checks that report a write which did not land rather
-than a capability that is missing.
+fade, `ppt_format_chart` cannot take `chart_style`, `legend_font_size`, the
+legend and title coordinates or an 8-direction `legend_position` (they are
+computed from the chart's rendered size, which the XML does not carry),
+`ppt_format_chart_axis` cannot take `tick_label_font_size`, and the rest are
+checks that report a write which did not land rather than a capability that
+is missing.
+
+The nine editors that go through the clipboard, five for charts and four for
+freeform nodes, succeed with a `warnings` line every time, because what they
+did is not what the name says: the shape was copied, rewritten and pasted
+back, the original deleted, and the new shape given the old name, position
+and z order. Animations do not come with it, and the count of the effects
+that were lost is in the same list. The first such warning in a server's life
+is a paragraph; the rest are one line.
 
 Everything else that differs comes back in `warnings` beside a success, which
 is where to look for the smaller gaps: a glow with no transparency, a line
@@ -640,9 +653,9 @@ exists and burns turns looking for it. The tool stays listed and returns a
 structured refusal naming the platform, the reason and a route to take instead.
 
 ```json
-{"error": "ppt_set_chart_data is not available on macOS",
- "reason": "'Chart 1' on slide 2 is a chart and its data cannot be written yet. ...",
- "alternatives": ["ppt_add_chart, then delete the old chart, until then", "ppt_get_chart_data, which reads the categories and series"]}
+{"error": "ppt_add_smartart is not available on macOS",
+ "reason": "PowerPoint for Mac's Apple Event dictionary has no `smart art` class and no command that makes one. ...",
+ "alternatives": ["ppt_add_shape and ppt_add_connector, for a diagram drawn by hand"]}
 ```
 
 The tools that go through the clipboard follow the same rule from the other
@@ -650,6 +663,10 @@ side. `paste object` reports nothing, so every paste is checked by counting
 the slide's shapes and reading the new shape's type; none landed is a
 refusal, the wrong thing landed is removed and then refused, and a paste that
 went inside a selected chart is prevented by clearing the selection first.
+The editors go one step further: the new shape is copied straight back and
+the change looked for in the copy, and a paste that reads back without it is
+removed before the refusal, with the original untouched. Only after the copy
+carries the change is the original deleted.
 
 The server `instructions` string should carry a short platform note too, since
 that is what the model reads before planning a deck.
@@ -694,8 +711,8 @@ lives.
 
 **Phase 4, the clipboard.** Charts, freeforms and groups through
 `com.microsoft.Art--GVML-ClipFormat`, in the order `docs/gvml-design.md`
-section 6 gives: the six tools that create or read first, then the ones that
-edit a chart, then the ones that edit a path.
+section 6 gives: the six tools that create or read first, then the five that
+edit a chart, then the four that edit a path. All three tiers are in.
 
 **Spike, in parallel and not on the critical path.** Whether a shipped `.ppam`
 plus `run VB macro` can reach the VBA object model. If it can, SmartArt comes

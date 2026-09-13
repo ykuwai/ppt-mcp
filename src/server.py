@@ -100,12 +100,17 @@ the cause is not yet known (issue #191). `ppt_save_presentation_as` right after
 creating a deck, and `ppt_save_presentation` at each break, costs almost
 nothing and is the difference between a hiccup and starting over.
 
-Charts, freeform paths and groups are made through the clipboard here, because
-PowerPoint for Mac's scripting dictionary has no words for them. `ppt_add_chart`,
-`ppt_build_freeform` and `ppt_group_shapes` work, and so do reading a chart's
-data, a freeform's nodes and a group's members. Editing an existing chart or
-path in place does not yet; those tools say so. SmartArt has no route at all.
-The user's clipboard is saved and put back around each of these calls.
+Charts, freeform paths and groups go through the clipboard here, because
+PowerPoint for Mac's scripting dictionary has no words for them. Creating and
+reading them works as on Windows. Editing an existing chart or path
+(`ppt_set_chart_data`, `ppt_change_chart_type`, `ppt_format_chart`,
+`ppt_format_chart_axis`, `ppt_set_chart_series`, and the node tools) works by
+copying the shape, rewriting it and pasting it back, then deleting the
+original: the name, position and z order are kept, animations on that shape
+are lost, and `warnings` says so each time. Set the data and formatting of a
+chart before animating it. A node's editing type cannot be set; SmartArt has
+no route at all. The user's clipboard is saved and put back around each of
+these calls.
 """ if sys.platform == "darwin" else ""
 
 

@@ -1,9 +1,11 @@
-"""Run the six clipboard tools against a live PowerPoint and print what landed.
+"""Run the clipboard tools against a live PowerPoint and print what landed.
 
 The checks that only a hand can make (docs/gvml-design.md section 7): that
 PowerPoint accepts the packages, that a second paste does not land inside the
 first chart, that the clipboard comes back, that the chart survives a save
-and reopen, and that position and z order read back as written.
+and reopen, that position and z order read back as written, and that the
+nine editors (five for charts, four for freeform nodes) leave the shape where
+it was in the z order and say what they cost.
 
     PYTHONPATH=src .venv/bin/python scripts/gvml_smoke.py
 
@@ -21,8 +23,24 @@ from appscript import k  # noqa: E402
 
 from backend import pasteboard  # noqa: E402
 from backend.mac_ae import EXPORT_STAGING_DIR, ppt  # noqa: E402
-from ppt_com.charts import _add_chart_impl, _get_chart_data_impl  # noqa: E402
-from ppt_com.freeform import _build_freeform_impl, _get_shape_nodes_impl  # noqa: E402
+from ppt_com.animation import _add_animation_impl, _list_animations_impl  # noqa: E402
+from ppt_com.charts import (  # noqa: E402
+    _add_chart_impl,
+    _change_chart_type_impl,
+    _format_chart_axis_impl,
+    _format_chart_impl,
+    _get_chart_data_impl,
+    _set_chart_data_impl,
+    _set_chart_series_impl,
+)
+from ppt_com.freeform import (  # noqa: E402
+    _build_freeform_impl,
+    _delete_node_impl,
+    _get_shape_nodes_impl,
+    _insert_node_impl,
+    _set_node_position_impl,
+    _set_segment_type_impl,
+)
 from ppt_com.groups import (  # noqa: E402
     _get_group_items_impl,
     _group_shapes_impl,
@@ -90,6 +108,42 @@ def main() -> None:
     show("get_chart_data column", run(_get_chart_data_impl, 1, c1["shape_name"]))
     show("get_chart_data pie", run(_get_chart_data_impl, 1, c2["shape_name"]))
     show("add_chart unknown int", run(_add_chart_impl, 1, 9999, 10, 10, 100, 100))
+
+    # The chart editors. A shape is added after the chart so the z order has
+    # somewhere to go wrong; the chart must read back at the same position.
+    run(_add_shape_impl, 1, 1, 50, 500, 60, 40, "after", *([None] * 16))
+    z_before = [s["name"] for s in run(_list_shapes_impl, 1)["shapes"]]
+    show("set_chart_data", run(_set_chart_data_impl, 1, c1["shape_name"], ["Q1", "Q2", "Q3"], [
+        {"name": "Sales", "values": [120, 180, 150]}, {"name": "Cost", "values": [80, 90, 100]},
+    ]))
+    show("get_chart_data after set", run(_get_chart_data_impl, 1, c1["shape_name"]))
+    show("format_chart", run(_format_chart_impl, 1, c1["shape_name"], "売上の推移", True, "top",
+                             None, None, None, None, None, None, None))
+    show("format_chart refuses chart_style", run(_format_chart_impl, 1, c1["shape_name"], None, None, None,
+                                                 5, None, None, None, None, None, None))
+    show("format_chart_axis value", run(_format_chart_axis_impl, 1, c1["shape_name"], "value", "円",
+                                        0, 200, 50, None, None, None, "cross", None, False, None, None, None, "#,##0"))
+    show("format_chart_axis category", run(_format_chart_axis_impl, 1, c1["shape_name"], "category", "四半期",
+                                           None, None, None, None, 1, 1, None, "inside", None, None, None, None, None))
+    show("set_chart_series", run(_set_chart_series_impl, 1, c1["shape_name"], 2, "#FF0000", True, None))
+    show("change_chart_type line", run(_change_chart_type_impl, 1, c1["shape_name"], "line_markers"))
+    show("set_chart_series on a line", run(_set_chart_series_impl, 1, c1["shape_name"], 1, "#0000FF", None, 4.5))
+    show("change_chart_type pie", run(_change_chart_type_impl, 1, c1["shape_name"], "pie"))
+    show("change_chart_type column", run(_change_chart_type_impl, 1, c1["shape_name"], "column"))
+    z_after = [s["name"] for s in run(_list_shapes_impl, 1)["shapes"]]
+    print("z order kept through the chart edits:", z_before == z_after, z_after)
+
+    # The node editors, with an animation on the shape so the loss is counted.
+    show("add_animation on Blob", run(_add_animation_impl, 1, "Blob", "fly", "on_click", 1.0, 0.0, False,
+                                      *([None] * 13)))
+    show("set_node_position", run(_set_node_position_impl, 1, "Blob", None, 2, 320, 80))
+    show("insert_node", run(_insert_node_impl, 1, "Blob", None, 2, 0, 0, 340, 140, None, None, None, None))
+    show("set_segment_type", run(_set_segment_type_impl, 1, "Blob", None, 1, 1))
+    show("delete_node", run(_delete_node_impl, 1, "Blob", None, 3))
+    show("get_shape_nodes after edits", run(_get_shape_nodes_impl, 1, "Blob", None))
+    show("list_animations after edits", run(_list_animations_impl, 1))
+    z_after = [s["name"] for s in run(_list_shapes_impl, 1)["shapes"]]
+    print("z order kept through the node edits:", z_before == z_after, z_after)
 
     # The user's clipboard came back.
     print("clipboard now:", pasteboard.read("public.utf8-plain-text"))

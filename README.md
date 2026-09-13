@@ -304,7 +304,7 @@ ESC cancels without committing, so there are no destructive side effects. This i
 
 ## 🍎 macOS support
 
-**21 tools refuse on macOS. The rest work.** The 21 are listed by name in
+**12 tools refuse on macOS. The rest work.** The 12 are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what
@@ -316,9 +316,8 @@ Not available on macOS:
 - **SmartArt.** The dictionary has no class and no command for it, so it
   cannot be created or edited from a script. An existing graphic is still an
   ordinary shape and can be moved, resized, read and deleted.
-- **Editing a chart or a freeform path after it is made.** Both can be
-  created, and a chart's data and a path's nodes can be read back, but the
-  tools that change one in place are not written yet.
+- **A freeform node's editing type.** Corner, smooth and symmetric are not
+  stored anywhere a script can reach; move the node's handles instead.
 - **Removing one animation.** Clearing a slide's animations works.
 - **Tags, `ppt_select_shapes`, `ppt_set_table_style` and `ppt_execute_mso`.**
   Nothing in the dictionary reaches any of them.
@@ -347,6 +346,13 @@ Smaller differences:
 - **Charts, freeform paths and grouping go through the clipboard**, which
   means the operation takes it for a moment and puts back what was there. This
   is how those three reach a dictionary that has no words for them.
+- **Editing an existing chart or path recreates the shape.** The chart data,
+  type, title, legend, axis and series tools, and the node tools, copy the
+  shape, rewrite it and paste it back, then delete the original. The name,
+  position and z order are kept; animations on the shape are not, and the
+  result says how many were lost. A few formatting arguments that depend on
+  the chart's rendered size (`chart_style`, legend and title coordinates,
+  the 8-direction legend presets, `tick_label_font_size`) are refused by name.
 - Icons are rasterised with `sips` before they are inserted, because
   PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
   systems get a refusal naming the reason rather than a blank box.
