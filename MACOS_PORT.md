@@ -513,11 +513,10 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**155 tools. 134 do the job. 21 always refuse.**
+**155 tools. 139 do the job. 16 always refuse.**
 
 | Why | Tools |
 |---|---|
-| No `chart` class, and rewriting a chart's XML through the clipboard is not yet written | `ppt_set_chart_data`, `ppt_change_chart_type`, `ppt_format_chart`, `ppt_format_chart_axis`, `ppt_set_chart_series` |
 | No `nodes`, and rewriting a path through the clipboard is not yet written. `ppt_set_node_editing_type` will stay refused: corner, smooth and symmetric are not stored in the XML either | `ppt_insert_node`, `ppt_delete_node`, `ppt_set_node_position`, `ppt_set_node_editing_type`, `ppt_set_segment_type` |
 | No `smart art` class | `ppt_add_smartart`, `ppt_modify_smartart`, `ppt_list_smartart_options` |
 | No `select` command, so no shape range | `ppt_select_shapes` |
@@ -526,15 +525,19 @@ checked against the code by a test, so it cannot quietly go stale.
 | No table style, only the text direction | `ppt_set_table_style` |
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
 
-A further **16 tools work and refuse one argument**, with `error` naming
+A further **18 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
 cannot take a `trigger_shape`, `ppt_set_reflection` cannot take the four
 numeric arguments, `ppt_add_video` and `ppt_add_audio` cannot take
 `link_to_file`, `ppt_set_media_settings` cannot take volume, mute, trim or
-fade, and the rest are checks that report a write which did not land rather
-than a capability that is missing.
+fade, `ppt_format_chart` cannot take `chart_style`, `legend_font_size`, the
+legend and title coordinates or an 8-direction `legend_position` (they are
+computed from the chart's rendered size, which the XML does not carry),
+`ppt_format_chart_axis` cannot take `tick_label_font_size`, and the rest are
+checks that report a write which did not land rather than a capability that
+is missing.
 
 Everything else that differs comes back in `warnings` beside a success, which
 is where to look for the smaller gaps: a glow with no transparency, a line

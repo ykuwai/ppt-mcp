@@ -25,20 +25,32 @@ sections 2, 3 and 8):
 6. The position is written afterwards, because a paste lands in the middle
    of the view and drifts on each repeat, and is read back.
 
+The tools that edit a chart or a path in place have no way to do so, and go
+through ``replace_shape``: copy the shape, rewrite its package, paste the
+result beside the original, read it back, and only then delete the original
+and put the new shape where the old one was in z order. What that costs is
+said in ``warnings`` rather than hidden (design section 4): the shape is a
+new object with the old name, and its animations, which the package does not
+carry, are gone with the original.
+
 None of the functions here end in ``_impl``. The tools' implementations live
 in ``charts.py``, ``freeform.py`` and ``groups.py`` and call in.
 """
 
 import logging
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Callable, List, Optional
 
+from appscript import k
 from appscript.reference import CommandError
 
 from backend import pasteboard
 from backend.mac_ae import (
     count,
+    elements,
     error_number,
+    is_missing,
     shapes_of,
     target_window,
 )
@@ -328,3 +340,190 @@ def paste_package(
                 f"at ({round(got_left, 2)}, {round(got_top, 2)})."
             )
     return Pasted(shape, name, warnings)
+
+
+# ---------------------------------------------------------------------------
+# Replacing a shape with a rewritten copy of itself
+# ---------------------------------------------------------------------------
+
+# Said in full the first time and in one line after that, the way the line
+# visibility warning in shapes.py is. A caller editing twenty nodes should
+# not read the paragraph twenty times, and the short form stands on its own
+# because the server outlives any one conversation.
+_RECREATED_LONG = (
+    "'{name}' was recreated rather than edited in place. PowerPoint for Mac "
+    "cannot reach inside a {what} from a script, so the shape was copied, its "
+    "XML rewritten and pasted back, and the original deleted. Its name, "
+    "position and z order were put back. Its animations were not, because "
+    "the clipboard package does not carry them, and anything else that "
+    "pointed at the old object (a comment anchor, an animation trigger on "
+    "another shape) now points at nothing."
+)
+_RECREATED_SHORT = (
+    "'{name}' was recreated by paste; name, position and z order kept, "
+    "animations not."
+)
+_recreation_explained = False
+
+
+def _recreated_warning(name: str, what: str) -> str:
+    global _recreation_explained
+    if _recreation_explained:
+        return _RECREATED_SHORT.format(name=name)
+    _recreation_explained = True
+    return _RECREATED_LONG.format(name=name, what=what)
+
+
+def effects_on(slide, name: str) -> Optional[int]:
+    """How many effects of the slide's main sequence belong to a shape.
+
+    None when the sequence cannot be read, which the caller reports as
+    "could not be counted" rather than as zero. The count is asked of the
+    sequence, never of its effects collection; see ``mac_ae.count_of``.
+    """
+    try:
+        from ppt_mac.animation import _effect_count, _effect_shape_names, _main_sequence
+
+        seq = _main_sequence(slide)
+        total = _effect_count(seq)
+        if not total:
+            return 0
+        return sum(1 for n in _effect_shape_names(seq, total) if n == name)
+    except Exception as exc:  # noqa: BLE001 - reported as unknown, never fatal
+        logger.debug("Could not count the effects on '%s': %s", name, exc)
+        return None
+
+
+@dataclass
+class Replaced:
+    """What stands where the original stood: its reference, its name, the
+    package it reads back as, and everything to tell the caller."""
+
+    shape: object
+    name: str
+    package: Package
+    warnings: List[str] = field(default_factory=list)
+
+
+def _names(slide) -> List[str]:
+    """Every shape name on the slide in z order, in one Apple Event."""
+    return ["" if is_missing(n) else n for n in elements(slide.shapes.name)]
+
+
+def _send_backward(slide, index: int, target: int) -> None:
+    """Move the shape at ``index`` down to ``target`` one step at a time.
+
+    One Apple Event per step. The reference is re-made at each step because
+    ``slide.shapes[i]`` is positional and resolves afresh on every send, so
+    sending the same reference twice moves two different shapes.
+    """
+    for i in range(index, target, -1):
+        slide.shapes[i].z_order(z_order_position=k.send_shape_backward)
+
+
+def replace_shape(
+    pres, slide, slide_index: int, original_index: int, raw: bytes, clip: Clipboard,
+    tool_name: str, expected_type, left: float, top: float, what: str,
+    verify: Callable[[Package], Optional[str]],
+    alternatives: Optional[List[str]] = None,
+) -> Replaced:
+    """Paste ``raw``, check it, then delete the original and restore its place.
+
+    ``original_index`` is the original's 1-based position on the slide, which
+    is also its z order. ``verify`` is handed the package the new shape reads
+    back as (one more ``copy shape``) and returns a description of what is
+    missing from it, or None when the edit is there; a description removes
+    the new shape and refuses with the original untouched.
+
+    The order is the one that leaves nothing half done (design section 4):
+    paste, verify, delete. A paste that is dropped leaves the original alone.
+    A delete that fails leaves two shapes with one name, and says so.
+    """
+    alternatives = alternatives or []
+    names_before = _names(slide)
+    name = names_before[original_index - 1]
+    effects = effects_on(slide, name)
+
+    pasted = paste_package(
+        pres, slide, slide_index, raw, clip, tool_name, expected_type, left, top, alternatives,
+    )
+    new_index = count(slide.shapes)
+
+    # Read the new shape back before the original goes. The paste is the
+    # only evidence there is (MACOS_PORT section 5), and the paste says
+    # nothing, so what the shape reads back as is the check.
+    readback = copy_shape_package(slide.shapes[new_index], clip, tool_name)
+    problem = verify(readback)
+    if problem is not None:
+        remaining = _remove_landed(slide, new_index - 1)
+        note = (
+            f" The pasted copy could not be removed and is still on the slide as {remaining}."
+            if remaining else " The pasted copy was removed again."
+        )
+        raise Refused(_refusal(
+            tool_name,
+            f"The rewritten '{name}' pasted as a {what}, but read back without "
+            f"the change: {problem}.{note} The original is untouched.",
+            alternatives,
+            error=f"{tool_name} pasted a {what} that did not carry the edit",
+        ))
+
+    try:
+        slide.shapes[original_index].delete()
+    except CommandError as exc:
+        logger.warning("Could not delete '%s' after replacing it: %s", name, exc)
+    names_now = _names(slide)
+    if len(names_now) != len(names_before):
+        raise Refused(_refusal(
+            tool_name,
+            f"The rewritten '{name}' was pasted onto slide {slide_index} and "
+            f"verified, but the original could not be deleted afterwards, so "
+            f"two shapes named '{name}' are on the slide: the original at "
+            f"position {original_index} and the new one at position "
+            f"{new_index}. Delete one with ppt_delete_shape by index.",
+            ["ppt_delete_shape"],
+            error=f"{tool_name} left both the original and its replacement on the slide",
+        ))
+
+    warnings = [_recreated_warning(name, what)]
+    if effects is None:
+        warnings.append(
+            f"Whether '{name}' had animations could not be read, so any it "
+            "had are gone with the original."
+        )
+    elif effects:
+        warnings.append(
+            f"{effects} animation effect(s) on '{name}' were lost with the "
+            "original; the clipboard package does not carry them."
+        )
+    warnings.extend(pasted.warnings)
+
+    # The new shape is last. Walk it back to where the original was.
+    last = len(names_now)
+    try:
+        _send_backward(slide, last, original_index)
+    except CommandError as exc:
+        logger.warning("Could not restore the z order of '%s': %s", name, exc)
+    names_after = _names(slide)
+    if names_after != names_before:
+        at = names_after.index(name) + 1 if name in names_after else None
+        warnings.append(
+            f"'{name}' could not be put back at z order position "
+            f"{original_index}; it is at position {at} now."
+        )
+        shape = slide.shapes[at] if at else slide.shapes[last]
+    else:
+        shape = slide.shapes[original_index]
+    return Replaced(shape, name, readback, warnings)
+
+
+def strip_ids(package: Package) -> None:
+    """Drop the creation ids from a package about to be pasted beside its
+    original, in place. See ``gvml.shapes.strip_creation_ids``."""
+    from gvml import canvas as _canvas
+    from gvml import shapes as _shapes
+
+    root = ET.fromstring(package.drawing())
+    for element in _canvas.children(_canvas.canvas_of(root)):
+        _shapes.strip_creation_ids(element)
+    package.parts[package.drawing_part()] = _canvas.serialize_drawing(root).encode("utf-8")
