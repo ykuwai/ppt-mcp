@@ -456,3 +456,709 @@ def chart_package(name: str, x: int, y: int, cx: int, cy: int, chart_xml_text: s
         drawing_rels=[Relationship("rId1", REL_CHART, CHART_PART)],
         overrides={CHART_PART: CT_CHART},
     )
+
+
+# ---------------------------------------------------------------------------
+# Editing a chart1.xml PowerPoint wrote
+# ---------------------------------------------------------------------------
+# The five editing tools copy a chart off the slide, change one thing in its
+# chart1.xml and paste it back (design section 6, second tier). Everything the
+# caller did not ask about is left exactly as PowerPoint wrote it, which is why
+# these edit the tree rather than regenerating it from the writer above.
+#
+# Element order is what PowerPoint checks and does not report, so every
+# insertion goes through ``_insert_ordered`` with the schema's order for that
+# parent. The lists below are the CT_* sequences from the chart schema, with
+# the children of every axis kind merged into one list so one helper serves
+# catAx, valAx, dateAx and serAx.
+
+import copy as _copy
+
+_MC = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
+
+_CHART_ORDER = [
+    "title", "autoTitleDeleted", "pivotFmts", "view3D", "floor", "sideWall",
+    "backWall", "plotArea", "legend", "plotVisOnly", "dispBlanksAs",
+    "showDLblsOverMax", "extLst",
+]
+_CHART_SPACE_ORDER = [
+    "date1904", "lang", "roundedCorners", "AlternateContent", "style", "clrMapOvr",
+    "pivotSource", "protection", "chart", "spPr", "txPr", "externalData",
+    "printSettings", "userShapes", "extLst",
+]
+_SER_ORDER = [
+    "idx", "order", "tx", "spPr", "invertIfNegative", "pictureOptions", "marker",
+    "explosion", "dPt", "dLbls", "trendline", "errBars", "cat", "val", "xVal",
+    "yVal", "bubbleSize", "bubble3D", "shape", "smooth", "extLst",
+]
+_AXIS_ORDER = [
+    "axId", "scaling", "delete", "axPos", "majorGridlines", "minorGridlines",
+    "title", "numFmt", "majorTickMark", "minorTickMark", "tickLblPos", "spPr",
+    "txPr", "crossAx", "crosses", "crossesAt", "auto", "lblAlgn", "lblOffset",
+    "tickLblSkip", "tickMarkSkip", "noMultiLvlLbl", "crossBetween",
+    "baseTimeUnit", "majorUnit", "majorTimeUnit", "minorUnit", "minorTimeUnit",
+    "dispUnits", "extLst",
+]
+_SCALING_ORDER = ["logBase", "orientation", "max", "min", "extLst"]
+_LEGEND_ORDER = ["legendPos", "legendEntry", "layout", "overlay", "spPr", "txPr", "extLst"]
+_DLBLS_ORDER = [
+    "dLbl", "delete", "numFmt", "spPr", "txPr", "dLblPos", "showLegendKey",
+    "showVal", "showCatName", "showSerName", "showPercent", "showBubbleSize",
+    "separator", "showLeaderLines", "leaderLines", "extLst",
+]
+# What a plot element holds before its series, by kind, so new series go
+# after the last of these and before dLbls, gapWidth and the axis ids.
+_PLOT_HEAD = {"barDir", "grouping", "varyColors", "scatterStyle", "radarStyle",
+              "wireframe", "ofPieType"}
+
+AXIS_TAGS = ("catAx", "valAx", "dateAx", "serAx")
+PLOT_KINDS = {tag for tag in (
+    "barChart", "bar3DChart", "lineChart", "line3DChart", "pieChart", "pie3DChart",
+    "doughnutChart", "areaChart", "area3DChart", "scatterChart", "radarChart",
+    "bubbleChart", "stockChart", "surfaceChart", "surface3DChart", "ofPieChart",
+)}
+
+# Windows legend positions to c:legendPos. The 8-direction presets Windows
+# computes from the legend's rendered size are not here; the XML does not
+# carry that size.
+LEGEND_POS = {"bottom": "b", "left": "l", "right": "r", "top": "t", "corner": "tr"}
+TICK_MARK = {"none": "none", "inside": "in", "outside": "out", "cross": "cross"}
+
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _insert_ordered(parent: ET.Element, child: ET.Element, order: List[str]) -> ET.Element:
+    """Put ``child`` where the schema says it goes, replacing one already there.
+
+    An element the schema lists once (a title, a legend) is replaced in place
+    when present. Otherwise the child lands after the last existing sibling
+    whose name precedes it in ``order``.
+    """
+    name = _local(child.tag)
+    if name not in order:
+        raise ValueError(f"{name} has no place in this parent's order")
+    rank = order.index(name)
+    existing = [c for c in parent if _local(c.tag) == name]
+    if existing and name not in ("dPt", "legendEntry", "trendline", "dLbl", "pivotFmt"):
+        parent.insert(list(parent).index(existing[0]), child)
+        parent.remove(existing[0])
+        return child
+    position = 0
+    for i, sibling in enumerate(parent):
+        local = _local(sibling.tag)
+        if local in order and order.index(local) <= rank:
+            position = i + 1
+    parent.insert(position, child)
+    return child
+
+
+def _remove(parent: ET.Element, name: str) -> bool:
+    found = [c for c in parent if _local(c.tag) == name]
+    for c in found:
+        parent.remove(c)
+    return bool(found)
+
+
+def _el(name: str, **attrs) -> ET.Element:
+    e = ET.Element(_C + name)
+    for key, value in attrs.items():
+        e.set(key, str(value))
+    return e
+
+
+def _val(name: str, value) -> ET.Element:
+    return _el(name, val=value)
+
+
+def load(chart_xml_bytes: bytes) -> ET.Element:
+    """Parse a chart part with its prefixes kept, or say what is wrong."""
+    from gvml.package import register_prefixes
+
+    register_prefixes(chart_xml_bytes)
+    return _parse(chart_xml_bytes)
+
+
+def dump(root: ET.Element) -> bytes:
+    return (XML_DECL + ET.tostring(root, encoding="unicode")).encode("utf-8")
+
+
+def _plot_area(root: ET.Element) -> ET.Element:
+    plot = root.find(f"{_C}chart/{_C}plotArea")
+    if plot is None:
+        raise PackageError("chart1.xml has no plot area")
+    return plot
+
+
+def _plots(plot_area: ET.Element) -> List[ET.Element]:
+    return [c for c in plot_area if _local(c.tag) in PLOT_KINDS]
+
+
+def _all_series(plot_area: ET.Element) -> List[ET.Element]:
+    return [ser for plot in _plots(plot_area) for ser in plot.findall(f"{_C}ser")]
+
+
+def _rich_text(text: str) -> ET.Element:
+    """``c:tx/c:rich`` holding one run, the shape of a title PowerPoint writes."""
+    tx = _el("tx")
+    rich = ET.SubElement(tx, _C + "rich")
+    ET.SubElement(rich, f"{{{NS_A}}}bodyPr")
+    ET.SubElement(rich, f"{{{NS_A}}}lstStyle")
+    p = ET.SubElement(rich, f"{{{NS_A}}}p")
+    r = ET.SubElement(p, f"{{{NS_A}}}r")
+    t = ET.SubElement(r, f"{{{NS_A}}}t")
+    t.text = text
+    return tx
+
+
+def _title_text(title: Optional[ET.Element]) -> Optional[str]:
+    if title is None:
+        return None
+    return "".join(t.text or "" for t in title.iter(f"{{{NS_A}}}t"))
+
+
+def _set_title(parent: ET.Element, text: str, order: List[str]) -> None:
+    title = _el("title")
+    title.append(_rich_text(text))
+    title.append(_val("overlay", 0))
+    _insert_ordered(parent, title, order)
+
+
+# -- data --------------------------------------------------------------------
+
+def _cache_el(numeric: bool, formula: str, values: Sequence) -> ET.Element:
+    xml = _num_ref(formula, values) if numeric else _str_ref(formula, values)
+    return ET.fromstring(f'<w xmlns:c="{NS_C}">{xml}</w>')[0]
+
+
+def _set_ref(ser: ET.Element, name: str, numeric: bool, formula: str, values: Sequence) -> None:
+    holder = _el(name)
+    holder.append(_cache_el(numeric, formula, values))
+    _insert_ordered(ser, holder, _SER_ORDER)
+
+
+def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict]) -> bytes:
+    """Rewrite the series of the first plot, and nothing else.
+
+    Each new series takes over the ``c:ser`` at its position (so a colour or a
+    label setting on series 2 stays with series 2); series past the old count
+    are cloned from the last one with its own formatting stripped, so they
+    take the theme colour of their index the way a new series does. The
+    ``c:externalData`` pointer is dropped, because the workbook it points at
+    would no longer say what the chart says; the caller drops the part.
+    """
+    if not series:
+        raise ValueError("a chart needs at least one series")
+    n = len(categories)
+    for s in series:
+        if len(s.get("values", [])) != n:
+            raise ValueError(
+                f"series '{s.get('name', '')}' has {len(s.get('values', []))} "
+                f"values for {n} categories"
+            )
+    root = load(chart_xml_bytes)
+    plot_area = _plot_area(root)
+    plots = _plots(plot_area)
+    if not plots:
+        raise PackageError("chart1.xml has no plot to put series into")
+    plot = plots[0]
+    old = plot.findall(f"{_C}ser")
+    if not old:
+        raise PackageError("the chart's first plot holds no series to take as a template")
+    kind = _local(plot.tag)
+    xy = kind in ("scatterChart", "bubbleChart")
+
+    insert_at = list(plot).index(old[0])
+    for ser in old:
+        plot.remove(ser)
+    template = _copy.deepcopy(old[-1])
+    for name in ("spPr", "dPt", "dLbls", "marker", "trendline", "errBars"):
+        _remove(template, name)
+
+    for i, s in enumerate(series):
+        ser = _copy.deepcopy(old[i]) if i < len(old) else _copy.deepcopy(template)
+        col = _column(i + 1)
+        _insert_ordered(ser, _val("idx", i), _SER_ORDER)
+        _insert_ordered(ser, _val("order", i), _SER_ORDER)
+        tx = _el("tx")
+        tx.append(_cache_el(False, f"Sheet1!${col}$1", [s["name"]]))
+        _insert_ordered(ser, tx, _SER_ORDER)
+        if xy:
+            _remove(ser, "cat")
+            _remove(ser, "val")
+            _set_ref(ser, "xVal", True, f"Sheet1!$A$2:$A${n + 1}", categories)
+            _set_ref(ser, "yVal", True, f"Sheet1!${col}$2:${col}${n + 1}", s["values"])
+            if kind == "bubbleChart":
+                size_col = _column(i + 2)
+                sizes = s.get("sizes") or [1.0] * n
+                _set_ref(ser, "bubbleSize", True, f"Sheet1!${size_col}$2:${size_col}${n + 1}", sizes)
+        else:
+            _remove(ser, "xVal")
+            _remove(ser, "yVal")
+            _remove(ser, "bubbleSize")
+            _set_ref(ser, "cat", False, f"Sheet1!$A$2:$A${n + 1}", categories)
+            _set_ref(ser, "val", True, f"Sheet1!${col}$2:${col}${n + 1}", s["values"])
+        plot.insert(insert_at + i, ser)
+
+    _remove(root, "externalData")
+    return dump(root)
+
+
+def external_data_id(chart_xml_bytes: bytes) -> Optional[str]:
+    """The ``r:id`` of the chart's workbook pointer, if it has one."""
+    root = _parse(chart_xml_bytes)
+    ext = root.find(f"{_C}externalData")
+    return None if ext is None else ext.get(f"{{{NS_R}}}id")
+
+
+# -- type --------------------------------------------------------------------
+
+def _series_data(ser: ET.Element) -> dict:
+    values = _cache_values(ser.find(f"{_C}val"), numeric=True)
+    if not values:
+        values = _cache_values(ser.find(f"{_C}yVal"), numeric=True)
+    data = {"name": _series_name(ser), "values": values}
+    sizes = _cache_values(ser.find(f"{_C}bubbleSize"), numeric=True)
+    if sizes:
+        data["sizes"] = sizes
+    return data
+
+
+def set_type(chart_xml_bytes: bytes, type_int: int) -> bytes:
+    """Replace the plot with one of another kind, carrying the data across.
+
+    The series' names and numbers move over; the plot level formatting (gap
+    width, data labels, per series colours) is the new kind's default, which
+    is also what Windows leaves after ``Chart.ChartType``. Axes that the new
+    kind can keep (a category and a value axis) are kept with everything set
+    on them; a kind that needs different axes (pie none, scatter two value
+    axes, 3D line a series axis) gets fresh ones.
+    """
+    spec = SPECS.get(type_int)
+    if spec is None:
+        raise ChartTypeError(
+            f"XlChartType {type_int} has no GVML template yet. Supported: "
+            + ", ".join(str(t) for t in SPECS)
+        )
+    root = load(chart_xml_bytes)
+    chart = root.find(f"{_C}chart")
+    plot_area = _plot_area(root)
+    plots = _plots(plot_area)
+    if not plots:
+        raise PackageError("chart1.xml has no plot to change the kind of")
+    old_plot = plots[0]
+    old_sers = old_plot.findall(f"{_C}ser")
+    if not old_sers:
+        raise PackageError("the chart's first plot holds no series")
+
+    series = [_series_data(s) for s in old_sers]
+    cats = _cache_values(old_sers[0].find(f"{_C}cat"), numeric=False)
+    if not cats:
+        cats = _cache_values(old_sers[0].find(f"{_C}xVal"), numeric=True)
+    n = len(series[0]["values"])
+    cats = list(cats) + [None] * (n - len(cats))
+    if spec.kind in ("scatter", "bubble"):
+        numeric_cats = []
+        for i, c in enumerate(cats[:n]):
+            try:
+                numeric_cats.append(float(c))
+            except (TypeError, ValueError):
+                numeric_cats.append(float(i + 1))
+        cats = numeric_cats
+    else:
+        cats = ["" if c is None else str(c) for c in cats[:n]]
+    for s in series:
+        s["values"] = [None if v is None else v for v in s["values"]]
+
+    series_xml = "".join(_series_xml(spec, i, s, cats, n) for i, s in enumerate(series))
+    new_plot = ET.fromstring(
+        f'<w xmlns:c="{NS_C}" xmlns:a="{NS_A}">{_plot(spec, series_xml)}</w>'
+    )[0]
+
+    old_axis_ids = [a.get("val") for a in old_plot.findall(f"{_C}axId")]
+    old_axes = [a for a in plot_area if _local(a.tag) in AXIS_TAGS]
+    old_kinds = [_local(a.tag) for a in old_axes]
+    wants = [_local(a.tag) for a in ET.fromstring(
+        f'<w xmlns:c="{NS_C}" xmlns:a="{NS_A}">{_axes(spec)}</w>'
+    )]
+    keep_axes = wants == old_kinds[:len(wants)] and len(old_axis_ids) == len(wants) and wants
+
+    # Everything that is not a plot or an axis of the first plot stays.
+    first_axes = {a for a in old_axes if a.find(f"{_C}axId").get("val") in old_axis_ids}
+    for child in list(plot_area):
+        if child is old_plot or (child in first_axes and not keep_axes):
+            plot_area.remove(child)
+    for plot in plots[1:]:
+        # A second plot group (a secondary axis) has no place on the new kind.
+        plot_area.remove(plot)
+    for axis in old_axes:
+        if axis not in first_axes:
+            plot_area.remove(axis)
+
+    layout = plot_area.find(f"{_C}layout")
+    at = list(plot_area).index(layout) + 1 if layout is not None else 0
+    plot_area.insert(at, new_plot)
+    if keep_axes:
+        for ax_ref, old_id in zip(new_plot.findall(f"{_C}axId"), old_axis_ids):
+            ax_ref.set("val", old_id)
+    else:
+        for i, axis in enumerate(ET.fromstring(
+            f'<w xmlns:c="{NS_C}" xmlns:a="{NS_A}">{_axes(spec)}</w>'
+        )):
+            plot_area.insert(at + 1 + i, axis)
+
+    if spec.three_d:
+        if chart.find(f"{_C}view3D") is None:
+            view = ET.fromstring(
+                f'<c:view3D xmlns:c="{NS_C}"><c:rotX val="15"/><c:rotY val="20"/>'
+                '<c:rAngAx val="1"/></c:view3D>'
+            )
+            _insert_ordered(chart, view, _CHART_ORDER)
+    else:
+        for name in ("view3D", "floor", "sideWall", "backWall"):
+            _remove(chart, name)
+    return dump(root)
+
+
+# -- title and legend ----------------------------------------------------------
+
+def format_chart(
+    chart_xml_bytes: bytes,
+    title: Optional[str] = None,
+    has_legend: Optional[bool] = None,
+    legend_position: Optional[str] = None,
+) -> bytes:
+    """Title and legend, the way ``Chart.HasTitle``, ``HasLegend`` and
+    ``Legend.Position`` set them. Raises ``ValueError`` with the Windows text
+    for a legend position on a chart with no legend."""
+    root = load(chart_xml_bytes)
+    chart = root.find(f"{_C}chart")
+    if chart is None:
+        raise PackageError("chart1.xml has no c:chart")
+
+    if title is not None:
+        _set_title(chart, title, _CHART_ORDER)
+        _insert_ordered(chart, _val("autoTitleDeleted", 0), _CHART_ORDER)
+
+    if has_legend is not None:
+        if has_legend:
+            if chart.find(f"{_C}legend") is None:
+                legend = _el("legend")
+                legend.append(_val("legendPos", "r"))
+                legend.append(_val("overlay", 0))
+                _insert_ordered(chart, legend, _CHART_ORDER)
+        else:
+            _remove(chart, "legend")
+
+    if legend_position is not None:
+        legend = chart.find(f"{_C}legend")
+        if legend is None:
+            raise ValueError(
+                "Cannot set legend position when chart has no legend. "
+                "Set has_legend=true first."
+            )
+        key = legend_position.strip().lower()
+        if key not in LEGEND_POS:
+            raise ValueError(
+                f"Unknown legend position '{legend_position}'. "
+                f"PowerPoint presets: {', '.join(LEGEND_POS)}."
+            )
+        _insert_ordered(legend, _val("legendPos", LEGEND_POS[key]), _LEGEND_ORDER)
+        # A legend that was dragged by hand keeps a manual layout, which
+        # overrides the preset; PowerPoint drops it too when a preset is chosen.
+        _remove(legend, "layout")
+    return dump(root)
+
+
+def chart_summary(chart_xml_bytes: bytes) -> dict:
+    """What ``ppt_format_chart`` reports: has_title, has_legend, and the
+    title text and legend position for a read-back check."""
+    root = _parse(chart_xml_bytes)
+    chart = root.find(f"{_C}chart")
+    if chart is None:
+        raise PackageError("chart1.xml has no c:chart")
+    title = chart.find(f"{_C}title")
+    legend = chart.find(f"{_C}legend")
+    pos = legend.find(f"{_C}legendPos") if legend is not None else None
+    return {
+        "has_title": title is not None,
+        "title": _title_text(title),
+        "has_legend": legend is not None,
+        "legend_position": pos.get("val") if pos is not None else None,
+    }
+
+
+# -- axes ----------------------------------------------------------------------
+
+def _axis_for(root: ET.Element, axis_key: str) -> ET.Element:
+    """The axis element Windows's ``Chart.Axes(type, group)`` would return.
+
+    ``category`` is the category axis, or on a scatter the first value axis;
+    ``value`` the value axis the first plot crosses it with;
+    ``secondary_value`` a value axis no plot in the first group uses;
+    ``series`` the series axis of a 3D chart.
+    """
+    plot_area = _plot_area(root)
+    plots = _plots(plot_area)
+    axes = [a for a in plot_area if _local(a.tag) in AXIS_TAGS]
+    by_id = {a.find(f"{_C}axId").get("val"): a for a in axes if a.find(f"{_C}axId") is not None}
+    first_ids = [a.get("val") for a in plots[0].findall(f"{_C}axId")] if plots else []
+
+    if axis_key == "series":
+        found = [a for a in axes if _local(a.tag) == "serAx"]
+        return found[0] if found else None
+    category = [a for a in axes if _local(a.tag) in ("catAx", "dateAx")]
+    category_id = (
+        category[0].find(f"{_C}axId").get("val") if category
+        else (first_ids[0] if first_ids else None)
+    )
+    if axis_key == "category":
+        return by_id.get(category_id) if category_id is not None else None
+    if axis_key == "value":
+        for axis_id in first_ids:
+            axis = by_id.get(axis_id)
+            if axis is not None and _local(axis.tag) == "valAx" and axis_id != category_id:
+                return axis
+        return None
+    if axis_key == "secondary_value":
+        for axis in axes:
+            axis_id = axis.find(f"{_C}axId").get("val")
+            if _local(axis.tag) == "valAx" and axis_id not in first_ids:
+                return axis
+        return None
+    return None
+
+
+def format_axis(
+    chart_xml_bytes: bytes,
+    axis_key: str,
+    title: Optional[str] = None,
+    min_scale: Optional[float] = None,
+    max_scale: Optional[float] = None,
+    major_unit: Optional[float] = None,
+    minor_unit: Optional[float] = None,
+    tick_label_spacing: Optional[int] = None,
+    tick_mark_spacing: Optional[int] = None,
+    major_tick_mark: Optional[str] = None,
+    minor_tick_mark: Optional[str] = None,
+    reverse_order: Optional[bool] = None,
+    log_scale: Optional[bool] = None,
+    log_base: Optional[float] = None,
+    number_format: Optional[str] = None,
+):
+    """One axis, the fields ``ppt_format_chart_axis`` maps onto the XML.
+
+    Returns ``(bytes, applied)``; ``applied`` lists the argument names in
+    the order Windows applies them. Raises ``ValueError`` with the Windows
+    text when the axis is not on this chart.
+    """
+    root = load(chart_xml_bytes)
+    axis = _axis_for(root, axis_key)
+    if axis is None:
+        raise ValueError(
+            f"Axis '{axis_key}' is not available on this chart type "
+            "(e.g. pie/doughnut charts have no axes). Underlying error: "
+            "no such axis element in chart1.xml"
+        )
+    applied: List[str] = []
+    scaling = axis.find(f"{_C}scaling")
+    if scaling is None:
+        scaling = _insert_ordered(axis, _el("scaling"), _AXIS_ORDER)
+
+    if title is not None:
+        _set_title(axis, title, _AXIS_ORDER)
+        applied.append("title")
+    if min_scale is not None:
+        _insert_ordered(scaling, _val("min", _num(min_scale)), _SCALING_ORDER)
+        applied.append("min_scale")
+    if max_scale is not None:
+        _insert_ordered(scaling, _val("max", _num(max_scale)), _SCALING_ORDER)
+        applied.append("max_scale")
+    if major_unit is not None:
+        _insert_ordered(axis, _val("majorUnit", _num(major_unit)), _AXIS_ORDER)
+        applied.append("major_unit")
+    if minor_unit is not None:
+        _insert_ordered(axis, _val("minorUnit", _num(minor_unit)), _AXIS_ORDER)
+        applied.append("minor_unit")
+    if tick_label_spacing is not None:
+        _insert_ordered(axis, _val("tickLblSkip", int(tick_label_spacing)), _AXIS_ORDER)
+        applied.append("tick_label_spacing")
+    if tick_mark_spacing is not None:
+        _insert_ordered(axis, _val("tickMarkSkip", int(tick_mark_spacing)), _AXIS_ORDER)
+        applied.append("tick_mark_spacing")
+    if major_tick_mark is not None:
+        _insert_ordered(axis, _val("majorTickMark", TICK_MARK[major_tick_mark]), _AXIS_ORDER)
+        applied.append("major_tick_mark")
+    if minor_tick_mark is not None:
+        _insert_ordered(axis, _val("minorTickMark", TICK_MARK[minor_tick_mark]), _AXIS_ORDER)
+        applied.append("minor_tick_mark")
+    if reverse_order is not None:
+        _insert_ordered(scaling, _val("orientation", "maxMin" if reverse_order else "minMax"), _SCALING_ORDER)
+        applied.append("reverse_order")
+    if log_scale is not None:
+        if log_scale:
+            _insert_ordered(scaling, _val("logBase", _num(log_base or 10)), _SCALING_ORDER)
+        else:
+            _remove(scaling, "logBase")
+        applied.append("log_scale")
+    if log_base is not None:
+        _insert_ordered(scaling, _val("logBase", _num(log_base)), _SCALING_ORDER)
+        applied.append("log_base")
+    if number_format is not None:
+        fmt = _el("numFmt", formatCode=number_format, sourceLinked="0")
+        _insert_ordered(axis, fmt, _AXIS_ORDER)
+        applied.append("number_format")
+    return dump(root), applied
+
+
+def read_axis(chart_xml_bytes: bytes, axis_key: str) -> Optional[dict]:
+    """The same fields back out of an axis, for the read-back check."""
+    root = _parse(chart_xml_bytes)
+    axis = _axis_for(root, axis_key)
+    if axis is None:
+        return None
+
+    def val(parent, name):
+        e = parent.find(f"{_C}{name}") if parent is not None else None
+        return None if e is None else e.get("val")
+
+    def num(parent, name):
+        v = val(parent, name)
+        return None if v is None else float(v)
+
+    scaling = axis.find(f"{_C}scaling")
+    fmt = axis.find(f"{_C}numFmt")
+    orientation = val(scaling, "orientation")
+    tick_back = {v: k for k, v in TICK_MARK.items()}
+    return {
+        "title": _title_text(axis.find(f"{_C}title")),
+        "min_scale": num(scaling, "min"),
+        "max_scale": num(scaling, "max"),
+        "major_unit": num(axis, "majorUnit"),
+        "minor_unit": num(axis, "minorUnit"),
+        "tick_label_spacing": None if val(axis, "tickLblSkip") is None else int(val(axis, "tickLblSkip")),
+        "tick_mark_spacing": None if val(axis, "tickMarkSkip") is None else int(val(axis, "tickMarkSkip")),
+        "major_tick_mark": tick_back.get(val(axis, "majorTickMark")),
+        "minor_tick_mark": tick_back.get(val(axis, "minorTickMark")),
+        "reverse_order": None if orientation is None else orientation == "maxMin",
+        "log_scale": val(scaling, "logBase") is not None,
+        "log_base": num(scaling, "logBase"),
+        "number_format": None if fmt is None else fmt.get("formatCode"),
+    }
+
+
+# -- one series ------------------------------------------------------------------
+
+def _sp_pr(ser: ET.Element) -> ET.Element:
+    sp = ser.find(f"{_C}spPr")
+    if sp is None:
+        sp = _insert_ordered(ser, _el("spPr"), _SER_ORDER)
+    return sp
+
+
+def _solid_fill(color_hex: str) -> ET.Element:
+    fill = ET.Element(f"{{{NS_A}}}solidFill")
+    ET.SubElement(fill, f"{{{NS_A}}}srgbClr").set("val", color_hex)
+    return fill
+
+
+_SPPR_ORDER = ["xfrm", "custGeom", "prstGeom", "noFill", "solidFill", "gradFill",
+               "blipFill", "pattFill", "grpFill", "ln", "effectLst", "effectDag",
+               "scene3d", "sp3d", "extLst"]
+
+
+_LN_ORDER = ["noFill", "solidFill", "gradFill", "pattFill", "prstDash", "custDash",
+             "round", "bevel", "miter", "headEnd", "tailEnd", "extLst"]
+
+
+def _insert_a(parent: ET.Element, child: ET.Element, order: List[str]) -> ET.Element:
+    """``_insert_ordered`` for DrawingML children, whose fills are a choice."""
+    name = _local(child.tag)
+    fills = {"noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"}
+    if name in fills:
+        for c in list(parent):
+            if _local(c.tag) in fills:
+                parent.remove(c)
+    return _insert_ordered(parent, child, order)
+
+
+def set_series(
+    chart_xml_bytes: bytes,
+    series_index: int,
+    color: Optional[str] = None,
+    show_data_labels: Optional[bool] = None,
+    line_weight: Optional[float] = None,
+) -> bytes:
+    """Colour, data labels and line weight of one series, 1-based.
+
+    ``color`` is ``#RRGGBB``. On a line, scatter or radar series the colour
+    goes on the line, which is the part of such a series that shows; on
+    every other kind on the fill.
+    """
+    root = load(chart_xml_bytes)
+    sers = _all_series(_plot_area(root))
+    if series_index < 1 or series_index > len(sers):
+        raise ValueError(
+            f"series_index {series_index} out of range (chart has {len(sers)} series)."
+        )
+    ser = sers[series_index - 1]
+    kind = next(
+        _local(plot.tag) for plot in _plots(_plot_area(root)) if ser in list(plot)
+    )
+    liney = kind in ("lineChart", "line3DChart", "scatterChart", "radarChart", "stockChart")
+
+    if color is not None:
+        hex_part = color.lstrip("#").upper()
+        if len(hex_part) != 6 or any(c not in "0123456789ABCDEF" for c in hex_part):
+            raise ValueError(f"color must be '#RRGGBB', got '{color}'")
+        sp = _sp_pr(ser)
+        if liney:
+            # PowerPoint keeps only the line's colour on a line series and
+            # drops a fill written beside it (measured on a paste), so the
+            # colour goes on the line alone.
+            ln = sp.find(f"{{{NS_A}}}ln")
+            if ln is None:
+                ln = _insert_a(sp, ET.Element(f"{{{NS_A}}}ln"), _SPPR_ORDER)
+            _insert_a(ln, _solid_fill(hex_part), _LN_ORDER)
+        else:
+            _insert_a(sp, _solid_fill(hex_part), _SPPR_ORDER)
+    if line_weight is not None:
+        sp = _sp_pr(ser)
+        ln = sp.find(f"{{{NS_A}}}ln")
+        if ln is None:
+            ln = _insert_a(sp, ET.Element(f"{{{NS_A}}}ln"), _SPPR_ORDER)
+        ln.set("w", str(int(round(float(line_weight) * 12700))))
+    if show_data_labels is not None:
+        d = _el("dLbls")
+        for name, on in (("showLegendKey", False), ("showVal", show_data_labels),
+                         ("showCatName", False), ("showSerName", False),
+                         ("showPercent", False), ("showBubbleSize", False)):
+            d.append(_val(name, 1 if on else 0))
+        _insert_ordered(ser, d, _SER_ORDER)
+    return dump(root)
+
+
+def read_series(chart_xml_bytes: bytes, series_index: int) -> Optional[dict]:
+    """Colour, data labels and line weight of one series, for the read-back."""
+    root = _parse(chart_xml_bytes)
+    sers = _all_series(_plot_area(root))
+    if series_index < 1 or series_index > len(sers):
+        return None
+    ser = sers[series_index - 1]
+    sp = ser.find(f"{_C}spPr")
+    ln = sp.find(f"{{{NS_A}}}ln") if sp is not None else None
+    clr = sp.find(f"{{{NS_A}}}solidFill/{{{NS_A}}}srgbClr") if sp is not None else None
+    if clr is None and ln is not None:
+        # A line series carries its colour on the line.
+        clr = ln.find(f"{{{NS_A}}}solidFill/{{{NS_A}}}srgbClr")
+    labels = ser.find(f"{_C}dLbls/{_C}showVal")
+    return {
+        "color": None if clr is None else "#" + clr.get("val", ""),
+        "line_weight": None if ln is None or ln.get("w") is None else round(int(ln.get("w")) / 12700, 2),
+        "show_data_labels": None if labels is None else labels.get("val") == "1",
+    }
+
+
+def series_count(chart_xml_bytes: bytes) -> int:
+    return len(_all_series(_plot_area(_parse(chart_xml_bytes))))

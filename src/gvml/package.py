@@ -63,6 +63,29 @@ class PackageError(ValueError):
     """A package that would not survive a paste, found before the paste."""
 
 
+_XMLNS = re.compile(rb'xmlns:([A-Za-z_][\w.-]*)="([^"]+)"')
+
+
+def register_prefixes(xml_bytes: bytes) -> None:
+    """Register every ``xmlns:prefix`` a document declares, before parsing it.
+
+    The four prefixes registered at import cover what this package writes.
+    A ``chart1.xml`` PowerPoint wrote declares more (``mc``, ``c14``, ``c16r2``
+    and whatever else the version added), and ``mc:Choice Requires="c14"``
+    names a prefix by its spelling, so etree renaming it to ``ns3`` on the way
+    out would leave the choice pointing at nothing. Reading the declarations
+    off the bytes and registering each one keeps the spelling PowerPoint
+    used. Registering is global and repeating it is harmless.
+    """
+    for prefix, uri in _XMLNS.findall(xml_bytes):
+        try:
+            ET.register_namespace(prefix.decode("ascii"), uri.decode("ascii"))
+        except (ValueError, UnicodeDecodeError):
+            # A prefix etree reserves (ns0 style) or one it cannot spell; the
+            # document keeps working, the prefix is just renamed on output.
+            continue
+
+
 @dataclass(frozen=True)
 class Relationship:
     """One ``<Relationship>``, with its target already resolved to a part name."""
@@ -192,6 +215,32 @@ class Package:
     def chart(self) -> Optional[bytes]:
         part = self.chart_part()
         return None if part is None else self.parts.get(part)
+
+    def remove_relationship(self, source_part: str, rel_id: str) -> Optional[str]:
+        """Drop one relationship of a part, and the part it pointed at.
+
+        Returns the name of the part removed, or None when the relationship
+        was not there. The target is removed only when nothing else in the
+        package relates to it. Used to let go of a chart's embedded workbook
+        once the caches it was written from no longer match it.
+        """
+        rels = self.relationships(source_part)
+        dropped = [r for r in rels if r.id == rel_id]
+        if not dropped:
+            return None
+        target = dropped[0].target
+        self.parts[_rels_part_for(source_part)] = _rels_xml(
+            source_part, [r for r in rels if r.id != rel_id]
+        )
+        still_used = any(
+            r.target == target
+            for part in [""] + [n for n in self.parts if not n.endswith(".rels")]
+            for r in self.relationships(part)
+        )
+        if not still_used:
+            self.parts.pop(target, None)
+            self.parts.pop(_rels_part_for(target), None)
+        return target
 
     # -- checking ----------------------------------------------------------
 
@@ -393,4 +442,5 @@ __all__ = [
     "GVML_UTI", "DRAWING_PART", "CHART_PART", "NS_A", "NS_LC", "NS_C", "NS_R",
     "REL_CHART", "REL_IMAGE", "REL_THEME", "CT_CHART", "XML_DECL",
     "Package", "PackageError", "Relationship", "Graft", "build", "read", "validate",
+    "register_prefixes",
 ]
