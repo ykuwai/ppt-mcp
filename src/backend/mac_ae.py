@@ -37,6 +37,11 @@ from typing import Any, Callable, Optional
 from appscript import app, its, k, mactypes  # noqa: F401  (re-exported for tools)
 from appscript.reference import CommandError, Reference
 
+# Only for the cancellation contract. `utils.com_wrapper` imports nothing from
+# this package, so this direction is safe, and the module is importable on any
+# platform because of the guard at its top (#185).
+from utils.com_wrapper import pending_com_futures
+
 logger = logging.getLogger(__name__)
 
 BUNDLE_ID = "com.microsoft.Powerpoint"
@@ -326,6 +331,17 @@ class _Job:
             self._dropped = True
             return True
 
+    def cancel(self) -> bool:
+        """`drop` under the name `utils.com_wrapper.QueuedCalls` calls.
+
+        That class holds whatever a request has queued and calls `.cancel()`
+        on each of it when the caller goes away. On Windows those are COM
+        futures; here they are jobs, and taking one back before the worker
+        claims it is the same promise. A job already running is not recalled,
+        which is the honest outcome for an Apple Event in flight.
+        """
+        return self.drop()
+
 
 class PowerPointAppleEventWrapper:
     """Manages the connection to PowerPoint over Apple Events.
@@ -483,6 +499,17 @@ class PowerPointAppleEventWrapper:
         """
         job = _Job(func, args, kwargs, idempotent)
         self._queue.put(job)
+
+        # Register with whatever is watching this request, so that a caller who
+        # goes away takes its queued work with it. `utils.offload` puts a
+        # `QueuedCalls` here for the duration of a tool call and cancels it on
+        # the way out. Without this macOS got half of #198 and #199: the event
+        # loop stayed free, but a cancelled request's queue still ran, minutes
+        # later, against a deck that had moved on. Nobody is watching for
+        # internal callers, and then this does nothing.
+        watcher = pending_com_futures.get()
+        if watcher is not None:
+            watcher.add(job)
 
         # Two waits, not one. The first is for the queue, and it is the caller's
         # to abandon; the second is for PowerPoint, and it starts only once the

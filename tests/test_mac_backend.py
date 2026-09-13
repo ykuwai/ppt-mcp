@@ -985,3 +985,76 @@ class TestWhatIsSafeToRunTwice:
         ppt = self._wrapper()
         assert ppt.execute(takes_one_argument, True, idempotent=True) == "ok"
         assert seen == {"visible": True}
+
+
+@macos_only
+class TestWorkGoesAwayWithTheCallerThatQueuedIt:
+    """macOS had half of #198 and #199 and not the other half.
+
+    `utils.offload` frees the event loop and, when a caller goes away, cancels
+    everything that caller had queued. It cancels through
+    `pending_com_futures`, which this backend registered nothing with, so a
+    cancelled request's queue still ran, later, against a deck that had moved
+    on. That is the shape the two-stage wait was built for, arriving by a
+    different door.
+
+    Written the way `tests/test_offload_cancel.py` writes the Windows half,
+    through `run_offloaded` itself, because the context only reaches the
+    worker thread when anyio puts it there. A plain `threading.Thread` starts
+    with an empty context and would pass this test while proving nothing.
+    """
+
+    @staticmethod
+    def _wrapper():
+        from backend.mac_ae import PowerPointAppleEventWrapper
+
+        ppt = PowerPointAppleEventWrapper()
+        ppt.start()
+        return ppt
+
+    def test_a_cancelled_request_takes_its_queue_with_it(self, monkeypatch):
+        import threading
+
+        import anyio
+
+        from backend import mac_ae
+        from utils.offload import run_offloaded
+
+        monkeypatch.setattr(mac_ae, "_QUEUE_WAIT", 1.0)
+        ppt = self._wrapper()
+        holding = threading.Event()
+        release = threading.Event()
+        entered = threading.Event()
+        ran = []
+
+        # Fill the worker, so the job below waits in line rather than running.
+        threading.Thread(
+            target=lambda: ppt.execute(lambda: (holding.set(), release.wait(5))),
+            daemon=True,
+        ).start()
+        holding.wait(5)
+
+        def queues_an_edit():
+            entered.set()
+            try:
+                ppt.execute(lambda: ran.append("edited"))
+            except Exception:  # noqa: BLE001 - not running it is the point
+                pass
+
+        async def main():
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(run_offloaded, queues_an_edit)
+                await anyio.to_thread.run_sync(entered.wait, 5)
+                await anyio.sleep(0.2)
+                tg.cancel_scope.cancel()
+
+        anyio.run(main)
+        release.set()
+        threading.Event().wait(0.5)
+
+        assert ran == [], "the abandoned edit reached PowerPoint anyway"
+
+    def test_nothing_watching_changes_nothing(self):
+        """Internal callers have no request behind them, and still work."""
+        ppt = self._wrapper()
+        assert ppt.execute(lambda: "done") == "done"
