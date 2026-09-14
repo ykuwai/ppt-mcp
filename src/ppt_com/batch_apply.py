@@ -98,13 +98,65 @@ class BatchApplyFormattingInput(BaseModel):
 # Dispatch
 # ---------------------------------------------------------------------------
 
+# Where one idea goes by two names across these tools. The value is the name
+# the operation models use; the key is what a caller arrives with, having just
+# used `ppt_add_shape` or `ppt_add_textbox`.
+_SIBLING_NAMES = {
+    "font_color": "color",
+    "line_visible": "visible",
+    "line_color": "color",
+    "line_weight": "weight",
+    "fill_color": "color",
+    "fill_transparency": "transparency",
+}
+
+
+def _checked(model_cls, tool_name, params, **fixed):
+    """Build an operation's input model, refusing arguments it does not have.
+
+    Pydantic drops unknown keys by default, so a batch operation carrying a
+    misspelled or borrowed argument used to apply nothing and report success.
+    That happened for real: `format_text` was given `font_color`, which is what
+    `ppt_add_shape` and `ppt_add_textbox` call it, while this tool's own name
+    for it is `color`. The text stayed the colour it was and the result said
+    `"status": "success"`, and the only way to notice was to look at the slide.
+
+    A near miss is named, because the argument that gets passed here is almost
+    always the right idea under a sibling tool's name.
+    """
+    known = set(model_cls.model_fields)
+    unknown = [key for key in params if key not in known]
+    if unknown:
+        import difflib
+
+        parts = []
+        for key in unknown:
+            # The splits this server actually has, where spelling is no guide.
+            # `font_color` is what the shape and textbox tools call what this
+            # one calls `color`, and difflib answers `font_color_theme` for it,
+            # which is a different thing entirely.
+            suggestion = _SIBLING_NAMES.get(key)
+            if suggestion not in known:
+                close = difflib.get_close_matches(key, known, n=1, cutoff=0.6)
+                suggestion = close[0] if close else None
+            parts.append(
+                f"{key!r}" + (f" (did you mean {suggestion!r}?)" if suggestion else "")
+            )
+        accepted = ", ".join(sorted(known - set(fixed)))
+        raise ValueError(
+            f"{tool_name} does not take " + ", ".join(parts)
+            + f". Nothing was applied. It takes: {accepted}."
+        )
+    return model_cls(**fixed, **params)
+
+
 def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
     """Validate params and call the appropriate impl function."""
     if tool_name == "set_fill":
-        m = SetFillInput(
+        m = _checked(
+            SetFillInput, tool_name, params,
             slide_index=slide_index,
             shape_name_or_index=shape_name_or_index,
-            **params,
         )
         return _formatting._set_fill_impl(
             slide_index, shape_name_or_index,
@@ -113,10 +165,10 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
         )
 
     elif tool_name == "set_line":
-        m = SetLineInput(
+        m = _checked(
+            SetLineInput, tool_name, params,
             slide_index=slide_index,
             shape_name_or_index=shape_name_or_index,
-            **params,
         )
         return _formatting._set_line_impl(
             slide_index, shape_name_or_index,
@@ -124,10 +176,10 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
         )
 
     elif tool_name == "set_shadow":
-        m = SetShadowInput(
+        m = _checked(
+            SetShadowInput, tool_name, params,
             slide_index=slide_index,
             shape_name_or_index=shape_name_or_index,
-            **params,
         )
         return _formatting._set_shadow_impl(
             slide_index, shape_name_or_index,
@@ -136,10 +188,10 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
         )
 
     elif tool_name == "set_glow":
-        m = SetGlowInput(
+        m = _checked(
+            SetGlowInput, tool_name, params,
             slide_index=slide_index,
             shape_name_or_index=shape_name_or_index,
-            **params,
         )
         return _effects._set_glow_impl(
             slide_index, shape_name_or_index,
@@ -147,10 +199,10 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
         )
 
     elif tool_name == "set_reflection":
-        m = SetReflectionInput(
+        m = _checked(
+            SetReflectionInput, tool_name, params,
             slide_index=slide_index,
             shape_name_or_index=shape_name_or_index,
-            **params,
         )
         return _effects._set_reflection_impl(
             slide_index, shape_name_or_index,
@@ -158,10 +210,10 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
         )
 
     elif tool_name == "set_soft_edge":
-        m = SetSoftEdgeInput(
+        m = _checked(
+            SetSoftEdgeInput, tool_name, params,
             slide_index=slide_index,
             shape_name_or_index=shape_name_or_index,
-            **params,
         )
         return _effects._set_soft_edge_impl(
             slide_index, shape_name_or_index,
@@ -169,10 +221,10 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
         )
 
     elif tool_name == "format_text":
-        m = FormatTextInput(
+        m = _checked(
+            FormatTextInput, tool_name, params,
             slide_index=slide_index,
             shape_name_or_index=shape_name_or_index,
-            **params,
         )
         return _text._format_text_impl(
             slide_index, shape_name_or_index,

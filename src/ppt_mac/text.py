@@ -1560,6 +1560,7 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
     slide_w = pres.page_setup.slide_width()
     slide_h = pres.slide_master.height()
     issues = []
+    groups_passed = []
     fixed = []
 
     shrink_to_fit = to_keyword(_AUTO_SIZE, ppAutoSizeTextToFitShape, "auto size")
@@ -1572,6 +1573,19 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
         slide = pres.slides[si]
 
         for shape in shapes_of(slide):
+
+            # A group is walked past, not into. On macOS a group answers no
+            # members over Apple Events, so there is no way in from here, and
+            # the text in one is simply not looked at. That is survivable; what
+            # is not is answering "no issues" for a slide whose only problem is
+            # in a group, which is what this did. Counted, and said out loud
+            # below, the way ppt_replace_font says it.
+            try:
+                if shape.shape_type() == MsoShapeType[msoGroup]:
+                    groups_passed.append(shape.name())
+                    continue
+            except CommandError:
+                pass
 
             # Before the text frame check, because a picture hanging off the
             # slide is as wrong as a paragraph doing it. A box set to grow with
@@ -1763,6 +1777,16 @@ def _check_typography_impl(slide_indices, max_chars, max_words,
                     })
 
     result = {"issues": issues, "total": len(issues)}
+    if groups_passed:
+        named = ", ".join(sorted(set(groups_passed))[:5])
+        more = "" if len(set(groups_passed)) <= 5 else ", and others"
+        result["warnings"] = [
+            f"{len(set(groups_passed))} grouped shape(s) were not looked "
+            f"inside ({named}{more}). PowerPoint for Mac reports no members "
+            "for a group over Apple Events, so their text was not checked and "
+            "a problem in one would not appear above. Ungroup with "
+            "ppt_ungroup_shapes to include it."
+        ]
     if fix:
         result["fixed"] = fixed
         result["fixed_count"] = len(fixed)
