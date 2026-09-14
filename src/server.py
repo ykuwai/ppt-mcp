@@ -111,6 +111,12 @@ are lost, and `warnings` says so each time. Set the data and formatting of a
 chart before animating it. A node's editing type cannot be set; SmartArt has
 no route at all. The user's clipboard is saved and put back around each of
 these calls.
+
+A few chart arguments have no place in that XML and are refused by name rather
+than ignored: `chart_style`, `legend_font_size`, explicit legend and title
+coordinates and the corner legend positions on `ppt_format_chart`, and
+`tick_label_font_size` on `ppt_format_chart_axis`. Everything else those two
+take works. Drop the named argument and call again.
 """ if sys.platform == "darwin" else ""
 
 

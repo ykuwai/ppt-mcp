@@ -217,7 +217,11 @@ class TestLineVisibility:
         assert deck.shape("Box").line_format.transparency() == 1.0
         assert result["status"] == "success"
         assert "no visible property" in result["warnings"][0]
-        assert "make the border show again" in result["warnings"][0]
+        # The part worth the words: the flag PowerPoint reads is untouched, so
+        # setting a colour later undoes this without the caller asking.
+        assert "brings the border back" in result["warnings"][0]
+        # Named as the caller passes it, not as the plumbing calls it.
+        assert "line_visible" in result["warnings"][0]
 
     def test_it_says_which_way_round_the_substitution_went(self):
         """One sentence for hiding and another for showing.
@@ -230,7 +234,7 @@ class TestLineVisibility:
         hiding = _LINE_VISIBILITY_WARNING[False]
         showing = _LINE_VISIBILITY_WARNING[True]
 
-        assert "no border to look at" in hiding
+        assert "weight 0 and full transparency" in hiding
         assert "The border is drawn." in showing
         assert hiding != showing
 
