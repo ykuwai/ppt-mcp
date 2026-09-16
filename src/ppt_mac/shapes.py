@@ -784,8 +784,9 @@ def _text_frame_state(shape):
     """The macOS half of ppt_com.shapes._text_frame_state.
 
     `auto size` sits on the text frame here rather than needing a TextFrame2
-    detour, and it does carry shrink to fit, so the one state worth reading is
-    readable. The words are the same as on Windows.
+    detour, and it does carry shrink to fit, so the one setting worth reading
+    is readable. The words are the same as on Windows, and so is the caveat
+    that autofit is the configured mode rather than a measurement.
     """
     from ppt_com.text import (
         AUTO_SIZE_NAMES, ORIENTATION_NAMES, VERTICAL_ANCHOR_NAMES,

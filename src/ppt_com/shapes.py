@@ -717,11 +717,18 @@ def _list_shapes_impl(slide_index):
 
 
 def _text_frame_state(shape):
-    """Report the text frame state that decides how text is drawn.
+    """Report the text frame settings that decide how text is drawn.
 
-    ppt_get_text answers with the size a run was set to. When the frame is
-    shrinking text to fit, that is not the size on the slide, and nothing else
-    says so. The words are the ones ppt_set_textframe accepts.
+    ppt_get_text answers with the size a run was set to, and when the frame is
+    allowed to shrink text to fit, that is not always the size on the slide.
+    Nothing else said the setting was on. The words are the ones
+    ppt_set_textframe accepts.
+
+    autofit is the configured mode, not a measurement. AutoSize is all COM
+    offers, and a shrink_to_fit box whose text already fits is drawn at its
+    full size. Whether the text is being shrunk right now is what
+    ppt_check_typography measures, by turning the setting off, reading the
+    natural height and putting it back.
 
     Returns None for a shape with no text frame at all.
     """
@@ -1167,10 +1174,12 @@ def get_shape_info(params: ShapeIdentifierInput) -> str:
 
     text_frame carries autofit, word_wrap, vertical_anchor, orientation and
     the four margins, in the words ppt_set_textframe accepts, or null for a
-    shape with no text frame. autofit "shrink_to_fit" means the text is drawn
-    smaller than the size ppt_get_text reports. The margins matter when
-    working out whether a line fits, because the usable width is the shape
-    width less the left and right margin, around 14pt on a default box.
+    shape with no text frame. autofit is the configured mode, so
+    "shrink_to_fit" says the text may be drawn smaller than the size
+    ppt_get_text reports, not that it is; ppt_check_typography measures which
+    one it is. The margins matter when working out whether a line fits,
+    because the usable width is the shape width less the left and right
+    margin, around 14pt on a default box.
 
     Args:
         params: Slide index and shape identifier (name or index).
@@ -1423,9 +1432,11 @@ def register_tools(mcp):
         Identify the shape by name (shape_name) or 1-based index (shape_index).
         Returns full text, fill info, line info, rotation, z-order, and
         text_frame (autofit, word_wrap, vertical_anchor, orientation,
-        margins). Read text_frame before sizing text to fit a box, autofit
-        "shrink_to_fit" means the drawn size is not the size that was set,
-        and the usable width is the shape width less the side margins.
+        margins). Read text_frame before sizing text to fit a box. autofit is
+        the configured mode, so "shrink_to_fit" means the drawn size may be
+        smaller than the size that was set, and ppt_check_typography is what
+        says whether it currently is. The usable width is the shape width
+        less the side margins.
         """
         return await run_offloaded(get_shape_info, params)
 
