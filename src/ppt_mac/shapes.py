@@ -42,6 +42,7 @@ from backend.mac_enums import (
     MsoGradientStyle,
     MsoLineDashStyle,
     MsoShapeType,
+    MsoTextOrientation,
     MsoVerticalAnchor,
     MsoZOrderCmd,
     PpParagraphAlignment,
@@ -61,6 +62,10 @@ _WIN_SHAPE_TYPE = {word: number for number, word in MsoShapeType.items()}
 _WIN_AUTO_SHAPE_TYPE = {word: number for number, word in MsoAutoShapeType.items()}
 _WIN_FILL_TYPE = {word: number for number, word in MsoFillType.items()}
 _WIN_DASH_STYLE = {word: number for number, word in MsoLineDashStyle.items()}
+_WIN_VERTICAL_ANCHOR = {word: number for number, word in MsoVerticalAnchor.items()}
+_WIN_TEXT_ORIENTATION = {
+    word: number for number, word in MsoTextOrientation.items()
+}
 
 # The four character codes for the two properties appscript cannot reach by
 # name. Both names are taken by AppleScript's own built-in vocabulary, which
@@ -775,6 +780,86 @@ def _list_shapes_impl(slide_index):
     }
 
 
+def _text_frame_state(shape):
+    """The macOS half of ppt_com.shapes._text_frame_state.
+
+    `auto size` sits on the text frame here rather than needing a TextFrame2
+    detour, and it does carry shrink to fit, so the one setting worth reading
+    is readable. The words are the same as on Windows, and so is the caveat
+    that autofit is the configured mode rather than a measurement.
+    """
+    from ppt_com.text import (
+        AUTO_SIZE_NAMES, ORIENTATION_NAMES, VERTICAL_ANCHOR_NAMES,
+    )
+    from ppt_mac.text import _AUTO_SIZE
+
+    win_auto_size = {word: number for number, word in _AUTO_SIZE.items()}
+
+    try:
+        if not shape.has_text_frame():
+            return None
+    except Exception:
+        return None
+
+    state = {
+        "autofit": None,
+        "word_wrap": None,
+        "vertical_anchor": None,
+        "orientation": None,
+        "margins": None,
+    }
+
+    try:
+        tf = shape.text_frame
+    except Exception:
+        return state
+
+    try:
+        state["autofit"] = AUTO_SIZE_NAMES.get(
+            _win_constant(win_auto_size, tf.auto_size())
+        )
+    except Exception:
+        pass
+
+    try:
+        wrap = tf.word_wrap()
+        state["word_wrap"] = None if is_missing(wrap) else bool(wrap)
+    except Exception:
+        pass
+
+    try:
+        state["vertical_anchor"] = VERTICAL_ANCHOR_NAMES.get(
+            _win_constant(_WIN_VERTICAL_ANCHOR, tf.vertical_anchor())
+        )
+    except Exception:
+        pass
+
+    try:
+        # `text orientation` rather than `orientation`, so what is read back is
+        # the property ppt_set_textframe writes.
+        state["orientation"] = ORIENTATION_NAMES.get(
+            _win_constant(_WIN_TEXT_ORIENTATION, tf.text_orientation())
+        )
+    except Exception:
+        pass
+
+    try:
+        margins = {
+            "left": tf.margin_left(),
+            "right": tf.margin_right(),
+            "top": tf.margin_top(),
+            "bottom": tf.margin_bottom(),
+        }
+        if not any(is_missing(value) for value in margins.values()):
+            state["margins"] = {
+                side: round(value, 2) for side, value in margins.items()
+            }
+    except Exception:
+        pass
+
+    return state
+
+
 def _get_shape_info_impl(slide_index, shape_name, shape_index):
     ppt._get_app_impl()
     pres = ppt._get_pres_impl()
@@ -813,6 +898,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         "text": None,
         "fill": None,
         "line": None,
+        "text_frame": _text_frame_state(shape),
     }
 
     # Animation check, through the per shape settings rather than the slide's

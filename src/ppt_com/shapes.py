@@ -18,7 +18,7 @@ from utils.redraw import FrozenRedraw
 from utils.validation import font_size_warning
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
-    msoTrue, msoFalse,
+    msoTrue, msoFalse, msoTriStateMixed,
     msoGroup,
     msoTextOrientationHorizontal,
     msoBringToFront, msoSendToBack, msoBringForward, msoSendBackward,
@@ -716,6 +716,82 @@ def _list_shapes_impl(slide_index):
     }
 
 
+def _text_frame_state(shape):
+    """Report the text frame settings that decide how text is drawn.
+
+    ppt_get_text answers with the size a run was set to, and when the frame is
+    allowed to shrink text to fit, that is not always the size on the slide.
+    Nothing else said the setting was on. The words are the ones
+    ppt_set_textframe accepts.
+
+    autofit is the configured mode, not a measurement. AutoSize is all COM
+    offers, and a shrink_to_fit box whose text already fits is drawn at its
+    full size. Whether the text is being shrunk right now is what
+    ppt_check_typography measures, by turning the setting off, reading the
+    natural height and putting it back.
+
+    Returns None for a shape with no text frame at all.
+    """
+    from ppt_com.text import (
+        AUTO_SIZE_NAMES, ORIENTATION_NAMES, VERTICAL_ANCHOR_NAMES,
+    )
+
+    try:
+        if not shape.HasTextFrame:
+            return None
+    except Exception:
+        return None
+
+    state = {
+        "autofit": None,
+        "word_wrap": None,
+        "vertical_anchor": None,
+        "orientation": None,
+        "margins": None,
+    }
+
+    # AutoSize lives on TextFrame2. TextFrame's own AutoSize cannot say
+    # shrink_to_fit, which is the one state worth reading.
+    try:
+        state["autofit"] = AUTO_SIZE_NAMES.get(shape.TextFrame2.AutoSize)
+    except Exception:
+        pass
+
+    try:
+        tf = shape.TextFrame
+    except Exception:
+        return state
+
+    try:
+        wrap = tf.WordWrap
+        # Mixed is what a group of paragraphs answers, and it is neither.
+        state["word_wrap"] = None if wrap == msoTriStateMixed else wrap == msoTrue
+    except Exception:
+        pass
+
+    try:
+        state["vertical_anchor"] = VERTICAL_ANCHOR_NAMES.get(tf.VerticalAnchor)
+    except Exception:
+        pass
+
+    try:
+        state["orientation"] = ORIENTATION_NAMES.get(tf.Orientation)
+    except Exception:
+        pass
+
+    try:
+        state["margins"] = {
+            "left": round(tf.MarginLeft, 2),
+            "right": round(tf.MarginRight, 2),
+            "top": round(tf.MarginTop, 2),
+            "bottom": round(tf.MarginBottom, 2),
+        }
+    except Exception:
+        pass
+
+    return state
+
+
 def _get_shape_info_impl(slide_index, shape_name, shape_index):
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
@@ -739,6 +815,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         "text": None,
         "fill": None,
         "line": None,
+        "text_frame": _text_frame_state(shape),
     }
 
     # Animation check
@@ -1095,6 +1172,15 @@ def get_shape_info(params: ShapeIdentifierInput) -> str:
     shape is a group container), has_animation (True if the shape has any
     animation in the main sequence), aspect_ratio_locked.
 
+    text_frame carries autofit, word_wrap, vertical_anchor, orientation and
+    the four margins, in the words ppt_set_textframe accepts, or null for a
+    shape with no text frame. autofit is the configured mode, so
+    "shrink_to_fit" says the text may be drawn smaller than the size
+    ppt_get_text reports, not that it is; ppt_check_typography measures which
+    one it is. The margins matter when working out whether a line fits,
+    because the usable width is the shape width less the left and right
+    margin, around 14pt on a default box.
+
     Args:
         params: Slide index and shape identifier (name or index).
 
@@ -1344,7 +1430,13 @@ def register_tools(mcp):
         """Get detailed information about a specific shape.
 
         Identify the shape by name (shape_name) or 1-based index (shape_index).
-        Returns full text, fill info, line info, rotation, and z-order.
+        Returns full text, fill info, line info, rotation, z-order, and
+        text_frame (autofit, word_wrap, vertical_anchor, orientation,
+        margins). Read text_frame before sizing text to fit a box. autofit is
+        the configured mode, so "shrink_to_fit" means the drawn size may be
+        smaller than the size that was set, and ppt_check_typography is what
+        says whether it currently is. The usable width is the shape width
+        less the side margins.
         """
         return await run_offloaded(get_shape_info, params)
 

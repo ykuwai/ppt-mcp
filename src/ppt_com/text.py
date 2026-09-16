@@ -33,6 +33,8 @@ from ppt_com.constants import (
     ppBulletArabicDBPlain, ppBulletArabicDBPeriod,
     msoTextOrientationHorizontal, msoTextOrientationVertical,
     msoTextOrientationUpward, msoTextOrientationDownward,
+    msoAnchorTop, msoAnchorMiddle, msoAnchorBottom,
+    msoAnchorTopBaseline, msoAnchorBottomBaseLine,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,6 +94,26 @@ AUTO_SIZE_MAP = {
     "shape_to_fit": ppAutoSizeShapeToFitText,
     "shrink_to_fit": ppAutoSizeTextToFitShape,
 }
+
+# Module scope so the read side in ppt_com.shapes can name an anchor the same
+# way ppt_set_textframe does, instead of growing a second spelling.
+VERTICAL_ANCHOR_MAP = {
+    "top": msoAnchorTop,
+    "middle": msoAnchorMiddle,
+    "bottom": msoAnchorBottom,
+}
+
+# The read side of the three maps above. ppt_get_shape_info reports a text
+# frame in the words ppt_set_textframe accepts, so what is read back can be
+# written again without a second vocabulary in between.
+AUTO_SIZE_NAMES = {value: name for name, value in AUTO_SIZE_MAP.items()}
+ORIENTATION_NAMES = {value: name for name, value in ORIENTATION_MAP.items()}
+VERTICAL_ANCHOR_NAMES = {value: name for name, value in VERTICAL_ANCHOR_MAP.items()}
+# PowerPoint has two more anchors that ppt_set_textframe does not write. They
+# are named here so reading one reports what it is rather than nothing, and a
+# caller that feeds the name back gets told the name is not writable.
+VERTICAL_ANCHOR_NAMES[msoAnchorTopBaseline] = "top_baseline"
+VERTICAL_ANCHOR_NAMES[msoAnchorBottomBaseLine] = "bottom_baseline"
 
 BULLET_TYPE_MAP = {
     "none": ppBulletNone,
@@ -1709,11 +1731,6 @@ def _set_textframe_impl(slide_index, shape_name_or_index,
         shape.TextFrame2.AutoSize = auto_size_val
 
     if vertical_anchor is not None:
-        VERTICAL_ANCHOR_MAP = {
-            "top": 1,       # msoAnchorTop
-            "middle": 3,    # msoAnchorMiddle
-            "bottom": 4,    # msoAnchorBottom
-        }
         anchor_val = VERTICAL_ANCHOR_MAP.get(vertical_anchor.lower())
         if anchor_val is None:
             raise ValueError(
