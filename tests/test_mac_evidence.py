@@ -1412,7 +1412,7 @@ class TestADocumentThatOutlivedItsWindow:
         reaching = {
             str(path)
             for path in sorted(pathlib.Path("src").rglob("*.py"))
-            for line in path.read_text().splitlines()
+            for line in path.read_text(encoding="utf-8").splitlines()
             # Comments about the trap are the point of the routing, not a
             # breach of it.
             if "document_windows[1]" in line and not line.strip().startswith("#")
