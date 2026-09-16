@@ -985,3 +985,130 @@ class TestWhatIsSafeToRunTwice:
         ppt = self._wrapper()
         assert ppt.execute(takes_one_argument, True, idempotent=True) == "ok"
         assert seen == {"visible": True}
+
+
+@macos_only
+class TestWorkGoesAwayWithTheCallerThatQueuedIt:
+    """macOS had half of #198 and #199 and not the other half.
+
+    `utils.offload` frees the event loop and, when a caller goes away, cancels
+    everything that caller had queued. It cancels through
+    `pending_com_futures`, which this backend registered nothing with, so a
+    cancelled request's queue still ran, later, against a deck that had moved
+    on. That is the shape the two-stage wait was built for, arriving by a
+    different door.
+
+    Written the way `tests/test_offload_cancel.py` writes the Windows half,
+    through `run_offloaded` itself, because the context only reaches the
+    worker thread when anyio puts it there. A plain `threading.Thread` starts
+    with an empty context and would pass this test while proving nothing.
+    """
+
+    @staticmethod
+    def _wrapper():
+        from backend.mac_ae import PowerPointAppleEventWrapper
+
+        ppt = PowerPointAppleEventWrapper()
+        ppt.start()
+        return ppt
+
+    def test_a_cancelled_request_takes_its_queue_with_it(self, monkeypatch):
+        import threading
+
+        import anyio
+
+        from backend import mac_ae
+        from utils.offload import run_offloaded
+
+        monkeypatch.setattr(mac_ae, "_QUEUE_WAIT", 1.0)
+        ppt = self._wrapper()
+        holding = threading.Event()
+        release = threading.Event()
+        entered = threading.Event()
+        ran = []
+
+        # Fill the worker, so the job below waits in line rather than running.
+        threading.Thread(
+            target=lambda: ppt.execute(lambda: (holding.set(), release.wait(5))),
+            daemon=True,
+        ).start()
+        holding.wait(5)
+
+        def queues_an_edit():
+            entered.set()
+            try:
+                ppt.execute(lambda: ran.append("edited"))
+            except Exception:  # noqa: BLE001 - not running it is the point
+                pass
+
+        async def main():
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(run_offloaded, queues_an_edit)
+                await anyio.to_thread.run_sync(entered.wait, 5)
+                await anyio.sleep(0.2)
+                tg.cancel_scope.cancel()
+
+        anyio.run(main)
+        release.set()
+        threading.Event().wait(0.5)
+
+        assert ran == [], "the abandoned edit reached PowerPoint anyway"
+
+    def test_nothing_watching_changes_nothing(self):
+        """Internal callers have no request behind them, and still work."""
+        ppt = self._wrapper()
+        assert ppt.execute(lambda: "done") == "done"
+
+    def test_the_cancelled_caller_is_freed_at_once(self, monkeypatch):
+        """Discarding the work is only half of it.
+
+        `drop` marked the job and woke nobody, so the thread that queued it sat
+        in `started.wait()` for the entire queue budget, which is over two
+        minutes. The Apple Event was correctly discarded and a burst of
+        cancellations could still hold the shared thread pool closed behind it.
+        """
+        import threading
+        import time
+
+        from backend import mac_ae
+
+        monkeypatch.setattr(mac_ae, "_QUEUE_WAIT", 30.0)
+        ppt = self._wrapper()
+        holding = threading.Event()
+        release = threading.Event()
+        took = []
+
+        threading.Thread(
+            target=lambda: ppt.execute(lambda: (holding.set(), release.wait(5))),
+            daemon=True,
+        ).start()
+        holding.wait(5)
+
+        job_seen = []
+        real_put = ppt._queue.put
+
+        def capture(job):
+            job_seen.append(job)
+            real_put(job)
+
+        monkeypatch.setattr(ppt._queue, "put", capture)
+
+        def waits():
+            start = time.monotonic()
+            try:
+                ppt.execute(lambda: None)
+            except Exception:  # noqa: BLE001 - being freed is the point
+                pass
+            took.append(time.monotonic() - start)
+
+        waiter = threading.Thread(target=waits, daemon=True)
+        waiter.start()
+        while not job_seen:
+            time.sleep(0.02)
+        time.sleep(0.1)
+        assert job_seen[0].cancel() is True
+
+        waiter.join(5)
+        release.set()
+        assert took, "the caller never returned"
+        assert took[0] < 2.0, f"freed only after {took[0]:.1f}s, budget was 30s"

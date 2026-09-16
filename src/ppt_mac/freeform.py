@@ -21,17 +21,22 @@ numbering is the Windows one, one node per straight segment and three per
 curve; see ``gvml/freeform.py``. The procedure and its checks are in
 ``ppt_mac/gvml_paste.py``.
 
-**The five tools that edit nodes still refuse.** They are the design's third
-tier (docs/gvml-design.md section 6): copy, edit the path, paste, delete the
-original, put position and z order back. The parts are all here now, and
-those tools are not yet written. ``ppt_set_node_editing_type`` will not be:
-corner, smooth and symmetric are not in the dictionary and not in the XML
-either. PowerPoint's UI derives them from where the handles sit, and there is
+**Four of the five node editors go the same way back.** ``ppt_set_node_position``,
+``ppt_insert_node``, ``ppt_delete_node`` and ``ppt_set_segment_type`` copy the
+shape, rewrite its ``a:custGeom`` (``gvml/freeform.py``), paste the result
+beside the original, read it back to confirm the path is the one written,
+and only then delete the original and walk the new shape back to its z order
+(``gvml_paste.replace_shape``). The shape that results is a new object with
+the old name, and ``warnings`` says so, along with how many animation effects
+went with the original. ``ppt_set_node_editing_type`` stays refused: corner,
+smooth and symmetric are not in the dictionary and not in the XML either.
+PowerPoint's UI derives them from where the handles sit, and there is
 nowhere to write one.
 """
 
 import json
 import logging
+import xml.etree.ElementTree as ET
 
 from backend.mac_ae import ppt, slide_at as _slide
 from backend.mac_enums import MsoShapeType
@@ -46,21 +51,32 @@ from ppt_mac.gvml_paste import (
     Refused,
     copy_shape_package,
     paste_package,
+    replace_shape,
+    strip_ids,
     unused_name,
     with_warnings,
 )
-from ppt_mac.shapes import _WIN_SHAPE_TYPE, _get_shape, _shape_names, _win_constant
+from ppt_mac.shapes import (
+    _WIN_SHAPE_TYPE,
+    _get_shape,
+    _shape_index,
+    _shape_names,
+    _win_constant,
+)
 
 logger = logging.getLogger(__name__)
 
-# The one finding every remaining refusal in this module rests on.
+# The one finding the remaining refusal in this module rests on.
 _NO_NODES = (
     "PowerPoint for Mac's Apple Event dictionary has no `node`, no `vertex`, "
     "no `vertices` and no `segment` on a shape. Windows walks Shape.Nodes for "
-    "this, and it has no counterpart here. The path can be read with "
-    "ppt_get_shape_nodes, which goes through the clipboard; editing it the "
-    "same way is not yet written."
+    "this, and it has no counterpart here."
 )
+
+_EDIT_ALTERNATIVES = [
+    "Edit the path by hand in PowerPoint, with Edit Points",
+    "ppt_build_freeform, then ppt_delete_shape on the old shape",
+]
 
 _BUILD_ALTERNATIVES = [
     "ppt_add_shape, which reaches every built-in autoshape",
@@ -116,6 +132,86 @@ def _refuse_for_node_tool(tool_name, slide_index, shape_name, shape_index, detai
             "Edit the path by hand in PowerPoint, with Edit Points",
         ] + _SHAPE_TOOLS,
     ))
+
+
+def _edit_path(tool_name, slide_index, shape_name, shape_index, edit, describe):
+    """Copy the freeform, rewrite its path with ``edit``, paste it back, check.
+
+    ``edit(path) -> path`` is one of the four operations in
+    ``gvml.freeform`` and raises ``ValueError`` with the Windows wording for
+    an index out of range. The read-back check is that the new shape's
+    nodes are exactly the nodes of the path written; ``describe(old_path,
+    new_path, nodes)`` builds the success body, minus ``shape_name`` and
+    ``warnings``. Returns a JSON string.
+    """
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+    shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
+    _check_freeform(shape)
+    index = _shape_index(slide, None, shape_name=shape_name, shape_index=shape_index)
+    name = shape.name()
+
+    clip = Clipboard.take()
+    try:
+        try:
+            package = copy_shape_package(shape, clip, tool_name)
+        except Refused as refused:
+            return json.dumps(refused.payload)
+        try:
+            root = ET.fromstring(package.drawing())
+            element = _gvml_shapes.only_child(
+                _canvas.children(_canvas.canvas_of(root)), "freeform"
+            )
+            old_path = _gvml_freeform.read_path(element)
+        except PackageError as exc:
+            return json.dumps(_refusal(
+                tool_name,
+                f"'{name}' reports itself as a freeform, but the path in the "
+                f"package PowerPoint wrote for it could not be read: {exc}. "
+                "Nothing was changed.",
+                _EDIT_ALTERNATIVES + _SHAPE_TOOLS[1:],
+            ))
+        new_path = edit(old_path)
+        x, y, _cx, _cy = _gvml_freeform.write_path(element, new_path)
+        _gvml_shapes.strip_creation_ids(element)
+        package.parts[package.drawing_part()] = _canvas.serialize_drawing(root).encode("utf-8")
+        wanted = _gvml_freeform.nodes_of([new_path])
+
+        def check(readback):
+            try:
+                got = _gvml_freeform.read_nodes(_gvml_shapes.only_child(
+                    _canvas.children(_canvas.parse(readback.drawing())), "freeform"
+                ))
+            except PackageError as exc:
+                return f"the pasted shape's path could not be read ({exc})"
+            if _positions(got) != _positions(wanted):
+                return (
+                    f"{len(got)} node(s) read back where {len(wanted)} were "
+                    "written, or at other positions"
+                )
+            return None
+
+        try:
+            replaced = replace_shape(
+                pres, slide, slide_index, index, package.to_bytes(), clip, tool_name,
+                MsoShapeType[msoFreeform], _canvas.pt(x), _canvas.pt(y), "freeform",
+                check, _EDIT_ALTERNATIVES,
+            )
+        except Refused as refused:
+            return json.dumps(refused.payload)
+        nodes = _gvml_freeform.read_nodes(_gvml_shapes.only_child(
+            _canvas.children(_canvas.parse(replaced.package.drawing())), "freeform"
+        ))
+    finally:
+        clip.restore()
+
+    body = {"success": True, "shape_name": replaced.name}
+    body.update(describe(old_path, new_path, nodes))
+    return json.dumps(with_warnings(body, clip, replaced.warnings))
+
+
+def _positions(nodes):
+    return [(n["x"], n["y"]) for n in nodes]
 
 
 # ---------------------------------------------------------------------------
@@ -206,39 +302,55 @@ def _get_shape_nodes_impl(slide_index, shape_name, shape_index):
 
 
 def _set_node_position_impl(slide_index, shape_name, shape_index, node_index, x, y):
-    """Refuse, because there is no node to move."""
-    return _refuse_for_node_tool(
-        "ppt_set_node_position",
-        slide_index, shape_name, shape_index,
-        f"node {node_index} cannot be moved, or found, or counted. Windows "
-        "calls Shape.Nodes.SetPosition for this.",
-    )
+    """Move one node and paste the path back.
+
+    An anchor takes the handles attached to it along, which is what dragging
+    a vertex in Edit Points does and what Windows means by adjacent control
+    points shifting; a control point moves alone. The returned position is
+    read back off the pasted shape.
+    """
+    def edit(path):
+        return _gvml_freeform.set_node_position(path, node_index, x, y)
+
+    def describe(_old, _new, nodes):
+        node = nodes[node_index - 1]
+        return {"node_index": node_index, "x": node["x"], "y": node["y"]}
+
+    return _edit_path("ppt_set_node_position", slide_index, shape_name, shape_index, edit, describe)
 
 
 def _insert_node_impl(slide_index, shape_name, shape_index, after_index, seg_int, et_int, x1, y1, x2, y2, x3, y3):
-    """Refuse, because there is nothing to insert into."""
-    return _refuse_for_node_tool(
-        "ppt_insert_node",
-        slide_index, shape_name, shape_index,
-        f"nothing can be inserted after node {after_index}. Windows calls "
-        "Shape.Nodes.Insert for this.",
-    )
+    """Add a segment after a vertex and paste the path back.
+
+    The segment that used to follow the vertex now starts at the new point,
+    so the outline gains one node for a line and three for a curve. An auto
+    curve's handles are chosen the way ``ppt_build_freeform`` chooses them.
+    """
+    def edit(path):
+        return _gvml_freeform.insert_node(path, after_index, seg_int, et_int, x1, y1, x2, y2, x3, y3)
+
+    def describe(_old, _new, nodes):
+        return {"new_node_count": len(nodes)}
+
+    return _edit_path("ppt_insert_node", slide_index, shape_name, shape_index, edit, describe)
 
 
 def _delete_node_impl(slide_index, shape_name, shape_index, node_index):
-    """Refuse, because there is no node to delete.
+    """Remove a node and the segment after it, and paste the path back.
 
-    A silent no-op would be at its worst here. This tool is destructive on
-    Windows, so a caller who believes it worked will go on to re-index the
-    remaining nodes against a path that never changed.
+    Deleting a control point deletes the whole Bézier segment, the other
+    control point and the end point with it, which is what the tool
+    promises on Windows; three nodes go, not two. The outline is either
+    rewritten whole or untouched: a paste that is dropped leaves the
+    original alone.
     """
-    return _refuse_for_node_tool(
-        "ppt_delete_node",
-        slide_index, shape_name, shape_index,
-        f"node {node_index} cannot be deleted. Windows calls "
-        "Shape.Nodes.Delete for this, and the outline is untouched here rather "
-        "than partly edited.",
-    )
+    def edit(path):
+        return _gvml_freeform.delete_node(path, node_index)
+
+    def describe(_old, _new, nodes):
+        return {"remaining_node_count": len(nodes)}
+
+    return _edit_path("ppt_delete_node", slide_index, shape_name, shape_index, edit, describe)
 
 
 def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index, et_int):
@@ -248,8 +360,7 @@ def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index
     the XML does either. ``a:custGeom`` stores points; corner, smooth and
     symmetric are what PowerPoint's UI calls the geometry of the two handles
     at a point, and there is no attribute to write one into. So this one
-    stays refused even now that the path can be rewritten through the
-    clipboard.
+    stays refused now that the path can be rewritten through the clipboard.
     """
     return _refuse_for_node_tool(
         "ppt_set_node_editing_type",
@@ -257,16 +368,35 @@ def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index
         f"the editing type of node {node_index} cannot be set. Nothing in the "
         "dictionary pairs with MsoEditingType, and the DrawingML the clipboard "
         "carries has no such attribute either: corner, smooth and symmetric "
-        "are read off the handle geometry, not stored. Move the handles "
-        "instead, once ppt_set_node_position is written for this platform.",
+        "are read off the handle geometry, not stored. Move the handles with "
+        "ppt_set_node_position instead; ppt_get_shape_nodes reports the type "
+        "the handles now make.",
     )
 
 
 def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg_int):
-    """Refuse, because a segment cannot yet be rewritten here."""
-    return _refuse_for_node_tool(
-        "ppt_set_segment_type",
-        slide_index, shape_name, shape_index,
-        f"the segment after node {node_index} cannot be switched between line "
-        "and curve. Nothing in the dictionary pairs with MsoSegmentType.",
-    )
+    """Switch the segment after a node between line and curve, and paste.
+
+    A new curve puts its handles a third and two thirds of the way along
+    the chord, so the outline does not move until a handle does. The node
+    count changes by two either way, and the note Windows adds is added.
+    """
+    def edit(path):
+        return _gvml_freeform.set_segment_type(path, node_index, seg_int)
+
+    def describe(old, new, nodes):
+        old_count = _gvml_freeform.node_count(old)
+        result = {
+            "node_index": node_index,
+            "segment_type": _gvml_freeform.SEGMENT_NAMES.get(seg_int, str(seg_int)),
+            "old_node_count": old_count,
+            "new_node_count": len(nodes),
+        }
+        if old_count != len(nodes):
+            result["note"] = (
+                "Node count changed — switching line↔curve adds or removes control-point nodes. "
+                "Re-call ppt_get_shape_nodes to see updated indices."
+            )
+        return result
+
+    return _edit_path("ppt_set_segment_type", slide_index, shape_name, shape_index, edit, describe)

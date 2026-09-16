@@ -87,18 +87,22 @@ _VALID_FILL_TYPES = {"solid", "none", "gradient"}
 # One sentence per direction, because the substitution does opposite things
 # and a reader was left working out which. Hiding a border is where the caveat
 # belongs; showing one has a different trap, a border of weight 0.
+# Short, because removing a border is an ordinary thing to do and this fires on
+# every shape that does it. Sixteen copies of a paragraph in one deck build was
+# the measurement that shortened it, and the caller can act on none of it: they
+# asked for no border and they have no border. What is worth the words is the
+# part that bites later, which is that PowerPoint's own flag is untouched.
+#
+# It says `line_visible`, which is the argument a caller passes, rather than
+# `visible`, which is what the plumbing underneath calls it. Naming a parameter
+# the caller never typed sends them looking for it.
 _LINE_VISIBILITY_WARNING = {
-    True: (
-        "PowerPoint for Mac's line format has no visible property, so "
-        "visible=True was applied as a weight and full opacity instead. The "
-        "border is drawn."
-    ),
+    True: "line_visible=True was applied as a weight and full opacity. The border is drawn.",
     False: (
-        "PowerPoint for Mac's line format has no visible property, so "
-        "visible=False was applied as weight 0 and full transparency instead. "
-        "The shape has no border to look at. PowerPoint's own no line flag is "
-        "untouched though, so setting a colour or a weight on it later will "
-        "make the border show again."
+        "line_visible=False was applied as weight 0 and full transparency, "
+        "because the line format here has no visible property. PowerPoint's "
+        "own no line flag is untouched, so a colour or weight set later brings "
+        "the border back."
     ),
 }
 
@@ -114,11 +118,10 @@ _LINE_VISIBILITY_WARNING = {
 # same person, and a first call answered with a pointer to something that was
 # never said to them. Now it is shorter, not partial.
 _LINE_VISIBILITY_WARNING_AGAIN = {
-    True: "visible=True was applied as a weight and full opacity. The border is drawn.",
+    True: "line_visible=True was applied as a weight and full opacity. The border is drawn.",
     False: (
-        "visible=False was applied as weight 0 and full transparency. The "
-        "shape has no border to look at, and a colour or weight set on it "
-        "later will bring one back."
+        "line_visible=False was applied as weight 0 and full transparency, "
+        "and a colour or weight set later brings the border back."
     ),
 }
 
@@ -227,7 +230,32 @@ def _shape_index(
     for position, name in enumerate(names, start=1):
         if name == identifier:
             return position
-    raise ValueError(f"Shape '{identifier}' not found on this slide.")
+
+    # A name that is not here is very often inside a group. Nothing addresses a
+    # group's children on this platform, so the honest thing is to say where to
+    # look rather than to say only that the name is absent. An agent that hit
+    # this spent eight calls working it out by ungrouping, and still could not
+    # finish, because ungrouping renames the children on the way out.
+    grouped = []
+    for position, name in enumerate(names, start=1):
+        try:
+            if slide.shapes[position].shape_type() == MsoShapeType[msoGroup]:
+                grouped.append(name)
+        except Exception:  # noqa: BLE001 - a shape that will not say is not one
+            continue
+    if grouped:
+        raise ValueError(
+            f"Shape '{identifier}' is not on this slide at the top level. "
+            f"It may be inside one of these groups: {', '.join(grouped)}. "
+            "Nothing reaches a group's children by name here; "
+            "ppt_get_group_items lists them, and ppt_ungroup_shapes is the "
+            "only way to edit one, though it renames the children as it goes. "
+            f"On the slide itself: {', '.join(names) if names else 'nothing'}."
+        )
+    raise ValueError(
+        f"Shape '{identifier}' not found on this slide. "
+        f"On the slide: {', '.join(names) if names else 'nothing'}."
+    )
 
 
 def _get_shape(

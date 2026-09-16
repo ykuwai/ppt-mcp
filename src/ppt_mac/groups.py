@@ -215,10 +215,23 @@ def _ungroup_shapes_impl(slide_index, shape_name_or_index):
         )
 
     members = [name for name in after if name not in before]
+
+    # PowerPoint renames the members on the way out, and every tool here tells
+    # callers to address shapes by name rather than index because indices
+    # shift. So a caller who noted the names before ungrouping finds none of
+    # them afterwards, and the ones it hands back are the only ones that work.
+    # Pictures move furthest: one went from `Picture 17` to `Picture 42` to
+    # `Picture 54` across two rounds, and on a Japanese system text boxes come
+    # back as `テキスト ボックス 18`.
     return {
         "success": True,
         "ungrouped_count": len(members),
         "shape_names": members,
+        "warnings": [
+            "PowerPoint renamed the members as it ungrouped them, so any name "
+            "noted before this call no longer matches anything. Use the names "
+            "in shape_names. Grouping them again renames them once more."
+        ],
     }
 
 

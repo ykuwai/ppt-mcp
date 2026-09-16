@@ -43,10 +43,24 @@ def int_to_rgb(color_int: int) -> tuple[int, int, int]:
 
 def hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
     """Convert a hex color string (#RRGGBB or RRGGBB) to (R, G, B) tuple."""
+    raw = hex_str
     hex_str = hex_str.lstrip("#")
     if len(hex_str) == 3:
         hex_str = "".join(c * 2 for c in hex_str)
     if len(hex_str) != 6:
+        # A theme name is the likeliest thing to arrive here, because the
+        # instructions tell callers to use the deck's accent colours and only
+        # some tools take one by name. `Invalid hex color: #accent1` sends
+        # nobody anywhere, so say where the number lives.
+        if raw.lower().replace(" ", "_").replace("-", "_") in THEME_COLOR_MAP:
+            raise ValueError(
+                f"'{raw}' is a theme colour name, and this argument takes a "
+                "hex value like '#156082'. Read the deck's own value from "
+                "ppt_get_presentation_info, which returns accent_colors as "
+                "hex. The arguments that take a name instead are "
+                "ppt_format_text's font_color_theme and ppt_add_svg_icon's "
+                "color."
+            )
         raise ValueError(f"Invalid hex color: #{hex_str}")
     return (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
 

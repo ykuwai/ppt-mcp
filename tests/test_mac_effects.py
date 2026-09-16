@@ -288,11 +288,13 @@ class TestUngrouping:
             deck.make_group("Diagram", ["Box", "Circle"], comes_apart=True)
             result = _ungroup_shapes_impl(1, "Diagram")
 
-        assert result == {
-            "success": True,
-            "ungrouped_count": 2,
-            "shape_names": ["Box", "Circle"],
-        }
+        assert result["success"] is True
+        assert result["ungrouped_count"] == 2
+        assert result["shape_names"] == ["Box", "Circle"]
+        # PowerPoint renames the members on the way out, and every tool here
+        # tells callers to use names because indices shift. A caller who noted
+        # the names before this call finds none of them afterwards.
+        assert "renamed the members" in result["warnings"][0]
 
     def test_a_group_that_stays_put_is_a_refusal_not_a_success(self):
         from ppt_mac.groups import _ungroup_shapes_impl

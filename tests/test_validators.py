@@ -3648,3 +3648,34 @@ class TestOpenPresentationInputActivate:
     def test_unknown_field_rejected(self):
         with pytest.raises(ValidationError):
             OpenPresentationInput(file_path="C:/x.pptx", activte=True)  # typo
+
+
+class TestAThemeNameWhereAHexBelongs:
+    """`Invalid hex color: #accent1` sent nobody anywhere.
+
+    The server's own instructions tell callers to use the deck's accent
+    colours rather than hardcoded RGB, and only two arguments take one by
+    name. An agent building a deck wrote the same hex twenty-five times for
+    want of knowing where the number lived.
+    """
+
+    def test_a_theme_name_is_told_where_its_hex_lives(self):
+        from utils.color import hex_to_rgb
+
+        with pytest.raises(ValueError) as caught:
+            hex_to_rgb("accent1")
+        said = str(caught.value)
+        assert "theme colour name" in said
+        assert "ppt_get_presentation_info" in said
+        assert "font_color_theme" in said
+
+    def test_a_real_hex_is_untouched(self):
+        from utils.color import hex_to_rgb
+
+        assert hex_to_rgb("#156082") == (21, 96, 130)
+
+    def test_nonsense_is_still_nonsense(self):
+        from utils.color import hex_to_rgb
+
+        with pytest.raises(ValueError, match="Invalid hex color"):
+            hex_to_rgb("nonsense")

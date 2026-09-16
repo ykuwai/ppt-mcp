@@ -217,7 +217,11 @@ class TestLineVisibility:
         assert deck.shape("Box").line_format.transparency() == 1.0
         assert result["status"] == "success"
         assert "no visible property" in result["warnings"][0]
-        assert "make the border show again" in result["warnings"][0]
+        # The part worth the words: the flag PowerPoint reads is untouched, so
+        # setting a colour later undoes this without the caller asking.
+        assert "brings the border back" in result["warnings"][0]
+        # Named as the caller passes it, not as the plumbing calls it.
+        assert "line_visible" in result["warnings"][0]
 
     def test_it_says_which_way_round_the_substitution_went(self):
         """One sentence for hiding and another for showing.
@@ -230,7 +234,7 @@ class TestLineVisibility:
         hiding = _LINE_VISIBILITY_WARNING[False]
         showing = _LINE_VISIBILITY_WARNING[True]
 
-        assert "no border to look at" in hiding
+        assert "weight 0 and full transparency" in hiding
         assert "The border is drawn." in showing
         assert hiding != showing
 
@@ -1503,3 +1507,41 @@ class TestAnEmptyDeckAndADeadReference:
 
         with pytest.raises(ValueError, match="out of range"):
             mac_ae.slide_at(_Empty(), 1)
+
+
+class TestABatchOperationSaysWhatItCannotTake:
+    """Runs on both platforms: the dispatch is shared, and so was the bug.
+
+    Pydantic drops unknown keys, so a batch `format_text` given `font_color`
+    applied nothing and answered `"status": "success"`. `font_color` is what
+    `ppt_add_shape` and `ppt_add_textbox` call it; this one calls it `color`.
+    An agent building a deck hit exactly that, and only caught it by looking at
+    the slide afterwards.
+    """
+
+    def test_a_sibling_tools_name_is_refused_and_translated(self):
+        from ppt_com.batch_apply import _dispatch_op
+
+        with pytest.raises(ValueError) as caught:
+            _dispatch_op(1, "Card", "format_text", {"font_color": "#FFFFFF"})
+
+        said = str(caught.value)
+        assert "does not take 'font_color'" in said
+        assert "did you mean 'color'" in said, "the near miss guessed wrong"
+        assert "Nothing was applied" in said
+
+    def test_a_plain_typo_still_gets_a_guess(self):
+        from ppt_com.batch_apply import _dispatch_op
+
+        with pytest.raises(ValueError) as caught:
+            _dispatch_op(1, "Card", "format_text", {"colour": "red"})
+        assert "did you mean 'color'" in str(caught.value)
+
+    def test_the_arguments_it_does_take_are_listed(self):
+        from ppt_com.batch_apply import _dispatch_op
+
+        with pytest.raises(ValueError) as caught:
+            _dispatch_op(1, "Card", "set_line", {"line_visible": False})
+        said = str(caught.value)
+        assert "did you mean 'visible'" in said
+        assert "It takes: color, dash_style, transparency, visible, weight." in said

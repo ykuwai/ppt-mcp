@@ -37,6 +37,11 @@ from typing import Any, Callable, Optional
 from appscript import app, its, k, mactypes  # noqa: F401  (re-exported for tools)
 from appscript.reference import CommandError, Reference
 
+# Only for the cancellation contract. `utils.com_wrapper` imports nothing from
+# this package, so this direction is safe, and the module is importable on any
+# platform because of the guard at its top (#185).
+from utils.com_wrapper import pending_com_futures
+
 logger = logging.getLogger(__name__)
 
 BUNDLE_ID = "com.microsoft.Powerpoint"
@@ -296,7 +301,7 @@ class _Job:
 
     __slots__ = (
         "func", "args", "kwargs", "idempotent",
-        "future", "started", "_lock", "_dropped",
+        "future", "started", "settled", "_lock", "_dropped",
     )
 
     def __init__(self, func: Callable, args: tuple, kwargs: dict,
@@ -307,6 +312,12 @@ class _Job:
         self.idempotent = idempotent
         self.future: Future = Future()
         self.started = threading.Event()
+        # Set by whichever of claim and drop gets there first, so the caller
+        # waiting in the queue is woken by either outcome. Waiting on `started`
+        # alone meant a job taken back was correctly discarded and its caller
+        # still sat there for the whole queue budget, holding a thread out of
+        # the pool that everything else shares.
+        self.settled = threading.Event()
         self._lock = threading.Lock()
         self._dropped = False
 
@@ -316,7 +327,13 @@ class _Job:
             if self._dropped:
                 return False
             self.started.set()
+            self.settled.set()
             return True
+
+    @property
+    def dropped(self) -> bool:
+        with self._lock:
+            return self._dropped
 
     def drop(self) -> bool:
         """Caller side. True when the job was taken back before it began."""
@@ -324,7 +341,19 @@ class _Job:
             if self.started.is_set():
                 return False
             self._dropped = True
-            return True
+        self.settled.set()
+        return True
+
+    def cancel(self) -> bool:
+        """`drop` under the name `utils.com_wrapper.QueuedCalls` calls.
+
+        That class holds whatever a request has queued and calls `.cancel()`
+        on each of it when the caller goes away. On Windows those are COM
+        futures; here they are jobs, and taking one back before the worker
+        claims it is the same promise. A job already running is not recalled,
+        which is the honest outcome for an Apple Event in flight.
+        """
+        return self.drop()
 
 
 class PowerPointAppleEventWrapper:
@@ -484,12 +513,23 @@ class PowerPointAppleEventWrapper:
         job = _Job(func, args, kwargs, idempotent)
         self._queue.put(job)
 
+        # Register with whatever is watching this request, so that a caller who
+        # goes away takes its queued work with it. `utils.offload` puts a
+        # `QueuedCalls` here for the duration of a tool call and cancels it on
+        # the way out. Without this macOS got half of #198 and #199: the event
+        # loop stayed free, but a cancelled request's queue still ran, minutes
+        # later, against a deck that had moved on. Nobody is watching for
+        # internal callers, and then this does nothing.
+        watcher = pending_com_futures.get()
+        if watcher is not None:
+            watcher.add(job)
+
         # Two waits, not one. The first is for the queue, and it is the caller's
         # to abandon; the second is for PowerPoint, and it starts only once the
         # work does. Timing both together used to charge a call for the time it
         # spent in line, which is how a handful of parallel tool calls made the
         # ones at the back fail while their work went ahead regardless.
-        if not job.started.wait(timeout=_QUEUE_WAIT):
+        if not job.settled.wait(timeout=_QUEUE_WAIT):
             if job.drop():
                 raise AppleEventError(
                     f"PowerPoint was still busy with an earlier request after "
@@ -500,6 +540,15 @@ class PowerPointAppleEventWrapper:
                     "the same turn."
                 )
             # It started while that was being decided, so wait for it properly.
+        elif job.dropped:
+            # Cancelled from outside while it sat in the queue. The work is
+            # discarded either way; returning now is what frees this thread,
+            # which is the whole reason `settled` exists.
+            raise AppleEventError(
+                "The request that queued this call was cancelled before "
+                "PowerPoint reached it, so it was discarded. Nothing was "
+                "changed."
+            )
 
         try:
             return job.future.result(timeout=_CALL_BUDGET)
