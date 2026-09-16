@@ -228,7 +228,7 @@ def read_windows_constants():
     sections = {}
     current = None
     banner = False
-    for line in CONSTANTS.read_text().splitlines():
+    for line in CONSTANTS.read_text(encoding="utf-8").splitlines():
         if line.startswith("# ====="):
             # Titles sit between two rules, so only the line after the opening
             # one is a title; the closing rule just re-arms the flag.
@@ -270,7 +270,7 @@ def read_name_maps():
     """
     sections = {}
     for enum_name, (relative, map_name) in NAME_MAPS.items():
-        source = (ROOT / "src" / relative).read_text()
+        source = (ROOT / "src" / relative).read_text(encoding="utf-8")
         match = re.search(
             r"^{}(?:\s*:[^=]+)?\s*=\s*\{{(.*?)^\}}".format(re.escape(map_name)),
             source,

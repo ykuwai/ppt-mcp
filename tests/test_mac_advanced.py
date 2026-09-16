@@ -340,7 +340,7 @@ class TestStaging:
         rendered = []
 
         def fake_render(svg_path, png_path, pixels):
-            rendered.append((open(svg_path).read(), pixels))
+            rendered.append((open(svg_path, encoding="utf-8").read(), pixels))
             with open(png_path, "wb") as handle:
                 handle.write(b"\x89PNG\r\n\x1a\n")
             return True

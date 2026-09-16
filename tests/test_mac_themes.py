@@ -384,7 +384,7 @@ class TestTheDocumentedRefusalsMatchTheCode:
 
         found = set()
         for path in sorted(pathlib.Path("src/ppt_mac").glob("*.py")):
-            text = path.read_text()
+            text = path.read_text(encoding="utf-8")
             for node in ast.parse(text).body:
                 if not isinstance(node, ast.FunctionDef):
                     continue
@@ -411,7 +411,7 @@ class TestTheDocumentedRefusalsMatchTheCode:
         import pathlib
         import re
 
-        doc = pathlib.Path("MACOS_PORT.md").read_text()
+        doc = pathlib.Path("MACOS_PORT.md").read_text(encoding="utf-8")
         section = doc[doc.index("### 6.1 Every tool that refuses"):]
         section = section[:section.index("A further")]
         documented = set(re.findall(r"`(ppt_[a-z_]+)`", section))
@@ -423,7 +423,7 @@ class TestTheDocumentedRefusalsMatchTheCode:
         import pathlib
         import re
 
-        doc = pathlib.Path("MACOS_PORT.md").read_text()
+        doc = pathlib.Path("MACOS_PORT.md").read_text(encoding="utf-8")
         stated = re.search(
             r"\*\*(\d+) tools\. (\d+) do the job\. (\d+) always refuse\.\*\*", doc
         )
@@ -431,7 +431,7 @@ class TestTheDocumentedRefusalsMatchTheCode:
         total = sum(
             1
             for path in pathlib.Path("src/ppt_mac").glob("*.py")
-            for node in ast.parse(path.read_text()).body
+            for node in ast.parse(path.read_text(encoding="utf-8")).body
             if isinstance(node, ast.FunctionDef) and node.name.endswith("_impl")
         )
         refusing = len(self._always_refusing())
@@ -524,7 +524,7 @@ class TestEveryMacTestSaysItIsAMacTest:
 
         found = []
         for path in sorted(pathlib.Path("tests").glob("test_mac_*.py")):
-            text = path.read_text()
+            text = path.read_text(encoding="utf-8")
             for node in ast.parse(text).body:
                 if not isinstance(node, ast.ClassDef):
                     continue
@@ -566,7 +566,7 @@ class TestBothReadmesCountTheSame:
         import pathlib
         import re
 
-        doc = pathlib.Path("MACOS_PORT.md").read_text()
+        doc = pathlib.Path("MACOS_PORT.md").read_text(encoding="utf-8")
         stated = re.search(
             r"\*\*(\d+) tools\. (\d+) do the job\. (\d+) always refuse\.\*\*", doc
         )
@@ -578,7 +578,7 @@ class TestBothReadmesCountTheSame:
         import re
 
         refusing = self._documented_refusals()
-        text = pathlib.Path("README.md").read_text()
+        text = pathlib.Path("README.md").read_text(encoding="utf-8")
         said = re.search(r"\*\*(\d+) tools refuse on macOS", text)
         assert said, "README.md no longer says how many refuse"
         assert int(said.group(1)) == refusing
@@ -588,7 +588,7 @@ class TestBothReadmesCountTheSame:
         import re
 
         refusing = self._documented_refusals()
-        text = pathlib.Path("README_ja.md").read_text()
+        text = pathlib.Path("README_ja.md").read_text(encoding="utf-8")
         said = re.search(r"\*\*macOS で断るツールは (\d+) です", text)
         assert said, "README_ja.md no longer says how many refuse"
         assert int(said.group(1)) == refusing
