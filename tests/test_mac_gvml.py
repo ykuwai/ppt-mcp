@@ -663,6 +663,93 @@ class TestChartEditors:
 
 
 # ---------------------------------------------------------------------------
+# A call that asks for nothing
+# ---------------------------------------------------------------------------
+@macos_only
+class TestACallThatAsksForNothing:
+    """Three of the editors have nothing but optional arguments. A call that
+    leaves them all out is a success on Windows, where no argument means no
+    property set, and it must cost the chart nothing here either. Replacing
+    the chart is how macOS edits one, and it loses the animations on it, so a
+    call with nothing to write stops after the copy."""
+
+    def test_format_chart_with_no_argument_leaves_the_chart_standing(self):
+        from ppt_mac.charts import _NOTHING_ASKED, _format_chart_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))], effects=["Sales"]) as deck:
+            before = deck.shapes[0]
+            result = _format_chart_impl(1, "Sales", *([None] * 10))
+
+        assert {k: v for k, v in result.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Sales", "has_title": False,
+            "has_legend": True, "note": _NOTHING_ASKED,
+        }
+        # The same object, with the same XML and its animation still on it.
+        assert deck.shapes == [before]
+        assert deck.shapes[0].package == _fixture_bytes("chart")
+        assert deck.order == ["snapshot", "copy", "claim", "restore"]
+
+    def test_format_chart_axis_with_no_argument_applies_nothing(self):
+        from ppt_mac.charts import _NOTHING_ASKED, _format_chart_axis_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            result = _format_chart_axis_impl(1, "Sales", "value", *([None] * 14))
+
+        assert {k: v for k, v in result.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Sales", "axis": "value", "applied": [],
+            "note": _NOTHING_ASKED,
+        }
+        assert "paste" not in deck.order
+
+    def test_set_chart_series_with_no_argument_changes_no_series(self):
+        from ppt_mac.charts import _NOTHING_ASKED, _set_chart_series_impl
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            result = _set_chart_series_impl(1, "Sales", 2, None, None, None)
+
+        assert {k: v for k, v in result.items() if k != "warnings"} == {
+            "success": True, "shape_name": "Sales", "series_index": 2, "note": _NOTHING_ASKED,
+        }
+        assert "paste" not in deck.order
+
+    def test_the_target_is_still_checked_so_windows_still_raises(self):
+        """The copy is what finds out whether the axis or the series is
+        there, so the shortcut keeps it rather than answering from the
+        arguments alone."""
+        from ppt_mac.charts import (
+            _change_chart_type_impl, _format_chart_axis_impl, _set_chart_series_impl,
+        )
+
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            with pytest.raises(ValueError, match="series_index 7 out of range"):
+                _set_chart_series_impl(1, "Sales", 7, None, None, None)
+            _change_chart_type_impl(1, "Sales", "pie")
+            with pytest.raises(ValueError, match="Axis 'value' is not available"):
+                _format_chart_axis_impl(1, "Sales", "value", *([None] * 14))
+
+        assert deck.order.count("paste") == 1
+
+    @pytest.mark.parametrize("call,field", [
+        (lambda impl: impl["format"](1, "Sales", None, False, *([None] * 8)), "has_legend"),
+        (lambda impl: impl["axis"](1, "Sales", "value", *([None] * 9), False, *([None] * 4)), "log_scale"),
+        (lambda impl: impl["series"](1, "Sales", 1, None, False, None), "show_data_labels"),
+    ])
+    def test_an_argument_that_is_false_is_still_an_argument(self, call, field):
+        """False is a request, not a missing one, so these do replace the chart."""
+        from ppt_mac.charts import (
+            _format_chart_axis_impl, _format_chart_impl, _set_chart_series_impl,
+        )
+
+        impl = {"format": _format_chart_impl, "axis": _format_chart_axis_impl,
+                "series": _set_chart_series_impl}
+        with _fake_deck(shapes=[("Sales", "chart", _fixture_bytes("chart"))]) as deck:
+            result = call(impl)
+
+        assert result["success"] is True and "note" not in result
+        assert deck.order.count("paste") == 1, field
+
+
+# ---------------------------------------------------------------------------
 # The four freeform editors
 # ---------------------------------------------------------------------------
 @macos_only

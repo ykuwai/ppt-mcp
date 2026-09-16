@@ -26,7 +26,9 @@ original, read back to confirm the change is in it, and only then is the
 original deleted and the new chart walked back to the original's z order.
 The chart that results is a new object with the old name. The caller is told
 so in ``warnings``, along with how many animation effects went with the
-original, because the package does not carry them (design section 4).
+original, because the package does not carry them (design section 4). A call
+that left every optional argument out is not worth that price, so it stops
+after the copy and says in ``note`` that the chart still stands.
 
 ``ppt_format_chart`` and ``ppt_format_chart_axis`` take the arguments that
 are one element or one attribute in the XML and refuse the rest by name,
@@ -127,6 +129,16 @@ _LEGEND_DIRECTIONS = {
     "bottom-left", "bottom-center", "bottom-right",
 }
 
+# What a call that left every optional argument out is told. It is a success,
+# because it is one on Windows too, where no argument means no property set;
+# the sentence is here so nobody reads the success as work done.
+_NOTHING_ASKED = (
+    "No optional argument was given, so nothing was changed. On macOS this "
+    "tool rewrites a chart by replacing it, which would cost the chart its "
+    "animations, and a call that asks for nothing is not worth that. The "
+    "chart is the object it was."
+)
+
 _FORMAT_AXIS_UNMAPPED = {
     "tick_label_font_size": "the tick labels' text properties are a whole `c:txPr` block, not one attribute",
 }
@@ -164,7 +176,8 @@ def _refuse_arguments(tool_name, given: dict, table: dict):
     )
 
 
-def _edit_chart(tool_name, slide_index, shape_name_or_index, edit, verify, describe):
+def _edit_chart(tool_name, slide_index, shape_name_or_index, edit, verify, describe,
+                requested=True):
     """Copy the chart, rewrite its XML with ``edit``, paste it back, check it.
 
     ``edit(chart_bytes) -> (chart_bytes, state)`` does the rewrite and may
@@ -173,6 +186,13 @@ def _edit_chart(tool_name, slide_index, shape_name_or_index, edit, verify, descr
     state) -> problem or None`` says whether the chart PowerPoint pasted
     carries the change. ``describe(readback_bytes, state) -> dict`` builds
     the success body, minus ``shape_name`` and ``warnings``.
+
+    ``requested`` is False when every optional argument was left out. Such a
+    call still copies the chart, because ``edit`` is what finds out whether
+    the axis or the series it names is there at all, and Windows raises for
+    one that is not. What it does not do is paste the chart back; replacing
+    a chart costs it its animations and makes a new object of it, which is
+    a high price for a call that asked for nothing.
     """
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
@@ -182,6 +202,7 @@ def _edit_chart(tool_name, slide_index, shape_name_or_index, edit, verify, descr
     left, top = shape.left_position(), shape.top()
 
     clip = Clipboard.take()
+    kept = None
     try:
         try:
             package = copy_shape_package(shape, clip, tool_name)
@@ -205,30 +226,40 @@ def _edit_chart(tool_name, slide_index, shape_name_or_index, edit, verify, descr
                 f"rewritten: {exc}. Nothing was changed.",
                 _SHAPE_TOOLS,
             )
-        chart_part = package.chart_part()
-        package.parts[chart_part] = new_bytes
-        # A workbook the chart no longer matches is let go of; PowerPoint
-        # pastes a chart without one (design section 0).
-        workbook_id = _gvml_charts.external_data_id(chart_bytes)
-        if workbook_id is not None and _gvml_charts.external_data_id(new_bytes) is None:
-            package.remove_relationship(chart_part, workbook_id)
-        strip_ids(package)
+        if not requested:
+            # Whatever the call names is there, and nothing was asked of it.
+            # The chart stays the object it was, animations and all.
+            kept = new_bytes
+        else:
+            chart_part = package.chart_part()
+            package.parts[chart_part] = new_bytes
+            # A workbook the chart no longer matches is let go of; PowerPoint
+            # pastes a chart without one (design section 0).
+            workbook_id = _gvml_charts.external_data_id(chart_bytes)
+            if workbook_id is not None and _gvml_charts.external_data_id(new_bytes) is None:
+                package.remove_relationship(chart_part, workbook_id)
+            strip_ids(package)
 
-        def check(readback):
-            chart = readback.chart()
-            if chart is None:
-                return "the pasted shape's package holds no chart part"
-            return verify(chart, state)
+            def check(readback):
+                chart = readback.chart()
+                if chart is None:
+                    return "the pasted shape's package holds no chart part"
+                return verify(chart, state)
 
-        try:
-            replaced = replace_shape(
-                pres, slide, slide_index, index, package.to_bytes(), clip, tool_name,
-                MsoShapeType[msoChart], left, top, "chart", check, _EDIT_ALTERNATIVES,
-            )
-        except Refused as refused:
-            return refused.payload
+            try:
+                replaced = replace_shape(
+                    pres, slide, slide_index, index, package.to_bytes(), clip, tool_name,
+                    MsoShapeType[msoChart], left, top, "chart", check, _EDIT_ALTERNATIVES,
+                )
+            except Refused as refused:
+                return refused.payload
     finally:
         clip.restore()
+
+    if kept is not None:
+        body = {"success": True, "shape_name": name, "note": _NOTHING_ASKED}
+        body.update(describe(kept, state))
+        return with_warnings(body, clip)
 
     body = {"success": True, "shape_name": replaced.name}
     body.update(describe(replaced.package.chart(), state))
@@ -429,7 +460,10 @@ def _format_chart_impl(
         got = _gvml_charts.chart_summary(readback)
         return {"has_title": got["has_title"], "has_legend": got["has_legend"]}
 
-    return _edit_chart("ppt_format_chart", slide_index, shape_name_or_index, edit, verify, describe)
+    return _edit_chart(
+        "ppt_format_chart", slide_index, shape_name_or_index, edit, verify, describe,
+        requested=any(v is not None for v in (title, has_legend, legend_position)),
+    )
 
 
 def _format_chart_axis_impl(
@@ -501,7 +535,10 @@ def _format_chart_axis_impl(
     def describe(_readback, state):
         return {"axis": axis_key, "applied": state[0]}
 
-    return _edit_chart("ppt_format_chart_axis", slide_index, shape_name_or_index, edit, verify, describe)
+    return _edit_chart(
+        "ppt_format_chart_axis", slide_index, shape_name_or_index, edit, verify, describe,
+        requested=any(v is not None for v in fields.values()),
+    )
 
 
 def _set_chart_series_impl(
@@ -530,7 +567,10 @@ def _set_chart_series_impl(
     def describe(_readback, _wanted):
         return {"series_index": series_index}
 
-    return _edit_chart("ppt_set_chart_series", slide_index, shape_name_or_index, edit, verify, describe)
+    return _edit_chart(
+        "ppt_set_chart_series", slide_index, shape_name_or_index, edit, verify, describe,
+        requested=any(v is not None for v in (color, show_data_labels, line_weight)),
+    )
 
 
 def _change_chart_type_impl(slide_index, shape_name_or_index, chart_type):
