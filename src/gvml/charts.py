@@ -734,6 +734,15 @@ def set_type(chart_xml_bytes: bytes, type_int: int) -> bytes:
     kind can keep (a category and a value axis) are kept with everything set
     on them; a kind that needs different axes (pie none, scatter two value
     axes, 3D line a series axis) gets fresh ones.
+
+    A combo chart holds more than one plot group, a bar one and a line one
+    over a secondary axis, say. Every group's series comes across, in the
+    order the plot area holds them, which is the order ``read_chart``
+    reports and the order the caller saw. The secondary axis itself goes,
+    because one plot has one pair, but no series goes with it. What cannot
+    come across is a group plotted against category labels of its own,
+    since a single plot carries one set of them, and that is refused by
+    name rather than quietly relabelled.
     """
     spec = SPECS.get(type_int)
     if spec is None:
@@ -748,15 +757,28 @@ def set_type(chart_xml_bytes: bytes, type_int: int) -> bytes:
     if not plots:
         raise PackageError("chart1.xml has no plot to change the kind of")
     old_plot = plots[0]
-    old_sers = old_plot.findall(f"{_C}ser")
+    old_sers = _all_series(plot_area)
     if not old_sers:
-        raise PackageError("the chart's first plot holds no series")
+        raise PackageError("the chart's plot holds no series")
 
     series = [_series_data(s) for s in old_sers]
-    cats = _cache_values(old_sers[0].find(f"{_C}cat"), numeric=False)
+    labels = [_cache_values(s.find(f"{_C}cat"), numeric=False) for s in old_sers]
+    cats = next((c for c in labels if c), [])
+    if len(plots) > 1:
+        # One plot carries one set of category labels, so a group plotted
+        # against its own cannot be carried over; say which series rather
+        # than relabel it or leave it behind.
+        odd = [s for s, c in zip(series, labels) if c and c != cats]
+        if odd:
+            raise PackageError(
+                "the chart plots " + ", ".join(f"'{s['name']}'" for s in odd)
+                + " against categories of its own, and one plot carries one "
+                "set of category labels, so the series cannot be carried "
+                "across without relabelling it"
+            )
     if not cats:
         cats = _cache_values(old_sers[0].find(f"{_C}xVal"), numeric=True)
-    n = len(series[0]["values"])
+    n = max(len(s["values"]) for s in series)
     cats = list(cats) + [None] * (n - len(cats))
     if spec.kind in ("scatter", "bubble"):
         numeric_cats = []
@@ -790,7 +812,8 @@ def set_type(chart_xml_bytes: bytes, type_int: int) -> bytes:
         if child is old_plot or (child in first_axes and not keep_axes):
             plot_area.remove(child)
     for plot in plots[1:]:
-        # A second plot group (a secondary axis) has no place on the new kind.
+        # A second plot group has no place on the new kind; its series are
+        # already in the new plot and only the empty group goes.
         plot_area.remove(plot)
     for axis in old_axes:
         if axis not in first_axes:

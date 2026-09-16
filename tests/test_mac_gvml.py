@@ -587,6 +587,47 @@ class TestChartEditors:
         assert charts.kind_of(Package.from_bytes(deck.shapes[0].package).chart()) == "pieChart"
         assert data["series"][0]["values"] == [4.3, 2.5, 3.5, 4.5]
 
+    def test_a_combo_chart_changes_kind_with_all_of_its_series(self):
+        """Two plot groups, one over a secondary axis. The series of both
+        have to arrive in the new plot, or the read-back check sees series
+        go missing, takes the pasted chart away again and refuses."""
+        from conftest import combo_chart_xml
+        from gvml import Package, charts
+
+        from ppt_mac.charts import _change_chart_type_impl, _get_chart_data_impl
+
+        package = Package.from_bytes(_fixture_bytes("chart"))
+        package.parts[package.chart_part()] = combo_chart_xml(package.chart())
+        with _fake_deck(shapes=[("Sales", "chart", package.to_bytes())]) as deck:
+            result = _change_chart_type_impl(1, "Sales", "line")
+            data = _get_chart_data_impl(1, "Sales")
+
+        assert result["success"] is True and result["new_chart_type"] == "line"
+        assert [s["name"] for s in data["series"]] == ["Series 1", "Series 2", "Series 3"]
+        assert charts.kind_of(Package.from_bytes(deck.shapes[0].package).chart()) == "lineChart"
+
+    def test_a_combo_chart_whose_groups_disagree_is_refused_by_name(self):
+        from conftest import combo_chart_xml
+        from gvml import Package, charts
+
+        from ppt_mac.charts import _change_chart_type_impl
+
+        package = Package.from_bytes(_fixture_bytes("chart"))
+        root = charts.load(combo_chart_xml(package.chart()))
+        c = f"{{{charts.NS_C}}}"
+        cats = root.find(f"{c}chart/{c}plotArea/{c}lineChart/{c}ser/{c}cat")
+        for i, pt in enumerate(cats.iter(f"{c}pt")):
+            pt.find(f"{c}v").text = f"Week {i + 1}"
+        package.parts[package.chart_part()] = charts.dump(root)
+        before = package.to_bytes()
+        with _fake_deck(shapes=[("Sales", "chart", before)]) as deck:
+            payload = _change_chart_type_impl(1, "Sales", "line")
+
+        assert "success" not in payload
+        assert "'Series 3' against categories of its own" in payload["reason"]
+        assert "paste" not in deck.order
+        assert deck.shapes[0].package == before
+
     def test_format_chart(self):
         from ppt_mac.charts import _format_chart_impl
 

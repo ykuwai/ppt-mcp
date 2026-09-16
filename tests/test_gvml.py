@@ -489,6 +489,15 @@ def chart_bytes():
     return fixture("chart").chart()
 
 
+def combo_bytes():
+    """The recorded chart with its third series lifted into a second plot
+    group over a secondary value axis. Built in ``conftest`` because the
+    macOS tests need the same chart."""
+    from conftest import combo_chart_xml
+
+    return combo_chart_xml(chart_bytes())
+
+
 def _children(element):
     return [_local(c.tag) for c in element]
 
@@ -618,6 +627,71 @@ class TestChartTypeIsSwappedUnderTheData:
     def test_a_kind_without_a_template_is_named(self):
         with pytest.raises(charts.ChartTypeError, match="-4100"):
             charts.set_type(chart_bytes(), -4100)
+
+
+class TestAComboChartKeepsEveryGroupsSeries:
+    """Two plot groups, the second over a secondary axis. The new kind has
+    one plot, so every group's series goes into it; the secondary axis is
+    what leaves, not the data plotted against it."""
+
+    def test_the_fixture_is_a_combo_chart_with_a_secondary_axis(self):
+        combo = combo_bytes()
+        plot_area = ET.fromstring(combo).find(f"{C}chart/{C}plotArea")
+        assert _children(plot_area) == [
+            "layout", "barChart", "lineChart", "catAx", "valAx", "valAx", "catAx",
+        ]
+        assert charts.read_axis(combo, "secondary_value") is not None
+        assert charts.series_count(combo) == 3
+
+    @pytest.mark.parametrize("type_int,kind", [(4, "lineChart"), (57, "barChart")])
+    def test_every_series_arrives_in_the_new_plot_in_the_same_order(self, type_int, kind):
+        combo = combo_bytes()
+        out = charts.set_type(combo, type_int)
+        assert charts.kind_of(out) == kind
+        # The order read_chart reports is the order the caller saw, and the
+        # order ppt_change_chart_type's read-back check compares against.
+        assert charts.read_chart(out) == charts.read_chart(combo)
+        plot_area = ET.fromstring(out).find(f"{C}chart/{C}plotArea")
+        assert _children(plot_area) == ["layout", kind, "catAx", "valAx"]
+        assert len(plot_area.find(f"{C}{kind}").findall(f"{C}ser")) == 3
+        # One plot, one pair of axes, so the secondary pair goes.
+        assert charts.read_axis(out, "secondary_value") is None
+        assert [s.get("val") for s in plot_area.find(f"{C}{kind}").findall(f"{C}axId")] == ["10", "20"]
+
+    def test_the_series_are_renumbered_from_nothing(self):
+        out = charts.set_type(combo_bytes(), 4)
+        sers = list(ET.fromstring(out).iter(f"{C}ser"))
+        assert [s.find(f"{C}idx").get("val") for s in sers] == ["0", "1", "2"]
+        assert [s.find(f"{C}order").get("val") for s in sers] == ["0", "1", "2"]
+
+    def test_a_pie_takes_every_group_too_and_loses_the_axes(self):
+        out = charts.set_type(combo_bytes(), 5)
+        assert [s["name"] for s in charts.read_chart(out)["series"]] == [
+            "Series 1", "Series 2", "Series 3",
+        ]
+        assert _children(ET.fromstring(out).find(f"{C}chart/{C}plotArea")) == ["layout", "pieChart"]
+
+    def test_a_longer_series_in_the_second_group_keeps_its_points(self):
+        root = charts.load(combo_bytes())
+        cache = root.find(f"{C}chart/{C}plotArea/{C}lineChart/{C}ser/{C}val/{C}numRef/{C}numCache")
+        cache.find(f"{C}ptCount").set("val", "5")
+        cache.append(ET.fromstring(f'<c:pt xmlns:c="{charts.NS_C}" idx="4"><c:v>9</c:v></c:pt>'))
+        out = charts.set_type(charts.dump(root), 4)
+        got = charts.read_chart(out)
+        assert got["series"][2]["values"] == [2.0, 2.0, 3.0, 5.0, 9.0]
+        # The categories stretch to the longest series rather than cutting it.
+        assert got["categories"] == ["Category 1", "Category 2", "Category 3", "Category 4", ""]
+
+    def test_a_group_with_categories_of_its_own_is_refused_by_name(self):
+        """One plot carries one set of category labels. Relabelling a series
+        or leaving it behind would both lose what the caller had, so the
+        series is named and nothing is written."""
+        root = charts.load(combo_bytes())
+        line_cats = root.find(f"{C}chart/{C}plotArea/{C}lineChart/{C}ser/{C}cat")
+        for i, pt in enumerate(line_cats.iter(f"{C}pt")):
+            pt.find(f"{C}v").text = f"Week {i + 1}"
+        with pytest.raises(PackageError, match="'Series 3' against categories of its own"):
+            charts.set_type(charts.dump(root), 4)
 
 
 class TestChartTitleAndLegend:
