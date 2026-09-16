@@ -699,14 +699,21 @@ class TestFreeformEditors:
         assert (nodes["nodes"][2]["x"], nodes["nodes"][2]["y"]) == (10.0, 20.0)
 
     def test_delete_node(self):
-        from ppt_mac.freeform import _delete_node_impl
+        """Node 3 is a curve's first control point, so the whole curve goes,
+        three nodes of the nine, and the pasted path says so."""
+        from ppt_mac.freeform import _delete_node_impl, _get_shape_nodes_impl
 
         with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]):
             payload = json.loads(_delete_node_impl(1, "Blob", None, 3))
+            nodes = json.loads(_get_shape_nodes_impl(1, "Blob", None))
 
         assert {k: v for k, v in payload.items() if k != "warnings"} == {
-            "success": True, "shape_name": "Blob", "remaining_node_count": 7,
+            "success": True, "shape_name": "Blob", "remaining_node_count": 6,
         }
+        assert nodes["node_count"] == 6
+        assert [n["segment_type"] for n in nodes["nodes"]] == [
+            "line", "curve", "inaccessible", "inaccessible", "line", "inaccessible",
+        ]
 
     def test_set_segment_type_carries_the_windows_note_when_the_count_changes(self):
         from ppt_mac.freeform import _set_segment_type_impl

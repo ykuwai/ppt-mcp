@@ -882,11 +882,21 @@ class TestNodeEdits:
         assert out.segments[0][1] == path.segments[1][3]
         assert freeform.node_count(out) == 6
 
-    def test_deleting_a_control_point_straightens_its_curve(self):
+    def test_deleting_a_control_point_deletes_the_whole_curve(self):
+        """The tool promises the other control point and the end point go
+        too, so three nodes leave and no straight edge is put in their place."""
         _, path = fixture_path()
         out = freeform.delete_node(path, 3)
-        assert out.segments[1] == ("line", path.segments[1][3])
-        assert freeform.node_count(out) == 7
+        assert [s[0] for s in out.segments] == ["line", "curve", "line"]
+        assert out.segments[1] == path.segments[2]
+        assert freeform.node_count(out) == 6
+        # Either control point stands for the same curve.
+        assert freeform.delete_node(path, 4).segments == out.segments
+
+    def test_a_path_of_one_curve_cannot_lose_its_control_point(self):
+        one = freeform.Path((0.0, 0.0), [("curve", (1.0, 1.0), (2.0, 2.0), (3.0, 3.0))])
+        with pytest.raises(ValueError, match="at least two nodes"):
+            freeform.delete_node(one, 2)
 
     def test_deleting_the_first_node_starts_the_path_at_the_next(self):
         _, path = fixture_path()

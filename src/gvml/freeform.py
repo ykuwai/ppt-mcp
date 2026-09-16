@@ -447,14 +447,20 @@ def insert_node(
 
 
 def delete_node(path: Path, index: int) -> Path:
-    """Remove a node and the segment after it. Removing a control point
-    straightens its curve into a line, keeping both ends."""
+    """Remove a node and the segment after it.
+
+    A control point stands for its own curve, and the segment after a
+    control point is that curve, so deleting one deletes the whole Bézier
+    segment, its other control point and its end point with it. That is
+    what ``ppt_delete_node`` promises and what Windows does; leaving a
+    straight line between the curve's ends would put an edge in the outline
+    that the caller never asked for.
+    """
     i, role = _check_index(path, index)
     new = path.copy()
     if role in ("c1", "c2"):
-        new.segments[i] = ("line", new.segments[i][-1])
-        return new
-    if role == "start":
+        del new.segments[i]
+    elif role == "start":
         if not new.segments:
             raise ValueError("node_index 1 is the only node; a path cannot lose it.")
         new.start = new.segments[0][-1]

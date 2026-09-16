@@ -338,9 +338,11 @@ def _insert_node_impl(slide_index, shape_name, shape_index, after_index, seg_int
 def _delete_node_impl(slide_index, shape_name, shape_index, node_index):
     """Remove a node and the segment after it, and paste the path back.
 
-    Deleting a control point straightens its curve into a line, keeping
-    both ends, which is what Windows does. The outline is either rewritten
-    whole or untouched: a paste that is dropped leaves the original alone.
+    Deleting a control point deletes the whole Bézier segment, the other
+    control point and the end point with it, which is what the tool
+    promises on Windows; three nodes go, not two. The outline is either
+    rewritten whole or untouched: a paste that is dropped leaves the
+    original alone.
     """
     def edit(path):
         return _gvml_freeform.delete_node(path, node_index)
