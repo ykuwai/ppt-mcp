@@ -18,11 +18,21 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+# The combo chart the suite builds, so the live check and the unit tests
+# paste the same one.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tests"))
 
 from appscript import k  # noqa: E402
 
+from conftest import combo_chart_xml  # noqa: E402
+
 from backend import pasteboard  # noqa: E402
-from backend.mac_ae import EXPORT_STAGING_DIR, ppt  # noqa: E402
+from backend.mac_ae import EXPORT_STAGING_DIR, ppt, slide_at  # noqa: E402
+from backend.mac_enums import MsoShapeType  # noqa: E402
+from gvml import charts as gvml_charts  # noqa: E402
+from gvml.canvas import emu  # noqa: E402
+from ppt_com.constants import msoChart  # noqa: E402
+from ppt_mac.gvml_paste import Clipboard, paste_package  # noqa: E402
 from ppt_com.animation import _add_animation_impl, _list_animations_impl  # noqa: E402
 from ppt_com.charts import (  # noqa: E402
     _add_chart_impl,
@@ -51,6 +61,27 @@ from ppt_com.presentation import _save_presentation_as_impl  # noqa: E402
 from ppt_com.slides import _add_slide_impl  # noqa: E402
 
 DECK = os.path.join(EXPORT_STAGING_DIR, "gvml-smoke.pptx")
+
+
+def paste_combo(slide_index, name):
+    """A chart with two plot groups and a secondary value axis.
+
+    Nothing in the tools makes one, and PowerPoint's own combo charts were
+    what stage two had none of, so it is written here and pasted.
+    """
+    xml = combo_chart_xml(gvml_charts.chart_xml(51).encode()).decode("utf-8")
+    pres = ppt._get_pres_impl()
+    slide = slide_at(pres, slide_index)
+    raw = gvml_charts.chart_package(name, emu(60), emu(60), emu(480), emu(300), xml)
+    clip = Clipboard.take()
+    try:
+        pasted = paste_package(
+            pres, slide, slide_index, raw, clip, "paste_combo",
+            MsoShapeType[msoChart], 60, 60, [],
+        )
+    finally:
+        clip.restore()
+    return {"shape_name": pasted.name, "warnings": pasted.warnings}
 
 
 def show(label, result):
@@ -132,6 +163,20 @@ def main() -> None:
     show("change_chart_type column", run(_change_chart_type_impl, 1, c1["shape_name"], "column"))
     z_after = [s["name"] for s in run(_list_shapes_impl, 1)["shapes"]]
     print("z order kept through the chart edits:", z_before == z_after, z_after)
+
+    # A combo chart, on its own slide. Its series live in two plot groups,
+    # one of them over a secondary axis, and a change of kind has to bring
+    # all of them into the one plot the new kind has.
+    run(_add_slide_impl, None, None, "blank")
+    combo = show("paste a combo chart", run(paste_combo, 2, "Combo"))
+    show("get_chart_data on the combo", run(_get_chart_data_impl, 2, combo["shape_name"]))
+    show("format_chart_axis secondary_value", run(
+        _format_chart_axis_impl, 2, combo["shape_name"], "secondary_value", "右軸",
+        *([None] * 13)))
+    show("change_chart_type on the combo", run(_change_chart_type_impl, 2, combo["shape_name"], "line"))
+    show("get_chart_data after the change", run(_get_chart_data_impl, 2, combo["shape_name"]))
+    show("format_chart with no argument at all", run(
+        _format_chart_impl, 2, combo["shape_name"], *([None] * 10)))
 
     # The node editors, with an animation on the shape so the loss is counted.
     show("add_animation on Blob", run(_add_animation_impl, 1, "Blob", "fly", "on_click", 1.0, 0.0, False,
