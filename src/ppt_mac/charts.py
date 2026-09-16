@@ -460,6 +460,9 @@ def _format_chart_impl(
         got = _gvml_charts.chart_summary(readback)
         return {"has_title": got["has_title"], "has_legend": got["has_legend"]}
 
+    # The three arguments below are every one this tool writes; the rest are
+    # refused by name above. An argument added to `edit` belongs here too, or
+    # a call carrying it would be taken for a call that asked for nothing.
     return _edit_chart(
         "ppt_format_chart", slide_index, shape_name_or_index, edit, verify, describe,
         requested=any(v is not None for v in (title, has_legend, legend_position)),
