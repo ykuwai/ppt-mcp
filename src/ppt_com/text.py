@@ -1139,9 +1139,16 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text: str) -> dict:
 _FIT_TOLERANCE_PT = 0.5
 
 
+# The orientations whose lines run down the box rather than across it. In a
+# vertical frame a line is a column, so wrapping is limited by the height and
+# the block grows sideways. Upward and downward rotate the glyphs and keep
+# that same geometry, which PowerPoint's own bounds confirm.
+_VERTICAL_FLOW = frozenset({"vertical", "upward", "downward"})
+
+
 def build_measurement(lines, text_width, text_height,
                       shape_width, shape_height, margins,
-                      word_wrap, autofit):
+                      word_wrap, autofit, orientation):
     """Turn measured bounds into the answer a caller asked the question for.
 
     Kept apart from the reading so the arithmetic can be tested without
@@ -1151,8 +1158,16 @@ def build_measurement(lines, text_width, text_height,
     PowerPoint would not answer. Without it there is no usable size and no
     honest overflow answer, so both come back None rather than guessed.
 
-    A line only overflows sideways when wrapping is off. With wrapping on a
-    long line becomes two lines, which is a height problem, not a width one.
+    Overflow shows on the axis wrapping does not control. Wrapping ends a
+    horizontal line at the box width, so what is left to overflow is the
+    height; in a vertical frame it ends a column at the box height and the
+    width is what is left. The other axis is only checked once wrapping is
+    off, because with it on a long line becomes another line rather than a
+    line that sticks out.
+
+    A bound PowerPoint would not answer makes the verdict None. Reporting
+    "fits" for something that was never measured is the one answer that
+    cannot be recovered from.
     """
     measurement = {
         "line_count": len(lines),
@@ -1173,12 +1188,21 @@ def build_measurement(lines, text_width, text_height,
     measurement["usable_width_pt"] = usable_width
     measurement["usable_height_pt"] = usable_height
 
-    overflows = False
-    if text_height is not None:
-        overflows = text_height > usable_height + _FIT_TOLERANCE_PT
-    if not overflows and word_wrap is False and text_width is not None:
-        overflows = text_width > usable_width + _FIT_TOLERANCE_PT
-    measurement["overflows"] = overflows
+    if orientation in _VERTICAL_FLOW:
+        checks = [(text_width, usable_width)]
+        if word_wrap is False:
+            checks.append((text_height, usable_height))
+    else:
+        checks = [(text_height, usable_height)]
+        if word_wrap is False:
+            checks.append((text_width, usable_width))
+
+    if any(measured is None for measured, _ in checks):
+        return measurement
+
+    measurement["overflows"] = any(
+        measured > limit + _FIT_TOLERANCE_PT for measured, limit in checks
+    )
 
     return measurement
 
@@ -1230,6 +1254,7 @@ def _measure_text(shape, tf, tr):
         lines, text_width, text_height,
         round(shape.Width, 2), round(shape.Height, 2),
         state.get("margins"), state.get("word_wrap"), state.get("autofit"),
+        state.get("orientation"),
     )
 
 

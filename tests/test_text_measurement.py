@@ -21,12 +21,12 @@ def line(text, width, height=34.0):
 
 def measure(lines=None, text_width=392.4, text_height=68.0,
             shape_width=427.0, shape_height=200.0, margins=MARGINS,
-            word_wrap=True, autofit="none"):
+            word_wrap=True, autofit="none", orientation="horizontal"):
     if lines is None:
         lines = [line("一行目", 392.4), line("二行目", 210.0)]
     return build_measurement(
         lines, text_width, text_height,
-        shape_width, shape_height, margins, word_wrap, autofit,
+        shape_width, shape_height, margins, word_wrap, autofit, orientation,
     )
 
 
@@ -90,9 +90,18 @@ class TestAnEmptyOrUnmeasurableFrame:
         assert state["line_count"] == 0
         assert state["lines"] == []
 
-    def test_and_nothing_that_cannot_be_measured_overflows(self):
+    def test_and_what_was_never_measured_gets_no_verdict(self):
         state = measure(lines=[], text_width=None, text_height=None)
-        assert state["overflows"] is False
+        assert state["overflows"] is None
+
+    def test_an_unreadable_height_costs_the_verdict_on_a_wrapping_box(self):
+        assert measure(text_height=None)["overflows"] is None
+
+    def test_an_unreadable_width_does_not_while_wrapping_is_on(self):
+        assert measure(text_width=None)["overflows"] is False
+
+    def test_but_it_does_once_wrapping_is_off(self):
+        assert measure(text_width=None, word_wrap=False)["overflows"] is None
 
     def test_a_line_powerpoint_would_not_measure_keeps_its_text(self):
         state = measure(lines=[line("一行目", None, None)])
@@ -111,3 +120,50 @@ class TestWhatTheBlockCarries:
 
     def test_the_keys_are_the_same_whatever_was_readable(self):
         assert set(measure()) == set(measure(margins=None))
+
+
+class TestVerticalText:
+    """A vertical line is a column. Wrapping ends it at the bottom of the box,
+    so the block grows sideways and that is where overflow shows.
+
+    Measured on a real 200 by 300pt box: three columns of 38.4 by 288, a block
+    115.2 wide and 294.5 tall, in 185.6 by 292.8 of usable space. Read as
+    horizontal text that is an overflow, and the rendered slide shows the text
+    sitting comfortably inside its box.
+    """
+
+    VERTICAL = dict(
+        lines=[line("吹奏楽部で「べろだ", 38.4, 288.0),
+               line("して」に聞こえて爆", 38.4, 288.0),
+               line("笑してしまいました", 38.4, 288.01)],
+        text_width=115.2, text_height=294.5,
+        shape_width=200.0, shape_height=300.0,
+        orientation="vertical",
+    )
+
+    def test_a_column_a_little_taller_than_the_box_is_not_an_overflow(self):
+        assert measure(**self.VERTICAL)["overflows"] is False
+
+    def test_the_same_numbers_read_as_horizontal_are(self):
+        assert measure(**dict(self.VERTICAL, orientation="horizontal"))[
+            "overflows"] is True
+
+    def test_more_columns_than_fit_across_is_an_overflow(self):
+        # The same text in an 80pt wide box.
+        assert measure(**dict(self.VERTICAL, shape_width=80.0))[
+            "overflows"] is True
+
+    def test_upward_and_downward_are_laid_out_the_same_way(self):
+        # PowerPoint answers the same bounds for all three, the glyphs turn
+        # and the geometry does not.
+        for orientation in ("upward", "downward"):
+            state = measure(**dict(self.VERTICAL, orientation=orientation))
+            assert state["overflows"] is False, orientation
+
+    def test_with_wrapping_off_a_column_past_the_bottom_overflows(self):
+        state = measure(**dict(self.VERTICAL, word_wrap=False))
+        assert state["overflows"] is True
+
+    def test_an_unknown_orientation_is_treated_as_horizontal(self):
+        assert measure(**dict(self.VERTICAL, orientation=None))[
+            "overflows"] is True

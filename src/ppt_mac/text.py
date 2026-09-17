@@ -829,6 +829,7 @@ def _measure_text(shape, tr):
         lines, text_width, text_height,
         round(shape.width(), 2), round(shape.height(), 2),
         state.get("margins"), state.get("word_wrap"), state.get("autofit"),
+        state.get("orientation"),
     )
 
 
