@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from utils.offload import run_offloaded
 from backend import ppt
 from ppt_com.constants import msoTrue, msoFalse
+from ppt_com.shape_lookup import resolve_shape as _get_shape
 
 logger = logging.getLogger(__name__)
 
@@ -76,36 +77,6 @@ class ExecuteMsoInput(BaseModel):
         default=True,
         description="If true, check whether the command is enabled before executing",
     )
-
-
-# ---------------------------------------------------------------------------
-# Helper: find a shape by name or index
-# ---------------------------------------------------------------------------
-def _get_shape(slide, name_or_index: Union[str, int]):
-    """Find a shape on a slide by name (str) or 1-based index (int).
-
-    Args:
-        slide: Slide COM object
-        name_or_index: Shape name (str) or 1-based index (int)
-
-    Returns:
-        Shape COM object
-
-    Raises:
-        ValueError: If shape not found or index out of range
-    """
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > slide.Shapes.Count:
-            raise ValueError(
-                f"Shape index {name_or_index} out of range "
-                f"(1-{slide.Shapes.Count})"
-            )
-        return slide.Shapes(name_or_index)
-    else:
-        for i in range(1, slide.Shapes.Count + 1):
-            if slide.Shapes(i).Name == name_or_index:
-                return slide.Shapes(i)
-        raise ValueError(f"Shape '{name_or_index}' not found on slide")
 
 
 # ---------------------------------------------------------------------------

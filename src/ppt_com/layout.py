@@ -21,6 +21,7 @@ from ppt_com.constants import (
     MERGE_CMD_MAP, SLIDE_SIZE_MAP, GRADIENT_STYLE_MAP,
     VIEW_TYPE_NAMES,
 )
+from ppt_com.shape_lookup import require_top_level, resolve_shape as _get_shape
 
 logger = logging.getLogger(__name__)
 
@@ -187,36 +188,6 @@ class MergeShapesInput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Helper: find a shape by name or index
-# ---------------------------------------------------------------------------
-def _get_shape(slide, name_or_index: Union[str, int]):
-    """Find a shape on a slide by name (str) or 1-based index (int).
-
-    Args:
-        slide: Slide COM object
-        name_or_index: Shape name (str) or 1-based index (int)
-
-    Returns:
-        Shape COM object
-
-    Raises:
-        ValueError: If shape not found or index out of range
-    """
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > slide.Shapes.Count:
-            raise ValueError(
-                f"Shape index {name_or_index} out of range "
-                f"(1-{slide.Shapes.Count})"
-            )
-        return slide.Shapes(name_or_index)
-    else:
-        for i in range(1, slide.Shapes.Count + 1):
-            if slide.Shapes(i).Name == name_or_index:
-                return slide.Shapes(i)
-        raise ValueError(f"Shape '{name_or_index}' not found on slide")
-
-
-# ---------------------------------------------------------------------------
 # COM implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
 def _align_shapes_impl(slide_index, shape_names, align_to, relative_to_slide):
@@ -235,14 +206,7 @@ def _align_shapes_impl(slide_index, shape_names, align_to, relative_to_slide):
         )
 
     # Validate all shape names exist
-    for name in shape_names:
-        found = False
-        for i in range(1, slide.Shapes.Count + 1):
-            if slide.Shapes(i).Name == name:
-                found = True
-                break
-        if not found:
-            raise ValueError(f"Shape '{name}' not found on slide {slide_index}")
+    require_top_level(slide, shape_names, slide_index, "ppt_align_shapes")
 
     relative = msoTrue if relative_to_slide else msoFalse
     shape_range = slide.Shapes.Range(tuple(shape_names))
@@ -272,14 +236,7 @@ def _distribute_shapes_impl(slide_index, shape_names, direction, relative_to_sli
         )
 
     # Validate all shape names exist
-    for name in shape_names:
-        found = False
-        for i in range(1, slide.Shapes.Count + 1):
-            if slide.Shapes(i).Name == name:
-                found = True
-                break
-        if not found:
-            raise ValueError(f"Shape '{name}' not found on slide {slide_index}")
+    require_top_level(slide, shape_names, slide_index, "ppt_distribute_shapes")
 
     relative = msoTrue if relative_to_slide else msoFalse
     shape_range = slide.Shapes.Range(tuple(shape_names))
@@ -514,14 +471,7 @@ def _merge_shapes_impl(slide_index, shape_names, merge_type, primary_shape):
         )
 
     # Validate all shape names exist
-    for name in shape_names:
-        found = False
-        for i in range(1, slide.Shapes.Count + 1):
-            if slide.Shapes(i).Name == name:
-                found = True
-                break
-        if not found:
-            raise ValueError(f"Shape '{name}' not found on slide {slide_index}")
+    require_top_level(slide, shape_names, slide_index, "ppt_merge_shapes")
 
     shape_range = slide.Shapes.Range(tuple(shape_names))
 

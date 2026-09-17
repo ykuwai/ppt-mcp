@@ -19,28 +19,9 @@ from ppt_com.constants import (
     msoLineSolid, msoLineRoundDot, msoLineDash,
     msoLineDashDot, msoLineLongDash,
 )
+from ppt_com.shape_lookup import resolve_shape as _get_shape
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Helper: reuse _get_shape from text module
-# ---------------------------------------------------------------------------
-def _get_shape(slide, name_or_index):
-    """Find shape by name (str) or index (int)."""
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > slide.Shapes.Count:
-            raise ValueError(
-                f"Shape index {name_or_index} out of range "
-                f"(1-{slide.Shapes.Count})"
-            )
-        return slide.Shapes(name_or_index)
-    else:
-        for i in range(1, slide.Shapes.Count + 1):
-            shape = slide.Shapes(i)
-            if shape.Name == name_or_index:
-                return shape
-        raise ValueError(f"Shape '{name_or_index}' not found on slide")
 
 
 # ---------------------------------------------------------------------------

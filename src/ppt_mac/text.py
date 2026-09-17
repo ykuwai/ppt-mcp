@@ -1251,6 +1251,7 @@ def _find_replace_text_impl(
     slide_indices,
     shape_name,
     context_chars,
+    include_groups,
 ) -> dict:
     from ppt_com.text import _build_context
 
@@ -1278,9 +1279,21 @@ def _find_replace_text_impl(
 
     hits = []
     warnings = []
+    groups_passed = []
     for slide_index in indices:
         slide = pres.slides[slide_index]
         for shape in shapes_of(slide):
+            # A group is walked past, not into, the way ppt_check_typography
+            # walks past one. Apple Events answer no members for a real group,
+            # so there is no way in from here. Said out loud rather than
+            # quietly skipped, because include_groups asked for the opposite.
+            if include_groups:
+                try:
+                    if shape.shape_type() == MsoShapeType[msoGroup]:
+                        groups_passed.append(shape.name())
+                        continue
+                except CommandError:
+                    pass
             if shape_name is not None and shape.name() != shape_name:
                 continue
             if not shape.has_text_frame():
@@ -1295,6 +1308,8 @@ def _find_replace_text_impl(
                     hit = {
                         "slide_index": slide_index,
                         "shape_name": shape.name(),
+                        # Every shape reached here is at the top level.
+                        "shape_path": shape.name(),
                         "start": match.start() + 1,
                         "length": len(match.group(0)),
                     }
@@ -1345,6 +1360,7 @@ def _find_replace_text_impl(
                     hit = {
                         "slide_index": slide_index,
                         "shape_name": shape.name(),
+                        "shape_path": shape.name(),
                         "start": start + 1,
                         "length": len(replace_text),
                     }
@@ -1354,6 +1370,17 @@ def _find_replace_text_impl(
                         )
                     hits.append(hit)
                     cursor = start + max(len(replace_text), 1)
+
+    if groups_passed:
+        named = ", ".join(sorted(set(groups_passed))[:5])
+        more = "" if len(set(groups_passed)) <= 5 else ", and others"
+        warnings.append(
+            f"include_groups was asked for and {len(set(groups_passed))} "
+            f"grouped shape(s) were still not looked inside ({named}{more}). "
+            "PowerPoint for Mac reports no members for a group over Apple "
+            "Events, so their text was neither searched nor replaced. Ungroup "
+            "with ppt_ungroup_shapes to include it."
+        )
 
     result = {
         "status": "success",
