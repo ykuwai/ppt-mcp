@@ -16,6 +16,7 @@ from utils.navigation import goto_slide
 from ppt_com.constants import msoGroup, SHAPE_TYPE_NAMES
 from ppt_com.shape_lookup import (
     PATH_SEPARATOR, require_top_level, resolve_shape as _get_shape,
+    resolve_with_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,10 @@ def _get_group_items_impl(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
-    shape = _get_shape(slide, shape_name_or_index)
+    # The group's own path, not just its name: a nested group asked for as
+    # "Outer/Inner" has to report "Outer/Inner/Deep", or the path it hands
+    # back does not lead anywhere.
+    shape, group_path = resolve_with_path(slide, shape_name_or_index)
 
     if shape.Type != msoGroup:
         raise ValueError(
@@ -123,7 +127,7 @@ def _get_group_items_impl(slide_index, shape_name_or_index):
             # The string every other tool takes. The bare name works too
             # while it is the only one like it on the slide; this one always
             # does, which is what makes the list worth handing back.
-            "path": shape.Name + PATH_SEPARATOR + item.Name,
+            "path": group_path + PATH_SEPARATOR + item.Name,
             "type": type_val,
             "type_name": SHAPE_TYPE_NAMES.get(type_val, f"Unknown({type_val})"),
             "left": round(item.Left, 2),

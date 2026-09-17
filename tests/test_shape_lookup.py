@@ -11,9 +11,9 @@ import pytest
 
 from ppt_com.constants import msoGroup
 from ppt_com.shape_lookup import (
-    find_in_groups,
     require_top_level,
     resolve_shape,
+    resolve_with_path,
     walk_group_children,
 )
 
@@ -101,6 +101,12 @@ class TestReachingIntoAGroup:
     def test_and_by_its_full_path(self):
         slide = FakeSlide(group("Outer", group("Inner", FakeShape("Deep"))))
         assert resolve_shape(slide, "Outer/Inner/Deep").Name == "Deep"
+
+    def test_a_path_with_a_level_missing_finds_nothing(self):
+        # A stale path must not quietly edit the shape two levels down.
+        slide = FakeSlide(group("Outer", group("Inner", FakeShape("Deep"))))
+        with pytest.raises(ValueError, match="not found on slide"):
+            resolve_shape(slide, "Outer/Deep")
 
     def test_a_path_whose_last_segment_is_wrong_is_not_found(self):
         slide = badge_slide()
@@ -213,12 +219,14 @@ class TestTheToolsThatCannotTakeAChild:
             require_top_level(badge_slide(), ["Nope"], 7, "ppt_group_shapes")
         assert str(caught.value) == "Shape 'Nope' not found on slide 7"
 
-    def test_find_in_groups_reports_the_path_of_a_child(self):
-        assert find_in_groups(badge_slide(), "Rounded Rectangle 22") == (
-            "Group 20/Rounded Rectangle 22")
-
-    def test_and_nothing_for_a_shape_at_the_top_level(self):
-        assert find_in_groups(badge_slide(), "TextBox 19") is None
+    def test_a_path_is_recognised_as_a_child_too(self):
+        # ppt_get_group_items hands out paths; passing one here used to be
+        # reported as a shape that does not exist.
+        with pytest.raises(ValueError) as caught:
+            require_top_level(badge_slide(),
+                              ["Group 20/Rounded Rectangle 22"], 7,
+                              "ppt_merge_shapes")
+        assert "inside group 'Group 20'" in str(caught.value)
 
 
 class TestWhatATextSearchLooksAt:
@@ -251,3 +259,58 @@ class TestWhatATextSearchLooksAt:
         # It has no text frame, so the caller skips it; leaving it out of the
         # walk would be a second place to get that decision wrong.
         assert ("Group 20", "Group 20") in self._walk(True)
+
+
+class TestThePathAShapeReportsBack:
+    """resolve_with_path answers where the shape turned out to live, which is
+    what ppt_get_group_items puts in front of its members.
+    """
+
+    def test_a_top_level_shape_is_its_own_path(self):
+        _, path = resolve_with_path(badge_slide(), "TextBox 19")
+        assert path == "TextBox 19"
+
+    def test_an_index_answers_the_name(self):
+        _, path = resolve_with_path(badge_slide(), 2)
+        assert path == "Group 20"
+
+    def test_a_child_found_by_bare_name_answers_its_full_path(self):
+        _, path = resolve_with_path(badge_slide(), "Rounded Rectangle 22")
+        assert path == "Group 20/Rounded Rectangle 22"
+
+    def test_a_nested_group_answers_every_level(self):
+        slide = FakeSlide(group("Outer", group("Inner", FakeShape("Deep"))))
+        _, path = resolve_with_path(slide, "Inner")
+        assert path == "Outer/Inner"
+
+    def test_which_is_what_a_nested_member_path_has_to_be_built_on(self):
+        slide = FakeSlide(group("Outer", group("Inner", FakeShape("Deep"))))
+        _, path = resolve_with_path(slide, "Outer/Inner")
+        assert path + "/Deep" == "Outer/Inner/Deep"
+        assert resolve_shape(slide, path + "/Deep").Name == "Deep"
+
+
+class TestAGroupOrChildNamedWithASlash:
+    """A segment may contain the separator, so every way of reading the
+    string is tried rather than splitting it once and hoping.
+    """
+
+    def test_a_child_named_with_a_slash_is_reachable_by_its_path(self):
+        slide = FakeSlide(group("G", FakeShape("A/B")))
+        assert resolve_shape(slide, "G/A/B").Name == "A/B"
+
+    def test_a_group_named_with_a_slash_is_too(self):
+        slide = FakeSlide(group("G/H", FakeShape("Child")))
+        assert resolve_shape(slide, "G/H/Child").Name == "Child"
+
+    def test_two_children_named_with_a_slash_are_still_separable(self):
+        slide = FakeSlide(group("G1", FakeShape("A/B")),
+                          group("G2", FakeShape("A/B")))
+        with pytest.raises(ValueError, match="more than one group"):
+            resolve_shape(slide, "A/B")
+        assert resolve_shape(slide, "G2/A/B") is slide.Shapes(2).GroupItems(1)
+
+    def test_the_path_ppt_get_group_items_reports_resolves(self):
+        slide = FakeSlide(group("G", FakeShape("A/B")))
+        path = "G" + "/" + slide.Shapes(1).GroupItems(1).Name
+        assert resolve_shape(slide, path).Name == "A/B"
