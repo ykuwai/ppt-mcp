@@ -178,6 +178,17 @@ class GetTextInput(BaseModel):
     shape_name_or_index: Union[str, int] = Field(
         ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
+    measure: bool = Field(
+        default=False,
+        description=(
+            "Also measure the text as PowerPoint draws it: line_count, the "
+            "text and size of every line, the width and height of the whole "
+            "block, the usable width and height (the shape less its margins) "
+            "and whether it overflows. Use this instead of exporting a "
+            "preview image to find out whether a headline wraps. Costs extra "
+            "round trips, so it is off by default."
+        ),
+    )
 
 
 class FormatTextInput(BaseModel):
@@ -1123,7 +1134,131 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text: str) -> dict:
     }
 
 
-def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
+# Half a point of slack. PowerPoint reports bounds it computed in EMU, so a
+# line that fits exactly can come back a hundredth of a point over.
+_FIT_TOLERANCE_PT = 0.5
+
+
+# The orientations whose lines run down the box rather than across it. In a
+# vertical frame a line is a column, so wrapping is limited by the height and
+# the block grows sideways. Upward and downward rotate the glyphs and keep
+# that same geometry, which PowerPoint's own bounds confirm.
+_VERTICAL_FLOW = frozenset({"vertical", "upward", "downward"})
+
+
+def build_measurement(lines, text_width, text_height,
+                      shape_width, shape_height, margins,
+                      word_wrap, autofit, orientation):
+    """Turn measured bounds into the answer a caller asked the question for.
+
+    Kept apart from the reading so the arithmetic can be tested without
+    PowerPoint, and so both platforms compute overflow the same way.
+
+    `margins` is the four sided dict ppt_get_shape_info reports, or None when
+    PowerPoint would not answer. Without it there is no usable size and no
+    honest overflow answer, so both come back None rather than guessed.
+
+    Overflow shows on the axis wrapping does not control. Wrapping ends a
+    horizontal line at the box width, so what is left to overflow is the
+    height; in a vertical frame it ends a column at the box height and the
+    width is what is left. The other axis is only checked once wrapping is
+    off, because with it on a long line becomes another line rather than a
+    line that sticks out.
+
+    A bound PowerPoint would not answer makes the verdict None. Reporting
+    "fits" for something that was never measured is the one answer that
+    cannot be recovered from.
+    """
+    measurement = {
+        "line_count": len(lines),
+        "lines": lines,
+        "text_width_pt": text_width,
+        "text_height_pt": text_height,
+        "usable_width_pt": None,
+        "usable_height_pt": None,
+        "overflows": None,
+        "autofit": autofit,
+    }
+
+    if margins is None:
+        return measurement
+
+    usable_width = round(shape_width - margins["left"] - margins["right"], 2)
+    usable_height = round(shape_height - margins["top"] - margins["bottom"], 2)
+    measurement["usable_width_pt"] = usable_width
+    measurement["usable_height_pt"] = usable_height
+
+    if orientation in _VERTICAL_FLOW:
+        checks = [(text_width, usable_width)]
+        if word_wrap is False:
+            checks.append((text_height, usable_height))
+    else:
+        checks = [(text_height, usable_height)]
+        if word_wrap is False:
+            checks.append((text_width, usable_width))
+
+    if any(measured is None for measured, _ in checks):
+        return measurement
+
+    measurement["overflows"] = any(
+        measured > limit + _FIT_TOLERANCE_PT for measured, limit in checks
+    )
+
+    return measurement
+
+
+def _measure_text(shape, tf, tr):
+    """Measure a text frame as PowerPoint currently draws it.
+
+    The numbers are the drawn ones. A frame set to shrink text to fit and
+    actually shrinking it answers the shrunk size, and then `overflows` is
+    false because the shrinking is what made it fit. `autofit` is in the block
+    so that reads the right way round; ppt_check_typography is what measures
+    the size the text would have wanted.
+    """
+    from ppt_com.shapes import _text_frame_state
+
+    state = _text_frame_state(shape) or {}
+
+    lines = []
+    try:
+        line_count = tr.Lines().Count
+    except Exception:
+        line_count = 0
+    for i in range(1, line_count + 1):
+        line = tr.Lines(i)
+        entry = {"text": None, "width_pt": None, "height_pt": None}
+        try:
+            entry["text"] = line.Text
+        except Exception:
+            pass
+        try:
+            entry["width_pt"] = round(line.BoundWidth, 2)
+        except Exception:
+            pass
+        try:
+            entry["height_pt"] = round(line.BoundHeight, 2)
+        except Exception:
+            pass
+        lines.append(entry)
+
+    # An empty frame has no bounds to report, and asking for them raises.
+    text_width = text_height = None
+    try:
+        text_width = round(tr.BoundWidth, 2)
+        text_height = round(tr.BoundHeight, 2)
+    except Exception:
+        pass
+
+    return build_measurement(
+        lines, text_width, text_height,
+        round(shape.Width, 2), round(shape.Height, 2),
+        state.get("margins"), state.get("word_wrap"), state.get("autofit"),
+        state.get("orientation"),
+    )
+
+
+def _get_text_impl(slide_index: int, shape_name_or_index, measure=False) -> dict:
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
@@ -1176,6 +1311,9 @@ def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
         }
         runs.append(run_info)
     result["runs"] = runs
+
+    if measure:
+        result["measurement"] = _measure_text(shape, tf, tr)
 
     return result
 
@@ -1760,10 +1898,20 @@ def set_text(params: SetTextInput) -> str:
 
 
 def get_text(params: GetTextInput) -> str:
-    """Get text content and formatting info from a shape."""
+    """Get text content and formatting info from a shape.
+
+    With measure=True the result also carries a measurement block: line_count,
+    every line with its own width and height, the width and height of the
+    whole block, the usable width and height (the shape less its margins),
+    whether it overflows, and the frame's autofit setting. The numbers are
+    what PowerPoint draws now, so a frame that is shrinking text answers the
+    shrunk size and then does not overflow; ppt_check_typography is what
+    measures the size the text wanted.
+    """
     try:
         result = ppt.execute(
-            _get_text_impl, params.slide_index, params.shape_name_or_index
+            _get_text_impl, params.slide_index, params.shape_name_or_index,
+            params.measure,
         )
         return json.dumps(result)
     except Exception as e:
@@ -2412,6 +2560,11 @@ def register_tools(mcp):
 
         Returns the full text, paragraph info (alignment, indent level),
         and per-run formatting (font, size, bold, italic, color).
+
+        Pass measure=True to also get the text measured as drawn: line_count,
+        per-line width and height, the block's width and height, the usable
+        width and height, and overflows. That answers "does this headline
+        wrap" without exporting a preview image and reading the picture.
         """
         return await run_offloaded(get_text, params)
 

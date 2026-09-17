@@ -782,7 +782,58 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text: str) -> dict:
     }
 
 
-def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
+def _measure_text(shape, tr):
+    """The macOS half of ppt_com.text._measure_text.
+
+    `bounds width` and `bounds height` are on a text range here, and a line is
+    a text range, so the per line sizes come from the same property the whole
+    block uses. Each read stands on its own, so a line PowerPoint will not
+    measure costs its own two numbers and still reports its text.
+    """
+    from ppt_com.text import build_measurement
+    from ppt_mac.shapes import _text_frame_state
+
+    state = _text_frame_state(shape) or {}
+
+    lines = []
+    try:
+        line_refs = elements(tr.lines)
+    except Exception:
+        line_refs = []
+    for line in line_refs:
+        entry = {"text": None, "width_pt": None, "height_pt": None}
+        try:
+            entry["text"] = _text_of(line)
+        except Exception:
+            pass
+        try:
+            entry["width_pt"] = round(line.bounds_width(), 2)
+        except Exception:
+            pass
+        try:
+            entry["height_pt"] = round(line.bounds_height(), 2)
+        except Exception:
+            pass
+        lines.append(entry)
+
+    # An empty frame has no bounds, and asking for them is an error rather
+    # than a zero.
+    text_width = text_height = None
+    try:
+        text_width = round(tr.bounds_width(), 2)
+        text_height = round(tr.bounds_height(), 2)
+    except Exception:
+        pass
+
+    return build_measurement(
+        lines, text_width, text_height,
+        round(shape.width(), 2), round(shape.height(), 2),
+        state.get("margins"), state.get("word_wrap"), state.get("autofit"),
+        state.get("orientation"),
+    )
+
+
+def _get_text_impl(slide_index: int, shape_name_or_index, measure=False) -> dict:
     ppt._get_app_impl()
     pres = ppt._get_pres_impl()
     slide = pres.slides[slide_index]
@@ -821,6 +872,9 @@ def _get_text_impl(slide_index: int, shape_name_or_index) -> dict:
             "reported as one run using the formatting of the range as a whole."
         )
     result["runs"] = [dict(run, index=i) for i, run in enumerate(runs, start=1)]
+
+    if measure:
+        result["measurement"] = _measure_text(shape, tr)
 
     return result
 
