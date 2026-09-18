@@ -1,0 +1,59 @@
+name: Release is tagged
+
+# A release reaches PyPI because a v* tag was pushed, and for no other reason.
+# publish.yml listens for that tag and nothing else, so a version bump that
+# arrives on main without one is a release that looks finished and was never
+# published. That is what happened to v2.0.0: it sat on main for two days
+# while PyPI stayed at 1.10.0, and it surfaced by accident while cutting the
+# next release.
+#
+# This runs where someone is already looking, on the pull request that takes a
+# release into main.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tagged:
+    name: The version on main has a tag
+    runs-on: ubuntu-latest
+    steps:
+      # Every tag, and enough history to ask whether one is an ancestor.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The version in pyproject.toml is tagged
+        shell: bash
+        run: |
+          version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          echo "pyproject.toml says $version"
+
+          if ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::No tag v$version. publish.yml only runs on a pushed" \
+                 "tag, so this version would reach main without reaching PyPI." \
+                 "Tag it on develop first: git tag v$version && git push origin v$version"
+            exit 1
+          fi
+          echo "tag v$version exists"
+
+      # Only on a pull request. A squash merge rewrites the commit, so on main
+      # itself the tag is deliberately not an ancestor and asking would fail
+      # every time.
+      - name: The tag names the code being merged
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          if ! git merge-base --is-ancestor "v$version" HEAD; then
+            echo "::error::Tag v$version exists but is not in this branch's" \
+                 "history, so it was cut from different code. Tag the commit" \
+                 "this pull request is merging."
+            exit 1
+          fi
+          echo "tag v$version is in this history"
