@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator, model_valida
 from utils.offload import run_offloaded
 from backend import ppt
 from utils.navigation import goto_slide
+from utils.redraw import FrozenRedraw
 from utils.color import hex_to_int, int_to_hex, int_to_rgb, get_theme_color_index
 from utils.validation import font_size_warning
 from ppt_com.constants import (
@@ -199,6 +200,79 @@ class FormatTextInput(BaseModel):
         return v
 
 
+class TextFormatSpec(BaseModel):
+    """The formatting a span can be given, with no span attached."""
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    font_name: Optional[str] = Field(default=None, description="Latin font name. Also sets the East Asian font unless font_name_fareast is provided.")
+    font_name_fareast: Optional[str] = Field(default=None, description="East Asian (CJK) font name (e.g. 'BIZ UDPゴシック').")
+    font_size: Optional[float] = Field(default=None, description="Font size in points")
+    bold: Optional[bool] = Field(default=None, description="Bold on/off")
+    italic: Optional[bool] = Field(default=None, description="Italic on/off")
+    underline: Optional[bool] = Field(default=None, description="Underline on/off")
+    color: Optional[str] = Field(default=None, description="Color as '#RRGGBB' hex string")
+    font_color_theme: Optional[str] = Field(default=None, description="Theme color name (e.g. 'accent1', 'dark1')")
+    highlight_color: Optional[str] = Field(
+        default=None,
+        description="Text highlight (marker) color as '#RRGGBB' hex string, or 'clear' to remove highlight. Requires Office 2019+.",
+    )
+
+    @field_validator("highlight_color")
+    @classmethod
+    def validate_highlight_color(cls, v):
+        if v is None or v.lower() == "clear":
+            return v
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", v):
+            raise ValueError("highlight_color must be '#RRGGBB' hex string or 'clear'")
+        return v
+
+
+class TextRangeSpec(TextFormatSpec):
+    """One span of a text frame, and what to do to it.
+
+    Prefer search_text. start is a 1-based character offset into a string
+    where \v counts as one character, so every edit shifts every offset
+    after it, and a miscount colours the wrong words.
+    """
+
+    search_text: Optional[str] = Field(default=None, description="Text to find in the shape. The matching span is formatted. Prefer this over start/length.")
+    occurrence: int = Field(default=1, ge=1, description="Which occurrence of search_text to take (1 = first). Only with search_text.")
+    start: Optional[int] = Field(default=None, description="1-based character start position (mutually exclusive with search_text)")
+    length: Optional[int] = Field(default=None, description="Number of characters (mutually exclusive with search_text)")
+
+    @field_validator("search_text")
+    @classmethod
+    def validate_search_text_not_empty(cls, v):
+        if v is not None and v == "":
+            raise ValueError("search_text must not be empty")
+        return v
+
+    @model_validator(mode="after")
+    def validate_span(self):
+        return _check_span(self)
+
+
+def _check_span(spec):
+    """Either search_text, or start and length together. Shared by both models."""
+    has_search = spec.search_text is not None
+    if has_search:
+        if spec.start is not None or spec.length is not None:
+            raise ValueError(
+                "search_text is mutually exclusive with start/length. "
+                "Use either search_text or start+length, not both."
+            )
+    else:
+        if spec.start is None or spec.length is None:
+            raise ValueError(
+                "Either search_text or both start and length must be provided."
+            )
+        if spec.occurrence != 1:
+            raise ValueError(
+                "occurrence is only valid with search_text, not with start/length."
+            )
+    return spec
+
+
 class FormatTextRangeInput(BaseModel):
     """Input for formatting a specific character range within a shape.
 
@@ -232,6 +306,25 @@ class FormatTextRangeInput(BaseModel):
         description="Text highlight (marker) color as '#RRGGBB' hex string, or 'clear' to remove highlight. Requires Office 2019+.",
     )
 
+    base: Optional[TextFormatSpec] = Field(
+        default=None,
+        description=(
+            "Formatting for the whole text frame, applied before ranges. Set "
+            "the ground here and punch the exceptions in ranges, instead of "
+            "a separate ppt_format_text call first. Only with ranges."
+        ),
+    )
+    ranges: Optional[list[TextRangeSpec]] = Field(
+        default=None,
+        description=(
+            "Several spans of one shape, each with its own formatting, in one "
+            "call. Applied in the order given, so a later entry wins where "
+            "they overlap. Use this when a text box carries differently sized "
+            "or coloured words, which is one call rather than one per span, "
+            "and the shape is never seen half styled."
+        ),
+    )
+
     @field_validator("highlight_color")
     @classmethod
     def validate_highlight_color(cls, v):
@@ -252,27 +345,38 @@ class FormatTextRangeInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_range_specification(self):
-        """Ensure either start/length or search_text is provided, not both."""
-        has_start = self.start is not None
-        has_length = self.length is not None
-        has_search = self.search_text is not None
+        """Ensure either start/length or search_text is provided, not both.
 
-        if has_search:
-            if has_start or has_length:
+        Stands down when ranges is used, where each entry carries its own
+        span and the fields out here would have nothing to apply to.
+        """
+        if self.ranges is not None:
+            single = [
+                name for name in (
+                    "start", "length", "search_text", "font_name",
+                    "font_name_fareast", "font_size", "bold", "italic",
+                    "underline", "color", "font_color_theme",
+                    "highlight_color",
+                ) if getattr(self, name) is not None
+            ]
+            if single:
                 raise ValueError(
-                    "search_text is mutually exclusive with start/length. "
-                    "Use either search_text or start+length, not both."
-                )
-        else:
-            if not has_start or not has_length:
-                raise ValueError(
-                    "Either search_text or both start and length must be provided."
+                    f"{', '.join(single)} formats one span, so it cannot be "
+                    "used with ranges. Put the span in ranges, or the "
+                    "frame-wide formatting in base."
                 )
             if self.occurrence != 1:
-                raise ValueError(
-                    "occurrence is only valid with search_text, not with start/length."
-                )
-        return self
+                raise ValueError("occurrence belongs to a ranges entry, not beside it")
+            if not self.ranges:
+                raise ValueError("ranges must not be empty if provided")
+            return self
+
+        if self.base is not None:
+            raise ValueError(
+                "base is the ground under ranges, so it only means something "
+                "with ranges. Formatting one span needs no base."
+            )
+        return _check_span(self)
 
 
 class SetParagraphFormatInput(BaseModel):
@@ -1510,56 +1614,127 @@ def _format_text_impl(slide_index, shape_name_or_index,
     }
 
 
-def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
-                              search_text, occurrence,
-                              font_name, font_name_fareast, font_size, bold, italic, underline,
-                              color, font_color_theme, highlight_color) -> dict:
+def _resolve_span(full_text, shape_name, start, length, search_text, occurrence):
+    """Turn a span description into 1-based (start, length).
+
+    Kept apart because a batch resolves every span against the text as it
+    stands before anything is written, so one entry cannot shift another.
+    """
+    if search_text is None:
+        return start, length
+
+    pos = -1
+    search_from = 0
+    for i in range(occurrence):
+        pos = full_text.find(search_text, search_from)
+        if pos == -1:
+            if i == 0:
+                raise ValueError(
+                    f"search_text '{search_text}' not found in shape '{shape_name}'"
+                )
+            raise ValueError(
+                f"search_text '{search_text}' has only {i} occurrence(s) "
+                f"in shape '{shape_name}', but occurrence={occurrence} was requested"
+            )
+        search_from = pos + len(search_text)
+    # COM Characters() is 1-based
+    return pos + 1, len(search_text)
+
+
+def _check_format_spec(spec):
+    """Run the conversions that can refuse a value, and throw the result away.
+
+    A colour is only rejected when it is written, so in a batch a bad value
+    in the fourth entry used to leave the first three applied. Every entry is
+    checked here before the first one is written.
+    """
+    if spec.get("color") is not None:
+        hex_to_int(spec["color"])
+    if spec.get("font_color_theme") is not None:
+        get_theme_color_index(spec["font_color_theme"])
+
+
+def _format_span(shape, tr, start, length, spec) -> dict:
+    """Apply one span's formatting and report what it landed on."""
+    target = tr.Characters(Start=start, Length=length)
+    _apply_font_props(
+        target.Font, spec.get("font_name"), spec.get("font_name_fareast"),
+        spec.get("font_size"), spec.get("bold"), spec.get("italic"),
+        spec.get("underline"), spec.get("color"), spec.get("font_color_theme"),
+    )
+    if spec.get("highlight_color") is not None:
+        _apply_highlight(shape, spec["highlight_color"], start, length)
+    return {
+        "formatted_text": target.Text,
+        "start": target.Start,
+        "length": target.Length,
+    }
+
+
+def _text_frame_of(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
-
     if not shape.HasTextFrame:
         raise ValueError(f"Shape '{shape.Name}' does not have a text frame")
+    return shape, shape.TextFrame.TextRange
 
-    tr = shape.TextFrame.TextRange
 
-    # Resolve search_text to start/length if provided
-    if search_text is not None:
-        full_text = tr.Text
-        pos = -1
-        search_from = 0
-        for i in range(occurrence):
-            pos = full_text.find(search_text, search_from)
-            if pos == -1:
-                if i == 0:
-                    raise ValueError(
-                        f"search_text '{search_text}' not found in shape '{shape.Name}'"
-                    )
-                else:
-                    raise ValueError(
-                        f"search_text '{search_text}' has only {i} occurrence(s) "
-                        f"in shape '{shape.Name}', but occurrence={occurrence} was requested"
-                    )
-            search_from = pos + len(search_text)
-        # COM Characters() is 1-based
-        start = pos + 1
-        length = len(search_text)
+def _format_text_ranges_impl(slide_index, shape_name_or_index, base, ranges) -> dict:
+    """Format several spans of one shape, with an optional ground under them.
 
-    target = tr.Characters(Start=start, Length=length)
-    _apply_font_props(target.Font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme)
+    Every span is resolved against the text before anything is written, so a
+    search that fails leaves the shape alone rather than half styled. The
+    writes then go inside one freeze, because a box restyled a span at a time
+    is visibly restyled a span at a time to anyone watching the window.
+    """
+    shape, tr = _text_frame_of(slide_index, shape_name_or_index)
 
-    if highlight_color is not None:
-        _apply_highlight(shape, highlight_color, start, length)
+    full_text = tr.Text
+    spans = [
+        _resolve_span(full_text, shape.Name, spec.get("start"),
+                      spec.get("length"), spec.get("search_text"),
+                      spec.get("occurrence", 1))
+        for spec in ranges
+    ]
+    for spec in ([base] if base else []) + list(ranges):
+        _check_format_spec(spec)
+
+    with FrozenRedraw():
+        if base:
+            _format_span(shape, tr, 1, len(full_text), base)
+        applied = [
+            _format_span(shape, tr, start, length, spec)
+            for (start, length), spec in zip(spans, ranges)
+        ]
 
     return {
         "status": "success",
         "shape_name": shape.Name,
-        "formatted_text": target.Text,
-        "start": target.Start,
-        "length": target.Length,
+        "count": len(applied),
+        "ranges": applied,
     }
+
+
+def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
+                              search_text, occurrence,
+                              font_name, font_name_fareast, font_size, bold, italic, underline,
+                              color, font_color_theme, highlight_color) -> dict:
+    shape, tr = _text_frame_of(slide_index, shape_name_or_index)
+
+    start, length = _resolve_span(
+        tr.Text, shape.Name, start, length, search_text, occurrence)
+    applied = _format_span(shape, tr, start, length, {
+        "font_name": font_name, "font_name_fareast": font_name_fareast,
+        "font_size": font_size, "bold": bold, "italic": italic,
+        "underline": underline, "color": color,
+        "font_color_theme": font_color_theme,
+        "highlight_color": highlight_color,
+    })
+
+    return {"status": "success", "shape_name": shape.Name, **applied}
 
 
 def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index,
@@ -1941,8 +2116,33 @@ def format_text(params: FormatTextInput) -> str:
 
 
 def format_text_range(params: FormatTextRangeInput) -> str:
-    """Format a specific character range within a shape's text."""
+    """Format a character range within a shape's text, or several at once.
+
+    With ranges, every span is formatted in one call, over an optional base
+    applied to the whole frame first. That is the shape of a text box whose
+    design puts a word at 50pt in magenta inside a sentence at 28pt, which
+    otherwise costs one call for the frame and one per span, repeated in full
+    after every wording change.
+    """
     try:
+        if params.ranges is not None:
+            result = ppt.execute(
+                _format_text_ranges_impl,
+                params.slide_index, params.shape_name_or_index,
+                params.base.model_dump() if params.base else None,
+                [spec.model_dump() for spec in params.ranges],
+            )
+            sizes = [params.base.font_size] if params.base else []
+            sizes += [spec.font_size for spec in params.ranges]
+            warnings = [w for w in (font_size_warning(size) for size in sizes) if w]
+            if warnings:
+                # Merged, not assigned: macOS answers here with its own
+                # warnings for formatting that did not land, and losing those
+                # would hide that part of the call did nothing.
+                result["warnings"] = sorted(
+                    set(result.get("warnings", [])) | set(warnings))
+            return json.dumps(result)
+
         result = ppt.execute(
             _format_text_range_impl,
             params.slide_index, params.shape_name_or_index,
@@ -2601,13 +2801,21 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_format_text_range(params: FormatTextRangeInput) -> str:
-        """Format a specific character range within a shape's text.
+        """Format a character range within a shape's text, or several at once.
 
-        Target range can be specified in two ways (mutually exclusive):
-        1. **start + length**: Characters(start, length) — start is 1-based.
-           Example: to bold characters 3 through 7, use start=3, length=5.
-        2. **search_text**: Search for the text and format the matching range.
-           Use occurrence to target the Nth match (default: 1st).
+        Target a range in two ways (mutually exclusive):
+        1. **search_text**: the matching span is formatted. Prefer this. Use
+           occurrence for the Nth match (default: 1st).
+        2. **start + length**: Characters(start, length), start is 1-based
+           and counts  as one character, so every edit shifts every offset
+           after it.
+
+        For a box with several differently formatted spans, pass **ranges**,
+        a list of entries each carrying its own span and formatting, plus an
+        optional **base** applied to the whole frame first. Set the ground in
+        base, punch the exceptions in ranges. Entries apply in order, so a
+        later one wins where they overlap. One call instead of one for the
+        frame and one per span, and the box is never seen half styled.
         """
         return await run_offloaded(format_text_range, params)
 
