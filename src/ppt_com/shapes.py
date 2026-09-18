@@ -579,8 +579,13 @@ def _add_shape_impl(
             width, height,
         )
         # Here rather than inside _apply_shape_attrs, which knows about a
-        # shape and not about the slide it sits on.
-        result.update(place_in_zorder(slide, shape, zorder))
+        # shape and not about the slide it sits on. shape_index was read in
+        # there, before the move, so it is corrected rather than left saying
+        # where the shape started.
+        placed = place_in_zorder(slide, shape, zorder)
+        if "z_position" in placed:
+            result["shape_index"] = placed["z_position"]
+        result.update(placed)
         return result
 
 
@@ -730,10 +735,15 @@ def _add_textbox_impl(
             )
         textbox.TextFrame.VerticalAnchor = anchor_val
 
+    placed = place_in_zorder(slide, textbox, zorder)
     return {
         "success": True,
         "shape_name": textbox.Name,
+        # After the placement, not before: a dict literal evaluates its
+        # entries in order, so reading the position first reports where the
+        # shape used to be.
         "shape_index": textbox.ZOrderPosition,
+        **placed,
     }
 
 

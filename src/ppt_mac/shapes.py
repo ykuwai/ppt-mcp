@@ -425,24 +425,50 @@ def _text_positions(slide, shape, own_name):
     return positions
 
 
+def _refind(slide, name):
+    """The shape called `name`, addressed afresh.
+
+    Every reference here is `slide.shapes[i]`, resolved at each use, so the
+    moment the z order changes the reference names whatever shape inherited
+    that index. A reference held across a `z order` call reads and moves the
+    wrong shape. Names survive the reordering, so they are what the walk holds
+    on to.
+    """
+    for shape in shapes_of(slide):
+        try:
+            if shape.name() == name:
+                return shape
+        except CommandError:
+            continue
+    raise ValueError(f"Shape '{name}' not found on slide")
+
+
 def place_in_zorder(slide, shape, where):
-    """The macOS half of ppt_com.shapes.place_in_zorder. Same words, same walk."""
+    """The macOS half of ppt_com.shapes.place_in_zorder. Same words, same walk.
+
+    The shape is re-found by name after every move, for the reason in _refind.
+    The caller's own reference is stale once this returns, so it should read
+    what it needs before calling and take the final position from the answer.
+    """
     if where in (None, "front"):
         return {}
 
     send_to_back = to_keyword(MsoZOrderCmd, msoSendToBack, "z order command")
     bring_forward = to_keyword(MsoZOrderCmd, msoBringForward, "z order command")
+    own_name = shape.name()
 
     if where == "back":
         shape.z_order(z_order_position=send_to_back)
-        return {"zorder": "back", "z_position": shape.z_order_position()}
+        return {
+            "zorder": "back",
+            "z_position": _refind(slide, own_name).z_order_position(),
+        }
 
     if where != "behind_text":
         raise ValueError(
             f"Unknown zorder '{where}'. Use one of: front, back, behind_text"
         )
 
-    own_name = shape.name()
     if not _text_positions(slide, shape, own_name):
         return {
             "zorder": "front",
@@ -456,12 +482,16 @@ def place_in_zorder(slide, shape, where):
 
     shape.z_order(z_order_position=send_to_back)
     for _ in range(count(slide.shapes)):
+        shape = _refind(slide, own_name)
         lowest = min(_text_positions(slide, shape, own_name))
         if shape.z_order_position() + 1 >= lowest:
             break
         shape.z_order(z_order_position=bring_forward)
 
-    return {"zorder": "behind_text", "z_position": shape.z_order_position()}
+    return {
+        "zorder": "behind_text",
+        "z_position": _refind(slide, own_name).z_order_position(),
+    }
 
 
 def _add_shape_impl(
@@ -510,7 +540,10 @@ def _add_shape_impl(
         )
         # Here rather than inside _apply_shape_attrs, which knows about a
         # shape and not about the slide it sits on.
-        result.update(place_in_zorder(slide, shape, zorder))
+        placed = place_in_zorder(slide, shape, zorder)
+        if "z_position" in placed:
+            result["shape_index"] = placed["z_position"]
+        result.update(placed)
         return result
 
 
@@ -709,10 +742,15 @@ def _add_textbox_impl(
             )
         )
 
+    # Read before the move: place_in_zorder leaves the caller's reference
+    # pointing at whatever shape inherited its index.
+    name = textbox.name()
+    placed = place_in_zorder(slide, textbox, zorder)
     return {
         "success": True,
-        "shape_name": textbox.name(),
-        "shape_index": textbox.z_order_position(),
+        "shape_name": name,
+        "shape_index": placed.get("z_position", textbox.z_order_position()),
+        **placed,
     }
 
 
@@ -763,13 +801,16 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height,
     elif height is not None:
         pic.lock_aspect_ratio.set(True)
         pic.height.set(height)
+    name = pic.name()
+    size = (round(pic.width(), 2), round(pic.height(), 2))
+    placed = place_in_zorder(slide, pic, zorder)
     return {
         "success": True,
-        "shape_name": pic.name(),
-        "shape_index": pic.z_order_position(),
-        "width": round(pic.width(), 2),
-        "height": round(pic.height(), 2),
-        **place_in_zorder(slide, pic, zorder),
+        "shape_name": name,
+        "shape_index": placed.get("z_position", pic.z_order_position()),
+        "width": size[0],
+        "height": size[1],
+        **placed,
     }
 
 
@@ -792,11 +833,13 @@ def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y,
     _verify_created(
         line, None, None, expected_type=k.shape_type_line, what="line"
     )
+    name = line.name()
+    placed = place_in_zorder(slide, line, zorder)
     return {
         "success": True,
-        "shape_name": line.name(),
-        "shape_index": line.z_order_position(),
-        **place_in_zorder(slide, line, zorder),
+        "shape_name": name,
+        "shape_index": placed.get("z_position", line.z_order_position()),
+        **placed,
     }
 
 
@@ -1301,10 +1344,15 @@ def _set_zorder_impl(slide_index, shape_name, shape_index, z_order_cmd):
     slide = _slide(pres, slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
 
+    # The name is read once, before anything moves, and the position is read
+    # off a reference found again afterwards. A reference held across a
+    # `z order` call names whatever shape inherited its index.
+    name = shape.name()
+
     if behind_text:
         placed = place_in_zorder(slide, shape, "behind_text")
-        result = {"success": True, "shape_name": shape.name(),
-                  "new_z_position": shape.z_order_position()}
+        result = {"success": True, "shape_name": name,
+                  "new_z_position": placed["z_position"]}
         if "note" in placed:
             result["note"] = placed["note"]
         return result
@@ -1312,6 +1360,6 @@ def _set_zorder_impl(slide_index, shape_name, shape_index, z_order_cmd):
     shape.z_order(z_order_position=z_order_word)
     return {
         "success": True,
-        "shape_name": shape.name(),
-        "new_z_position": shape.z_order_position(),
+        "shape_name": name,
+        "new_z_position": _refind(slide, name).z_order_position(),
     }

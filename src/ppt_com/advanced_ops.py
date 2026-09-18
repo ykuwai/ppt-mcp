@@ -1131,6 +1131,7 @@ def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_c
             h = height if height is not None else -1
             pic = slide.Shapes.AddPicture(abs_tmp, 0, -1, left, top, w, h)
 
+        placed = place_in_zorder(slide, pic, zorder)
         return {
             "success": True,
             "shape_name": pic.Name,
@@ -1138,7 +1139,7 @@ def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_c
             "width": round(pic.Width, 2),
             "height": round(pic.Height, 2),
             "source_url": url,
-            **place_in_zorder(slide, pic, zorder),
+            **placed,
         }
     finally:
         if os.path.exists(tmp_path):
@@ -1381,6 +1382,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
         pic.Left = left + (width - new_w) / 2
         pic.Top = top + (height - new_h) / 2
 
+        placed = place_in_zorder(slide, pic, zorder)
         return {
             "success": True,
             "shape_name": pic.Name,
@@ -1388,7 +1390,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
             "width": round(pic.Width, 2),
             "height": round(pic.Height, 2),
             "icon_name": icon_name,
-            **place_in_zorder(slide, pic, zorder),
+            **placed,
             "source_url": svg_url,
         }
     finally:
