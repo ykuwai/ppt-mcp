@@ -1150,13 +1150,9 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
     return info
 
 
-def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height, rotation, name, adjustments):
-    app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
-    pres = ppt._get_pres_impl()
-    slide = _slide(pres, slide_index)
-    shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
-
+def _apply_geometry(shape, left, top, width, height, rotation,
+                    dleft, dtop, dwidth, dheight):
+    """Absolute values first, then the offsets, on one shape."""
     if left is not None:
         shape.left_position.set(left)
     if top is not None:
@@ -1167,6 +1163,82 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
         shape.height.set(height)
     if rotation is not None:
         raw(shape, _ROTATION).set(rotation)
+    if dleft is not None:
+        shape.left_position.set(shape.left_position() + dleft)
+    if dtop is not None:
+        shape.top.set(shape.top() + dtop)
+    if dwidth is not None:
+        shape.width.set(shape.width() + dwidth)
+    if dheight is not None:
+        shape.height.set(shape.height() + dheight)
+
+
+def _geometry_of(shape):
+    # Read back out of PowerPoint rather than echoing what was asked for,
+    # which is also the check that the writes landed.
+    return {
+        "shape_name": shape.name(),
+        "left": round(shape.left_position(), 2),
+        "top": round(shape.top(), 2),
+        "width": round(shape.width(), 2),
+        "height": round(shape.height(), 2),
+    }
+
+
+def _update_many_impl(slide_index, shape_names, all_shapes, exclude,
+                      left, top, width, height, rotation,
+                      dleft, dtop, dwidth, dheight):
+    """The macOS half of ppt_com.shapes._update_many_impl.
+
+    Same selection arithmetic, same all-or-nothing rule. Every shape is
+    addressed by its own reference from one `shapes_of` read, and nothing here
+    reorders, so the references stay good for the whole walk.
+    """
+    from ppt_com.shapes import select_targets
+
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+
+    shapes = shapes_of(slide)
+    order = [shape.name() for shape in shapes]
+
+    picked = select_targets(order, shape_names, all_shapes, exclude)
+    targets = [shapes[pick] for pick in picked if isinstance(pick, int)]
+    # A name that is not at the top level is simply missing here. Windows
+    # looks inside the groups at this point; nothing can, on this side.
+    missing = [pick for pick in picked if not isinstance(pick, int)]
+    if missing:
+        raise ValueError(
+            "Nothing was moved. These shapes are not on slide "
+            f"{slide_index}: {', '.join(missing)}. On the slide: "
+            f"{', '.join(order)}. A shape inside a group cannot be reached by "
+            "name here, because a group answers no members over Apple Events; "
+            "ppt_ungroup_shapes is the way in."
+        )
+
+    with FrozenRedraw():
+        updated = []
+        for shape in targets:
+            _apply_geometry(shape, left, top, width, height, rotation,
+                            dleft, dtop, dwidth, dheight)
+            updated.append(_geometry_of(shape))
+
+    return {"success": True, "count": len(updated), "updated": updated}
+
+
+def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height,
+                       rotation, name, adjustments,
+                       dleft=None, dtop=None, dwidth=None, dheight=None):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+    shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
+
+    _apply_geometry(shape, left, top, width, height, rotation,
+                    dleft, dtop, dwidth, dheight)
     if name is not None:
         shape.name.set(name)
 
@@ -1187,16 +1259,7 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
                 )
             shape.adjustments[idx].adjustment_value.set(value)
 
-    # Read every number back out of PowerPoint rather than echoing what was
-    # asked for, which is also the check that the writes above landed.
-    result = {
-        "success": True,
-        "shape_name": shape.name(),
-        "left": round(shape.left_position(), 2),
-        "top": round(shape.top(), 2),
-        "width": round(shape.width(), 2),
-        "height": round(shape.height(), 2),
-    }
+    result = {"success": True, **_geometry_of(shape)}
 
     # Include current adjustment values in response when adjustments were set.
     if adjustments:
