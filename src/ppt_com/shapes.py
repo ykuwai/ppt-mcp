@@ -16,6 +16,7 @@ from backend import ppt
 from utils.navigation import goto_slide
 from utils.redraw import FrozenRedraw
 from utils.validation import font_size_warning
+from ppt_com.shape_lookup import resolve_shape
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
     msoTrue, msoFalse, msoTriStateMixed,
@@ -403,7 +404,8 @@ def _get_shape(slide, name_or_index: Union[str, int, None], shape_name: Optional
     """Find a shape on a slide by name or 1-based index.
 
     Accepts either a combined name_or_index parameter or separate
-    shape_name/shape_index from Pydantic models.
+    shape_name/shape_index from Pydantic models. The lookup itself is
+    ppt_com.shape_lookup.resolve_shape, so this reaches into groups too.
     """
     if shape_name is not None:
         identifier = shape_name
@@ -414,20 +416,7 @@ def _get_shape(slide, name_or_index: Union[str, int, None], shape_name: Optional
     else:
         raise ValueError("Either shape_name or shape_index must be provided.")
 
-    if isinstance(identifier, int):
-        if identifier < 1 or identifier > slide.Shapes.Count:
-            raise ValueError(
-                f"Shape index {identifier} is out of range. "
-                f"Slide has {slide.Shapes.Count} shapes (1-based)."
-            )
-        return slide.Shapes(identifier)
-
-    # String name lookup
-    for i in range(1, slide.Shapes.Count + 1):
-        shape = slide.Shapes(i)
-        if shape.Name == identifier:
-            return shape
-    raise ValueError(f"Shape '{identifier}' not found on this slide.")
+    return resolve_shape(slide, identifier)
 
 
 def _resolve_shape_type(shape_type: Union[int, str]) -> int:

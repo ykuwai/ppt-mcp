@@ -36,39 +36,11 @@ from ppt_com.constants import (
     msoAnchorTop, msoAnchorMiddle, msoAnchorBottom,
     msoAnchorTopBaseline, msoAnchorBottomBaseLine,
 )
+from ppt_com.shape_lookup import (
+    PATH_SEPARATOR, resolve_shape as _get_shape, walk_group_children,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Helper functions
-# ---------------------------------------------------------------------------
-def _get_shape(slide, name_or_index):
-    """Find shape by name (str) or index (int).
-
-    Args:
-        slide: Slide COM object
-        name_or_index: Shape name (str) or 1-based index (int)
-
-    Returns:
-        Shape COM object
-
-    Raises:
-        ValueError: If shape not found
-    """
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > slide.Shapes.Count:
-            raise ValueError(
-                f"Shape index {name_or_index} out of range "
-                f"(1-{slide.Shapes.Count})"
-            )
-        return slide.Shapes(name_or_index)
-    else:
-        for i in range(1, slide.Shapes.Count + 1):
-            shape = slide.Shapes(i)
-            if shape.Name == name_or_index:
-                return shape
-        raise ValueError(f"Shape '{name_or_index}' not found on slide")
 
 
 # ---------------------------------------------------------------------------
@@ -463,13 +435,21 @@ class FindReplaceTextInput(BaseModel):
     shape_name: Optional[str] = Field(
         default=None,
         min_length=1,
-        description="Limit search to a shape with this Name. Applied within each targeted slide.",
+        description="Limit search to a shape with this Name, or, with include_groups, its 'Group/Child' path. Applied within each targeted slide.",
     )
     context_chars: int = Field(
         default=0,
         ge=0,
         le=500,
         description="Include N characters of context before/after each hit in the result.",
+    )
+    include_groups: bool = Field(
+        default=False,
+        description=(
+            "Also search the shapes inside groups. Off by default because it "
+            "widens what a replace touches; turn it on when text you can see "
+            "on the slide is not being found."
+        ),
     )
 
     @field_validator("slide_indices")
@@ -1721,6 +1701,25 @@ def _set_bullet_impl(slide_index, shape_name_or_index, paragraph_index,
     }
 
 
+def _searchable_shapes(slide, include_groups):
+    """Every shape on the slide that a text search should look at.
+
+    Yields (shape, path). The path is the name for a shape at the top level
+    and "Group/Child" for one inside a group, which is what a caller feeds
+    back to reach it again.
+
+    Groups used to be skipped without saying so: a group has no text frame of
+    its own, so the loop walked past it and the text inside was simply never
+    searched. Nothing reported that, and filtering by a child's name returned
+    no matches rather than an error.
+    """
+    for si in range(1, slide.Shapes.Count + 1):
+        shape = slide.Shapes(si)
+        yield shape, shape.Name
+        if include_groups:
+            yield from walk_group_children(shape, shape.Name + PATH_SEPARATOR)
+
+
 def _find_replace_text_impl(
     find_text,
     replace_text,
@@ -1730,6 +1729,7 @@ def _find_replace_text_impl(
     slide_indices,
     shape_name,
     context_chars,
+    include_groups,
 ) -> dict:
     pres = ppt._get_pres_impl()
     find_only = replace_text is None or dry_run
@@ -1750,9 +1750,10 @@ def _find_replace_text_impl(
 
     hits = []
     for slide in slides_to_search:
-        for si in range(1, slide.Shapes.Count + 1):
-            shape = slide.Shapes(si)
-            if shape_name is not None and shape.Name != shape_name:
+        for shape, path in _searchable_shapes(slide, include_groups):
+            # A child answers to its own name and to its path, so a caller
+            # that read either out of ppt_get_group_items can filter with it.
+            if shape_name is not None and shape_name not in (shape.Name, path):
                 continue
             if not shape.HasTextFrame:
                 continue
@@ -1767,6 +1768,7 @@ def _find_replace_text_impl(
                     hit = {
                         "slide_index": slide.SlideIndex,
                         "shape_name": shape.Name,
+                        "shape_path": path,
                         "start": match.Start,
                         "length": match.Length,
                     }
@@ -1790,6 +1792,7 @@ def _find_replace_text_impl(
                     hit = {
                         "slide_index": slide.SlideIndex,
                         "shape_name": shape.Name,
+                        "shape_path": path,
                         "start": match.Start,
                         "length": match.Length,
                     }
@@ -2011,6 +2014,7 @@ def find_replace_text(params: FindReplaceTextInput) -> str:
             params.slide_indices,
             params.shape_name,
             params.context_chars,
+            params.include_groups,
         )
         return json.dumps(result)
     except Exception as e:
@@ -2687,13 +2691,17 @@ def register_tools(mcp):
 
         Output:
         - `match_count` and `matches` (each with `slide_index`, `shape_name`,
-          `start`, `length`, and `context` when `context_chars > 0`).
+          `shape_path`, `start`, `length`, and `context` when
+          `context_chars > 0`). `shape_path` is the name for a shape at the
+          top level and `Group/Child` for one inside a group.
         - In replace mode, `length` and the bracketed segment in `context`
           reflect the replacement text (i.e. what is now in the slide), not
           the original `find_text`.
 
-        Targets only shapes where `HasTextFrame` is true. Table cells, grouped
-        shapes, speaker notes, and SmartArt are not searched.
+        Targets only shapes where `HasTextFrame` is true. Table cells,
+        speaker notes and SmartArt are not searched. Shapes inside a group are
+        not either, until `include_groups` is set; text that is plainly on the
+        slide and reported as not found is usually in one.
 
         Note: `readOnlyHint` is `False` because the tool can write. In
         find-only / dry-run mode the tool performs no writes, but the hint is

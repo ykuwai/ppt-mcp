@@ -3586,6 +3586,7 @@ class TestFindReplaceReplaceLoopCursor:
                 find_text="foo", replace_text="foobar",
                 dry_run=False, match_case=False, whole_words=False,
                 slide_indices=None, shape_name=None, context_chars=0,
+                include_groups=False,
             )
 
         assert result["match_count"] == 2
@@ -3609,6 +3610,7 @@ class TestFindReplaceReplaceLoopCursor:
                 find_text="foo", replace_text="",
                 dry_run=False, match_case=False, whole_words=False,
                 slide_indices=None, shape_name=None, context_chars=0,
+                include_groups=False,
             )
 
         assert result["match_count"] == 1

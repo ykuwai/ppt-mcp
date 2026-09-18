@@ -14,6 +14,10 @@ from utils.offload import run_offloaded
 from backend import ppt
 from utils.navigation import goto_slide
 from ppt_com.constants import msoGroup, SHAPE_TYPE_NAMES
+from ppt_com.shape_lookup import (
+    PATH_SEPARATOR, require_top_level, resolve_shape as _get_shape,
+    resolve_with_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,36 +57,6 @@ class GetGroupItemsInput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Helper: find a shape by name or index
-# ---------------------------------------------------------------------------
-def _get_shape(slide, name_or_index: Union[str, int]):
-    """Find a shape on a slide by name (str) or 1-based index (int).
-
-    Args:
-        slide: Slide COM object
-        name_or_index: Shape name (str) or 1-based index (int)
-
-    Returns:
-        Shape COM object
-
-    Raises:
-        ValueError: If shape not found or index out of range
-    """
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > slide.Shapes.Count:
-            raise ValueError(
-                f"Shape index {name_or_index} out of range "
-                f"(1-{slide.Shapes.Count})"
-            )
-        return slide.Shapes(name_or_index)
-    else:
-        for i in range(1, slide.Shapes.Count + 1):
-            if slide.Shapes(i).Name == name_or_index:
-                return slide.Shapes(i)
-        raise ValueError(f"Shape '{name_or_index}' not found on slide")
-
-
-# ---------------------------------------------------------------------------
 # COM implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
 def _group_shapes_impl(slide_index, shape_names):
@@ -92,14 +66,7 @@ def _group_shapes_impl(slide_index, shape_names):
     slide = pres.Slides(slide_index)
 
     # Validate all shape names exist before grouping
-    for name in shape_names:
-        found = False
-        for i in range(1, slide.Shapes.Count + 1):
-            if slide.Shapes(i).Name == name:
-                found = True
-                break
-        if not found:
-            raise ValueError(f"Shape '{name}' not found on slide {slide_index}")
+    require_top_level(slide, shape_names, slide_index, "ppt_group_shapes")
 
     shape_range = slide.Shapes.Range(shape_names)
     group = shape_range.Group()
@@ -140,7 +107,10 @@ def _get_group_items_impl(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
-    shape = _get_shape(slide, shape_name_or_index)
+    # The group's own path, not just its name: a nested group asked for as
+    # "Outer/Inner" has to report "Outer/Inner/Deep", or the path it hands
+    # back does not lead anywhere.
+    shape, group_path = resolve_with_path(slide, shape_name_or_index)
 
     if shape.Type != msoGroup:
         raise ValueError(
@@ -154,6 +124,10 @@ def _get_group_items_impl(slide_index, shape_name_or_index):
         type_val = item.Type
         items.append({
             "name": item.Name,
+            # The string every other tool takes. The bare name works too
+            # while it is the only one like it on the slide; this one always
+            # does, which is what makes the list worth handing back.
+            "path": group_path + PATH_SEPARATOR + item.Name,
             "type": type_val,
             "type_name": SHAPE_TYPE_NAMES.get(type_val, f"Unknown({type_val})"),
             "left": round(item.Left, 2),
@@ -212,6 +186,11 @@ def ungroup_shapes(params: UngroupShapesInput) -> str:
 
 def get_group_items(params: GetGroupItemsInput) -> str:
     """Get information about all items within a group shape.
+
+    Each item carries a `path` of the form "Group 20/Rounded Rectangle 22".
+    Other tools take that, and take the bare `name` too while it is the only
+    one like it on the slide. On macOS `path` is null, because nothing there
+    reaches a group's member and there is no string that would.
 
     Args:
         params: Slide index and group shape identifier.
@@ -284,8 +263,12 @@ def register_tools(mcp):
     async def tool_get_group_items(params: GetGroupItemsInput) -> str:
         """Get information about all items within a group shape.
 
-        Returns name, type, position, and size for each item in the group.
-        Identify the group by shape name or 1-based shape index.
+        Returns name, path, type, position, and size for each item in the
+        group. Identify the group by shape name or 1-based shape index.
+
+        The path, "Group 20/Rounded Rectangle 22", is what every other tool
+        takes to reach that item; the bare name works too while it is the
+        only one like it on the slide.
         """
         return await run_offloaded(get_group_items, params)
 

@@ -15,6 +15,7 @@ from backend import ppt
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from utils.validation import font_size_warning
+from ppt_com.shape_lookup import resolve_shape
 from ppt_com.constants import (
     msoTrue, msoFalse,
     ppAlignLeft, ppAlignCenter, ppAlignRight, ppAlignJustify,
@@ -314,21 +315,7 @@ def _get_table_shape(slide, name_or_index: Union[str, int]):
     Raises:
         ValueError: If shape not found or is not a table
     """
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > slide.Shapes.Count:
-            raise ValueError(
-                f"Shape index {name_or_index} out of range "
-                f"(1-{slide.Shapes.Count})"
-            )
-        shape = slide.Shapes(name_or_index)
-    else:
-        shape = None
-        for i in range(1, slide.Shapes.Count + 1):
-            if slide.Shapes(i).Name == name_or_index:
-                shape = slide.Shapes(i)
-                break
-        if shape is None:
-            raise ValueError(f"Shape '{name_or_index}' not found on slide")
+    shape = resolve_shape(slide, name_or_index)
 
     if not shape.HasTable:
         raise ValueError(f"Shape '{shape.Name}' is not a table")

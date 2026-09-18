@@ -20,6 +20,7 @@ from ppt_com import text as _text
 from ppt_com.effects import SetGlowInput, SetReflectionInput, SetSoftEdgeInput
 from ppt_com.formatting import SetFillInput, SetLineInput, SetShadowInput
 from ppt_com.text import FormatTextInput
+from ppt_com.shape_lookup import resolve_shape as _get_shape
 
 logger = logging.getLogger(__name__)
 
@@ -31,26 +32,6 @@ OperationName = Literal[
 ]
 
 SUPPORTED_OPERATIONS = list(get_args(OperationName))
-
-
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
-
-def _get_shape(slide, name_or_index):
-    """Find shape by name (str) or 1-based index (int)."""
-    if isinstance(name_or_index, int):
-        if name_or_index < 1 or name_or_index > slide.Shapes.Count:
-            raise ValueError(
-                f"Shape index {name_or_index} out of range "
-                f"(1-{slide.Shapes.Count})"
-            )
-        return slide.Shapes(name_or_index)
-    for i in range(1, slide.Shapes.Count + 1):
-        shape = slide.Shapes(i)
-        if shape.Name == name_or_index:
-            return shape
-    raise ValueError(f"Shape '{name_or_index}' not found on slide")
 
 
 # ---------------------------------------------------------------------------

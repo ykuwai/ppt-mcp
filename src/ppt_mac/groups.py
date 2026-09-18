@@ -272,6 +272,11 @@ def _get_group_items_impl(slide_index, shape_name_or_index):
     finally:
         clip.restore()
 
+    # Windows reports the "Group/Child" string that reaches a member from
+    # every other tool. Nothing reaches a group's member here, so there is no
+    # such string and saying None is the honest version of the same key.
+    items = [dict(item, path=None) for item in items]
+
     return with_warnings({
         "success": True,
         "group_name": group_name,
