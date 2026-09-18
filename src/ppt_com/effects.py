@@ -209,7 +209,11 @@ def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
         "shape_name": shape.Name,
         "target": target,
     }
-    if target == "shape" and reflection_type and will_not_draw(shape):
+    asked_for_something = any(
+        value is not None
+        for value in (reflection_type, blur, offset, size, transparency)
+    )
+    if target == "shape" and asked_for_something and will_not_draw(shape):
         result["warnings"] = [nothing_drawn_warning(shape, "reflection")]
     return result
 

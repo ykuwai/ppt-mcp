@@ -79,14 +79,29 @@ def _nearest_soft_edge(radius: float):
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
 def _will_not_draw(shape):
-    """The macOS half of ppt_com.effects.will_not_draw."""
+    """The macOS half of ppt_com.effects.will_not_draw.
+
+    `line format` has no `visible` here, the same gap ppt_set_line works
+    around, so a border is judged the way that one hides it: weight 0 or full
+    transparency reads as no border. Asking for the property that does not
+    exist raised, the error was swallowed, and the warning this whole check
+    exists for never fired on macOS.
+    """
     try:
         if not shape.has_text_frame():
             return False
-        return (not shape.fill_format.visible()
-                and not shape.line_format.visible())
+        if shape.fill_format.visible():
+            return False
     except (AttributeError, CommandError):
         return False
+
+    try:
+        line = shape.line_format
+        return not line.line_weight() or line.transparency() >= 1.0
+    except (AttributeError, CommandError):
+        # No line format at all, a picture or a placeholder, so there is
+        # nothing for a shape effect to be drawn around either.
+        return True
 
 
 def _nothing_drawn_warning(shape, name):
@@ -232,7 +247,11 @@ def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
             f"else, so {', '.join(unsupported)} were not applied. The preset "
             "carries its own blur, offset, size and transparency."
         )
-    if target == "shape" and reflection_type and _will_not_draw(shape):
+    asked_for_something = any(
+        value is not None
+        for value in (reflection_type, blur, offset, size, transparency)
+    )
+    if target == "shape" and asked_for_something and _will_not_draw(shape):
         warnings.append(_nothing_drawn_warning(shape, "reflection"))
     if warnings:
         result["warnings"] = warnings
