@@ -572,12 +572,16 @@ def _add_shape_impl(
         shape = slide.Shapes.AddShape(
             Type=shape_type_int, Left=left, Top=top, Width=width, Height=height,
         )
-        return _apply_shape_attrs(
+        result = _apply_shape_attrs(
             shape, text, font_name, font_size, bold, italic, font_color, align,
             fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
             line_visible, line_color, line_weight, corner_radius, corner_radius_pt,
             width, height,
         )
+        # Here rather than inside _apply_shape_attrs, which knows about a
+        # shape and not about the slide it sits on.
+        result.update(place_in_zorder(slide, shape, zorder))
+        return result
 
 
 def _apply_shape_attrs(
@@ -662,13 +666,11 @@ def _apply_shape_attrs(
         except Exception:
             logger.warning("Failed to set corner_radius on shape '%s'", shape.Name)
 
-    placed = place_in_zorder(slide, shape, zorder)
     return {
         "success": True,
         "shape_name": shape.Name,
         "shape_index": shape.ZOrderPosition,
         "shape_type": shape.AutoShapeType,
-        **placed,
     }
 
 
