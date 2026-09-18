@@ -751,32 +751,97 @@ def _get_all_text_impl(slide_indices) -> str:
 # ---------------------------------------------------------------------------
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
-def _set_text_impl(slide_index: int, shape_name_or_index, text: str) -> dict:
-    app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
-    pres = ppt._get_pres_impl()
-    slide = pres.slides[slide_index]
-    shape = _get_shape(slide, shape_name_or_index)
+def _set_text_impl(slide_index: int, shape_name_or_index, text,
+                   start=None, length=None, search_text=None, occurrence=1,
+                   runs=None) -> dict:
+    from ppt_com.text import (
+        _check_format_spec, _for_powerpoint, _resolve_span, run_offsets,
+    )
 
-    _require_text_frame(shape)
+    shape, tr = _text_frame_of(slide_index, shape_name_or_index)
+    name = shape.name()
 
-    tr = shape.text_frame.text_range
-    text = text.replace('\n', '\r')  # \n -> paragraph break, CR here too
-    # \v (vertical tab) -> line break (Shift+Enter), passed through as it is
+    if runs is not None:
+        for spec in runs:
+            _check_format_spec(spec)
+        spans = run_offsets(runs)
+        whole = _for_powerpoint("".join(run["text"] for run in runs))
+        tr.content.set(whole)
+        if whole and not _clean(tr.content()):
+            raise RuntimeError(
+                f"PowerPoint reported no error but shape '{name}' is still "
+                "empty. The text was not written."
+            )
+        warnings, unsupported = [], []
+        for (run_start, run_length), spec in zip(spans, runs):
+            if not run_length:
+                continue
+            _, span_warnings, span_unsupported = _format_span(
+                shape, tr, whole, run_start, run_length, spec)
+            warnings += span_warnings
+            unsupported += span_unsupported
+        result = {
+            "status": "success",
+            "slide_index": slide_index,
+            "shape_name": name,
+            "text_length": tr.text_length(),
+            "paragraph_count": count(tr.paragraphs),
+            "runs": [
+                {"index": i, "text": whole[run_start - 1:run_start - 1 + run_length],
+                 "start": run_start, "length": run_length}
+                for i, (run_start, run_length) in enumerate(spans, start=1)
+            ],
+        }
+        if unsupported:
+            result["partial"] = True
+            result["unsupported"] = sorted(set(unsupported))
+        if warnings:
+            result["warnings"] = sorted(set(warnings))
+        return result
+
+    text = _for_powerpoint(text)
+
+    if start is not None or search_text is not None:
+        full_text = _text_of(tr)
+        start, length = _resolve_span(
+            full_text, name, start, length, search_text, occurrence)
+        result = {
+            "status": "success",
+            "slide_index": slide_index,
+            "shape_name": name,
+            "start": start,
+            "replaced_length": length,
+            "written_length": len(text),
+        }
+        if not _insert_or_replace(tr, full_text, start, length, text):
+            # The frame is rewritten whole, which is the one case where a
+            # span edit costs the formatting it was meant to keep.
+            rewritten = (full_text[:start - 1] + text
+                         + full_text[start - 1 + length:])
+            tr.content.set(rewritten)
+            result["warnings"] = [
+                f"Shape '{name}' refused a character range write, so its "
+                "whole text frame was rewritten and any mixed formatting "
+                "inside it is now uniform."
+            ]
+        result["text"] = _text_of(tr)
+        result["text_length"] = tr.text_length()
+        return result
+
     tr.content.set(text)
 
     # Nothing is trusted because it did not raise.
     written = _clean(tr.content())
     if text and not written:
         raise RuntimeError(
-            f"PowerPoint reported no error but shape '{shape.name()}' is still "
+            f"PowerPoint reported no error but shape '{name}' is still "
             "empty. The text was not written."
         )
 
     return {
         "status": "success",
         "slide_index": slide_index,
-        "shape_name": shape.name(),
+        "shape_name": name,
         "text_length": tr.text_length(),
         "paragraph_count": count(tr.paragraphs),
     }
@@ -1276,6 +1341,36 @@ def _measured_bullet_type(bullet):
                     return name
             return None
     return None
+
+
+def _insert_or_replace(text_range, full_text, start, length, new_text):
+    """Write `new_text` over a span, or insert it when the span is empty.
+
+    `thru` is inclusive at both ends, so there is no such thing as a range of
+    no characters to write into; asking for one is refused and the caller
+    falls back to rewriting the whole frame, which flattens exactly the
+    formatting an insertion is meant to keep.
+
+    So an insertion is done as a replacement of the character next to it,
+    rewritten with the new text beside it. The character in front is the one
+    used, which is what an insertion inherits on Windows too. At the very
+    front of the frame there is nothing in front, so the character after it
+    is used instead and the insertion takes that formatting.
+    """
+    if length:
+        return _replace_characters(text_range, start, length, new_text)
+
+    if not full_text:
+        text_range.content.set(new_text)
+        return True
+
+    if start > 1:
+        neighbour = full_text[start - 2]
+        return _replace_characters(
+            text_range, start - 1, 1, neighbour + new_text)
+
+    neighbour = full_text[0]
+    return _replace_characters(text_range, 1, 1, new_text + neighbour)
 
 
 def _replace_characters(text_range, start, length, new_text):
