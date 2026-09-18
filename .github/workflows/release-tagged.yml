@@ -43,17 +43,24 @@ jobs:
           echo "tag v$version exists"
 
       # Only on a pull request. A squash merge rewrites the commit, so on main
-      # itself the tag is deliberately not an ancestor and asking would fail
-      # every time.
-      - name: The tag names the code being merged
+      # itself the tag never points at anything here and asking would fail
+      # every release.
+      #
+      # The tag has to be the head of this branch, not merely somewhere in its
+      # history. Anything pushed after the tag was cut is absent from what
+      # publish.yml built, so the release on PyPI would be missing code that
+      # main is about to advertise as part of it.
+      - name: The tag is the commit being merged
         if: github.event_name == 'pull_request'
         shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
-          if ! git merge-base --is-ancestor "v$version" HEAD; then
-            echo "::error::Tag v$version exists but is not in this branch's" \
-                 "history, so it was cut from different code. Tag the commit" \
-                 "this pull request is merging."
+          tagged=$(git rev-parse "v$version^{commit}")
+
+          if [ "$tagged" != "$HEAD_SHA" ]; then
+            echo "::error::Tag v$version points at $tagged, and this branch is at $HEAD_SHA. Whatever came after the tag was not in what was published, so the release would be missing it. Tag the head of this branch and publish that."
             exit 1
           fi
-          echo "tag v$version is in this history"
+          echo "tag v$version is this branch's head, $tagged"
