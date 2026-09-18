@@ -1641,6 +1641,19 @@ def _resolve_span(full_text, shape_name, start, length, search_text, occurrence)
     return pos + 1, len(search_text)
 
 
+def _check_format_spec(spec):
+    """Run the conversions that can refuse a value, and throw the result away.
+
+    A colour is only rejected when it is written, so in a batch a bad value
+    in the fourth entry used to leave the first three applied. Every entry is
+    checked here before the first one is written.
+    """
+    if spec.get("color") is not None:
+        hex_to_int(spec["color"])
+    if spec.get("font_color_theme") is not None:
+        get_theme_color_index(spec["font_color_theme"])
+
+
 def _format_span(shape, tr, start, length, spec) -> dict:
     """Apply one span's formatting and report what it landed on."""
     target = tr.Characters(Start=start, Length=length)
@@ -1686,6 +1699,8 @@ def _format_text_ranges_impl(slide_index, shape_name_or_index, base, ranges) -> 
                       spec.get("occurrence", 1))
         for spec in ranges
     ]
+    for spec in ([base] if base else []) + list(ranges):
+        _check_format_spec(spec)
 
     with FrozenRedraw():
         if base:
@@ -2121,7 +2136,11 @@ def format_text_range(params: FormatTextRangeInput) -> str:
             sizes += [spec.font_size for spec in params.ranges]
             warnings = [w for w in (font_size_warning(size) for size in sizes) if w]
             if warnings:
-                result["warnings"] = sorted(set(warnings))
+                # Merged, not assigned: macOS answers here with its own
+                # warnings for formatting that did not land, and losing those
+                # would hide that part of the call did nothing.
+                result["warnings"] = sorted(
+                    set(result.get("warnings", [])) | set(warnings))
             return json.dumps(result)
 
         result = ppt.execute(

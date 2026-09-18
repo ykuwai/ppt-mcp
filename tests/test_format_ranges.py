@@ -145,6 +145,35 @@ class TestFormattingSeveralSpans:
         assert [r["start"] for r in result["ranges"]] == [1, 18]
 
 
+class TestWhenAColourIsWrong:
+    """A colour is only refused when it is written, so a bad value in the
+    fourth entry used to leave the first three applied.
+    """
+
+    def test_a_malformed_colour_anywhere_fails_the_call(self):
+        with pytest.raises(Exception):
+            run([
+                {"search_text": "吹奏楽部", "font_size": 36},
+                {"search_text": "爆笑", "color": "magenta"},
+            ])
+
+    def test_and_nothing_was_written(self):
+        shape = FakeShape("TextBox 19", SENTENCE)
+        written = []
+        with patch("ppt_com.text._text_frame_of", lambda *a: (shape, shape.range)),                 patch("ppt_com.text._apply_font_props",
+                      lambda *a: written.append(a)),                 patch("ppt_com.text._apply_highlight"):
+            with pytest.raises(Exception):
+                _format_text_ranges_impl(1, "TextBox 19", None, [
+                    {"search_text": "吹奏楽部", "font_size": 36},
+                    {"search_text": "爆笑", "color": "magenta"},
+                ])
+        assert written == []
+
+    def test_an_unknown_theme_colour_is_caught_the_same_way(self):
+        with pytest.raises(Exception):
+            run([{"search_text": "吹奏楽部", "font_color_theme": "accent99"}])
+
+
 class TestWhenOneSpanCannotBeFound:
     """Every span is resolved before anything is written, so the shape is
     left alone rather than half restyled.

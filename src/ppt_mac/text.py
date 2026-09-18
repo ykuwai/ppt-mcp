@@ -978,6 +978,11 @@ def _format_text_ranges_impl(slide_index, shape_name_or_index, base, ranges) -> 
         for spec in ranges
     ]
 
+    from ppt_com.text import _check_format_spec
+
+    for spec in ([base] if base else []) + list(ranges):
+        _check_format_spec(spec)
+
     warnings, unsupported, applied = [], [], []
     if base:
         _, base_warnings, base_unsupported = _format_span(
