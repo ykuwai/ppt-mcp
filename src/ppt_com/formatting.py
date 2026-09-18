@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -20,6 +20,10 @@ from ppt_com.constants import (
     msoLineDashDot, msoLineLongDash,
 )
 from ppt_com.shape_lookup import resolve_shape as _get_shape
+from ppt_com.effects import (
+    TARGET_FIELD_DESCRIPTION, effect_of, nothing_drawn_warning,
+    will_not_draw,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +117,9 @@ class SetShadowInput(BaseModel):
     transparency: Optional[float] = Field(
         default=None, description="Transparency 0.0 (opaque) to 1.0 (fully transparent)"
     )
+    target: Literal["shape", "text"] = Field(
+        default="shape", description=TARGET_FIELD_DESCRIPTION
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -195,14 +202,15 @@ def _set_line_impl(slide_index, shape_name_or_index,
 
 
 def _set_shadow_impl(slide_index, shape_name_or_index,
-                      visible, blur, offset_x, offset_y, color, transparency) -> dict:
+                      visible, blur, offset_x, offset_y, color, transparency,
+                      target="shape") -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
-    shadow = shape.Shadow
+    shadow = effect_of(shape, target, "Shadow")
 
     shadow.Visible = msoTrue if visible else msoFalse
 
@@ -218,11 +226,15 @@ def _set_shadow_impl(slide_index, shape_name_or_index,
         if transparency is not None:
             shadow.Transparency = transparency
 
-    return {
+    result = {
         "status": "success",
         "shape_name": shape.Name,
+        "target": target,
         "shadow_visible": visible,
     }
+    if target == "shape" and visible and will_not_draw(shape):
+        result["warnings"] = [nothing_drawn_warning(shape, "shadow")]
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -263,7 +275,7 @@ def set_shadow(params: SetShadowInput) -> str:
             _set_shadow_impl,
             params.slide_index, params.shape_name_or_index,
             params.visible, params.blur, params.offset_x, params.offset_y,
-            params.color, params.transparency,
+            params.color, params.transparency, params.target,
         )
         return json.dumps(result)
     except Exception as e:
@@ -323,10 +335,14 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_set_shadow(params: SetShadowInput) -> str:
-        """Set shadow effect on a shape.
+        """Set a shadow on a shape, or on its text.
 
-        Configure blur, offset, color, and transparency.
-        Set visible=false to remove the shadow.
+        Configure blur, offset, color and transparency. visible=false
+        removes it.
+
+        target='text' shadows the glyphs rather than the shape. A shape
+        shadow on a text box with no fill and no line draws nothing, and the
+        call says so in a warning rather than reporting a plain success.
         """
         return await run_offloaded(set_shadow, params)
 

@@ -28,6 +28,7 @@ and so is the one assumption in this module.
 import logging
 
 from appscript import k
+from appscript.reference import CommandError
 
 from backend.mac_ae import ppt, raw, slide_at as _slide
 from backend.unsupported import refusal as _refusal
@@ -77,15 +78,82 @@ def _nearest_soft_edge(radius: float):
 # ---------------------------------------------------------------------------
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
+def _will_not_draw(shape):
+    """The macOS half of ppt_com.effects.will_not_draw.
+
+    `line format` has no `visible` here, the same gap ppt_set_line works
+    around, so a border is judged the way that one hides it: weight 0 or full
+    transparency reads as no border. Asking for the property that does not
+    exist raised, the error was swallowed, and the warning this whole check
+    exists for never fired on macOS.
+    """
+    try:
+        if not shape.has_text_frame():
+            return False
+        if shape.fill_format.visible():
+            return False
+    except (AttributeError, CommandError):
+        return False
+
+    try:
+        line = shape.line_format
+        return not line.line_weight() or line.transparency() >= 1.0
+    except (AttributeError, CommandError):
+        # No line format at all, a picture or a placeholder, so there is
+        # nothing for a shape effect to be drawn around either.
+        return True
+
+
+def _nothing_drawn_warning(shape, name):
+    return (
+        f"The {name} was set on shape '{shape.name()}', which has no fill and "
+        f"no line, so there is nothing for it to be drawn around and the "
+        f"slide will not change. For the halo around the text itself, use "
+        f"target='text'."
+    )
+
+
+def _font_effect(shape, name):
+    """The effect on the shape's text, or None when the dictionary has none.
+
+    Windows reaches these through TextFrame2's font. Whether PowerPoint for
+    Mac's font carries them is not something this code can assume, so it is
+    asked rather than guessed, and a tool that cannot get one refuses the
+    argument by name instead of setting a shape effect the caller did not ask
+    for.
+    """
+    try:
+        return getattr(shape.text_frame.text_range.font, name)
+    except (AttributeError, CommandError):
+        return None
+
+
+def _refuse_text_target(tool_name, effect):
+    return _refusal(
+        tool_name,
+        f"PowerPoint for Mac's font has no {effect} in its scripting "
+        f"dictionary, so the {effect} around the glyphs cannot be set here. "
+        "Nothing was changed. target='shape' works and draws on the shape's "
+        "own fill and line.",
+        [f"{tool_name} with target='shape'"],
+        error=f"{tool_name} cannot take target='text' on macOS",
+    )
+
+
 def _set_glow_impl(slide_index, shape_name_or_index, radius,
-                    color, transparency) -> dict:
+                    color, transparency, target="shape") -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
-    glow = shape.glow_format
+    if target == "text":
+        glow = _font_effect(shape, "glow_format")
+        if glow is None:
+            return _refuse_text_target("ppt_set_glow", "glow")
+    else:
+        glow = shape.glow_format
     glow.radius.set(radius)
 
     if color is not None:
@@ -94,21 +162,28 @@ def _set_glow_impl(slide_index, shape_name_or_index, radius,
     result = {
         "status": "success",
         "shape_name": shape.name(),
+        "target": target,
         # Read back rather than echoed, so a radius PowerPoint clamped or
         # ignored shows up in the answer instead of hiding behind the request.
         "glow_radius": glow.radius(),
     }
+    warnings = []
     if transparency is not None:
-        result["warnings"] = [
+        warnings.append(
             "PowerPoint for Mac's glow format has no transparency property, so "
             f"transparency={transparency} was not applied. The glow is the "
             "radius and colour asked for at PowerPoint's own opacity."
-        ]
+        )
+    if target == "shape" and radius and _will_not_draw(shape):
+        warnings.append(_nothing_drawn_warning(shape, "glow"))
+    if warnings:
+        result["warnings"] = warnings
     return result
 
 
 def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
-                          blur, offset, size, transparency) -> dict:
+                          blur, offset, size, transparency,
+                          target="shape") -> dict:
     # Which of the four Windows extras were asked for, worked out before
     # anything is touched, because whether this call can do anything at all
     # depends on it.
@@ -144,6 +219,13 @@ def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
     slide = _slide(pres, slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
+    if target == "text":
+        reflection = _font_effect(shape, "reflection_format")
+        if reflection is None:
+            return _refuse_text_target("ppt_set_reflection", "reflection")
+    else:
+        reflection = shape.reflection_format
+
     if reflection_type is not None:
         word = _REFLECTION_TYPES.get(reflection_type)
         if word is None:
@@ -151,18 +233,28 @@ def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
                 f"Unknown reflection_type {reflection_type}. "
                 f"Valid values: {sorted(_REFLECTION_TYPES)}"
             )
-        shape.reflection_format.reflection_type.set(word)
+        reflection.reflection_type.set(word)
 
     result = {
         "status": "success",
         "shape_name": shape.name(),
+        "target": target,
     }
+    warnings = []
     if unsupported:
-        result["warnings"] = [
+        warnings.append(
             "PowerPoint for Mac's reflection format is the preset and nothing "
             f"else, so {', '.join(unsupported)} were not applied. The preset "
             "carries its own blur, offset, size and transparency."
-        ]
+        )
+    asked_for_something = any(
+        value is not None
+        for value in (reflection_type, blur, offset, size, transparency)
+    )
+    if target == "shape" and asked_for_something and _will_not_draw(shape):
+        warnings.append(_nothing_drawn_warning(shape, "reflection"))
+    if warnings:
+        result["warnings"] = warnings
     return result
 
 

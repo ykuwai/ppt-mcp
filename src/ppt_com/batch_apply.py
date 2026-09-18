@@ -165,7 +165,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
         return _formatting._set_shadow_impl(
             slide_index, shape_name_or_index,
             m.visible, m.blur, m.offset_x, m.offset_y, m.color,
-            m.transparency,
+            m.transparency, m.target,
         )
 
     elif tool_name == "set_glow":
@@ -176,7 +176,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
         )
         return _effects._set_glow_impl(
             slide_index, shape_name_or_index,
-            m.radius, m.color, m.transparency,
+            m.radius, m.color, m.transparency, m.target,
         )
 
     elif tool_name == "set_reflection":
@@ -188,6 +188,7 @@ def _dispatch_op(slide_index, shape_name_or_index, tool_name, params):
         return _effects._set_reflection_impl(
             slide_index, shape_name_or_index,
             m.reflection_type, m.blur, m.offset, m.size, m.transparency,
+            m.target,
         )
 
     elif tool_name == "set_soft_edge":
