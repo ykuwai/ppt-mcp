@@ -905,6 +905,43 @@ def _list_shapes_impl(slide_index):
     }
 
 
+def _glow_of(source):
+    """radius and colour of one glow format, or None. No transparency here."""
+    try:
+        radius = round(source.radius(), 2)
+    except Exception:
+        return None
+    return {
+        "radius": radius,
+        "color_hex": _glow_colour(source),
+        # PowerPoint for Mac's glow format has no transparency property.
+        "transparency": None,
+    }
+
+
+def _glow_colour(source):
+    try:
+        return rgb_list_to_hex(source.color())
+    except Exception:
+        return None
+
+
+def _glows(shape):
+    """The macOS half of ppt_com.shapes._glows."""
+    glows = {"glow": None, "text_glow": None}
+    try:
+        glows["glow"] = _glow_of(shape.glow_format)
+    except Exception:
+        pass
+    try:
+        if shape.has_text_frame():
+            glows["text_glow"] = _glow_of(
+                shape.text_frame.text_range.font.glow_format)
+    except Exception:
+        pass
+    return glows
+
+
 def _text_frame_state(shape):
     """The macOS half of ppt_com.shapes._text_frame_state.
 
@@ -1024,6 +1061,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         "fill": None,
         "line": None,
         "text_frame": _text_frame_state(shape),
+        **_glows(shape),
     }
 
     # Animation check, through the per shape settings rather than the slide's

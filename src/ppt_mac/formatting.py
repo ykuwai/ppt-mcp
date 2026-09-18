@@ -287,14 +287,22 @@ def _set_line_impl(slide_index, shape_name_or_index,
 
 
 def _set_shadow_impl(slide_index, shape_name_or_index,
-                      visible, blur, offset_x, offset_y, color, transparency) -> dict:
+                      visible, blur, offset_x, offset_y, color, transparency,
+                      target="shape") -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
-    shadow = shape.shadow_format
+    if target == "text":
+        from ppt_mac.effects import _font_effect, _refuse_text_target
+
+        shadow = _font_effect(shape, "shadow_format")
+        if shadow is None:
+            return _refuse_text_target("ppt_set_shadow", "shadow")
+    else:
+        shadow = shape.shadow_format
 
     shadow.visible.set(bool(visible))
 
@@ -334,9 +342,16 @@ def _set_shadow_impl(slide_index, shape_name_or_index,
             "apply it."
         )
 
+    if target == "shape" and visible:
+        from ppt_mac.effects import _nothing_drawn_warning, _will_not_draw
+
+        if _will_not_draw(shape):
+            warnings.append(_nothing_drawn_warning(shape, "shadow"))
+
     return {
         "status": "success",
         "shape_name": shape.name(),
+        "target": target,
         "shadow_visible": visible,
         "warnings": warnings,
     }

@@ -5,7 +5,7 @@ Handles glow, reflection, and soft edge effects on shapes.
 
 import json
 import logging
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -16,6 +16,66 @@ from utils.color import hex_to_int
 from ppt_com.shape_lookup import resolve_shape as _get_shape
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Shape effect or text effect
+# ---------------------------------------------------------------------------
+EFFECT_TARGETS = ("shape", "text")
+
+TARGET_FIELD_DESCRIPTION = (
+    "Which effect to set. 'shape' is the outline of the shape itself. 'text' "
+    "is the halo around the glyphs, which is what lifts a caption off an "
+    "illustration behind it, and the only one that draws anything on a text "
+    "box with no fill and no line."
+)
+
+
+def effect_of(shape, target, name):
+    """The shape's effect object, or the one on its text.
+
+    A shape glow is drawn around the shape's fill and line. A text box has
+    neither by default, so setting one there succeeds, reads back, and draws
+    nothing. The effect such a box actually wants is on the font.
+    """
+    if target != "text":
+        return getattr(shape, name)
+
+    try:
+        has_frame = shape.HasTextFrame
+    except Exception:
+        has_frame = False
+    if not has_frame:
+        raise ValueError(
+            f"Shape '{shape.Name}' has no text frame, so it has no text "
+            f"{name.lower()}. Use target='shape'."
+        )
+    return getattr(shape.TextFrame2.TextRange.Font, name)
+
+
+def will_not_draw(shape):
+    """True when a shape effect on this shape has nothing to be drawn around.
+
+    Only asked of a shape that holds text, because a line or a picture with no
+    fill is perfectly ordinary and its effect draws on what is there. A text
+    box with no fill and no line is the case worth warning about, and it is
+    the default a text box is created with.
+    """
+    try:
+        if not shape.HasTextFrame:
+            return False
+        return not shape.Fill.Visible and not shape.Line.Visible
+    except Exception:
+        return False
+
+
+def nothing_drawn_warning(shape, name):
+    return (
+        f"The {name} was set on shape '{shape.Name}', which has no fill and "
+        f"no line, so there is nothing for it to be drawn around and the "
+        f"slide will not change. For the halo around the text itself, use "
+        f"target='text'."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +98,9 @@ class SetGlowInput(BaseModel):
     transparency: Optional[float] = Field(
         default=None, ge=0, le=1,
         description="Transparency 0.0 (opaque) to 1.0 (fully transparent)"
+    )
+    target: Literal["shape", "text"] = Field(
+        default="shape", description=TARGET_FIELD_DESCRIPTION
     )
 
 
@@ -67,6 +130,9 @@ class SetReflectionInput(BaseModel):
         default=None, ge=0, le=1,
         description="Transparency 0.0 (opaque) to 1.0 (fully transparent)"
     )
+    target: Literal["shape", "text"] = Field(
+        default="shape", description=TARGET_FIELD_DESCRIPTION
+    )
 
 
 class SetSoftEdgeInput(BaseModel):
@@ -86,14 +152,14 @@ class SetSoftEdgeInput(BaseModel):
 # COM implementation functions
 # ---------------------------------------------------------------------------
 def _set_glow_impl(slide_index, shape_name_or_index, radius,
-                    color, transparency) -> dict:
+                    color, transparency, target="shape") -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
-    glow = shape.Glow
+    glow = effect_of(shape, target, "Glow")
     glow.Radius = radius
 
     if color is not None:
@@ -102,22 +168,26 @@ def _set_glow_impl(slide_index, shape_name_or_index, radius,
     if transparency is not None:
         glow.Transparency = transparency
 
-    return {
+    result = {
         "status": "success",
         "shape_name": shape.Name,
+        "target": target,
         "glow_radius": radius,
     }
+    if target == "shape" and radius and will_not_draw(shape):
+        result["warnings"] = [nothing_drawn_warning(shape, "glow")]
+    return result
 
 
 def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
-                          blur, offset, size, transparency) -> dict:
+                          blur, offset, size, transparency, target="shape") -> dict:
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, shape_name_or_index)
 
-    reflection = shape.Reflection
+    reflection = effect_of(shape, target, "Reflection")
 
     if reflection_type is not None:
         reflection.Type = reflection_type
@@ -134,10 +204,14 @@ def _set_reflection_impl(slide_index, shape_name_or_index, reflection_type,
     if transparency is not None:
         reflection.Transparency = transparency
 
-    return {
+    result = {
         "status": "success",
         "shape_name": shape.Name,
+        "target": target,
     }
+    if target == "shape" and reflection_type and will_not_draw(shape):
+        result["warnings"] = [nothing_drawn_warning(shape, "reflection")]
+    return result
 
 
 def _set_soft_edge_impl(slide_index, shape_name_or_index, radius) -> dict:
@@ -165,7 +239,7 @@ def set_glow(params: SetGlowInput) -> str:
         result = ppt.execute(
             _set_glow_impl,
             params.slide_index, params.shape_name_or_index, params.radius,
-            params.color, params.transparency,
+            params.color, params.transparency, params.target,
         )
         return json.dumps(result)
     except Exception as e:
@@ -179,7 +253,7 @@ def set_reflection(params: SetReflectionInput) -> str:
             _set_reflection_impl,
             params.slide_index, params.shape_name_or_index,
             params.reflection_type, params.blur, params.offset,
-            params.size, params.transparency,
+            params.size, params.transparency, params.target,
         )
         return json.dumps(result)
     except Exception as e:
@@ -215,10 +289,17 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_set_glow(params: SetGlowInput) -> str:
-        """Set glow effect on a shape.
+        """Set a glow on a shape, or on its text.
 
-        Configure radius, color, and transparency.
-        Set radius=0 to remove the glow effect.
+        Configure radius, color and transparency. radius=0 removes it.
+
+        **target='shape'** glows the shape's fill and line. A text box has
+        neither by default, so a shape glow on one is set, reads back, and
+        draws nothing at all.
+
+        **target='text'** glows the glyphs. That is the white halo that lifts
+        a caption off an illustration behind it, and on a text box it is
+        almost always the one wanted. ppt_get_shape_info reports both.
         """
         return await run_offloaded(set_glow, params)
 
@@ -233,7 +314,11 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_set_reflection(params: SetReflectionInput) -> str:
-        """Set reflection effect on a shape.
+        """Set a reflection on a shape, or on its text.
+
+        target='text' reflects the glyphs rather than the shape, and a shape
+        reflection on a text box with no fill and no line draws nothing.
+
 
         Configure reflection type (0=none, 1-9=presets), blur, offset,
         size, and transparency.
