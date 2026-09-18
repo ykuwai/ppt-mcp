@@ -813,7 +813,7 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text,
             "replaced_length": length,
             "written_length": len(text),
         }
-        if not _replace_characters(tr, start, length, text):
+        if not _insert_or_replace(tr, full_text, start, length, text):
             # The frame is rewritten whole, which is the one case where a
             # span edit costs the formatting it was meant to keep.
             rewritten = (full_text[:start - 1] + text
@@ -1341,6 +1341,36 @@ def _measured_bullet_type(bullet):
                     return name
             return None
     return None
+
+
+def _insert_or_replace(text_range, full_text, start, length, new_text):
+    """Write `new_text` over a span, or insert it when the span is empty.
+
+    `thru` is inclusive at both ends, so there is no such thing as a range of
+    no characters to write into; asking for one is refused and the caller
+    falls back to rewriting the whole frame, which flattens exactly the
+    formatting an insertion is meant to keep.
+
+    So an insertion is done as a replacement of the character next to it,
+    rewritten with the new text beside it. The character in front is the one
+    used, which is what an insertion inherits on Windows too. At the very
+    front of the frame there is nothing in front, so the character after it
+    is used instead and the insertion takes that formatting.
+    """
+    if length:
+        return _replace_characters(text_range, start, length, new_text)
+
+    if not full_text:
+        text_range.content.set(new_text)
+        return True
+
+    if start > 1:
+        neighbour = full_text[start - 2]
+        return _replace_characters(
+            text_range, start - 1, 1, neighbour + new_text)
+
+    neighbour = full_text[0]
+    return _replace_characters(text_range, 1, 1, new_text + neighbour)
 
 
 def _replace_characters(text_range, start, length, new_text):

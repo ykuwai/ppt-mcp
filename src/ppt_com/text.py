@@ -239,6 +239,15 @@ class SetTextInput(BaseModel):
         ),
     )
     occurrence: int = Field(default=1, ge=1, description="Which occurrence of search_text to replace (1 = first). Only with search_text.")
+
+    @field_validator("search_text")
+    @classmethod
+    def validate_search_text_not_empty(cls, v):
+        # An empty one matches at position 1 with no length, which would
+        # insert at the front of the shape rather than report the mistake.
+        if v is not None and v == "":
+            raise ValueError("search_text must not be empty")
+        return v
     start: Optional[int] = Field(
         default=None, ge=1,
         description=(
@@ -253,6 +262,7 @@ class SetTextInput(BaseModel):
     )
     runs: Optional[list[RunSpec]] = Field(
         default=None,
+        min_length=1,
         description=(
             "Write the frame as a list of runs, each with its own text and "
             "formatting, in one call. Use this to build a box whose design "
@@ -2210,7 +2220,8 @@ def set_text(params: SetTextInput) -> str:
             _set_text_impl, params.slide_index, params.shape_name_or_index,
             params.text, params.start, params.length,
             params.search_text, params.occurrence,
-            [run.model_dump() for run in params.runs] if params.runs else None,
+            [run.model_dump() for run in params.runs]
+            if params.runs is not None else None,
         )
         sizes = [run.font_size for run in params.runs] if params.runs else []
         warnings = [w for w in (font_size_warning(size) for size in sizes) if w]

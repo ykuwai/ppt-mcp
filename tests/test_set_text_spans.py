@@ -253,6 +253,14 @@ class TestWhatTheToolAccepts:
         assert "mutually exclusive" in rejected(
             text="a", search_text="b", start=1, length=1)
 
+    def test_an_empty_search_text_is_refused(self):
+        # It matches at position 1 with no length, so it would insert at the
+        # front of the shape instead of reporting the mistake.
+        assert "must not be empty" in rejected(text="a", search_text="")
+
+    def test_an_empty_runs_list_is_refused(self):
+        assert "at least 1 item" in rejected(runs=[])
+
     def test_an_occurrence_without_search_text_is_refused(self):
         assert "only valid with search_text" in rejected(text="a", occurrence=2)
 
