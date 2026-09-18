@@ -90,6 +90,8 @@ from ppt_mac.shapes import (
 from utils.color import hex_to_rgb_list, rgb_list_to_hex
 from utils.navigation import goto_slide
 
+from ppt_mac.shapes import place_in_zorder
+
 logger = logging.getLogger(__name__)
 
 # The two shape types Windows accepts as a picture, as macOS names them.
@@ -1134,7 +1136,8 @@ def _fit_picture(picture, left, top, width, height) -> None:
     picture.top.set(top + (height - new_h) / 2)
 
 
-def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_color, fit):
+def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_color, fit,
+                               zorder="front"):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1177,13 +1180,18 @@ def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_c
             pic.lock_aspect_ratio.set(True)
             pic.height.set(height)
 
+        # Read before the move; the reference is stale afterwards.
+        name = pic.name()
+        size = (round(pic.width(), 2), round(pic.height(), 2))
+        placed = place_in_zorder(slide, pic, zorder)
         return {
             "success": True,
-            "shape_name": pic.name(),
-            "shape_index": pic.z_order_position(),
-            "width": round(pic.width(), 2),
-            "height": round(pic.height(), 2),
+            "shape_name": name,
+            "shape_index": placed.get("z_position", pic.z_order_position()),
+            "width": size[0],
+            "height": size[1],
             "source_url": url,
+            **placed,
         }
     finally:
         if os.path.exists(tmp_path):
@@ -1243,7 +1251,8 @@ def _sips_to_png(svg_path: str, png_path: str, pixels: int) -> bool:
     return os.path.exists(png_path) and os.path.getsize(png_path) > 0
 
 
-def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style, filled):
+def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style, filled,
+                       zorder="front"):
     if not _sips_renders_svg():
         return _refusal(
             "ppt_add_svg_icon",
@@ -1307,13 +1316,17 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
         pic = _place_picture(app, slide, png_path, left, top)
         _fit_picture(pic, left, top, width, height)
 
+        name = pic.name()
+        size = (round(pic.width(), 2), round(pic.height(), 2))
+        placed = place_in_zorder(slide, pic, zorder)
         return {
             "success": True,
-            "shape_name": pic.name(),
-            "shape_index": pic.z_order_position(),
-            "width": round(pic.width(), 2),
-            "height": round(pic.height(), 2),
+            "shape_name": name,
+            "shape_index": placed.get("z_position", pic.z_order_position()),
+            "width": size[0],
+            "height": size[1],
             "icon_name": icon_name,
+            **placed,
             "source_url": svg_url,
         }
     finally:

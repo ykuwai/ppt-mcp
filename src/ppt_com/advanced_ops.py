@@ -14,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -34,6 +34,8 @@ from ppt_com.constants import (
 )
 from ppt_com.shapes import SHAPE_NAME_MAP
 from ppt_com.shape_lookup import resolve_shape as _get_shape
+
+from ppt_com.shapes import ZORDER_FIELD_DESCRIPTION, place_in_zorder
 
 logger = logging.getLogger(__name__)
 
@@ -500,6 +502,9 @@ class AddPictureFromUrlInput(BaseModel):
             "aspect ratio and centering. Requires both width and height."
         ),
     )
+    zorder: Literal["front", "back", "behind_text"] = Field(
+        default="front", description=ZORDER_FIELD_DESCRIPTION
+    )
 
 
 # --- Add SVG Icon ---
@@ -535,6 +540,9 @@ class AddSvgIconInput(BaseModel):
     filled: bool = Field(
         default=False,
         description="If true, use the filled variant of the icon instead of outline.",
+    )
+    zorder: Literal["front", "back", "behind_text"] = Field(
+        default="front", description=ZORDER_FIELD_DESCRIPTION
     )
 
 
@@ -1076,7 +1084,8 @@ def _copy_animation_impl(slide_index, source_shape, target_shape):
 # ---------------------------------------------------------------------------
 # Add Picture from URL
 # ---------------------------------------------------------------------------
-def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_color, fit):
+def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_color, fit,
+                               zorder="front"):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1122,6 +1131,7 @@ def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_c
             h = height if height is not None else -1
             pic = slide.Shapes.AddPicture(abs_tmp, 0, -1, left, top, w, h)
 
+        placed = place_in_zorder(slide, pic, zorder)
         return {
             "success": True,
             "shape_name": pic.Name,
@@ -1129,6 +1139,7 @@ def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_c
             "width": round(pic.Width, 2),
             "height": round(pic.Height, 2),
             "source_url": url,
+            **placed,
         }
     finally:
         if os.path.exists(tmp_path):
@@ -1315,7 +1326,8 @@ def _set_default_shape_style_impl(
     return json.dumps({"success": True})
 
 
-def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style, filled):
+def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, style, filled,
+                       zorder="front"):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1370,6 +1382,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
         pic.Left = left + (width - new_w) / 2
         pic.Top = top + (height - new_h) / 2
 
+        placed = place_in_zorder(slide, pic, zorder)
         return {
             "success": True,
             "shape_name": pic.Name,
@@ -1377,6 +1390,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
             "width": round(pic.Width, 2),
             "height": round(pic.Height, 2),
             "icon_name": icon_name,
+            **placed,
             "source_url": svg_url,
         }
     finally:
@@ -1739,7 +1753,7 @@ def add_picture_from_url(params: AddPictureFromUrlInput) -> str:
             _add_picture_from_url_impl,
             params.slide_index, params.url,
             params.left, params.top, params.width, params.height,
-            params.svg_color, params.fit,
+            params.svg_color, params.fit, params.zorder,
         )
         return json.dumps(result)
     except Exception as e:
@@ -1761,7 +1775,7 @@ def add_svg_icon(params: AddSvgIconInput) -> str:
             _add_svg_icon_impl,
             params.slide_index, params.icon_name,
             params.left, params.top, params.width, params.height,
-            params.color, params.style, params.filled,
+            params.color, params.style, params.filled, params.zorder,
         )
         return json.dumps(result)
     except Exception as e:
