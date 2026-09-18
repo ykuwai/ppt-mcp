@@ -33,6 +33,7 @@ from backend.mac_ae import (
     osascript,
     ppt,
     raw,
+    shapes_of,
     slide_at as _slide,
     stage_into_container,
 )
@@ -48,7 +49,10 @@ from backend.mac_enums import (
     PpParagraphAlignment,
     to_keyword,
 )
-from ppt_com.constants import GRADIENT_STYLE_MAP, SHAPE_TYPE_NAMES, msoGroup
+from ppt_com.constants import (
+    GRADIENT_STYLE_MAP, SHAPE_TYPE_NAMES,
+    msoBringForward, msoGroup, msoSendToBack,
+)
 from utils.color import hex_to_rgb_list, rgb_list_to_hex
 from utils.navigation import goto_slide
 from utils.redraw import FrozenRedraw
@@ -391,12 +395,82 @@ def _resolve_image_path(file_path: str) -> str:
 # ---------------------------------------------------------------------------
 # Apple Event implementation functions (run on the worker thread via ppt.execute)
 # ---------------------------------------------------------------------------
+def _carries_text(shape):
+    """True when this shape has text on it.
+
+    Windows also looks inside a group, because a caption in one is still text
+    to sit under. Here a group answers no members over Apple Events, so a
+    group is judged by its own (absent) text frame and a caption inside one is
+    not seen. Same gap ppt_check_typography reports.
+    """
+    try:
+        return bool(shape.has_text_frame() and shape.text_frame.has_text())
+    except Exception:
+        return False
+
+
+def _text_positions(slide, shape, own_name):
+    positions = []
+    for other in shapes_of(slide):
+        try:
+            if other.name() == own_name:
+                continue
+        except Exception:
+            continue
+        if _carries_text(other):
+            try:
+                positions.append(other.z_order_position())
+            except Exception:
+                continue
+    return positions
+
+
+def place_in_zorder(slide, shape, where):
+    """The macOS half of ppt_com.shapes.place_in_zorder. Same words, same walk."""
+    if where in (None, "front"):
+        return {}
+
+    send_to_back = to_keyword(MsoZOrderCmd, msoSendToBack, "z order command")
+    bring_forward = to_keyword(MsoZOrderCmd, msoBringForward, "z order command")
+
+    if where == "back":
+        shape.z_order(z_order_position=send_to_back)
+        return {"zorder": "back", "z_position": shape.z_order_position()}
+
+    if where != "behind_text":
+        raise ValueError(
+            f"Unknown zorder '{where}'. Use one of: front, back, behind_text"
+        )
+
+    own_name = shape.name()
+    if not _text_positions(slide, shape, own_name):
+        return {
+            "zorder": "front",
+            "z_position": shape.z_order_position(),
+            "note": (
+                "zorder was behind_text and nothing on this slide has text, "
+                "so the shape was left at the front rather than hidden under "
+                "the background."
+            ),
+        }
+
+    shape.z_order(z_order_position=send_to_back)
+    for _ in range(count(slide.shapes)):
+        lowest = min(_text_positions(slide, shape, own_name))
+        if shape.z_order_position() + 1 >= lowest:
+            break
+        shape.z_order(z_order_position=bring_forward)
+
+    return {"zorder": "behind_text", "z_position": shape.z_order_position()}
+
+
 def _add_shape_impl(
     slide_index, shape_type_int, left, top, width, height, text,
     font_name, font_size, bold, italic, font_color, align,
     fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
     line_visible, line_color, line_weight,
     corner_radius, corner_radius_pt,
+    zorder="front",
 ):
     # Both names are checked here rather than where they are used, so a
     # misspelling costs nothing. Checked later, it left a styled shape on the
@@ -530,6 +604,7 @@ def _apply_shape_attrs(
             _WIN_AUTO_SHAPE_TYPE,
             shape.auto_shape_type(),
         ),
+        **place_in_zorder(slide, shape, zorder),
     }
     if warnings:
         result["warnings"] = warnings
@@ -574,7 +649,7 @@ def _apply_line_visibility(line, visible: bool):
 def _add_textbox_impl(
     slide_index, left, top, width, height, text,
     font_name, font_size, bold, italic, font_color, align,
-    vertical_anchor,
+    vertical_anchor, zorder="front",
 ):
     # Before the first Apple Event, so a misspelled name costs neither a stray
     # text box on the slide nor a jump to a slide the caller was not looking at.
@@ -638,7 +713,8 @@ def _add_textbox_impl(
     }
 
 
-def _add_picture_impl(slide_index, file_path, left, top, width, height):
+def _add_picture_impl(slide_index, file_path, left, top, width, height,
+                      zorder="front"):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -690,10 +766,12 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height):
         "shape_index": pic.z_order_position(),
         "width": round(pic.width(), 2),
         "height": round(pic.height(), 2),
+        **place_in_zorder(slide, pic, zorder),
     }
 
 
-def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y):
+def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y,
+                   zorder="front"):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -715,6 +793,7 @@ def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y):
         "success": True,
         "shape_name": line.name(),
         "shape_index": line.z_order_position(),
+        **place_in_zorder(slide, line, zorder),
     }
 
 
@@ -1201,16 +1280,32 @@ def _presentation_index(app, pres) -> Optional[int]:
 
 
 def _set_zorder_impl(slide_index, shape_name, shape_index, z_order_cmd):
+    from ppt_com.shapes import BEHIND_TEXT
+
     # Translated before goto_slide, so a command macOS has no word for costs
     # neither an Apple Event nor a jump to a slide the caller was not looking
-    # at. The table is local.
-    z_order_word = to_keyword(MsoZOrderCmd, z_order_cmd, "z order command")
+    # at. The table is local. send_behind_text has no word at all, it is a
+    # walk, so it skips the translation.
+    behind_text = z_order_cmd == BEHIND_TEXT
+    z_order_word = (
+        None if behind_text
+        else to_keyword(MsoZOrderCmd, z_order_cmd, "z order command")
+    )
 
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
+
+    if behind_text:
+        placed = place_in_zorder(slide, shape, "behind_text")
+        result = {"success": True, "shape_name": shape.name(),
+                  "new_z_position": shape.z_order_position()}
+        if "note" in placed:
+            result["note"] = placed["note"]
+        return result
+
     shape.z_order(z_order_position=z_order_word)
     return {
         "success": True,

@@ -6,7 +6,7 @@ and z-order management on PowerPoint slides.
 
 import json
 import logging
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -16,7 +16,7 @@ from backend import ppt
 from utils.navigation import goto_slide
 from utils.redraw import FrozenRedraw
 from utils.validation import font_size_warning
-from ppt_com.shape_lookup import resolve_shape
+from ppt_com.shape_lookup import resolve_shape, walk_group_children
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
     msoTrue, msoFalse, msoTriStateMixed,
@@ -160,6 +160,15 @@ ZORDER_CMD_MAP: dict[str, int] = {
 # ---------------------------------------------------------------------------
 # Pydantic input models
 # ---------------------------------------------------------------------------
+ZORDER_FIELD_DESCRIPTION = (
+    "Where the new shape lands in the stack. 'front' (default) is what "
+    "PowerPoint does. 'behind_text' puts it directly below the lowest shape "
+    "carrying text, which is what art under a caption wants and what 'back' "
+    "gets wrong on a deck with a full bleed background. 'back' is the very "
+    "bottom."
+)
+
+
 class AddShapeInput(BaseModel):
     """Input for adding an auto shape to a slide."""
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -262,6 +271,10 @@ class AddShapeInput(BaseModel):
         "Mutually exclusive with corner_radius. Ignored for other shape types.",
     )
 
+    zorder: Literal["front", "back", "behind_text"] = Field(
+        default="front", description=ZORDER_FIELD_DESCRIPTION
+    )
+
     @model_validator(mode="after")
     def check_corner_radius_exclusivity(self):
         """Ensure corner_radius and corner_radius_pt are mutually exclusive."""
@@ -307,6 +320,9 @@ class AddTextboxInput(BaseModel):
         default=None,
         description="Vertical text anchor: 'top', 'middle', or 'bottom'.",
     )
+    zorder: Literal["front", "back", "behind_text"] = Field(
+        default="front", description=ZORDER_FIELD_DESCRIPTION
+    )
 
 
 class AddPictureInput(BaseModel):
@@ -319,6 +335,9 @@ class AddPictureInput(BaseModel):
     top: float = Field(..., description="Top position in points")
     width: Optional[float] = Field(default=None, description="Width in points (auto-scale if not provided)")
     height: Optional[float] = Field(default=None, description="Height in points (auto-scale if not provided)")
+    zorder: Literal["front", "back", "behind_text"] = Field(
+        default="front", description=ZORDER_FIELD_DESCRIPTION
+    )
 
 
 class AddLineInput(BaseModel):
@@ -330,6 +349,9 @@ class AddLineInput(BaseModel):
     begin_y: float = Field(..., description="Start Y position in points")
     end_x: float = Field(..., description="End X position in points")
     end_y: float = Field(..., description="End Y position in points")
+    zorder: Literal["front", "back", "behind_text"] = Field(
+        default="front", description=ZORDER_FIELD_DESCRIPTION
+    )
 
 
 class ListShapesInput(BaseModel):
@@ -393,7 +415,13 @@ class SetZOrderInput(BaseModel):
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index (unstable — prefer shape_name)")
     command: str = Field(
         ...,
-        description="Z-order command: 'bring_to_front', 'send_to_back', 'bring_forward', 'send_backward'",
+        description=(
+            "Z-order command: 'bring_to_front', 'send_to_back', "
+            "'bring_forward', 'send_backward', or 'send_behind_text' "
+            "(directly below the lowest shape carrying text, which is where "
+            "art under a caption belongs; 'send_to_back' hides it under a "
+            "full bleed background)"
+        ),
     )
 
 
@@ -435,12 +463,100 @@ def _resolve_shape_type(shape_type: Union[int, str]) -> int:
 # ---------------------------------------------------------------------------
 # COM implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Where a new shape lands in the stack
+# ---------------------------------------------------------------------------
+ZORDER_PLACEMENTS = ("front", "back", "behind_text")
+
+# Not an MsoZOrderCmd. PowerPoint has four commands and none of them is this
+# one, so it travels as a sentinel the impl branches on.
+BEHIND_TEXT = "send_behind_text"
+
+
+def _carries_text(shape):
+    """True when this shape, or anything inside it, has text on it."""
+    try:
+        if shape.HasTextFrame and shape.TextFrame.HasText:
+            return True
+    except Exception:
+        # A group has no HasTextFrame at all, so the question moves inward.
+        pass
+    for child, _ in walk_group_children(shape):
+        try:
+            if child.HasTextFrame and child.TextFrame.HasText:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _text_positions(slide, shape):
+    positions = []
+    for i in range(1, slide.Shapes.Count + 1):
+        other = slide.Shapes(i)
+        if other.Name == shape.Name:
+            continue
+        if _carries_text(other):
+            positions.append(other.ZOrderPosition)
+    return positions
+
+
+def place_in_zorder(slide, shape, where):
+    """Put a freshly added shape where the caller asked for it.
+
+    PowerPoint adds every shape at the front, which is wrong for art that
+    belongs under a caption. `back` is not the answer either, because these
+    decks usually have a full bleed background at the bottom and sending the
+    new picture there hides it completely.
+
+    `behind_text` walks it up from the bottom until it sits directly below the
+    lowest shape carrying text. One step at a time, re-reading the positions,
+    because the arithmetic for "how many steps" is different depending on
+    where the shape started and getting it wrong is silent.
+
+    Returns a dict to merge into the tool's answer, or {} for the default.
+    """
+    if where in (None, "front"):
+        return {}
+
+    if where == "back":
+        shape.ZOrder(msoSendToBack)
+        return {"zorder": "back", "z_position": shape.ZOrderPosition}
+
+    if where != "behind_text":
+        raise ValueError(
+            f"Unknown zorder '{where}'. Use one of: "
+            f"{', '.join(ZORDER_PLACEMENTS)}"
+        )
+
+    if not _text_positions(slide, shape):
+        return {
+            "zorder": "front",
+            "z_position": shape.ZOrderPosition,
+            "note": (
+                "zorder was behind_text and nothing on this slide has text, "
+                "so the shape was left at the front rather than hidden under "
+                "the background."
+            ),
+        }
+
+    shape.ZOrder(msoSendToBack)
+    for _ in range(slide.Shapes.Count):
+        lowest = min(_text_positions(slide, shape))
+        if shape.ZOrderPosition + 1 >= lowest:
+            break
+        shape.ZOrder(msoBringForward)
+
+    return {"zorder": "behind_text", "z_position": shape.ZOrderPosition}
+
+
 def _add_shape_impl(
     slide_index, shape_type_int, left, top, width, height, text,
     font_name, font_size, bold, italic, font_color, align,
     fill_color, fill_type, fill_color2, fill_gradient_style, fill_transparency,
     line_visible, line_color, line_weight,
     corner_radius, corner_radius_pt,
+    zorder="front",
 ):
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
@@ -546,18 +662,20 @@ def _apply_shape_attrs(
         except Exception:
             logger.warning("Failed to set corner_radius on shape '%s'", shape.Name)
 
+    placed = place_in_zorder(slide, shape, zorder)
     return {
         "success": True,
         "shape_name": shape.Name,
         "shape_index": shape.ZOrderPosition,
         "shape_type": shape.AutoShapeType,
+        **placed,
     }
 
 
 def _add_textbox_impl(
     slide_index, left, top, width, height, text,
     font_name, font_size, bold, italic, font_color, align,
-    vertical_anchor,
+    vertical_anchor, zorder="front",
 ):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -617,7 +735,8 @@ def _add_textbox_impl(
     }
 
 
-def _add_picture_impl(slide_index, file_path, left, top, width, height):
+def _add_picture_impl(slide_index, file_path, left, top, width, height,
+                      zorder="front"):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -643,16 +762,19 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height):
     elif height is not None:
         pic.LockAspectRatio = msoTrue
         pic.Height = height
+    placed = place_in_zorder(slide, pic, zorder)
     return {
         "success": True,
         "shape_name": pic.Name,
         "shape_index": pic.ZOrderPosition,
         "width": round(pic.Width, 2),
         "height": round(pic.Height, 2),
+        **placed,
     }
 
 
-def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y):
+def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y,
+                   zorder="front"):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -660,10 +782,12 @@ def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y):
     line = slide.Shapes.AddLine(
         BeginX=begin_x, BeginY=begin_y, EndX=end_x, EndY=end_y,
     )
+    placed = place_in_zorder(slide, line, zorder)
     return {
         "success": True,
         "shape_name": line.Name,
         "shape_index": line.ZOrderPosition,
+        **placed,
     }
 
 
@@ -1017,6 +1141,17 @@ def _set_zorder_impl(slide_index, shape_name, shape_index, z_order_cmd):
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
+
+    # send_behind_text is not one of PowerPoint's four commands, it is a walk
+    # up from the bottom. Same helper the adding tools use.
+    if z_order_cmd == BEHIND_TEXT:
+        placed = place_in_zorder(slide, shape, "behind_text")
+        result = {"success": True, "shape_name": shape.Name,
+                  "new_z_position": shape.ZOrderPosition}
+        if "note" in placed:
+            result["note"] = placed["note"]
+        return result
+
     shape.ZOrder(z_order_cmd)
     return {"success": True, "shape_name": shape.Name, "new_z_position": shape.ZOrderPosition}
 
@@ -1049,6 +1184,7 @@ def add_shape(params: AddShapeInput) -> str:
             params.fill_gradient_style, params.fill_transparency,
             params.line_visible, params.line_color, params.line_weight,
             params.corner_radius, params.corner_radius_pt,
+            params.zorder,
         )
         warn = font_size_warning(params.font_size)
         if warn:
@@ -1077,7 +1213,7 @@ def add_textbox(params: AddTextboxInput) -> str:
             params.text,
             params.font_name, params.font_size, params.bold,
             params.italic, params.font_color, params.align,
-            params.vertical_anchor,
+            params.vertical_anchor, params.zorder,
         )
         warn = font_size_warning(params.font_size)
         if warn:
@@ -1104,6 +1240,7 @@ def add_picture(params: AddPictureInput) -> str:
             _add_picture_impl,
             params.slide_index, params.file_path,
             params.left, params.top, params.width, params.height,
+            params.zorder,
         )
         return json.dumps(result)
     except Exception as e:
@@ -1126,6 +1263,7 @@ def add_line(params: AddLineInput) -> str:
             _add_line_impl,
             params.slide_index,
             params.begin_x, params.begin_y, params.end_x, params.end_y,
+            params.zorder,
         )
         return json.dumps(result)
     except Exception as e:
@@ -1257,7 +1395,13 @@ def duplicate_shape(params: ShapeIdentifierInput) -> str:
 def set_shape_zorder(params: SetZOrderInput) -> str:
     """Change the z-order (stacking position) of a shape.
 
-    Commands: 'bring_to_front', 'send_to_back', 'bring_forward', 'send_backward'.
+    Commands: 'bring_to_front', 'send_to_back', 'bring_forward',
+    'send_backward', 'send_behind_text'.
+
+    'send_behind_text' puts the shape directly below the lowest shape carrying
+    text, which is where art under a caption belongs. It is not one of
+    PowerPoint's own commands; 'send_to_back' is usually wrong for this
+    because a deck with a full bleed background hides the shape completely.
 
     Args:
         params: Shape identifier and z-order command.
@@ -1267,15 +1411,15 @@ def set_shape_zorder(params: SetZOrderInput) -> str:
     """
     try:
         cmd = params.command.strip().lower().replace(" ", "_").replace("-", "_")
-        if cmd not in ZORDER_CMD_MAP:
+        if cmd != BEHIND_TEXT and cmd not in ZORDER_CMD_MAP:
             return json.dumps({
                 "error": f"Unknown z-order command '{params.command}'. "
-                f"Use one of: {', '.join(ZORDER_CMD_MAP.keys())}"
+                f"Use one of: {', '.join(list(ZORDER_CMD_MAP) + [BEHIND_TEXT])}"
             })
         result = ppt.execute(
             _set_zorder_impl,
             params.slide_index, params.shape_name, params.shape_index,
-            ZORDER_CMD_MAP[cmd],
+            BEHIND_TEXT if cmd == BEHIND_TEXT else ZORDER_CMD_MAP[cmd],
         )
         return json.dumps(result)
     except Exception as e:
@@ -1496,7 +1640,9 @@ def register_tools(mcp):
     async def tool_set_shape_zorder(params: SetZOrderInput) -> str:
         """Change the z-order (stacking position) of a shape.
 
-        Commands: 'bring_to_front', 'send_to_back', 'bring_forward', 'send_backward'.
+        Commands: 'bring_to_front', 'send_to_back', 'bring_forward',
+        'send_backward', 'send_behind_text' (directly below the lowest shape
+        that has text, for art that belongs under a caption).
         Identify the shape by name (shape_name) or 1-based index (shape_index).
         """
         return await run_offloaded(set_shape_zorder, params)
