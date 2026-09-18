@@ -6,9 +6,12 @@ import os
 import re
 import time
 import unicodedata
-from typing import List, Optional, Union
+from typing import Annotated, List, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from pydantic import (
+    BaseModel, ConfigDict, Field, StringConstraints,
+    field_validator, model_validator,
+)
 
 from utils.offload import run_offloaded
 from backend import ppt
@@ -154,7 +157,14 @@ class TextFormatSpec(BaseModel):
 class RunSpec(TextFormatSpec):
     """A piece of text and the formatting it is written with."""
 
-    text: str = Field(..., min_length=1, description="The text of this run. Use \n for a paragraph break and \v for a line break inside one.")
+    # Not stripped, unlike every other string on these models. A run is a
+    # fragment of a sentence, so its leading and trailing spaces are the gaps
+    # between words, and a trailing newline is the paragraph break the caller
+    # put there. Stripping them silently rewrote the text.
+    text: Annotated[str, StringConstraints(strip_whitespace=False, min_length=1)] = Field(
+        ...,
+        description="The text of this run, kept exactly as given. Use \n for a paragraph break and \v for a line break inside one.",
+    )
 
 
 class TextRangeSpec(TextFormatSpec):

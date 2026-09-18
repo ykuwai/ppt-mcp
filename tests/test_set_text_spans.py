@@ -256,6 +256,18 @@ class TestWhatTheToolAccepts:
     def test_an_occurrence_without_search_text_is_refused(self):
         assert "only valid with search_text" in rejected(text="a", occurrence=2)
 
+    def test_a_run_keeps_its_leading_and_trailing_spaces(self):
+        # A run is a fragment, so its edges are the gaps between words. The
+        # other strings on these models are stripped; this one must not be.
+        assert RunSpec(text=" word ").text == " word "
+
+    def test_and_its_trailing_newline(self):
+        # Stripping it would drop the caller's paragraph break in silence.
+        assert RunSpec(text="line" + LF).text == "line" + LF
+
+    def test_a_run_of_only_spaces_is_still_a_run(self):
+        assert RunSpec(text="  ").text == "  "
+
     def test_an_empty_run_is_refused(self):
         with pytest.raises(ValidationError, match="at least 1 character"):
             RunSpec(text="")
