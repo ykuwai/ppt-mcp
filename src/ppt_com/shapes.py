@@ -377,11 +377,40 @@ class UpdateShapeInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index (unstable — prefer shape_name)")
+    shape_names: Optional[list[str]] = Field(
+        default=None,
+        description=(
+            "Several shapes to update together, in one call. Use with the "
+            "d* offsets to shift a group of shapes by a fixed amount. If any "
+            "name does not resolve, nothing moves."
+        ),
+    )
+    all: bool = Field(
+        default=False,
+        description=(
+            "Update every shape on the slide. Pair with exclude to leave the "
+            "full bleed background where it is."
+        ),
+    )
+    exclude: Optional[list[str]] = Field(
+        default=None,
+        description="Names to leave alone. Only with all or shape_names.",
+    )
     left: Optional[float] = Field(default=None, description="New left position in points")
     top: Optional[float] = Field(default=None, description="New top position in points")
     width: Optional[float] = Field(default=None, description="New width in points")
     height: Optional[float] = Field(default=None, description="New height in points")
     rotation: Optional[float] = Field(default=None, description="Rotation in degrees (0-360)")
+    dleft: Optional[float] = Field(
+        default=None,
+        description="Move right by this many points, relative to where the shape is now. Negative moves left.",
+    )
+    dtop: Optional[float] = Field(
+        default=None,
+        description="Move down by this many points, relative to where the shape is now. Negative moves up, which is the usual one.",
+    )
+    dwidth: Optional[float] = Field(default=None, description="Widen by this many points, relative to the current width.")
+    dheight: Optional[float] = Field(default=None, description="Heighten by this many points, relative to the current height.")
     name: Optional[str] = Field(default=None, description="New name for the shape")
     adjustments: Optional[dict[int, float]] = Field(
         default=None,
@@ -402,6 +431,55 @@ class UpdateShapeInput(BaseModel):
                 if k < 1:
                     raise ValueError(
                         f"Adjustment index {k} must be >= 1 (1-based indexing)"
+                    )
+        return self
+
+    @model_validator(mode="after")
+    def validate_selection(self):
+        chosen = [
+            name for name, value in (
+                ("shape_name", self.shape_name),
+                ("shape_index", self.shape_index),
+                ("shape_names", self.shape_names),
+                ("all", self.all or None),
+            ) if value is not None
+        ]
+        if not chosen:
+            raise ValueError(
+                "Say which shapes to update: shape_name, shape_index, "
+                "shape_names, or all=true"
+            )
+        if len(chosen) > 1:
+            raise ValueError(
+                f"Use one way of choosing shapes, not {' and '.join(chosen)}"
+            )
+        if self.shape_names is not None and not self.shape_names:
+            raise ValueError("shape_names must not be empty if provided")
+        if self.exclude is not None and not (self.all or self.shape_names):
+            raise ValueError("exclude only means something with all or shape_names")
+        return self
+
+    @model_validator(mode="after")
+    def validate_offsets(self):
+        for absolute, relative in (("left", "dleft"), ("top", "dtop"),
+                                   ("width", "dwidth"), ("height", "dheight")):
+            if getattr(self, absolute) is not None and getattr(self, relative) is not None:
+                raise ValueError(
+                    f"{absolute} and {relative} are mutually exclusive — set "
+                    "the position or the offset, not both"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_single_shape_only_fields(self):
+        # A rename would make duplicates, and adjustment handles mean
+        # different things on different shapes.
+        if self.all or self.shape_names:
+            for field in ("name", "adjustments"):
+                if getattr(self, field) is not None:
+                    raise ValueError(
+                        f"{field} applies to one shape, so it cannot be used "
+                        "with all or shape_names"
                     )
         return self
 
@@ -1052,13 +1130,38 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
     return info
 
 
-def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height, rotation, name, adjustments):
-    app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
-    pres = ppt._get_pres_impl()
-    slide = pres.Slides(slide_index)
-    shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
+# ---------------------------------------------------------------------------
+# Choosing what an update applies to
+# ---------------------------------------------------------------------------
+def select_targets(available, shape_names, all_shapes, exclude):
+    """Work out which names an update should touch, and which are missing.
 
+    Pure name arithmetic, apart from the slide, so the awkward part can be
+    tested without PowerPoint. `available` is the names on the slide in z
+    order. Returns (names to update, names asked for that are not there).
+
+    Order follows the slide for `all`, and the caller's list otherwise, so a
+    result reads in the order the caller thinks in.
+    """
+    excluded = set(exclude or ())
+    if all_shapes:
+        return [n for n in available if n not in excluded], []
+
+    present = set(available)
+    wanted, missing = [], []
+    for name in shape_names:
+        if name in excluded:
+            continue
+        if name in present:
+            wanted.append(name)
+        else:
+            missing.append(name)
+    return wanted, missing
+
+
+def _apply_geometry(shape, left, top, width, height, rotation,
+                    dleft, dtop, dwidth, dheight):
+    """Absolute values first, then the offsets, on one shape."""
     if left is not None:
         shape.Left = left
     if top is not None:
@@ -1069,6 +1172,77 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
         shape.Height = height
     if rotation is not None:
         shape.Rotation = rotation
+    if dleft is not None:
+        shape.Left = shape.Left + dleft
+    if dtop is not None:
+        shape.Top = shape.Top + dtop
+    if dwidth is not None:
+        shape.Width = shape.Width + dwidth
+    if dheight is not None:
+        shape.Height = shape.Height + dheight
+
+
+def _geometry_of(shape):
+    return {
+        "shape_name": shape.Name,
+        "left": round(shape.Left, 2),
+        "top": round(shape.Top, 2),
+        "width": round(shape.Width, 2),
+        "height": round(shape.Height, 2),
+    }
+
+
+def _update_many_impl(slide_index, shape_names, all_shapes, exclude,
+                      left, top, width, height, rotation,
+                      dleft, dtop, dwidth, dheight):
+    """Move or resize a set of shapes in one call.
+
+    Nothing is written until every name has been resolved, so a typo leaves
+    the slide alone rather than half shifted. Seventeen shapes moving one at a
+    time is also seventeen repaints, hence the freeze.
+    """
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.Slides(slide_index)
+
+    by_name = {}
+    order = []
+    for i in range(1, slide.Shapes.Count + 1):
+        shape = slide.Shapes(i)
+        order.append(shape.Name)
+        by_name.setdefault(shape.Name, shape)
+
+    wanted, missing = select_targets(order, shape_names, all_shapes, exclude)
+    if missing:
+        raise ValueError(
+            "Nothing was moved. These shapes are not on slide "
+            f"{slide_index}: {', '.join(missing)}. On the slide: "
+            f"{', '.join(order)}"
+        )
+
+    with FrozenRedraw():
+        updated = []
+        for name in wanted:
+            shape = by_name[name]
+            _apply_geometry(shape, left, top, width, height, rotation,
+                            dleft, dtop, dwidth, dheight)
+            updated.append(_geometry_of(shape))
+
+    return {"success": True, "count": len(updated), "updated": updated}
+
+
+def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height,
+                       rotation, name, adjustments,
+                       dleft=None, dtop=None, dwidth=None, dheight=None):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.Slides(slide_index)
+    shape = _get_shape(slide, None, shape_name=shape_name, shape_index=shape_index)
+
+    _apply_geometry(shape, left, top, width, height, rotation,
+                    dleft, dtop, dwidth, dheight)
     if name is not None:
         shape.Name = name
 
@@ -1337,10 +1511,17 @@ def get_shape_info(params: ShapeIdentifierInput) -> str:
 
 
 def update_shape(params: UpdateShapeInput) -> str:
-    """Update properties of an existing shape.
+    """Update properties of an existing shape, or of several at once.
 
     Only updates properties that are provided (not None). Can change
     position, size, rotation, name, and shape-specific adjustment handles.
+
+    dleft, dtop, dwidth and dheight are offsets against what the shape has
+    now, so moving something up by 26pt does not need its current top read
+    first. shape_names and all pick several shapes, and exclude leaves some
+    out, so shifting a whole slide except its background is one call rather
+    than one per shape plus the arithmetic. Nothing is written until every
+    name has resolved, so a typo leaves the slide alone.
 
     Adjustment handles control shape-specific geometry — e.g., triangle apex
     position, arrow proportions, callout pointer, star depth, cross thickness.
@@ -1350,15 +1531,27 @@ def update_shape(params: UpdateShapeInput) -> str:
         params: Shape identifier and properties to update.
 
     Returns:
-        JSON with updated shape name, position/size, and adjustment values.
+        JSON with the updated shape name, position and size, and adjustment
+        values. For shape_names or all, a count and one entry per shape.
     """
     try:
-        result = ppt.execute(
-            _update_shape_impl,
-            params.slide_index, params.shape_name, params.shape_index,
-            params.left, params.top, params.width, params.height,
-            params.rotation, params.name, params.adjustments,
-        )
+        if params.all or params.shape_names:
+            result = ppt.execute(
+                _update_many_impl,
+                params.slide_index, params.shape_names, params.all,
+                params.exclude,
+                params.left, params.top, params.width, params.height,
+                params.rotation,
+                params.dleft, params.dtop, params.dwidth, params.dheight,
+            )
+        else:
+            result = ppt.execute(
+                _update_shape_impl,
+                params.slide_index, params.shape_name, params.shape_index,
+                params.left, params.top, params.width, params.height,
+                params.rotation, params.name, params.adjustments,
+                params.dleft, params.dtop, params.dwidth, params.dheight,
+            )
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to update shape: {str(e)}"})
@@ -1596,10 +1789,20 @@ def register_tools(mcp):
         },
     )
     async def tool_update_shape(params: UpdateShapeInput) -> str:
-        """Update properties of an existing shape.
+        """Update properties of an existing shape, or of several at once.
 
-        Identify the shape by name or index. Only provided properties are updated.
-        Can change position (left, top), size (width, height), rotation, and name.
+        Identify the shape by name or index, or several with shape_names, or
+        every shape on the slide with all=true plus exclude for the ones to
+        leave alone. Only provided properties are updated.
+
+        Absolute: left, top, width, height, rotation, name.
+        Relative: dleft, dtop, dwidth, dheight, applied to what the shape has
+        now. Prefer these for moving things, no read and no arithmetic first.
+
+        Shifting a whole slide up by 26pt except its background is one call:
+        all=true, exclude=["Picture 2"], dtop=-26. Nothing is written until
+        every name has resolved, so a typo leaves the slide alone rather than
+        half shifted.
         """
         return await run_offloaded(update_shape, params)
 
