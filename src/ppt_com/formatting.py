@@ -275,7 +275,7 @@ def set_shadow(params: SetShadowInput) -> str:
             _set_shadow_impl,
             params.slide_index, params.shape_name_or_index,
             params.visible, params.blur, params.offset_x, params.offset_y,
-            params.color, params.transparency,
+            params.color, params.transparency, params.target,
         )
         return json.dumps(result)
     except Exception as e:

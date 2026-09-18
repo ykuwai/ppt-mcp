@@ -919,19 +919,30 @@ def _list_shapes_impl(slide_index):
     }
 
 
+# What COM answers for a property of an effect that is not set. Reporting the
+# number is worse than reporting nothing, because it reads like a measurement.
+_UNDEFINED = -2147483648
+
+
+def _defined(value):
+    return None if value is None or value <= _UNDEFINED else value
+
+
 def _glow_of(source):
     """radius, colour and transparency of one Glow object, or None."""
     try:
-        radius = round(source.Radius, 2)
+        radius = _defined(round(source.Radius, 2))
     except Exception:
         return None
     glow = {"radius": radius, "color_hex": None, "transparency": None}
+    if radius is None:
+        return glow
     try:
         glow["color_hex"] = int_to_hex(source.Color.RGB)
     except Exception:
         pass
     try:
-        glow["transparency"] = round(source.Transparency, 2)
+        glow["transparency"] = _defined(round(source.Transparency, 2))
     except Exception:
         pass
     return glow
