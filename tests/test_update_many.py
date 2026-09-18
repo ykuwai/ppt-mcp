@@ -17,50 +17,68 @@ SLIDE = ["Picture 2", "Title 1", "Body 3", "Badge 4"]
 
 
 class TestChoosingWhatMoves:
-    def test_all_is_the_whole_slide_in_slide_order(self):
-        assert select_targets(SLIDE, None, True, None) == (SLIDE, [])
+    """select_targets answers with positions on the slide, not names, and
+    hands back a name it could not place so the caller can look in the groups.
+    """
+
+    def test_all_is_every_shape_in_slide_order(self):
+        assert select_targets(SLIDE, None, True, None) == [0, 1, 2, 3]
 
     def test_all_with_exclude_leaves_the_background_alone(self):
-        wanted, missing = select_targets(SLIDE, None, True, ["Picture 2"])
-        assert wanted == ["Title 1", "Body 3", "Badge 4"]
-        assert missing == []
+        assert select_targets(SLIDE, None, True, ["Picture 2"]) == [1, 2, 3]
 
     def test_a_list_comes_back_in_the_order_it_was_given(self):
-        wanted, _ = select_targets(SLIDE, ["Badge 4", "Title 1"], False, None)
-        assert wanted == ["Badge 4", "Title 1"]
+        assert select_targets(SLIDE, ["Badge 4", "Title 1"], False, None) == [3, 1]
 
-    def test_a_name_that_is_not_there_is_reported_rather_than_skipped(self):
-        wanted, missing = select_targets(SLIDE, ["Title 1", "Nope"], False, None)
-        assert wanted == ["Title 1"]
-        assert missing == ["Nope"]
+    def test_a_name_that_is_not_at_the_top_level_comes_back_as_itself(self):
+        # The caller then tries the groups before calling it missing.
+        assert select_targets(SLIDE, ["Title 1", "Nope"], False, None) == [1, "Nope"]
 
-    def test_every_missing_name_comes_back_not_just_the_first(self):
-        _, missing = select_targets(SLIDE, ["Nope", "Also nope"], False, None)
-        assert missing == ["Nope", "Also nope"]
+    def test_every_such_name_comes_back_not_just_the_first(self):
+        assert select_targets(SLIDE, ["Nope", "Also nope"], False, None) == [
+            "Nope", "Also nope"]
 
     def test_exclude_works_on_a_list_too(self):
-        wanted, missing = select_targets(
-            SLIDE, ["Title 1", "Body 3"], False, ["Body 3"])
-        assert wanted == ["Title 1"]
-        assert missing == []
+        assert select_targets(
+            SLIDE, ["Title 1", "Body 3"], False, ["Body 3"]) == [1]
 
-    def test_excluding_something_absent_is_not_a_missing_name(self):
+    def test_excluding_something_absent_asks_for_nothing(self):
         # The caller said to leave it alone, and it is already alone.
-        wanted, missing = select_targets(SLIDE, ["Title 1", "Nope"], False, ["Nope"])
-        assert wanted == ["Title 1"]
-        assert missing == []
+        assert select_targets(SLIDE, ["Title 1", "Nope"], False, ["Nope"]) == [1]
 
     def test_excluding_everything_moves_nothing_and_is_not_an_error(self):
-        assert select_targets(SLIDE, None, True, SLIDE) == ([], [])
+        assert select_targets(SLIDE, None, True, SLIDE) == []
 
     def test_an_empty_slide_with_all_moves_nothing(self):
-        assert select_targets([], None, True, None) == ([], [])
+        assert select_targets([], None, True, None) == []
 
     def test_a_name_asked_for_twice_is_taken_twice(self):
         # Applying the same offset twice to one shape is the caller's
         # business; silently collapsing it would be a different surprise.
-        wanted, _ = select_targets(SLIDE, ["Title 1", "Title 1"], False, None)
-        assert wanted == ["Title 1", "Title 1"]
+        assert select_targets(SLIDE, ["Title 1", "Title 1"], False, None) == [1, 1]
+
+
+class TestWhenTwoShapesShareAName:
+    """PowerPoint does not stop a slide holding two shapes called the same
+    thing. Going back through the name would move the first of them twice and
+    leave the second where it was, reporting both as done.
+    """
+
+    TWINS = ["Picture 2", "Rectangle 5", "Body 3", "Rectangle 5"]
+
+    def test_all_touches_both_of_them_once_each(self):
+        assert select_targets(self.TWINS, None, True, None) == [0, 1, 2, 3]
+
+    def test_and_still_leaves_out_what_was_excluded(self):
+        assert select_targets(self.TWINS, None, True, ["Body 3"]) == [0, 1, 3]
+
+    def test_excluding_the_shared_name_leaves_out_both(self):
+        assert select_targets(self.TWINS, None, True, ["Rectangle 5"]) == [0, 2]
+
+    def test_naming_it_means_the_first_one(self):
+        # One name cannot pick between them, and the first is what every
+        # other tool means by it.
+        assert select_targets(self.TWINS, ["Rectangle 5"], False, None) == [1]
 
 
 def rejected(**kwargs):

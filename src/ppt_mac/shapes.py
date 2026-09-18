@@ -1201,25 +1201,26 @@ def _update_many_impl(slide_index, shape_names, all_shapes, exclude,
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
 
-    by_name = {}
-    order = []
-    for shape in shapes_of(slide):
-        shape_name = shape.name()
-        order.append(shape_name)
-        by_name.setdefault(shape_name, shape)
+    shapes = shapes_of(slide)
+    order = [shape.name() for shape in shapes]
 
-    wanted, missing = select_targets(order, shape_names, all_shapes, exclude)
+    picked = select_targets(order, shape_names, all_shapes, exclude)
+    targets = [shapes[pick] for pick in picked if isinstance(pick, int)]
+    # A name that is not at the top level is simply missing here. Windows
+    # looks inside the groups at this point; nothing can, on this side.
+    missing = [pick for pick in picked if not isinstance(pick, int)]
     if missing:
         raise ValueError(
             "Nothing was moved. These shapes are not on slide "
             f"{slide_index}: {', '.join(missing)}. On the slide: "
-            f"{', '.join(order)}"
+            f"{', '.join(order)}. A shape inside a group cannot be reached by "
+            "name here, because a group answers no members over Apple Events; "
+            "ppt_ungroup_shapes is the way in."
         )
 
     with FrozenRedraw():
         updated = []
-        for shape_name in wanted:
-            shape = by_name[shape_name]
+        for shape in targets:
             _apply_geometry(shape, left, top, width, height, rotation,
                             dleft, dtop, dwidth, dheight)
             updated.append(_geometry_of(shape))

@@ -1134,29 +1134,38 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
 # Choosing what an update applies to
 # ---------------------------------------------------------------------------
 def select_targets(available, shape_names, all_shapes, exclude):
-    """Work out which names an update should touch, and which are missing.
+    """Work out which shapes an update should touch.
 
-    Pure name arithmetic, apart from the slide, so the awkward part can be
-    tested without PowerPoint. `available` is the names on the slide in z
-    order. Returns (names to update, names asked for that are not there).
+    Pure arithmetic, apart from the slide, so the awkward part can be tested
+    without PowerPoint. `available` is the names on the slide at the top
+    level, in z order.
+
+    Returns one list, in the order the answer should come back in. An int is a
+    position in `available`, a str is a name that is not at the top level and
+    has to be resolved another way before anything is called missing, because
+    a shape inside a group answers to its own name everywhere else.
+
+    Positions rather than names, because two shapes on a slide can share a
+    name. Going back through the name would move the first of them twice and
+    leave the second where it was, while reporting both as done.
 
     Order follows the slide for `all`, and the caller's list otherwise, so a
     result reads in the order the caller thinks in.
     """
     excluded = set(exclude or ())
     if all_shapes:
-        return [n for n in available if n not in excluded], []
+        return [i for i, name in enumerate(available) if name not in excluded]
 
-    present = set(available)
-    wanted, missing = [], []
+    first_at = {}
+    for i, name in enumerate(available):
+        first_at.setdefault(name, i)
+
+    picked = []
     for name in shape_names:
         if name in excluded:
             continue
-        if name in present:
-            wanted.append(name)
-        else:
-            missing.append(name)
-    return wanted, missing
+        picked.append(first_at.get(name, name))
+    return picked
 
 
 def _apply_geometry(shape, left, top, width, height, rotation,
@@ -1206,25 +1215,32 @@ def _update_many_impl(slide_index, shape_names, all_shapes, exclude,
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
 
-    by_name = {}
-    order = []
-    for i in range(1, slide.Shapes.Count + 1):
-        shape = slide.Shapes(i)
-        order.append(shape.Name)
-        by_name.setdefault(shape.Name, shape)
+    shapes = [slide.Shapes(i) for i in range(1, slide.Shapes.Count + 1)]
+    order = [shape.Name for shape in shapes]
 
-    wanted, missing = select_targets(order, shape_names, all_shapes, exclude)
+    targets, missing = [], []
+    for pick in select_targets(order, shape_names, all_shapes, exclude):
+        if isinstance(pick, int):
+            targets.append(shapes[pick])
+            continue
+        # Not at the top level. It may still be a group's child, which
+        # answers to its own name, or a "Group 20/Rounded Rectangle 22" path,
+        # the way shape_name does.
+        try:
+            targets.append(resolve_shape(slide, pick))
+        except ValueError:
+            missing.append(pick)
+
     if missing:
         raise ValueError(
-            "Nothing was moved. These shapes are not on slide "
-            f"{slide_index}: {', '.join(missing)}. On the slide: "
-            f"{', '.join(order)}"
+            "Nothing was moved. Not found on slide "
+            f"{slide_index}, at the top level or inside a group: "
+            f"{', '.join(missing)}. On the slide: {', '.join(order)}"
         )
 
     with FrozenRedraw():
         updated = []
-        for name in wanted:
-            shape = by_name[name]
+        for shape in targets:
             _apply_geometry(shape, left, top, width, height, rotation,
                             dleft, dtop, dwidth, dheight)
             updated.append(_geometry_of(shape))
@@ -1784,7 +1800,10 @@ def register_tools(mcp):
             "title": "Update Shape",
             "readOnlyHint": False,
             "destructiveHint": False,
-            "idempotentHint": True,
+            # The absolute fields are idempotent and the d* offsets are not:
+            # a retried dtop=-26 moves the shape another 26 points. The hint
+            # is one value for the whole tool, so it takes the honest one.
+            "idempotentHint": False,
             "openWorldHint": False,
         },
     )
@@ -1803,6 +1822,11 @@ def register_tools(mcp):
         all=true, exclude=["Picture 2"], dtop=-26. Nothing is written until
         every name has resolved, so a typo leaves the slide alone rather than
         half shifted.
+
+        The d* offsets are not idempotent: sending the same call twice moves
+        the shape twice. all=true means the shapes at the top level, so a
+        group moves as one; name a group's child in shape_names to reach
+        inside it.
         """
         return await run_offloaded(update_shape, params)
 
