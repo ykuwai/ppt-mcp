@@ -935,7 +935,9 @@ def _glow_of(source):
     except Exception:
         return None
     glow = {"radius": radius, "color_hex": None, "transparency": None}
-    if radius is None:
+    # A glow of no radius is not a glow, and the colour COM still holds for it
+    # is the sort of value that reads like a measurement and is not one.
+    if not radius:
         return glow
     try:
         glow["color_hex"] = int_to_hex(source.Color.RGB)

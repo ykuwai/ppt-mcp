@@ -20,6 +20,7 @@ from ppt_com.effects import (
     will_not_draw,
 )
 from ppt_com.formatting import SetShadowInput
+from ppt_com.shapes import _glow_of
 
 
 class Visibility:
@@ -128,6 +129,43 @@ class TestWhenAShapeEffectWillDrawNothing:
         assert "TextBox 10" in message
         assert "will not change" in message
         assert "target='text'" in message
+
+
+class Glow:
+    """A Glow object as COM answers it, undefined properties and all."""
+
+    UNDEFINED = -2147483648
+
+    def __init__(self, radius, color=0x000000, transparency=UNDEFINED):
+        self.Radius = radius
+        self.Color = type("C", (), {"RGB": color})()
+        self.Transparency = transparency
+
+
+class TestReadingAGlowBack:
+    """COM answers -2147483648 for a property of an effect that is not set.
+    Reporting that number is worse than reporting nothing, because it reads
+    like a measurement.
+    """
+
+    def test_a_glow_that_is_set_comes_back_whole(self):
+        glow = _glow_of(Glow(19.0, color=0xFFFFFF, transparency=0.0))
+        assert glow == {"radius": 19.0, "color_hex": "#FFFFFF", "transparency": 0.0}
+
+    def test_no_radius_means_no_glow_and_nothing_else_is_reported(self):
+        assert _glow_of(Glow(0.0)) == {
+            "radius": 0.0, "color_hex": None, "transparency": None}
+
+    def test_an_undefined_transparency_is_not_a_number(self):
+        glow = _glow_of(Glow(19.0, color=0xFFFFFF, transparency=Glow.UNDEFINED))
+        assert glow["transparency"] is None
+        assert glow["radius"] == 19.0
+
+    def test_an_undefined_radius_is_not_a_glow_either(self):
+        assert _glow_of(Glow(Glow.UNDEFINED))["radius"] is None
+
+    def test_something_that_is_not_a_glow_at_all_is_None(self):
+        assert _glow_of(object()) is None
 
 
 def models():

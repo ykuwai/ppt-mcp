@@ -913,7 +913,9 @@ def _glow_of(source):
         return None
     return {
         "radius": radius,
-        "color_hex": _glow_colour(source),
+        # A glow of no radius is not a glow, so the colour it still holds is
+        # not reported either.
+        "color_hex": _glow_colour(source) if radius else None,
         # PowerPoint for Mac's glow format has no transparency property.
         "transparency": None,
     }
