@@ -918,60 +918,37 @@ def _format_text_impl(slide_index, shape_name_or_index,
     return result
 
 
-def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
-                            search_text, occurrence,
-                            font_name, font_name_fareast, font_size, bold, italic, underline,
-                            color, font_color_theme, highlight_color) -> dict:
+def _text_frame_of(slide_index, shape_name_or_index):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.slides[slide_index]
     shape = _get_shape(slide, shape_name_or_index)
-
     _require_text_frame(shape)
+    return shape, shape.text_frame.text_range
 
-    tr = shape.text_frame.text_range
-    full_text = _text_of(tr)
 
-    # Resolve search_text to start/length if provided
-    if search_text is not None:
-        pos = -1
-        search_from = 0
-        for i in range(occurrence):
-            pos = full_text.find(search_text, search_from)
-            if pos == -1:
-                if i == 0:
-                    raise ValueError(
-                        f"search_text '{search_text}' not found in shape '{shape.name()}'"
-                    )
-                else:
-                    raise ValueError(
-                        f"search_text '{search_text}' has only {i} occurrence(s) "
-                        f"in shape '{shape.name()}', but occurrence={occurrence} was requested"
-                    )
-            search_from = pos + len(search_text)
-        # Character positions are 1-based here too
-        start = pos + 1
-        length = len(search_text)
-
+def _format_span(shape, tr, full_text, start, length, spec) -> tuple:
+    """Apply one span's formatting. Returns (entry, warnings, unsupported)."""
     warnings = _apply_font_to_range(tr, start, length, {
-        "font_name": font_name,
-        "font_name_fareast": font_name_fareast,
-        "font_size": font_size,
-        "bold": bold,
-        "italic": italic,
-        "underline": underline,
-        "color": color,
-        "font_color_theme": font_color_theme,
+        "font_name": spec.get("font_name"),
+        "font_name_fareast": spec.get("font_name_fareast"),
+        "font_size": spec.get("font_size"),
+        "bold": spec.get("bold"),
+        "italic": spec.get("italic"),
+        "underline": spec.get("underline"),
+        "color": spec.get("color"),
+        "font_color_theme": spec.get("font_color_theme"),
     })
 
-    warning = None
-    if highlight_color is not None:
-        warning = _apply_highlight(tr, highlight_color, start, length)
+    unsupported = []
+    if spec.get("highlight_color") is not None:
+        warning = _apply_highlight(tr, spec["highlight_color"], start, length)
+        if warning:
+            unsupported.append("highlight_color=clear")
+            warnings.append(warning)
 
-    result = {
-        "status": "success",
-        "shape_name": shape.name(),
+    entry = {
         # Sliced from the text already read rather than asked for again. A
         # `thru` range answers one value per element, so reading its content
         # back would give a list of single characters instead of a string.
@@ -979,10 +956,80 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
         "start": start,
         "length": length,
     }
-    if warning:
+    return entry, warnings, unsupported
+
+
+def _format_text_ranges_impl(slide_index, shape_name_or_index, base, ranges) -> dict:
+    """The macOS half of ppt_com.text._format_text_ranges_impl.
+
+    Same order, same rule that every span is resolved before anything is
+    written. FrozenRedraw is a no-op here, the whole call being one round of
+    Apple Events rather than a visible sequence.
+    """
+    from ppt_com.text import _resolve_span
+
+    shape, tr = _text_frame_of(slide_index, shape_name_or_index)
+    name = shape.name()
+    full_text = _text_of(tr)
+
+    spans = [
+        _resolve_span(full_text, name, spec.get("start"), spec.get("length"),
+                      spec.get("search_text"), spec.get("occurrence", 1))
+        for spec in ranges
+    ]
+
+    warnings, unsupported, applied = [], [], []
+    if base:
+        _, base_warnings, base_unsupported = _format_span(
+            shape, tr, full_text, 1, len(full_text), base)
+        warnings += base_warnings
+        unsupported += base_unsupported
+
+    for (start, length), spec in zip(spans, ranges):
+        entry, span_warnings, span_unsupported = _format_span(
+            shape, tr, full_text, start, length, spec)
+        applied.append(entry)
+        warnings += span_warnings
+        unsupported += span_unsupported
+
+    result = {
+        "status": "success",
+        "shape_name": name,
+        "count": len(applied),
+        "ranges": applied,
+    }
+    if unsupported:
         result["partial"] = True
-        result["unsupported"] = ["highlight_color=clear"]
-        warnings.append(warning)
+        result["unsupported"] = sorted(set(unsupported))
+    if warnings:
+        result["warnings"] = sorted(set(warnings))
+    return result
+
+
+def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
+                            search_text, occurrence,
+                            font_name, font_name_fareast, font_size, bold, italic, underline,
+                            color, font_color_theme, highlight_color) -> dict:
+    from ppt_com.text import _resolve_span
+
+    shape, tr = _text_frame_of(slide_index, shape_name_or_index)
+    full_text = _text_of(tr)
+    start, length = _resolve_span(
+        full_text, shape.name(), start, length, search_text, occurrence)
+
+    entry, warnings, unsupported = _format_span(
+        shape, tr, full_text, start, length, {
+            "font_name": font_name, "font_name_fareast": font_name_fareast,
+            "font_size": font_size, "bold": bold, "italic": italic,
+            "underline": underline, "color": color,
+            "font_color_theme": font_color_theme,
+            "highlight_color": highlight_color,
+        })
+
+    result = {"status": "success", "shape_name": shape.name(), **entry}
+    if unsupported:
+        result["partial"] = True
+        result["unsupported"] = unsupported
     if warnings:
         result["warnings"] = warnings
     return result
