@@ -14,12 +14,12 @@
 </p>
 
 <p align="center">
-  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 156 tools for AI agents and developers.</strong>
+  <strong>Real-time PowerPoint control on Windows and macOS —<br>an MCP server with 156 tools for AI agents and developers.</strong>
 </p>
 
 ---
 
-An MCP (Model Context Protocol) server that gives AI agents full control over a live Microsoft PowerPoint instance via COM automation. Unlike file-based libraries like python-pptx, this server interacts directly with a running PowerPoint application.
+An MCP (Model Context Protocol) server that gives AI agents full control over a live Microsoft PowerPoint instance, over COM on Windows and Apple Events on macOS. Unlike file-based libraries like python-pptx, this server interacts directly with a running PowerPoint application.
 
 ## 🎬 Demo
 
@@ -34,6 +34,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
+- **Windows and macOS** — The same tools, arguments and return values on both; where PowerPoint for Mac cannot do something, the tool says so rather than quietly doing nothing
 
 ## 📋 Requirements
 

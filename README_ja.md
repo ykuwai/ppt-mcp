@@ -14,12 +14,12 @@
 </p>
 
 <p align="center">
-  <strong>COM自動化によるPowerPointのリアルタイム制御 —<br>AIエージェントと開発者のための156ツールを備えたMCPサーバー</strong>
+  <strong>WindowsとmacOSで動くPowerPointのリアルタイム制御 —<br>AIエージェントと開発者のための156ツールを備えたMCPサーバー</strong>
 </p>
 
 ---
 
-PowerPointをCOM自動化で完全に制御するMCP（Model Context Protocol）サーバーです。python-pptxのようなファイルベースのライブラリとは異なり、起動中のPowerPointアプリケーションと直接やり取りします。
+起動中のPowerPointを完全に制御するMCP（Model Context Protocol）サーバーです。WindowsではCOM、macOSではApple Events経由で操作します。python-pptxのようなファイルベースのライブラリとは異なり、起動中のPowerPointアプリケーションと直接やり取りします。
 
 ## 🎬 デモ
 
@@ -34,6 +34,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 - **AIエージェントに安全** — `ppt_activate_presentation` で操作対象ファイルを固定。誤って別のプレゼンを編集するミスを防止
 - **[Google Material Symbols](https://fonts.google.com/icons) アイコン** — 2,500以上のアイコンをキーワード検索し、テーマカラーでSVG挿入
 - **テーマカラー連携** — RGB値のハードコードではなく `accent1`、`accent2` などのテーマカラー名で指定
+- **WindowsとmacOSに対応** — ツール名も引数も返り値も両者で同一。PowerPoint for Macで届かない操作は、黙って何もせずそう答える
 
 ## 📋 動作環境
 
