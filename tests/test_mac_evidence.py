@@ -121,6 +121,46 @@ class TestArgumentsAreCheckedFirst:
             with pytest.raises(ValueError, match="dash_style"):
                 _set_line_impl(1, "Box", "#FF0000", 2.0, "wiggly", None, None)
 
+    @pytest.mark.parametrize(
+        "name", ["long_dash_dot_dot", "sys_dash", "sys_dot", "sys_dash_dot"]
+    )
+    def test_a_dash_style_macos_has_no_word_for_is_refused_by_name(self, name):
+        """Issue #242. Windows takes these; macOS must not draw another style."""
+        from ppt_mac.formatting import _set_line_impl
+
+        with _no_powerpoint():
+            result = _set_line_impl(1, "Box", "#FF0000", 2.0, name, None, 0.5)
+
+        assert result["error"] == (
+            f"ppt_set_line cannot set dash_style '{name}' on macOS"
+        )
+        assert "round_dot" in result["alternatives"][0]
+
+    def test_a_table_border_dash_style_macos_has_no_word_for_is_refused(self):
+        from ppt_mac.tables import _set_table_borders_impl
+
+        with _no_powerpoint():
+            result = _set_table_borders_impl(
+                1, "Table", 1, 1, None, None, ["top"],
+                None, "#FF0000", 1.0, "sys_dash",
+            )
+
+        assert result["error"] == (
+            "ppt_set_table_borders cannot set dash_style 'sys_dash' on macOS"
+        )
+
+    def test_square_and_round_dot_are_the_right_enumerators(self):
+        from appscript import k
+
+        from ppt_mac.shapes import _dash_style_keyword
+
+        assert _dash_style_keyword("ppt_set_line", "square_dot", 2) == (
+            k.line_dash_style_square_dot, None
+        )
+        assert _dash_style_keyword("ppt_set_line", "round_dot", 3) == (
+            k.line_dash_style_round_dot, None
+        )
+
     def test_a_bad_fill_type_never_moves_the_view(self):
         from ppt_mac.formatting import _set_fill_impl
 

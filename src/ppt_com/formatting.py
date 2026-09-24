@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from utils.offload import run_offloaded
 from backend import ppt
@@ -16,8 +16,8 @@ from ppt_com.constants import (
     msoGradientHorizontal, msoGradientVertical,
     msoGradientDiagonalUp, msoGradientDiagonalDown,
     msoGradientFromCorner, msoGradientFromCenter,
-    msoLineSolid, msoLineRoundDot, msoLineDash,
-    msoLineDashDot, msoLineLongDash,
+    DASH_STYLE_MAP, DASH_STYLE_DESCRIPTION,  # noqa: F401  (DASH_STYLE_MAP re-exported)
+    check_dash_style, dash_style_value,
 )
 from ppt_com.shape_lookup import resolve_shape as _get_shape
 from ppt_com.effects import (
@@ -40,13 +40,7 @@ GRADIENT_STYLE_MAP = {
     "from_center": msoGradientFromCenter,
 }
 
-DASH_STYLE_MAP = {
-    "solid": msoLineSolid,
-    "round_dot": msoLineRoundDot,
-    "dash": msoLineDash,
-    "dash_dot": msoLineDashDot,
-    "long_dash": msoLineLongDash,
-}
+# DASH_STYLE_MAP lives in ppt_com.constants and is shared by every line tool.
 
 
 # ---------------------------------------------------------------------------
@@ -92,13 +86,17 @@ class SetLineInput(BaseModel):
     color: Optional[str] = Field(default=None, description="Line color as '#RRGGBB'")
     weight: Optional[float] = Field(default=None, description="Line weight in points")
     dash_style: Optional[str] = Field(
-        default=None,
-        description="'solid', 'round_dot', 'dash', 'dash_dot', or 'long_dash'"
+        default=None, description=DASH_STYLE_DESCRIPTION
     )
     visible: Optional[bool] = Field(default=None, description="Line visible on/off")
     transparency: Optional[float] = Field(
         default=None, description="Transparency 0.0 (opaque) to 1.0 (fully transparent)"
     )
+
+    @field_validator("dash_style")
+    @classmethod
+    def _dash_style_known(cls, v):
+        return check_dash_style(v)
 
 
 class SetShadowInput(BaseModel):
@@ -166,6 +164,10 @@ def _set_fill_impl(slide_index, shape_name_or_index, fill_type,
 
 def _set_line_impl(slide_index, shape_name_or_index,
                     color, weight, dash_style, visible, transparency) -> dict:
+    # Resolved before the view moves or anything is written, so an unknown
+    # name changes nothing.
+    dash_val = dash_style_value(dash_style) if dash_style is not None else None
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -183,13 +185,7 @@ def _set_line_impl(slide_index, shape_name_or_index,
     if weight is not None:
         line.Weight = weight
 
-    if dash_style is not None:
-        dash_val = DASH_STYLE_MAP.get(dash_style)
-        if dash_val is None:
-            raise ValueError(
-                f"Invalid dash_style '{dash_style}'. "
-                f"Valid values: {list(DASH_STYLE_MAP.keys())}"
-            )
+    if dash_val is not None:
         line.DashStyle = dash_val
 
     if transparency is not None:
@@ -321,6 +317,9 @@ def register_tools(mcp):
         """Set the border/line of a shape.
 
         Configure color, weight, dash style, visibility, and transparency.
+        Line cap (round, flat or square ends) is not in the PowerPoint object
+        model and cannot be set here. To match a line that has one, use
+        ppt_copy_formatting from that line.
         """
         return await run_offloaded(set_line, params)
 

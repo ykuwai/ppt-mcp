@@ -26,6 +26,7 @@ from typing import Optional, Union
 from appscript import k
 from appscript.reference import CommandError
 
+from backend.unsupported import refusal as _refusal
 from backend.mac_ae import (
     count,
     elements,
@@ -50,7 +51,7 @@ from backend.mac_enums import (
     to_keyword,
 )
 from ppt_com.constants import (
-    GRADIENT_STYLE_MAP, SHAPE_TYPE_NAMES,
+    DASH_STYLE_MAP, DASH_STYLE_NAMES, GRADIENT_STYLE_MAP, SHAPE_TYPE_NAMES,
     msoBringForward, msoGroup, msoSendToBack,
 )
 from utils.color import hex_to_rgb_list, rgb_list_to_hex
@@ -77,6 +78,40 @@ _WIN_TEXT_ORIENTATION = {
 # way and the plain spelling raises AttributeError.
 _ROTATION = b"ShRt"
 _DASH_STYLE = b"LFds"
+
+# The dash style names this side can write, in the order the tools list them.
+# Windows takes all twelve. PowerPoint for Mac's dictionary is only known to
+# have the first eight numbers; long_dash_dot_dot and the three sys styles have
+# no enumerator paired with them, so they are refused rather than drawn as
+# something close.
+_MAC_DASH_STYLE_NAMES = [
+    name for name, value in DASH_STYLE_MAP.items() if value in MsoLineDashStyle
+]
+
+
+def _dash_style_keyword(tool_name: str, dash_style, dash_val):
+    """The macOS enumerator for a resolved dash style, or a refusal naming it.
+
+    Returns ``(keyword, None)`` or ``(None, refusal)``. Called before the view
+    moves, so a refused style changes nothing.
+    """
+    if dash_val is None:
+        return None, None
+    if dash_val in MsoLineDashStyle:
+        return MsoLineDashStyle[dash_val], None
+    return None, _refusal(
+        tool_name,
+        f"dash_style '{dash_style}' (MsoLineDashStyle {dash_val}) has no "
+        "`line dash style` enumerator known in PowerPoint for Mac's "
+        "dictionary, so it cannot be written, and no other style is drawn "
+        "in its place. Nothing was changed.",
+        [
+            f"{tool_name} with dash_style one of: "
+            + ", ".join(_MAC_DASH_STYLE_NAMES),
+            "ppt_copy_formatting from a line that already has this style",
+        ],
+        error=f"{tool_name} cannot set dash_style '{dash_style}' on macOS",
+    )
 
 # The size PowerPoint leaves behind when it decided not to make what it was
 # asked for and said nothing about it.
@@ -1131,10 +1166,15 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         except Exception:
             pass
         try:
-            # The other name AppleScript has claimed; reached by code.
-            info["line"]["dash_style"] = _win_constant(
-                _WIN_DASH_STYLE, raw(line, _DASH_STYLE).get()
-            )
+            # The other name AppleScript has claimed; reached by code. Reported
+            # as the name ppt_set_line takes, as on Windows, and as the number
+            # when there is no name for it.
+            dash = _win_constant(_WIN_DASH_STYLE, raw(line, _DASH_STYLE).get())
+            info["line"]["dash_style"] = DASH_STYLE_NAMES.get(dash, dash)
+        except Exception:
+            pass
+        try:
+            info["line"]["transparency"] = round(line.transparency(), 2)
         except Exception:
             pass
     except Exception:

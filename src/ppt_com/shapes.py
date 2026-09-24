@@ -24,6 +24,7 @@ from ppt_com.constants import (
     msoTextOrientationHorizontal,
     msoBringToFront, msoSendToBack, msoBringForward, msoSendBackward,
     GRADIENT_STYLE_MAP,
+    DASH_STYLE_NAMES,
 )
 
 logger = logging.getLogger(__name__)
@@ -1129,7 +1130,14 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         except Exception:
             pass
         try:
-            info["line"]["dash_style"] = line.DashStyle
+            # The name ppt_set_line takes, so a line read here can be
+            # reproduced. A number with no name (mixed, -2) stays a number.
+            dash = line.DashStyle
+            info["line"]["dash_style"] = DASH_STYLE_NAMES.get(dash, dash)
+        except Exception:
+            pass
+        try:
+            info["line"]["transparency"] = round(line.Transparency, 2)
         except Exception:
             pass
     except Exception:
@@ -1838,7 +1846,8 @@ def register_tools(mcp):
         Identify the shape by name (shape_name) or 1-based index (shape_index).
         Returns full text, fill info, line info, rotation, z-order, and
         text_frame (autofit, word_wrap, vertical_anchor, orientation,
-        margins). Read text_frame before sizing text to fit a box. autofit is
+        margins). line.dash_style is the name ppt_set_line takes, so a line
+        read here can be reproduced. Read text_frame before sizing text to fit a box. autofit is
         the configured mode, so "shrink_to_fit" means the drawn size may be
         smaller than the size that was set, and ppt_check_typography is what
         says whether it currently is. The usable width is the shape width

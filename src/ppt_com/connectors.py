@@ -8,15 +8,15 @@ import json
 import logging
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from utils.offload import run_offloaded
 from backend import ppt
 from utils.color import hex_to_int
 from utils.navigation import goto_slide
 from ppt_com.constants import (
-    msoLineSolid, msoLineRoundDot, msoLineDash,
-    msoLineDashDot, msoLineLongDash,
+    DASH_STYLE_MAP, DASH_STYLE_DESCRIPTION,  # noqa: F401  (DASH_STYLE_MAP re-exported)
+    check_dash_style, dash_style_value,
     msoArrowheadNone, msoArrowheadTriangle, msoArrowheadOpen,
     msoArrowheadStealth, msoArrowheadDiamond, msoArrowheadOval,
 )
@@ -55,13 +55,7 @@ ARROW_WIDTH_MAP: dict[str, int] = {
     "wide": 3,     # msoArrowheadWide
 }
 
-DASH_STYLE_MAP: dict[str, int] = {
-    "solid": msoLineSolid,
-    "round_dot": msoLineRoundDot,
-    "dash": msoLineDash,
-    "dash_dot": msoLineDashDot,
-    "long_dash": msoLineLongDash,
-}
+# DASH_STYLE_MAP lives in ppt_com.constants and is shared by every line tool.
 
 # Friendly names for connection sites.
 # Maps a direction name to a unit vector (dx, dy) used to find the closest
@@ -202,8 +196,11 @@ class FormatConnectorInput(BaseModel):
         default=None, description="Line weight in points"
     )
     dash_style: Optional[str] = Field(
-        default=None,
-        description="'solid', 'round_dot', 'dash', 'dash_dot', or 'long_dash'",
+        default=None, description=DASH_STYLE_DESCRIPTION,
+    )
+    transparency: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Transparency 0.0 (opaque) to 1.0 (fully transparent)",
     )
     begin_arrow: Optional[str] = Field(
         default=None,
@@ -253,6 +250,11 @@ class FormatConnectorInput(BaseModel):
             "'top', 'bottom', 'left', 'right'. Defaults to 1 if omitted"
         ),
     )
+
+    @field_validator("dash_style")
+    @classmethod
+    def _dash_style_known(cls, v):
+        return check_dash_style(v)
 
     @model_validator(mode="after")
     def check_site_requires_shape(self) -> "FormatConnectorInput":
@@ -324,7 +326,11 @@ def _format_connector_impl(slide_index, shape_name_or_index,
                              begin_arrow, begin_arrow_length, begin_arrow_width,
                              end_arrow, end_arrow_length, end_arrow_width,
                              begin_shape, begin_site,
-                             end_shape, end_site):
+                             end_shape, end_site, transparency=None):
+    # Resolved before the view moves or anything is written, so an unknown
+    # name changes nothing.
+    dash_val = dash_style_value(dash_style) if dash_style is not None else None
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -339,14 +345,11 @@ def _format_connector_impl(slide_index, shape_name_or_index,
     if weight is not None:
         line.Weight = weight
 
-    if dash_style is not None:
-        dash_val = DASH_STYLE_MAP.get(dash_style.strip().lower())
-        if dash_val is None:
-            raise ValueError(
-                f"Unknown dash_style '{dash_style}'. "
-                f"Valid values: {list(DASH_STYLE_MAP.keys())}"
-            )
+    if dash_val is not None:
         line.DashStyle = dash_val
+
+    if transparency is not None:
+        line.Transparency = transparency
 
     if begin_arrow is not None:
         arrow_val = ARROW_STYLE_MAP.get(begin_arrow.strip().lower())
@@ -466,7 +469,7 @@ def format_connector(params: FormatConnectorInput) -> str:
             params.begin_arrow, params.begin_arrow_length, params.begin_arrow_width,
             params.end_arrow, params.end_arrow_length, params.end_arrow_width,
             params.begin_shape, params.begin_site,
-            params.end_shape, params.end_site,
+            params.end_shape, params.end_site, params.transparency,
         )
         return json.dumps(result)
     except Exception as e:
@@ -512,7 +515,8 @@ def register_tools(mcp):
     async def tool_format_connector(params: FormatConnectorInput) -> str:
         """Format a connector's line properties and reconnect endpoints.
 
-        Configure color, weight, dash style, arrowheads, and arrowhead size.
+        Configure color, weight, dash style, transparency, arrowheads, and
+        arrowhead size.
         Reconnect begin/end to different shapes via begin_shape/end_shape.
         Connection sites accept 1-based indices or direction names
         ('top', 'bottom', 'left', 'right').
