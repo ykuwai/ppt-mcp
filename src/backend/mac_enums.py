@@ -18,6 +18,7 @@ directional variants and in no plain form, and picking one would be a guess:
     MsoAnimAfterEffect: msoAnimAfterEffectNone
     MsoAnimTriggerType: msoAnimTriggerNone
     MsoAnimateByLevel: msoAnimateLevelNone
+    MsoLineDashStyle: msoLineLongDashDotDot, msoLineSysDash, msoLineSysDot, msoLineSysDashDot
     MsoShapeType: msoEmbeddedOLEObject, msoOLEControlObject, msoTextEffect
     MsoTextOrientation: msoTextOrientationVerticalFarEast
     MsoTriState: msoTriStateMixed
@@ -32,6 +33,11 @@ directional variants and in no plain form, and picking one would be a guess:
     PpTransitionSpeed: ppTransitionSpeedFast, ppTransitionSpeedMedium, ppTransitionSpeedSlow
     PpViewType: ppViewSlideMaster, ppViewNotesPage, ppViewThumbnails, ppViewMasterThumbnails
     PpWindowState: ppWindowMaximized
+
+Edited by hand once since the last run (issue #242), to be confirmed by the
+next one. constants.py had MsoLineDashStyle 2 and 3 swapped, so 2 and 3 below
+are swapped to match the fixed names. Its 9 to 12 were added after the last run
+and have never been matched against the dictionary.
 """
 
 from appscript import k
@@ -284,8 +290,8 @@ MsoGradientStyle: dict = {
 
 MsoLineDashStyle: dict = {
     1: k.line_dash_style_solid,  # msoLineSolid
-    2: k.line_dash_style_round_dot,  # msoLineRoundDot
-    3: k.line_dash_style_square_dot,  # msoLineDot
+    2: k.line_dash_style_square_dot,  # msoLineSquareDot
+    3: k.line_dash_style_round_dot,  # msoLineRoundDot
     4: k.line_dash_style_dash,  # msoLineDash
     5: k.line_dash_style_dash_dot,  # msoLineDashDot
     6: k.line_dash_style_dash_dot_dot,  # msoLineDashDotDot

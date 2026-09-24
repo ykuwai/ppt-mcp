@@ -549,6 +549,53 @@ class TestFormatConnector:
         assert connector.rerouted == 1
         assert result["success"] is True
 
+    def test_transparency_is_written_to_the_line_format(self):
+        from ppt_mac.connectors import _format_connector_impl
+
+        with _fake_deck(["Connector"]) as deck:
+            result = _format_connector_impl(
+                1, "Connector", None, None, None, None, None, None,
+                None, None, None, None, None, None, None, 0.45,
+            )
+
+        assert deck.shape("Connector").line_format.transparency() == 0.45
+        assert result["success"] is True
+
+    def test_round_dot_is_the_round_enumerator(self, monkeypatch):
+        """Issue #242. 3 is round dot on both platforms now."""
+        from appscript import k
+
+        from ppt_mac import connectors as mac_connectors
+
+        monkeypatch.setattr(
+            mac_connectors, "raw", lambda ref, code: ref.dash_style_raw
+        )
+        with _fake_deck(["Connector"]) as deck:
+            mac_connectors._format_connector_impl(
+                1, "Connector", None, None, "round_dot", None, None, None,
+                None, None, None, None, None, None, None,
+            )
+
+        line = deck.shape("Connector").line_format
+        assert line.dash_style_raw() == k.line_dash_style_round_dot
+
+    @pytest.mark.parametrize(
+        "name", ["long_dash_dot_dot", "sys_dash", "sys_dot", "sys_dash_dot"]
+    )
+    def test_a_style_macos_has_no_word_for_is_refused_by_name(self, name):
+        from ppt_mac.connectors import _format_connector_impl
+
+        with _no_powerpoint():
+            result = _format_connector_impl(
+                1, "Connector", "#FF0000", 2.0, name, None, None, None,
+                None, None, None, None, None, None, None, 0.5,
+            )
+
+        assert result["error"] == (
+            f"ppt_format_connector cannot set dash_style '{name}' on macOS"
+        )
+        assert "Nothing was changed" in result["reason"]
+
     def test_a_shape_that_is_not_a_connector_cannot_be_reconnected(self):
         from ppt_mac.connectors import _format_connector_impl
 
@@ -667,7 +714,7 @@ class _FakeShape:
         self.soft_edge_format = _bag(soft_edge_type=None)
         self.line_format = _bag(
             fore_color=None, line_weight=None, dash_style_raw=None,
-            begin_arrowhead_style=None, begin_arrow_head_length=None,
+            transparency=None, begin_arrowhead_style=None, begin_arrow_head_length=None,
             begin_arrowhead_width=None, end_arrowhead_style=None,
             end_arrowhead_length=None, end_arrowhead_width=None,
         )

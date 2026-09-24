@@ -106,11 +106,10 @@ OVERRIDES = {
     # beside it says so), and macOS puts `text to fit shape` in MsoAutoSize
     # too. Forcing it into the wrong enumeration is what the override check
     # caught, so the caller reads MsoAutoSize for a text frame's auto size.
-    "MsoLineDashStyle": {
-        # Windows msoLineDot is a square dot; macOS spells that out, so the
-        # name matcher cannot see that they are the same thing.
-        "msoLineDot": "line dash style square dot",
-    },
+    # MsoLineDashStyle needs no override. constants.py used to call 3
+    # msoLineDot and 2 msoLineRoundDot, which is wrong on both counts (2 is
+    # msoLineSquareDot and 3 is msoLineRoundDot, issue #242), and an override
+    # here paired the wrong one. With the right names both pair on their own.
     "MsoAnimEffect": {
         # The two motion paths whose macOS name is not the Windows one with its
         # words rotated. PowerPoint offers no plain star path, so the five
@@ -341,8 +340,8 @@ def main():
 
         # Two separate indexes, not one merged one. A strict lookup has to be
         # answered only by strict readings; otherwise `line dash style dash
-        # dot` reduced loosely to "dot" answers msoLineDot's exact "dot" and
-        # the strict pass stops being strict.
+        # dot` reduced loosely to "dot" answers the exact "dot" of a constant
+        # such as the old msoLineDot, and the strict pass stops being strict.
         mac_strict, mac_loose = {}, {}
         for name in mac_members:
             for form in variants(name, enum_words, mac_drop, True):
@@ -365,11 +364,12 @@ def main():
         # Strict first, loose second. Dropping the enumeration's own words is
         # what lets msoLineDash reach `line dash style dash`, but those same
         # words are meaningful inside some members, so `line dash style dash
-        # dot` also reduces to "dot" and msoLineDot would claim it before
-        # msoLineDashDot ever got to ask. Letting every constant have its exact
-        # reading before anyone falls back to a loose one keeps that from
-        # happening, and leaves msoLineDot correctly unmatched, because macOS
-        # has square dot and round dot and no plain dot.
+        # dot` also reduces to "dot" and a plain dot constant (constants.py
+        # once had msoLineDot) would claim it before msoLineDashDot ever got
+        # to ask. Letting every constant have its exact reading before anyone
+        # falls back to a loose one keeps that from happening, and leaves such
+        # a constant correctly unmatched, because macOS has square dot and
+        # round dot and no plain dot.
         matched = {}
         taken = set()
         for strict_only in (True, False):

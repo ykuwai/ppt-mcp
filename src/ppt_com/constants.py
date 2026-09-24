@@ -263,13 +263,75 @@ msoGradientFromCenter = 7
 # MsoLineDashStyle
 # ==============================================================================
 msoLineSolid = 1
-msoLineRoundDot = 2
-msoLineDot = 3
+msoLineSquareDot = 2
+msoLineRoundDot = 3
 msoLineDash = 4
 msoLineDashDot = 5
 msoLineDashDotDot = 6
 msoLineLongDash = 7
 msoLineLongDashDot = 8
+msoLineLongDashDotDot = 9
+# 10 to 12 are OOXML's sysDash, sysDot and sysDashDot. The enum page stops at
+# 9, but COM accepts these and reads them back unchanged, and a line styled by
+# hand in the PowerPoint UI often carries one.
+msoLineSysDash = 10
+msoLineSysDot = 11
+msoLineSysDashDot = 12
+
+# The dash style names every line tool accepts (ppt_set_line,
+# ppt_format_connector, ppt_set_table_borders), and the names
+# ppt_get_shape_info reports a line's dash style in.
+DASH_STYLE_MAP = {
+    "solid": msoLineSolid,
+    "square_dot": msoLineSquareDot,
+    "round_dot": msoLineRoundDot,
+    "dash": msoLineDash,
+    "dash_dot": msoLineDashDot,
+    "dash_dot_dot": msoLineDashDotDot,
+    "long_dash": msoLineLongDash,
+    "long_dash_dot": msoLineLongDashDot,
+    "long_dash_dot_dot": msoLineLongDashDotDot,
+    "sys_dash": msoLineSysDash,
+    "sys_dot": msoLineSysDot,
+    "sys_dash_dot": msoLineSysDashDot,
+}
+DASH_STYLE_NAMES = {v: k for k, v in DASH_STYLE_MAP.items()}
+
+# Older names that still work. ppt_set_table_borders took 'dot', which sent 3,
+# and 3 is msoLineRoundDot, so 'dot' keeps drawing round dots.
+DASH_STYLE_ALIASES = {
+    "dot": msoLineRoundDot,
+}
+
+DASH_STYLE_DESCRIPTION = (
+    "Dash style: 'solid', 'square_dot', 'round_dot', 'dash', 'dash_dot', "
+    "'dash_dot_dot', 'long_dash', 'long_dash_dot', 'long_dash_dot_dot', "
+    "'sys_dash', 'sys_dot', or 'sys_dash_dot'"
+)
+
+
+def dash_style_value(name):
+    """The MsoLineDashStyle number for a dash style name.
+
+    Case and surrounding space are ignored and the older aliases are accepted.
+    An unknown name raises ValueError listing the valid ones.
+    """
+    key = str(name).strip().lower()
+    value = DASH_STYLE_MAP.get(key, DASH_STYLE_ALIASES.get(key))
+    if value is None:
+        raise ValueError(
+            f"Unknown dash_style '{name}'. "
+            f"Valid values: {list(DASH_STYLE_MAP.keys())}"
+        )
+    return value
+
+
+def check_dash_style(name):
+    """Field validator body for a dash_style input: normalise it or reject it."""
+    if name is None:
+        return None
+    dash_style_value(name)
+    return str(name).strip().lower()
 
 # ==============================================================================
 # MsoArrowheadStyle

@@ -39,7 +39,6 @@ from backend.mac_ae import (
     windows_constant as _windows_constant,
 )
 from backend.mac_enums import (
-    MsoLineDashStyle,
     MsoVerticalAnchor,
     PpBorderType,
     PpParagraphAlignment,
@@ -48,7 +47,8 @@ from backend.mac_enums import (
 from backend.unsupported import refusal as _refusal
 from utils.color import hex_to_rgb_list, rgb_list_to_hex
 from utils.navigation import goto_slide
-from ppt_com.constants import msoLineDot
+from ppt_com.constants import dash_style_value
+from ppt_mac.shapes import _dash_style_keyword
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +56,6 @@ logger = logging.getLogger(__name__)
 # names, and appscript resolves the collision toward the enumerators, so the
 # property is only reachable by its raw four character code.
 _DASH_STYLE_CODE = b'LFds'
-
-# scripts/gen_mac_enums.py pairs by name, and Windows calls this one `msoLineDot`
-# while macOS calls it `line dash style square dot`, so the pairing was missed
-# and the generated table has no entry for 3. macOS does have the style, so this
-# is a gap in the generator rather than a gap in PowerPoint, and it should
-# disappear the next time the table is regenerated.
-_DASH_STYLES = dict(MsoLineDashStyle)
-_DASH_STYLES.setdefault(msoLineDot, k.line_dash_style_square_dot)
 
 
 def _get_table_shape(slide, name_or_index):
@@ -745,7 +737,7 @@ def _set_table_borders_impl(
     start_row, start_col, end_row, end_col,
     sides, visible, color, weight, dash_style,
 ):
-    from ppt_com.tables import BORDER_SIDE_MAP, DASH_STYLE_MAP
+    from ppt_com.tables import BORDER_SIDE_MAP
 
     # Every argument is translated before goto_slide, so a misspelled side or
     # dash style costs neither an Apple Event nor a jump to a slide the caller
@@ -763,16 +755,14 @@ def _set_table_borders_impl(
 
     rgb = hex_to_rgb_list(color) if color is not None else None
 
-    dash_keyword = None
-    if dash_style is not None:
-        key = dash_style.strip().lower()
-        if key not in DASH_STYLE_MAP:
-            raise ValueError(
-                f"Unknown dash_style '{dash_style}'. Use: {', '.join(DASH_STYLE_MAP.keys())}"
-            )
-        dash_keyword = to_keyword(
-            _DASH_STYLES, DASH_STYLE_MAP[key], "line dash style"
-        )
+    # A style Windows knows but macOS has no word for is refused by name
+    # rather than drawn as some other style.
+    dash_val = dash_style_value(dash_style) if dash_style is not None else None
+    dash_keyword, refused = _dash_style_keyword(
+        "ppt_set_table_borders", dash_style, dash_val
+    )
+    if refused:
+        return refused
 
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
