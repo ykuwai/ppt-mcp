@@ -40,7 +40,12 @@ from appscript.reference import CommandError, Reference
 # Only for the cancellation contract. `utils.com_wrapper` imports nothing from
 # this package, so this direction is safe, and the module is importable on any
 # platform because of the guard at its top (#185).
-from utils.com_wrapper import pending_com_futures
+from utils.com_wrapper import (
+    bind_call_presentation,
+    call_presentation,
+    pending_com_futures,
+    pick_presentation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -375,6 +380,9 @@ class PowerPointAppleEventWrapper:
         # Windows: `active presentation` raises -1728 whenever PowerPoint's
         # start gallery is the frontmost window, which users hit every day.
         self._target_pres_full_name: Optional[str] = None
+        # The per-call target of the job the worker is running, if its tool
+        # call named one. See `call_presentation` in utils.com_wrapper.
+        self._call_local = threading.local()
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -510,6 +518,9 @@ class PowerPointAppleEventWrapper:
                 is the case that qualifies; anything that edits a deck is not.
             **kwargs: Keyword arguments for func.
         """
+        wanted = call_presentation.get()
+        if wanted is not None:
+            func = bind_call_presentation(self._call_local, wanted, func)
         job = _Job(func, args, kwargs, idempotent)
         self._queue.put(job)
 
@@ -659,9 +670,22 @@ class PowerPointAppleEventWrapper:
         without bringing PowerPoint forward. Falls back to the active
         presentation, and then to the first open one, because ``active
         presentation`` raises whenever PowerPoint's start gallery is frontmost.
+
+        A presentation named by the running tool call comes first, and when it
+        is not open this raises instead of falling back to another deck.
         """
         app_ref = self._get_app_impl()
         presentations = self._presentations(app_ref)
+
+        wanted = getattr(self._call_local, "presentation", None)
+        if wanted is not None:
+            candidates = []
+            for pres in presentations:
+                try:
+                    candidates.append((pres.full_name(), pres.name(), pres))
+                except CommandError:
+                    continue
+            return pick_presentation(candidates, wanted)
 
         if self._target_pres_full_name:
             for pres in presentations:
