@@ -1847,10 +1847,10 @@ def register_tools(mcp):
         Returns full text, fill info, line info, rotation, z-order, and
         text_frame (autofit, word_wrap, vertical_anchor, orientation,
         margins). line.dash_style is the name ppt_set_line takes, so a line
-        read here can be reproduced. Read text_frame before sizing text to fit a box. autofit is
-        the configured mode, so "shrink_to_fit" means the drawn size may be
-        smaller than the size that was set, and ppt_check_typography is what
-        says whether it currently is. The usable width is the shape width
+        read here can be reproduced. Read text_frame before sizing text to
+        fit a box. autofit is the configured mode, so "shrink_to_fit" means
+        the drawn size may be smaller than the size that was set, and
+        ppt_check_typography is what says whether it currently is. The usable width is the shape width
         less the side margins.
         """
         return await run_offloaded(get_shape_info, params)

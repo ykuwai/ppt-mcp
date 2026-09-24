@@ -22,7 +22,7 @@ from ppt_com.constants import (
     msoAnchorTop, msoAnchorMiddle, msoAnchorBottom,
     ppBorderTop, ppBorderLeft, ppBorderBottom, ppBorderRight,
     ppBorderDiagonalDown, ppBorderDiagonalUp,
-    DASH_STYLE_MAP, DASH_STYLE_DESCRIPTION,  # noqa: F401  (DASH_STYLE_MAP re-exported)
+    DASH_STYLE_DESCRIPTION,
     check_dash_style, dash_style_value,
 )
 

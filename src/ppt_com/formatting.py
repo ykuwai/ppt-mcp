@@ -16,7 +16,7 @@ from ppt_com.constants import (
     msoGradientHorizontal, msoGradientVertical,
     msoGradientDiagonalUp, msoGradientDiagonalDown,
     msoGradientFromCorner, msoGradientFromCenter,
-    DASH_STYLE_MAP, DASH_STYLE_DESCRIPTION,  # noqa: F401  (DASH_STYLE_MAP re-exported)
+    DASH_STYLE_DESCRIPTION,
     check_dash_style, dash_style_value,
 )
 from ppt_com.shape_lookup import resolve_shape as _get_shape

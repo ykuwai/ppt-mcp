@@ -15,7 +15,7 @@ from backend import ppt
 from utils.color import hex_to_int
 from utils.navigation import goto_slide
 from ppt_com.constants import (
-    DASH_STYLE_MAP, DASH_STYLE_DESCRIPTION,  # noqa: F401  (DASH_STYLE_MAP re-exported)
+    DASH_STYLE_DESCRIPTION,
     check_dash_style, dash_style_value,
     msoArrowheadNone, msoArrowheadTriangle, msoArrowheadOpen,
     msoArrowheadStealth, msoArrowheadDiamond, msoArrowheadOval,
