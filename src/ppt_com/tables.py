@@ -68,7 +68,7 @@ ALIGNMENT_NAMES: dict[int, str] = {v: k for k, v in ALIGNMENT_MAP.items()}
 # ---------------------------------------------------------------------------
 class AddTableInput(BaseModel):
     """Input for adding a table to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     rows: int = Field(..., ge=1, description="Number of rows")
@@ -83,7 +83,7 @@ class AddTableInput(BaseModel):
 
 class GetTableDataInput(BaseModel):
     """Input for getting table data."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -94,7 +94,7 @@ class GetTableDataInput(BaseModel):
 
 class SetTableCellInput(BaseModel):
     """Input for setting text and formatting of a table cell."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -120,7 +120,7 @@ class SetTableCellInput(BaseModel):
 
 class SetTableDataInput(BaseModel):
     """Input for batch-setting table cell text from a 2D array."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -144,7 +144,7 @@ class SetTableDataInput(BaseModel):
 
 class MergeTableCellsInput(BaseModel):
     """Input for merging table cells."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -166,7 +166,7 @@ class MergeTableCellsInput(BaseModel):
 
 class TableRowInput(BaseModel):
     """Input for adding or deleting a table row."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -181,7 +181,7 @@ class TableRowInput(BaseModel):
 
 class TableColumnInput(BaseModel):
     """Input for adding or deleting a table column."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -196,7 +196,7 @@ class TableColumnInput(BaseModel):
 
 class SetTableStyleInput(BaseModel):
     """Input for applying a table style."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -216,7 +216,7 @@ class SetTableStyleInput(BaseModel):
 
 class SetTableLayoutInput(BaseModel):
     """Input for setting row heights and/or column widths of an existing table."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -234,7 +234,7 @@ class SetTableLayoutInput(BaseModel):
 
 class SplitTableCellsInput(BaseModel):
     """Input for splitting (unmerging) a merged table cell."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -248,7 +248,7 @@ class SplitTableCellsInput(BaseModel):
 
 class SetTableBordersInput(BaseModel):
     """Input for setting borders on a range of table cells."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(

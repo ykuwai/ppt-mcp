@@ -221,7 +221,7 @@ def _drop_what_cannot_be_inserted(results, max_results):
 # --- Tags ---
 class SetTagInput(BaseModel):
     """Input for setting a tag on a shape, slide, or presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: Optional[int] = Field(
         default=None, ge=1, description="1-based slide index (required for slide/shape targets)"
@@ -239,7 +239,7 @@ class SetTagInput(BaseModel):
 
 class GetTagsInput(BaseModel):
     """Input for getting tags from a shape, slide, or presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: Optional[int] = Field(
         default=None, ge=1, description="1-based slide index (required for slide/shape targets)"
@@ -256,7 +256,7 @@ class GetTagsInput(BaseModel):
 # --- Fonts ---
 class ReplaceFontInput(BaseModel):
     """Input for replacing a font throughout the presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     original_font: str = Field(..., description="Font name to replace")
     replacement_font: str = Field(..., description="New font name")
@@ -265,7 +265,7 @@ class ReplaceFontInput(BaseModel):
 # --- Set Default Fonts ---
 class SetDefaultFontsInput(BaseModel):
     """Input for setting default fonts for the entire presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     latin: Optional[str] = Field(
         default=None,
@@ -284,7 +284,7 @@ class SetDefaultFontsInput(BaseModel):
 # --- Picture Crop ---
 class CropPictureInput(BaseModel):
     """Input for cropping a picture shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -354,7 +354,7 @@ class CropPictureInput(BaseModel):
 # --- Picture Format ---
 class SetPictureFormatInput(BaseModel):
     """Input for adjusting picture format properties (brightness, contrast, etc.)."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -411,7 +411,7 @@ class SetPictureFormatInput(BaseModel):
 # --- Shape Export ---
 class ExportShapeInput(BaseModel):
     """Input for exporting a shape as an image file."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -429,7 +429,7 @@ class ExportShapeInput(BaseModel):
 # --- Slide Hidden ---
 class SetSlideHiddenInput(BaseModel):
     """Input for setting slide visibility."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     hidden: bool = Field(..., description="True to hide, False to show")
@@ -438,7 +438,7 @@ class SetSlideHiddenInput(BaseModel):
 # --- Select Shapes ---
 class SelectShapesInput(BaseModel):
     """Input for selecting multiple shapes on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_names: list[str] = Field(
@@ -449,7 +449,7 @@ class SelectShapesInput(BaseModel):
 # --- View ---
 class SetViewInput(BaseModel):
     """Input for setting the PowerPoint view type and zoom."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     view_type: Optional[str] = Field(
         default=None,
@@ -466,7 +466,7 @@ class SetViewInput(BaseModel):
 # --- Copy Animation ---
 class CopyAnimationInput(BaseModel):
     """Input for copying animation from one shape to another."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     source_shape: Union[str, int] = Field(
@@ -480,7 +480,7 @@ class CopyAnimationInput(BaseModel):
 # --- Add Picture from URL ---
 class AddPictureFromUrlInput(BaseModel):
     """Input for adding a picture from a URL."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     url: str = Field(..., description="URL of the image to download")
@@ -510,7 +510,7 @@ class AddPictureFromUrlInput(BaseModel):
 # --- Add SVG Icon ---
 class AddSvgIconInput(BaseModel):
     """Input for adding a Material Symbols icon as SVG image."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     icon_name: str = Field(
@@ -549,7 +549,7 @@ class AddSvgIconInput(BaseModel):
 # --- Lock Aspect Ratio ---
 class LockAspectRatioInput(BaseModel):
     """Input for locking/unlocking shape aspect ratio."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -561,7 +561,7 @@ class LockAspectRatioInput(BaseModel):
 # --- Search Icons ---
 class SearchIconsInput(BaseModel):
     """Input for searching Material Symbols icons by keyword."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     query: str = Field(
         ...,
@@ -1190,7 +1190,7 @@ def _resolve_color(pres, color_str):
 
 class SetDefaultShapeStyleInput(BaseModel):
     """Input for setting the default shape style for new shapes."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     # --- Shape-based mode ---
     slide_index: Optional[int] = Field(

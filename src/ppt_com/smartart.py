@@ -202,7 +202,7 @@ def _resolve_layout(app, layout_name: str):
 # ---------------------------------------------------------------------------
 class AddSmartArtInput(BaseModel):
     """Input for adding a SmartArt graphic to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     layout_name: Optional[str] = Field(
@@ -252,7 +252,7 @@ class AddSmartArtInput(BaseModel):
 
 class ModifySmartArtInput(BaseModel):
     """Input for modifying a SmartArt node or the SmartArt as a whole."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -333,7 +333,7 @@ class ModifySmartArtInput(BaseModel):
 
 class ListSmartArtInput(BaseModel):
     """Input for listing SmartArt layouts, color schemes, or quick styles."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     list_type: str = Field(
         default="layouts",

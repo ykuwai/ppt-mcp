@@ -128,7 +128,7 @@ class OpenPresentationInput(BaseModel):
 
 class SavePresentationInput(BaseModel):
     """Input for saving the active presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     presentation_index: Optional[int] = Field(
         default=None,
@@ -148,7 +148,7 @@ class SavePresentationInput(BaseModel):
 
 class SavePresentationAsInput(BaseModel):
     """Input for SaveAs operation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     file_path: str = Field(
         ...,
@@ -179,7 +179,7 @@ class SavePresentationAsInput(BaseModel):
 
 class ClosePresentationInput(BaseModel):
     """Input for closing a presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     save_changes: bool = Field(
         default=False,
@@ -203,7 +203,7 @@ class ClosePresentationInput(BaseModel):
 
 class GetPresentationInfoInput(BaseModel):
     """Input for getting presentation info."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     presentation_index: Optional[int] = Field(
         default=None,
@@ -223,7 +223,7 @@ class GetPresentationInfoInput(BaseModel):
 
 class ActivatePresentationInput(BaseModel):
     """Input for activating a specific presentation as the MCP target."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     presentation_index: Optional[int] = Field(
         default=None,
@@ -243,7 +243,7 @@ class ActivatePresentationInput(BaseModel):
 
 class ListTemplatesInput(BaseModel):
     """Input for listing available PowerPoint templates."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     templates_dir: Optional[str] = Field(
         default=None,

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 class UndoInput(BaseModel):
     """Input for undo operations."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     times: int = Field(
         default=1, ge=1,
@@ -33,7 +33,7 @@ class UndoInput(BaseModel):
 
 class RedoInput(BaseModel):
     """Input for redo operations."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     times: int = Field(
         default=1, ge=1,
@@ -43,7 +43,7 @@ class RedoInput(BaseModel):
 
 class CopyShapeToSlideInput(BaseModel):
     """Input for copying a shape to another slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     src_slide_index: int = Field(..., ge=1, description="1-based source slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -54,7 +54,7 @@ class CopyShapeToSlideInput(BaseModel):
 
 class CopyFormattingInput(BaseModel):
     """Input for copying formatting from one shape to others."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     source_shape: Union[str, int] = Field(
@@ -68,7 +68,7 @@ class CopyFormattingInput(BaseModel):
 
 class ExecuteMsoInput(BaseModel):
     """Input for executing an MSO command."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     command_name: str = Field(
         ..., description="MSO command name to execute"

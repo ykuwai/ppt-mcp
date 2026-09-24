@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 class AddVideoInput(BaseModel):
     """Input for adding a video to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     file_path: str = Field(..., description="Path to the video file")
@@ -41,7 +41,7 @@ class AddVideoInput(BaseModel):
 
 class AddAudioInput(BaseModel):
     """Input for adding an audio file to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     file_path: str = Field(..., description="Path to the audio file")
@@ -57,7 +57,7 @@ class AddAudioInput(BaseModel):
 
 class SetMediaSettingsInput(BaseModel):
     """Input for configuring media playback settings."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(

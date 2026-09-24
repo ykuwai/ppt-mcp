@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # When installed via PyPI (entry point: src.server:main), ensure the src/
 # directory is in sys.path so that internal imports like
@@ -31,10 +31,14 @@ from contextlib import asynccontextmanager
 # of being masked by the 1.x fallback failing afterwards.
 try:
     from mcp.server.mcpserver import Image, MCPServer  # mcp >= 2.0
+    from mcp.server.mcpserver.exceptions import ToolError
 except ModuleNotFoundError:
     from mcp.server.fastmcp import Image  # mcp 1.x
     from mcp.server.fastmcp import FastMCP as MCPServer
+    from mcp.server.fastmcp.exceptions import ToolError
+from pydantic import ValidationError
 
+from utils.arguments import describe_unknown_top_level, describe_validation_error
 from utils.com_wrapper import call_presentation
 
 # Configure logging to stderr (stdout is used for MCP protocol)
@@ -166,6 +170,14 @@ class _PowerPointServer(MCPServer):
     held in utils.com_wrapper.call_presentation while the tool runs. Both SDK
     majors dispatch tools/call through this method, so no SDK internals are
     involved; the schema side is added by _add_presentation_arg().
+
+    It is also where an argument the tool does not take is refused. The input
+    models forbid unknown keys, but the SDK's own argument model around
+    `params` ignores them, so a key passed next to `params` is checked here
+    against the tool's declared arguments. A validation failure inside
+    `params` is rewritten from pydantic's report into one sentence naming the
+    tool, the argument, the likely intended name and the valid ones. Both
+    still answer as a tool error (isError true).
     """
 
     async def call_tool(self, name, arguments, *args, **kwargs):
@@ -183,11 +195,84 @@ class _PowerPointServer(MCPServer):
             if name in _TOOLS_WITHOUT_PRESENTATION_ARG:
                 wanted = None
             wanted = (wanted or "").strip() or None
+        tool = self._registered_tool(name)
+        if tool is not None and isinstance(arguments, dict):
+            _refuse_unknown_arguments(name, tool, arguments)
         token = call_presentation.set(wanted)
         try:
             return await super().call_tool(name, arguments, *args, **kwargs)
+        except ToolError as exc:
+            readable = _readable_validation_error(name, tool, exc)
+            if readable is None:
+                raise
+            raise ToolError(readable) from exc.__cause__
         finally:
             call_presentation.reset(token)
+
+    def _registered_tool(self, name):
+        """The SDK's Tool for `name`, or None.
+
+        _tool_manager is an SDK internal (see _inline_schema_defs); if it moves,
+        calls go through unchecked rather than failing.
+        """
+        try:
+            return self._tool_manager.get_tool(name)
+        except Exception:
+            return None
+
+
+def _arg_model(tool):
+    """The SDK's per-tool argument model (the one whose field is `params`)."""
+    return getattr(getattr(tool, "fn_metadata", None), "arg_model", None)
+
+
+def _refuse_unknown_arguments(name, tool, arguments):
+    """Refuse keys next to `params` that the tool does not declare.
+
+    The SDK's argument model ignores them, so `{"params": {...},
+    "presntation": "x"}` used to run against the session target and answer
+    success. `presentation` itself has already been taken out by call_tool.
+    """
+    declared = list((tool.parameters or {}).get("properties") or {})
+    # An empty `params` on a tool that takes none carries nothing that could
+    # be lost, and a caller used to sending it everywhere is not wrong.
+    unknown = [
+        key for key, value in arguments.items()
+        if key not in declared and not (key == "params" and value in (None, {}))
+    ]
+    if not unknown:
+        return
+    if name not in _TOOLS_WITHOUT_PRESENTATION_ARG and PRESENTATION_ARG not in declared:
+        # A server built without _add_presentation_arg (the tests' probes).
+        declared.append(PRESENTATION_ARG)
+    params_model = None
+    arg_model = _arg_model(tool)
+    if arg_model is not None and "params" in arg_model.model_fields:
+        annotation = arg_model.model_fields["params"].annotation
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            params_model = annotation
+    raise ToolError(describe_unknown_top_level(name, unknown, declared, params_model))
+
+
+def _readable_validation_error(name, tool, exc):
+    """A caller-facing message for a ToolError caused by argument validation.
+
+    Returns None for any other ToolError, including a ValidationError raised
+    from inside a tool body, which is recognised by its title: pydantic titles
+    the error after the model that was validated, and for the arguments that
+    is the SDK's per-tool argument model.
+    """
+    cause = exc.__cause__
+    if not isinstance(cause, ValidationError):
+        return None
+    arg_model = _arg_model(tool)
+    if arg_model is None or cause.title != arg_model.__name__:
+        return None
+    try:
+        return describe_validation_error(name, arg_model, cause)
+    except Exception:
+        logger.warning("Could not rewrite a validation error for %s", name, exc_info=True)
+        return None
 
 
 mcp = _PowerPointServer(
@@ -538,6 +623,8 @@ except ImportError:
 
 
 class GetSlidePreviewInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
     slide_index: int = Field(1, ge=1, description="1-based slide index")
 
 

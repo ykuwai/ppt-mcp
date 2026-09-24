@@ -24,7 +24,7 @@ SELECTION_TYPE_NAMES = {
 # ---------------------------------------------------------------------------
 class ConnectInput(BaseModel):
     """Input for connecting to PowerPoint."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     visible: Optional[bool] = Field(
         default=None,
@@ -37,7 +37,7 @@ class ConnectInput(BaseModel):
 
 class SetWindowStateInput(BaseModel):
     """Input for setting PowerPoint window state."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     window_state: str = Field(
         default="maximized",
