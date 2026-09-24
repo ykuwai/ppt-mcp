@@ -18,6 +18,7 @@ directional variants and in no plain form, and picking one would be a guess:
     MsoAnimAfterEffect: msoAnimAfterEffectNone
     MsoAnimTriggerType: msoAnimTriggerNone
     MsoAnimateByLevel: msoAnimateLevelNone
+    MsoLineDashStyle: msoLineLongDashDotDot, msoLineSysDash, msoLineSysDot, msoLineSysDashDot
     MsoShapeType: msoEmbeddedOLEObject, msoOLEControlObject, msoTextEffect
     MsoTextOrientation: msoTextOrientationVerticalFarEast
     MsoTriState: msoTriStateMixed
@@ -33,13 +34,10 @@ directional variants and in no plain form, and picking one would be a guess:
     PpViewType: ppViewSlideMaster, ppViewNotesPage, ppViewThumbnails, ppViewMasterThumbnails
     PpWindowState: ppWindowMaximized
 
-One hand edit since the last run, to be confirmed by the next one. constants.py
-had MsoLineDashStyle 2 and 3 the wrong way round (issue #242), so the name
-pairing put round dot on 2 and square dot on 3. The constants are fixed and
-MsoLineDashStyle below is swapped to match, which is what a regeneration pairs
-by name. msoLineLongDashDotDot and the three sys styles (9 to 12) were added to
-constants.py after the last run and have never been matched against the
-dictionary, so they are absent here and the line tools refuse them on macOS.
+Edited by hand once since the last run (issue #242), to be confirmed by the
+next one. constants.py had MsoLineDashStyle 2 and 3 swapped, so 2 and 3 below
+are swapped to match the fixed names. Its 9 to 12 were added after the last run
+and have never been matched against the dictionary.
 """
 
 from appscript import k
