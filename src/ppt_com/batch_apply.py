@@ -40,7 +40,7 @@ SUPPORTED_OPERATIONS = list(get_args(OperationName))
 
 class BatchOperation(BaseModel):
     """A single formatting operation to apply."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     tool: OperationName = Field(
         ...,
@@ -60,7 +60,7 @@ class BatchApplyFormattingInput(BaseModel):
     Supported operations: set_fill, set_line, set_shadow, set_glow, set_reflection,
     set_soft_edge, format_text.
     """
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shapes: List[Union[str, int]] = Field(

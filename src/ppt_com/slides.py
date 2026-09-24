@@ -37,7 +37,7 @@ LAYOUT_NAME_MAP = {
 # ---------------------------------------------------------------------------
 class AddSlideInput(BaseModel):
     """Input for adding a new slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     position: Optional[int] = Field(
         default=None,
@@ -133,7 +133,7 @@ class DeleteSlideInput(BaseModel):
       - slide_indices (an explicit list), or
       - from_index + to_index (an inclusive range).
     """
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: Optional[int] = Field(
         default=None,
@@ -201,7 +201,7 @@ class DeleteSlideInput(BaseModel):
 
 class DuplicateSlideInput(BaseModel):
     """Input for duplicating a slide (optionally to a target position, N times)."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(
         ...,
@@ -239,7 +239,7 @@ class MoveSlideInput(BaseModel):
 
     Provide exactly ONE of slide_index (single) or slide_indices (a block).
     """
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: Optional[int] = Field(
         default=None,
@@ -283,7 +283,7 @@ class MoveSlideInput(BaseModel):
 
 class CopySlideInput(BaseModel):
     """Input for copying slides, optionally to another open presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: Optional[int] = Field(
         default=None,
@@ -372,7 +372,7 @@ class CopySlideInput(BaseModel):
 
 class ListSlidesInput(BaseModel):
     """Input for listing slides (no required params)."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     presentation_index: Optional[int] = Field(
         default=None,
@@ -392,7 +392,7 @@ class ListSlidesInput(BaseModel):
 
 class GetSlideInfoInput(BaseModel):
     """Input for getting detailed slide info."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(
         ...,
@@ -402,7 +402,7 @@ class GetSlideInfoInput(BaseModel):
 
 class SetSlideNotesInput(BaseModel):
     """Input for setting speaker notes."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(
         ...,
@@ -440,7 +440,7 @@ class SetSlideNotesInput(BaseModel):
 
 class GetSlideNotesInput(BaseModel):
     """Input for getting speaker notes."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(
         ...,
@@ -1285,7 +1285,7 @@ def get_slide_notes(params: GetSlideNotesInput) -> str:
 
 class GotoSlideInput(BaseModel):
     """Input for navigating to a specific slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(
         ...,

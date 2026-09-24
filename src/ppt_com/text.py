@@ -129,7 +129,7 @@ NUMBERED_STYLE_MAP = {
 # ---------------------------------------------------------------------------
 class TextFormatSpec(BaseModel):
     """The formatting a span can be given, with no span attached."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     font_name: Optional[str] = Field(default=None, description="Latin font name. Also sets the East Asian font unless font_name_fareast is provided.")
     font_name_fareast: Optional[str] = Field(default=None, description="East Asian (CJK) font name (e.g. 'BIZ UDPゴシック').")
@@ -215,7 +215,7 @@ def _check_span(spec):
 
 class SetTextInput(BaseModel):
     """Input for setting text content of a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -294,7 +294,7 @@ class SetTextInput(BaseModel):
 
 class GetTextInput(BaseModel):
     """Input for getting text from a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -315,7 +315,7 @@ class GetTextInput(BaseModel):
 
 class FormatTextInput(BaseModel):
     """Input for formatting all text in a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -356,7 +356,7 @@ class FormatTextRangeInput(BaseModel):
     When search_text is provided, the matching text position is used
     automatically (start and length must not be set).
     """
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -457,7 +457,7 @@ class FormatTextRangeInput(BaseModel):
 
 class SetParagraphFormatInput(BaseModel):
     """Input for setting paragraph formatting."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -647,7 +647,7 @@ class FindReplaceTextInput(BaseModel):
 
 class SetTextframeInput(BaseModel):
     """Input for configuring text frame properties (auto-fit, margins, etc.)."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -680,7 +680,7 @@ class SetTextframeInput(BaseModel):
 
 class GetAllTextInput(BaseModel):
     """Input for extracting all text from the presentation as pseudo-Markdown."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_indices: Optional[List[int]] = Field(
         default=None,
@@ -716,7 +716,7 @@ class GetAllTextInput(BaseModel):
 
 class CheckTypographyInput(BaseModel):
     """Input for checking typographic issues (widow lines) on slides."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: Optional[int] = Field(
         default=None, ge=1,

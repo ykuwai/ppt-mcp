@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 class AddCommentInput(BaseModel):
     """Input for adding a comment to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     text: str = Field(..., description="Comment text")
@@ -40,14 +40,14 @@ class AddCommentInput(BaseModel):
 
 class ListCommentsInput(BaseModel):
     """Input for listing comments on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
 
 
 class DeleteCommentInput(BaseModel):
     """Input for deleting a comment from a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     comment_index: int = Field(

@@ -52,7 +52,7 @@ IMAGE_FILTER_MAP = {
 # ---------------------------------------------------------------------------
 class ExportPDFInput(BaseModel):
     """Input for exporting a presentation to PDF."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     file_path: str = Field(
         ...,
@@ -77,7 +77,7 @@ class ExportImagesInput(BaseModel):
       - from_index + to_index: an inclusive range of slides.
       - (none of the above): every slide in the presentation.
     """
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     output_dir: str = Field(
         ...,
@@ -184,7 +184,7 @@ class ExportImagesInput(BaseModel):
 
 class CopyToClipboardInput(BaseModel):
     """Input for copying slides as images to the clipboard."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_indices: Optional[List[int]] = Field(
         default=None,

@@ -115,14 +115,14 @@ def _resolve_placeholder(slide, placeholder_index=None, placeholder_type=None):
 # ---------------------------------------------------------------------------
 class ListPlaceholdersInput(BaseModel):
     """Input for listing placeholders on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
 
 
 class GetPlaceholderInput(BaseModel):
     """Input for getting placeholder content."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     placeholder_index: Optional[int] = Field(
@@ -136,7 +136,7 @@ class GetPlaceholderInput(BaseModel):
 
 class SetPlaceholderTextInput(BaseModel):
     """Input for setting placeholder text."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     placeholder_index: Optional[int] = Field(
@@ -151,7 +151,7 @@ class SetPlaceholderTextInput(BaseModel):
 
 class ListDesignsInput(BaseModel):
     """Input for listing all designs (slide masters) in the presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     include_layouts: bool = Field(
         default=False,
@@ -161,7 +161,7 @@ class ListDesignsInput(BaseModel):
 
 class ListLayoutsInput(BaseModel):
     """Input for listing slide layouts."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     design_index: Optional[int] = Field(
         default=1, description="1-based design (master) index. Default: 1"
@@ -170,7 +170,7 @@ class ListLayoutsInput(BaseModel):
 
 class GetSlideMasterInfoInput(BaseModel):
     """Input for getting slide master information."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     design_index: Optional[int] = Field(
         default=1, description="1-based design index. Default: 1"

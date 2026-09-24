@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # When installed via PyPI (entry point: src.server:main), ensure the src/
 # directory is in sys.path so that internal imports like
@@ -538,6 +538,8 @@ except ImportError:
 
 
 class GetSlidePreviewInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
     slide_index: int = Field(1, ge=1, description="1-based slide index")
 
 

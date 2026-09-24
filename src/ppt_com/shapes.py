@@ -172,7 +172,7 @@ ZORDER_FIELD_DESCRIPTION = (
 
 class AddShapeInput(BaseModel):
     """Input for adding an auto shape to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_type: Union[int, str] = Field(
@@ -289,7 +289,7 @@ class AddShapeInput(BaseModel):
 
 class AddTextboxInput(BaseModel):
     """Input for adding a text box to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     left: float = Field(..., description="Left position in points")
@@ -328,7 +328,7 @@ class AddTextboxInput(BaseModel):
 
 class AddPictureInput(BaseModel):
     """Input for adding an image to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     file_path: str = Field(..., description="Path to image file")
@@ -343,7 +343,7 @@ class AddPictureInput(BaseModel):
 
 class AddLineInput(BaseModel):
     """Input for adding a line to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     begin_x: float = Field(..., description="Start X position in points")
@@ -357,14 +357,14 @@ class AddLineInput(BaseModel):
 
 class ListShapesInput(BaseModel):
     """Input for listing shapes on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
 
 
 class ShapeIdentifierInput(BaseModel):
     """Input for identifying a shape by name or index."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")
@@ -373,7 +373,7 @@ class ShapeIdentifierInput(BaseModel):
 
 class UpdateShapeInput(BaseModel):
     """Input for updating shape properties."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")
@@ -487,7 +487,7 @@ class UpdateShapeInput(BaseModel):
 
 class SetZOrderInput(BaseModel):
     """Input for changing shape z-order."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")

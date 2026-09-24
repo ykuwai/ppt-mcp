@@ -48,7 +48,7 @@ GRADIENT_STYLE_MAP = {
 # ---------------------------------------------------------------------------
 class SetFillInput(BaseModel):
     """Input for setting shape fill."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -77,7 +77,7 @@ class SetFillInput(BaseModel):
 
 class SetLineInput(BaseModel):
     """Input for setting shape border/line."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -101,7 +101,7 @@ class SetLineInput(BaseModel):
 
 class SetShadowInput(BaseModel):
     """Input for setting shadow effect."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(

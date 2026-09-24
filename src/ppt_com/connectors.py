@@ -134,7 +134,7 @@ def _resolve_site(shape, site: Union[int, str]) -> int:
 # ---------------------------------------------------------------------------
 class AddConnectorInput(BaseModel):
     """Input for adding a connector between two shapes."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     connector_type: str = Field(
@@ -183,7 +183,7 @@ class AddConnectorInput(BaseModel):
 
 class FormatConnectorInput(BaseModel):
     """Input for formatting a connector's line properties."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
