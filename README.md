@@ -137,7 +137,7 @@ uv sync
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines (with z-order placement, including behind the text), list, info (position, fill, line, text frame), update (one shape, a set, or the whole slide, absolute or by offset), delete, z-order |
 | **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups), textframe, extract all text as Markdown, typography check |
 | **Placeholders** | 6 | List, get, set placeholder content |
-| **Formatting** | 3 | Fill, line, shadow |
+| **Formatting** | 3 | Fill, line, shadow (on the shape or on its text) |
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
 | **Export** | 4 | PDF, images, slide preview, clipboard copy |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
@@ -151,9 +151,9 @@ uv sync
 | **Properties** | 2 | Set/get presentation metadata |
 | **Media** | 3 | Video, audio, media settings |
 | **SmartArt** | 3 | Add, modify, list layouts |
-| **Edit Operations** | 6 | Undo, redo, copy shapes/formatting between slides |
+| **Edit Operations** | 6 | Undo and redo (on the target presentation), copy shapes/formatting between slides |
 | **Layout** | 7 | Align, distribute, slide size, background, flip, merge shapes |
-| **Effects** | 3 | Glow, reflection, soft edge |
+| **Effects** | 3 | Glow and reflection (on the shape or on its text), soft edge |
 | **Comments** | 3 | Add, list, delete |
 | **Advanced** | 19 | Tags, fonts (set defaults + bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
@@ -236,6 +236,13 @@ ppt_activate_presentation(presentation_name="report.pptx")
 # All tools now operate on report.pptx
 ppt_activate_presentation(presentation_name="demo.pptx")
 # Switched — all tools now operate on demo.pptx
+```
+
+The activated presentation is one value for the whole server, and a client such as Claude Desktop routes every conversation through one server. When several conversations work on different files at once, pass `presentation` on each call. It applies to that call only, leaves the activated presentation alone, and accepts a full path, a file name, or a file name without extension. A file that is not open is an error, never a fallback to another one.
+
+```python
+ppt_add_textbox(params={...}, presentation="report.pptx")
+# Lands in report.pptx whatever another conversation has activated
 ```
 
 ### 📁 Template Support
