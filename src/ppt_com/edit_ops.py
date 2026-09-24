@@ -82,26 +82,38 @@ class ExecuteMsoInput(BaseModel):
 # ---------------------------------------------------------------------------
 # COM implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
-def _undo_impl(times):
+def _run_history_command(command, times):
+    """Run Undo or Redo up to `times` times on the target deck.
+
+    Both act on the active window, so the target's window is activated for
+    the command. Neither leaves anything the user needs to look at, so the
+    window that was active before gets the front back afterwards: switching
+    the deck on screen is not what an undo is asked for.
+    """
     app = ppt._get_app_impl()
-    count = 0
-    for _ in range(times):
-        if not app.CommandBars.GetEnabledMso("Undo"):
-            break
-        app.CommandBars.ExecuteMso("Undo")
-        count += 1
-    return {"success": True, "actions_undone": count}
+    previous = ppt._activate_target_window_for_command_impl()
+    try:
+        count = 0
+        for _ in range(times):
+            if not app.CommandBars.GetEnabledMso(command):
+                break
+            app.CommandBars.ExecuteMso(command)
+            count += 1
+        return count
+    finally:
+        if previous is not None:
+            try:
+                previous.Activate()
+            except Exception as e:
+                logger.warning("Could not reactivate the previous window: %s", e)
+
+
+def _undo_impl(times):
+    return {"success": True, "actions_undone": _run_history_command("Undo", times)}
 
 
 def _redo_impl(times):
-    app = ppt._get_app_impl()
-    count = 0
-    for _ in range(times):
-        if not app.CommandBars.GetEnabledMso("Redo"):
-            break
-        app.CommandBars.ExecuteMso("Redo")
-        count += 1
-    return {"success": True, "actions_redone": count}
+    return {"success": True, "actions_redone": _run_history_command("Redo", times)}
 
 
 def _copy_shape_to_slide_impl(src_slide_index, shape_name_or_index, dst_slide_index):
@@ -153,6 +165,7 @@ def _start_undo_entry_impl():
 
 def _execute_mso_impl(command_name, check_enabled):
     app = ppt._get_app_impl()
+    ppt._activate_target_window_for_command_impl()
 
     if check_enabled:
         enabled = app.CommandBars.GetEnabledMso(command_name)

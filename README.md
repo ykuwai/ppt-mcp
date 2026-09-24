@@ -14,12 +14,12 @@
 </p>
 
 <p align="center">
-  <strong>Real-time PowerPoint control through COM automation —<br>an MCP server with 156 tools for AI agents and developers.</strong>
+  <strong>Real-time PowerPoint control on Windows and macOS —<br>an MCP server with 156 tools for AI agents and developers.</strong>
 </p>
 
 ---
 
-An MCP (Model Context Protocol) server that gives AI agents full control over a live Microsoft PowerPoint instance via COM automation. Unlike file-based libraries like python-pptx, this server interacts directly with a running PowerPoint application.
+An MCP (Model Context Protocol) server that gives AI agents full control over a live Microsoft PowerPoint instance, over COM on Windows and Apple Events on macOS. Unlike file-based libraries like python-pptx, this server interacts directly with a running PowerPoint application.
 
 ## 🎬 Demo
 
@@ -34,6 +34,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
+- **Windows and macOS** — The same tools, arguments and return values on both; where PowerPoint for Mac cannot do something, the tool says so rather than quietly doing nothing
 
 ## 📋 Requirements
 
@@ -136,7 +137,7 @@ uv sync
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines (with z-order placement, including behind the text), list, info (position, fill, line, text frame), update (one shape, a set, or the whole slide, absolute or by offset), delete, z-order |
 | **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups), textframe, extract all text as Markdown, typography check |
 | **Placeholders** | 6 | List, get, set placeholder content |
-| **Formatting** | 3 | Fill, line, shadow |
+| **Formatting** | 3 | Fill, line, shadow (on the shape or on its text) |
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
 | **Export** | 4 | PDF, images, slide preview, clipboard copy |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
@@ -150,9 +151,9 @@ uv sync
 | **Properties** | 2 | Set/get presentation metadata |
 | **Media** | 3 | Video, audio, media settings |
 | **SmartArt** | 3 | Add, modify, list layouts |
-| **Edit Operations** | 6 | Undo, redo, copy shapes/formatting between slides |
+| **Edit Operations** | 6 | Undo and redo (on the target presentation), copy shapes/formatting between slides |
 | **Layout** | 7 | Align, distribute, slide size, background, flip, merge shapes |
-| **Effects** | 3 | Glow, reflection, soft edge |
+| **Effects** | 3 | Glow and reflection (on the shape or on its text), soft edge |
 | **Comments** | 3 | Add, list, delete |
 | **Advanced** | 19 | Tags, fonts (set defaults + bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
@@ -235,6 +236,13 @@ ppt_activate_presentation(presentation_name="report.pptx")
 # All tools now operate on report.pptx
 ppt_activate_presentation(presentation_name="demo.pptx")
 # Switched — all tools now operate on demo.pptx
+```
+
+The activated presentation is one value for the whole server, and a client such as Claude Desktop routes every conversation through one server. When several conversations work on different files at once, pass `presentation` on each call. It applies to that call only, leaves the activated presentation alone, and accepts a full path, a file name, or a file name without extension. A file that is not open is an error, never a fallback to another one.
+
+```python
+ppt_add_textbox(params={...}, presentation="report.pptx")
+# Lands in report.pptx whatever another conversation has activated
 ```
 
 ### 📁 Template Support

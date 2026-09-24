@@ -5,6 +5,7 @@ PowerPoint supports only a single running instance, so this provides
 singleton-like access to the Application COM object.
 """
 
+import functools
 import gc
 import logging
 import os
@@ -82,6 +83,74 @@ class QueuedCalls:
 # utils.offload can cancel its COM work if the caller goes away (#198, #199).
 # None means nobody is watching, which is the case for internal callers.
 pending_com_futures: ContextVar = ContextVar("pending_com_futures", default=None)
+
+# The presentation the running tool call named in its `presentation` argument,
+# or None.  server.py sets it for the duration of a tools/call, execute() reads
+# it on the calling thread and hands it to the worker with the operation, and
+# the target lookup there prefers it over the session target.  The session
+# target is one value for the whole process, and one process can serve several
+# conversations at once (Claude Desktop starts a server once and routes every
+# chat through it), so a deck named per call is the only target another
+# conversation cannot move.
+call_presentation: ContextVar = ContextVar("call_presentation", default=None)
+
+
+def bind_call_presentation(local: threading.local, wanted: str,
+                           func: Callable) -> Callable:
+    """Wrap func so that it runs with `local.presentation` set to wanted.
+
+    The worker reads the per-call target from a thread-local rather than from
+    the wrapper instance, because an abandoned worker (issue #199) can still
+    be finishing an operation while its replacement runs the next one.
+    """
+    @functools.wraps(func)
+    def bound(*args, **kwargs):
+        previous = getattr(local, "presentation", None)
+        local.presentation = wanted
+        try:
+            return func(*args, **kwargs)
+        finally:
+            local.presentation = previous
+
+    return bound
+
+
+def pick_presentation(candidates, wanted: str):
+    """Return the presentation a per-call `presentation` argument names.
+
+    Args:
+        candidates: (full_name, name, presentation) for every open deck.
+        wanted: A full path or URL, a file name, or a file name without its
+            extension, compared case-insensitively.  A full-name match wins
+            over name matches, so two open files called Deck.pptx can still
+            be told apart.
+
+    Raises:
+        ValueError: if nothing open matches, or if the name is ambiguous.
+            Never falls back to another deck: the caller named this one.
+    """
+    key = wanted.strip().lower()
+    by_full = [c for c in candidates if str(c[0]).lower() == key]
+    if len(by_full) == 1:
+        return by_full[0][2]
+    by_name = [
+        c for c in candidates
+        if str(c[1]).lower() == key or os.path.splitext(str(c[1]))[0].lower() == key
+    ]
+    if len(by_name) == 1:
+        return by_name[0][2]
+    if len(by_name) > 1:
+        raise ValueError(
+            f"presentation '{wanted}' matches several open files: "
+            f"{', '.join(str(c[0]) for c in by_name)}. "
+            "Pass the full path (full_name) instead."
+        )
+    raise ValueError(
+        f"presentation '{wanted}' is not open. Open presentations: "
+        f"{', '.join(str(c[0]) for c in candidates) or 'none'}. "
+        "Open it with ppt_open_presentation first."
+    )
+
 
 # HRESULTs that indicate PowerPoint is temporarily busy (e.g. modal dialog open).
 # RPC_E_CALL_REJECTED (0x80010001): server rejected the call outright.
@@ -210,6 +279,10 @@ class PowerPointCOMWrapper:
         self._queue: Queue = Queue()
         self._running = False
         self._target_pres_full_name: Optional[str] = None  # session-level target (FullName for uniqueness)
+        # The per-call target of the operation a worker is running, if its
+        # tool call named one (see call_presentation).  Thread-local, because
+        # an abandoned worker and its replacement can overlap.
+        self._call_local = threading.local()
         # Which worker generation is the live one.  A worker abandoned after a
         # wedge keeps its own generation, sees that it is no longer current,
         # and stops touching shared state (issue #199).
@@ -601,6 +674,10 @@ class PowerPointCOMWrapper:
                 "Restart the MCP server to reconnect to PowerPoint."
             )
 
+        wanted = call_presentation.get()
+        if wanted is not None:
+            func = bind_call_presentation(self._call_local, wanted, func)
+
         future: Future = Future()
         dequeued = threading.Event()
         # Under the recovery lock, so that the generation this call is
@@ -763,7 +840,19 @@ class PowerPointCOMWrapper:
 
         Matches on FullName.  When the target is no longer open, the stored
         target is cleared so callers fall back to ActivePresentation.
+
+        A presentation named by the running tool call (call_presentation)
+        takes precedence and is never None: it raises ValueError when that
+        deck is not open, rather than falling back to one the caller did not
+        name.  The session target is left as it is.
         """
+        wanted = getattr(self._call_local, "presentation", None)
+        if wanted is not None:
+            candidates = []
+            for i in range(1, app.Presentations.Count + 1):
+                p = app.Presentations(i)
+                candidates.append((p.FullName, p.Name, p))
+            return pick_presentation(candidates, wanted)
         if not self._target_pres_full_name:
             return None
         for i in range(1, app.Presentations.Count + 1):
@@ -847,6 +936,44 @@ class PowerPointCOMWrapper:
         except Exception as e:
             logger.warning("Could not activate presentation window: %s", e)
         return window
+
+    def _activate_target_window_for_command_impl(self) -> Optional[Any]:
+        """Internal: make sure a CommandBars command reaches the target deck.
+
+        CommandBars.ExecuteMso (Undo, Redo, any ribbon command) acts on the
+        active window, whichever presentation that belongs to.  With a target
+        set, per call or for the session, this brings the target's window to
+        the front first, and raises RuntimeError if it does not get there:
+        undoing the last edit of some other deck is worse than not undoing.
+        With no target set, the active window is what the caller means and
+        nothing is done.
+
+        Returns the window that was active before, when another deck's window
+        had to give way, so that a caller whose command leaves nothing to look
+        at (Undo, Redo) can hand the front back; None when nothing moved.
+        """
+        app = self._get_app_impl()
+        pres = self._find_target_pres_impl(app)
+        if pres is None:
+            return None
+        try:
+            previous = app.ActiveWindow
+            if previous.Presentation.FullName == pres.FullName:
+                previous = None
+        except Exception:
+            previous = None
+        self._activate_target_window_impl()
+        try:
+            active = app.ActiveWindow.Presentation.FullName
+        except Exception:
+            active = None
+        if active != pres.FullName:
+            raise RuntimeError(
+                f"The window of '{pres.Name}' could not be brought to the "
+                "front, and this command acts on the active window, which "
+                "belongs to another presentation. Nothing was run."
+            )
+        return previous
 
     def _set_target_pres_impl(self, name_or_index) -> dict:
         """Internal: set session-level target presentation on COM thread."""

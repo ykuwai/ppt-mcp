@@ -919,6 +919,57 @@ def _list_shapes_impl(slide_index):
     }
 
 
+# What COM answers for a property of an effect that is not set. Reporting the
+# number is worse than reporting nothing, because it reads like a measurement.
+_UNDEFINED = -2147483648
+
+
+def _defined(value):
+    return None if value is None or value <= _UNDEFINED else value
+
+
+def _glow_of(source):
+    """radius, colour and transparency of one Glow object, or None."""
+    try:
+        radius = _defined(round(source.Radius, 2))
+    except Exception:
+        return None
+    glow = {"radius": radius, "color_hex": None, "transparency": None}
+    # A glow of no radius is not a glow, and the colour COM still holds for it
+    # is the sort of value that reads like a measurement and is not one.
+    if not radius:
+        return glow
+    try:
+        glow["color_hex"] = int_to_hex(source.Color.RGB)
+    except Exception:
+        pass
+    try:
+        glow["transparency"] = _defined(round(source.Transparency, 2))
+    except Exception:
+        pass
+    return glow
+
+
+def _glows(shape):
+    """The shape's glow and the glow on its text, side by side.
+
+    Two different effects with the same name. A shape glow is drawn around the
+    fill and line, so it draws nothing on a text box that has neither, and
+    which of the two a slide is carrying could only be told by dropping to COM.
+    """
+    glows = {"glow": None, "text_glow": None}
+    try:
+        glows["glow"] = _glow_of(shape.Glow)
+    except Exception:
+        pass
+    try:
+        if shape.HasTextFrame:
+            glows["text_glow"] = _glow_of(shape.TextFrame2.TextRange.Font.Glow)
+    except Exception:
+        pass
+    return glows
+
+
 def _text_frame_state(shape):
     """Report the text frame settings that decide how text is drawn.
 
@@ -1019,6 +1070,7 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         "fill": None,
         "line": None,
         "text_frame": _text_frame_state(shape),
+        **_glows(shape),
     }
 
     # Animation check

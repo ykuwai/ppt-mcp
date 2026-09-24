@@ -998,8 +998,17 @@ def _select_shapes_impl(slide_index, shape_names):
 # Get Selection
 # ---------------------------------------------------------------------------
 def _get_selection_impl():
-    app = ppt._get_app_impl()
-    selection = app.ActiveWindow.Selection
+    ppt._get_app_impl()
+    # The target deck's own window, not ActiveWindow, which can belong to
+    # another deck. Reading a selection needs no focus, so nothing is
+    # activated (issue #183).
+    window = ppt._get_target_window_impl()
+    if window is None:
+        raise RuntimeError(
+            "There is no document window to read a selection from "
+            "(the presentation was opened with with_window=False?)."
+        )
+    selection = window.Selection
     sel_type = selection.Type
 
     result = {

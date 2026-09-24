@@ -537,7 +537,7 @@ numeric arguments, `ppt_add_video` and `ppt_add_audio` cannot take
 fade, `ppt_format_chart` cannot take `chart_style`, `legend_font_size`, the
 legend and title coordinates or an 8-direction `legend_position` (they are
 computed from the chart's rendered size, which the XML does not carry),
-`ppt_format_chart_axis` cannot take `tick_label_font_size`, and the rest are
+`ppt_format_chart_axis` cannot take `tick_label_font_size`. `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
 checks that report a write which did not land rather than a capability that
 is missing.
 

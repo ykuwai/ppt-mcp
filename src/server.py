@@ -35,6 +35,8 @@ except ModuleNotFoundError:
     from mcp.server.fastmcp import Image  # mcp 1.x
     from mcp.server.fastmcp import FastMCP as MCPServer
 
+from utils.com_wrapper import call_presentation
+
 # Configure logging to stderr (stdout is used for MCP protocol)
 logging.basicConfig(
     level=logging.INFO,
@@ -134,13 +136,67 @@ _PREFERRED_FONTS = (
 )
 
 
-mcp = MCPServer(
+# The argument every presentation-bound tool accepts next to `params`, and the
+# tools that do not take it because they act on PowerPoint itself, on the
+# running slide show, or set the session target in the first place.
+PRESENTATION_ARG = "presentation"
+_TOOLS_WITHOUT_PRESENTATION_ARG = frozenset({
+    "ppt_connect", "ppt_get_app_info", "ppt_get_active_window",
+    "ppt_set_window_state", "ppt_list_presentations", "ppt_create_presentation",
+    "ppt_open_presentation", "ppt_activate_presentation", "ppt_list_templates",
+    "ppt_search_icons", "ppt_slideshow_stop", "ppt_slideshow_next",
+    "ppt_slideshow_previous", "ppt_slideshow_goto", "ppt_slideshow_get_status",
+})
+# Type only. The same entry is copied into every bound tool's schema, and a
+# description there would be sent 141 times per connection (about 80,000
+# characters); the server instructions explain the argument once instead.
+_PRESENTATION_ARG_SCHEMA = {"type": "string"}
+
+
+class _PowerPointServer(MCPServer):
+    """MCPServer that accepts a per-call `presentation` argument.
+
+    The session target set by ppt_activate_presentation is one value for the
+    whole process, and one process can serve several conversations at once:
+    Claude Desktop starts a server once and routes every chat through it. When
+    a second conversation activates its deck, the first one's next call lands
+    there. A call that names its deck is immune to that.
+
+    The argument is taken out here, before the SDK validates `params`, and
+    held in utils.com_wrapper.call_presentation while the tool runs. Both SDK
+    majors dispatch tools/call through this method, so no SDK internals are
+    involved; the schema side is added by _add_presentation_arg().
+    """
+
+    async def call_tool(self, name, arguments, *args, **kwargs):
+        wanted = None
+        if isinstance(arguments, dict) and PRESENTATION_ARG in arguments:
+            arguments = dict(arguments)
+            wanted = arguments.pop(PRESENTATION_ARG)
+            if wanted is not None and not isinstance(wanted, str):
+                raise ValueError(
+                    f"'{PRESENTATION_ARG}' must be a string (a file name or "
+                    f"full path), got {type(wanted).__name__}"
+                )
+            # Harmless where it means nothing, and clients told to pass it on
+            # every call will, so it is dropped there rather than refused.
+            if name in _TOOLS_WITHOUT_PRESENTATION_ARG:
+                wanted = None
+            wanted = (wanted or "").strip() or None
+        token = call_presentation.set(wanted)
+        try:
+            return await super().call_tool(name, arguments, *args, **kwargs)
+        finally:
+            call_presentation.reset(token)
+
+
+mcp = _PowerPointServer(
     "powerpoint_mcp",
     lifespan=app_lifespan,
     instructions="""
 ## Getting started
 
-1. Call `ppt_activate_presentation` first — locks all tools to a specific file and prevents accidental edits to the wrong presentation.
+1. Call `ppt_activate_presentation` first — locks all tools to a specific file and prevents accidental edits to the wrong presentation. The activated presentation is shared by every conversation this server serves, so also pass its `full_name` as `presentation` on every further call: that keeps the call on your file even when another conversation activates a different one. Every tool that works on a presentation takes this optional `presentation` argument next to `params`. It accepts a `full_name` (as returned by `ppt_activate_presentation` or `ppt_open_presentation`), a file name, or a file name without extension; a new unsaved deck goes by the `name` that `ppt_create_presentation` returns. It applies to that call only and never changes the activated presentation. A presentation that is not open is an error, never a fallback to another one.
 2. Call `ppt_get_presentation_info` to understand the presentation — slide count, dimensions, template, current default fonts, and accent colors. Use this to inform all subsequent decisions. When saving files (e.g., exported markdown, images), use the presentation's `local_dir` from `ppt_get_presentation_info` as the default save directory. To read the existing slide content, call `ppt_get_all_text` — it returns all text as pseudo-Markdown with layout analysis, heading detection, and formatting markers.
 3. When adding slides, use `ppt_add_slide` with `count` to create multiple slides at once instead of calling it repeatedly.
 4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale systems, the slide master default is often 游ゴシック, which renders thin and illegible when projected. """ + _PREFERRED_FONTS + """
@@ -620,6 +676,42 @@ except Exception:
         exc_info=True,
     )
     _inlined_tool_count = 0
+
+
+def _add_presentation_arg(server) -> int:
+    """Declare the per-call `presentation` argument in the input schemas.
+
+    _PowerPointServer.call_tool is what honours it; this only makes it visible
+    to clients. Tools listed in _TOOLS_WITHOUT_PRESENTATION_ARG are skipped.
+    The argument sits next to `params` and is never required.
+
+    Returns the number of tools that gained the argument.
+    """
+    added = 0
+    for tool in server._tool_manager.list_tools():
+        if tool.name in _TOOLS_WITHOUT_PRESENTATION_ARG:
+            continue
+        schema = dict(tool.parameters)
+        properties = dict(schema.get("properties") or {})
+        if PRESENTATION_ARG in properties:
+            raise RuntimeError(f"{tool.name} already has a '{PRESENTATION_ARG}' argument")
+        properties[PRESENTATION_ARG] = dict(_PRESENTATION_ARG_SCHEMA)
+        schema["properties"] = properties
+        tool.parameters = schema
+        added += 1
+    return added
+
+
+try:
+    _presentation_arg_count = _add_presentation_arg(mcp)
+except Exception:
+    # Same SDK internals as _inline_schema_defs, and the same reasoning: the
+    # argument still works when a client sends it, it is only not advertised.
+    logger.warning(
+        "Could not add the 'presentation' argument to tool schemas",
+        exc_info=True,
+    )
+    _presentation_arg_count = 0
 
 
 def main():
