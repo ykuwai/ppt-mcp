@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 class GroupShapesInput(BaseModel):
     """Input for grouping shapes on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_names: list[str] = Field(
@@ -38,7 +38,7 @@ class GroupShapesInput(BaseModel):
 
 class UngroupShapesInput(BaseModel):
     """Input for ungrouping a group shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -48,7 +48,7 @@ class UngroupShapesInput(BaseModel):
 
 class GetGroupItemsInput(BaseModel):
     """Input for getting items within a group shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(

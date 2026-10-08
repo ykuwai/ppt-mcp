@@ -24,6 +24,7 @@ from ppt_com.constants import (
     msoTextOrientationHorizontal,
     msoBringToFront, msoSendToBack, msoBringForward, msoSendBackward,
     GRADIENT_STYLE_MAP,
+    DASH_STYLE_NAMES,
 )
 
 logger = logging.getLogger(__name__)
@@ -171,7 +172,7 @@ ZORDER_FIELD_DESCRIPTION = (
 
 class AddShapeInput(BaseModel):
     """Input for adding an auto shape to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_type: Union[int, str] = Field(
@@ -288,7 +289,7 @@ class AddShapeInput(BaseModel):
 
 class AddTextboxInput(BaseModel):
     """Input for adding a text box to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     left: float = Field(..., description="Left position in points")
@@ -327,7 +328,7 @@ class AddTextboxInput(BaseModel):
 
 class AddPictureInput(BaseModel):
     """Input for adding an image to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     file_path: str = Field(..., description="Path to image file")
@@ -342,7 +343,7 @@ class AddPictureInput(BaseModel):
 
 class AddLineInput(BaseModel):
     """Input for adding a line to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     begin_x: float = Field(..., description="Start X position in points")
@@ -356,14 +357,14 @@ class AddLineInput(BaseModel):
 
 class ListShapesInput(BaseModel):
     """Input for listing shapes on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
 
 
 class ShapeIdentifierInput(BaseModel):
     """Input for identifying a shape by name or index."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")
@@ -372,7 +373,7 @@ class ShapeIdentifierInput(BaseModel):
 
 class UpdateShapeInput(BaseModel):
     """Input for updating shape properties."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")
@@ -486,7 +487,7 @@ class UpdateShapeInput(BaseModel):
 
 class SetZOrderInput(BaseModel):
     """Input for changing shape z-order."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred — indices shift when shapes are added/removed)")
@@ -1129,7 +1130,14 @@ def _get_shape_info_impl(slide_index, shape_name, shape_index):
         except Exception:
             pass
         try:
-            info["line"]["dash_style"] = line.DashStyle
+            # The name ppt_set_line takes, so a line read here can be
+            # reproduced. A number with no name (mixed, -2) stays a number.
+            dash = line.DashStyle
+            info["line"]["dash_style"] = DASH_STYLE_NAMES.get(dash, dash)
+        except Exception:
+            pass
+        try:
+            info["line"]["transparency"] = round(line.Transparency, 2)
         except Exception:
             pass
     except Exception:
@@ -1838,10 +1846,11 @@ def register_tools(mcp):
         Identify the shape by name (shape_name) or 1-based index (shape_index).
         Returns full text, fill info, line info, rotation, z-order, and
         text_frame (autofit, word_wrap, vertical_anchor, orientation,
-        margins). Read text_frame before sizing text to fit a box. autofit is
-        the configured mode, so "shrink_to_fit" means the drawn size may be
-        smaller than the size that was set, and ppt_check_typography is what
-        says whether it currently is. The usable width is the shape width
+        margins). line.dash_style is the name ppt_set_line takes, so a line
+        read here can be reproduced. Read text_frame before sizing text to
+        fit a box. autofit is the configured mode, so "shrink_to_fit" means
+        the drawn size may be smaller than the size that was set, and
+        ppt_check_typography is what says whether it currently is. The usable width is the shape width
         less the side margins.
         """
         return await run_offloaded(get_shape_info, params)

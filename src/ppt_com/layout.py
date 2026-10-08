@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 class AlignShapesInput(BaseModel):
     """Input for aligning shapes on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_names: list[str] = Field(
@@ -50,7 +50,7 @@ class AlignShapesInput(BaseModel):
 
 class DistributeShapesInput(BaseModel):
     """Input for distributing shapes evenly on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_names: list[str] = Field(
@@ -69,12 +69,12 @@ class DistributeShapesInput(BaseModel):
 
 class GetSlideSizeInput(BaseModel):
     """Input for getting slide size (no parameters needed)."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
 
 class SetSlideSizeInput(BaseModel):
     """Input for setting slide size."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     width: Optional[float] = Field(
         default=None,
@@ -96,7 +96,7 @@ class SetSlideSizeInput(BaseModel):
 
 class SetSlideBackgroundInput(BaseModel):
     """Input for setting a slide's background."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: Optional[int] = Field(
         default=None, ge=1,
@@ -156,7 +156,7 @@ class SetSlideBackgroundInput(BaseModel):
 
 class FlipShapeInput(BaseModel):
     """Input for flipping a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -170,7 +170,7 @@ class FlipShapeInput(BaseModel):
 
 class MergeShapesInput(BaseModel):
     """Input for merging shapes using Boolean operations."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_names: list[str] = Field(

@@ -15,6 +15,7 @@ from utils.offload import run_offloaded
 from utils.color import int_to_hex
 from backend import ppt
 from utils.onedrive import resolve_local_path
+from utils.com_wrapper import pywintypes
 from ppt_com.constants import (
     msoTrue,
     msoFalse,
@@ -105,7 +106,12 @@ class OpenPresentationInput(BaseModel):
 
     file_path: str = Field(
         ...,
-        description="Full path to the presentation file (.pptx, .pptm, .ppt, .potx, etc.).",
+        description=(
+            "Full path to the presentation file (.pptx, .pptm, .ppt, .potx, etc.), "
+            "or, on Windows, the https:// URL of a file in SharePoint or OneDrive "
+            "(a direct URL or a sharing link). A deck opened from a sharing link "
+            "is afterwards named by the full_name this tool returns."
+        ),
     )
     read_only: bool = Field(
         default=False,
@@ -128,7 +134,7 @@ class OpenPresentationInput(BaseModel):
 
 class SavePresentationInput(BaseModel):
     """Input for saving the active presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     presentation_index: Optional[int] = Field(
         default=None,
@@ -148,7 +154,7 @@ class SavePresentationInput(BaseModel):
 
 class SavePresentationAsInput(BaseModel):
     """Input for SaveAs operation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     file_path: str = Field(
         ...,
@@ -179,7 +185,7 @@ class SavePresentationAsInput(BaseModel):
 
 class ClosePresentationInput(BaseModel):
     """Input for closing a presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     save_changes: bool = Field(
         default=False,
@@ -203,7 +209,7 @@ class ClosePresentationInput(BaseModel):
 
 class GetPresentationInfoInput(BaseModel):
     """Input for getting presentation info."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     presentation_index: Optional[int] = Field(
         default=None,
@@ -223,7 +229,7 @@ class GetPresentationInfoInput(BaseModel):
 
 class ActivatePresentationInput(BaseModel):
     """Input for activating a specific presentation as the MCP target."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     presentation_index: Optional[int] = Field(
         default=None,
@@ -243,7 +249,7 @@ class ActivatePresentationInput(BaseModel):
 
 class ListTemplatesInput(BaseModel):
     """Input for listing available PowerPoint templates."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     templates_dir: Optional[str] = Field(
         default=None,
@@ -402,13 +408,21 @@ def _create_presentation_impl(
     }
 
 
+def _is_url(file_path: str) -> bool:
+    return file_path.strip().lower().startswith(("http://", "https://"))
+
+
 def _open_presentation_impl(
     file_path: str,
     read_only: bool,
     with_window: bool,
     activate: bool,
 ) -> dict:
-    if not os.path.exists(file_path):
+    # A SharePoint or OneDrive URL is not a path os can check; PowerPoint opens
+    # it directly and reports its own error when the URL is wrong.
+    if _is_url(file_path):
+        file_path = file_path.strip()
+    elif not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
 
     # Opening a file legitimately needs PowerPoint, so launch it if not running.
@@ -733,6 +747,16 @@ def open_presentation(params: OpenPresentationInput) -> str:
         )
         return json.dumps(result)
     except Exception as e:
+        if _is_url(params.file_path) and isinstance(e, pywintypes.com_error):
+            # PowerPoint's own error for a URL it cannot open is a bare E_FAIL
+            # with no description, which says nothing about what went wrong.
+            # Anything else (a timeout, PowerPoint busy or missing) is not
+            # about the URL and is reported as it is.
+            return json.dumps({"error": (
+                f"PowerPoint could not open {params.file_path}. Check that the "
+                "URL is right and that PowerPoint is signed in to an account "
+                f"that can open it. ({e})"
+            )})
         return json.dumps({"error": str(e)})
 
 

@@ -14,10 +14,11 @@ from appscript import k
 from appscript.reference import CommandError
 
 from backend.mac_ae import is_missing, ppt, raw
-from backend.mac_enums import MsoGradientStyle, MsoLineDashStyle, to_keyword
-from ppt_com.constants import msoGradientHorizontal
+from backend.mac_enums import MsoGradientStyle, to_keyword
+from ppt_com.constants import dash_style_value, msoGradientHorizontal
 from ppt_mac.shapes import (
     _DASH_STYLE,
+    _dash_style_keyword,
     _line_visibility_warning,
     _apply_line_visibility,
     _get_shape,
@@ -26,10 +27,11 @@ from ppt_mac.shapes import (
 from utils.color import hex_to_rgb_list, rgb_list_to_hex
 from utils.navigation import goto_slide
 
-# ``GRADIENT_STYLE_MAP`` and ``DASH_STYLE_MAP`` live in ``ppt_com.formatting``,
-# which imports this module at its own bottom, so they are fetched inside the
-# functions that need them. A top level import would work in one direction and
-# quietly hand back a half built module in the other.
+# ``GRADIENT_STYLE_MAP`` lives in ``ppt_com.formatting``, which imports this
+# module at its own bottom, so it is fetched inside the function that needs it.
+# A top level import would work in one direction and quietly hand back a half
+# built module in the other. The dash style names live in ``ppt_com.constants``,
+# which imports nothing, so they come in at the top.
 
 logger = logging.getLogger(__name__)
 
@@ -194,19 +196,16 @@ def _set_fill_impl(slide_index, shape_name_or_index, fill_type,
 
 def _set_line_impl(slide_index, shape_name_or_index,
                     color, weight, dash_style, visible, transparency) -> dict:
-    from ppt_com.formatting import DASH_STYLE_MAP
-
     # Before the first write and before the view moves. This used to be checked
     # after the visibility, the colour and the weight had already been applied,
     # so a misspelled dash style handed the caller an error and a changed shape.
-    dash_val = None
-    if dash_style is not None:
-        dash_val = DASH_STYLE_MAP.get(dash_style)
-        if dash_val is None:
-            raise ValueError(
-                f"Invalid dash_style '{dash_style}'. "
-                f"Valid values: {list(DASH_STYLE_MAP.keys())}"
-            )
+    # A name Windows knows but macOS has no word for is refused here too.
+    dash_val = dash_style_value(dash_style) if dash_style is not None else None
+    dash_keyword, refused = _dash_style_keyword(
+        "ppt_set_line", dash_style, dash_val
+    )
+    if refused:
+        return refused
 
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -244,12 +243,10 @@ def _set_line_impl(slide_index, shape_name_or_index,
     if weight is not None:
         line.line_weight.set(weight)
 
-    if dash_val is not None:
+    if dash_keyword is not None:
         # `dash style` is a name AppleScript's own vocabulary already owns, so
         # appscript cannot reach PowerPoint's property by it. The code can.
-        raw(line, _DASH_STYLE).set(
-            to_keyword(MsoLineDashStyle, dash_val, "dash style")
-        )
+        raw(line, _DASH_STYLE).set(dash_keyword)
 
     if transparency is not None:
         line.transparency.set(transparency)

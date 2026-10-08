@@ -229,7 +229,7 @@ def generate_palette_from_primary(primary_hex: str) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 class ApplyThemeInput(BaseModel):
     """Input for applying a theme to the presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     theme_path: str = Field(
         ...,
@@ -242,12 +242,12 @@ class ApplyThemeInput(BaseModel):
 
 class GetThemeColorsInput(BaseModel):
     """Input for getting theme colors (no parameters required)."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
 
 class SetThemeColorsInput(BaseModel):
     """Input for setting individual theme colors."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     preset: Optional[str] = Field(
         default=None,
@@ -321,7 +321,7 @@ class SetThemeColorsInput(BaseModel):
 
 class SetHeadersFootersInput(BaseModel):
     """Input for setting headers and footers across all slides."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     footer_text: Optional[str] = Field(
         default=None, description="Footer text content"

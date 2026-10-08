@@ -19,8 +19,10 @@ connect`` and ``end connect`` take the shape and the site, exactly as
 whether they landed. That read back is the check, because a connector that came
 out unattached looks identical to one that worked until someone opens the deck.
 
-**Everything else is the line format.** Colour, weight, dash style and the six
-arrowhead properties are all on ``line format`` and all writable. Two of their
+**Everything else is the line format.** Colour, weight, dash style,
+transparency and the six arrowhead properties are all on ``line format`` and
+all writable, except the dash styles macOS has no enumerator for, which are
+refused by name. Two of their
 names do not match each other; the dictionary spells the begin one ``begin arrow
 head length`` and the end one ``end arrowhead length``, so anything that assumes
 symmetry raises ``AttributeError`` on one of the two.
@@ -35,11 +37,11 @@ from backend.mac_ae import ppt, raw, shapes_of, slide_at as _slide
 from backend.mac_enums import (
     MsoArrowheadStyle,
     MsoConnectorType,
-    MsoLineDashStyle,
     to_keyword,
 )
 from backend.unsupported import refusal as _refusal
-from ppt_mac.shapes import _DASH_STYLE, _get_shape
+from ppt_com.constants import dash_style_value
+from ppt_mac.shapes import _DASH_STYLE, _dash_style_keyword, _get_shape
 from utils.color import hex_to_rgb_list
 from utils.navigation import goto_slide
 
@@ -236,13 +238,12 @@ def _format_connector_impl(slide_index, shape_name_or_index,
                              begin_arrow, begin_arrow_length, begin_arrow_width,
                              end_arrow, end_arrow_length, end_arrow_width,
                              begin_shape, begin_site,
-                             end_shape, end_site):
+                             end_shape, end_site, transparency=None):
     # Lazy import for the same reason as in _add_connector_impl.
     from ppt_com.connectors import (
         ARROW_LENGTH_MAP,
         ARROW_STYLE_MAP,
         ARROW_WIDTH_MAP,
-        DASH_STYLE_MAP,
     )
 
     def _lookup(value, mapping, argument):
@@ -260,7 +261,7 @@ def _format_connector_impl(slide_index, shape_name_or_index,
     # Every word is checked before the view moves and before anything is
     # written, so a typo in the last argument does not leave the first four
     # applied.
-    dash_val = _lookup(dash_style, DASH_STYLE_MAP, "dash_style")
+    dash_val = dash_style_value(dash_style) if dash_style is not None else None
     begin_arrow_val = _lookup(begin_arrow, ARROW_STYLE_MAP, "begin_arrow")
     begin_length_val = _lookup(
         begin_arrow_length, ARROW_LENGTH_MAP, "begin_arrow_length"
@@ -276,6 +277,14 @@ def _format_connector_impl(slide_index, shape_name_or_index,
     if named:
         return _site_refusal("ppt_format_connector", named)
 
+    # A style Windows knows but macOS has no word for is refused by name, and
+    # before anything moves, rather than drawn as some other style.
+    dash_keyword, refused = _dash_style_keyword(
+        "ppt_format_connector", dash_style, dash_val
+    )
+    if refused:
+        return refused
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -290,12 +299,14 @@ def _format_connector_impl(slide_index, shape_name_or_index,
     if weight is not None:
         line.line_weight.set(weight)
 
-    if dash_val is not None:
+    if dash_keyword is not None:
         # `dash style` is a name AppleScript's own vocabulary already owns, so
         # appscript cannot reach PowerPoint's property by it. The code can.
-        raw(line, _DASH_STYLE).set(
-            to_keyword(MsoLineDashStyle, dash_val, "dash style")
-        )
+        raw(line, _DASH_STYLE).set(dash_keyword)
+
+    if transparency is not None:
+        # Written the way ppt_set_line writes it on this side.
+        line.transparency.set(transparency)
 
     if begin_arrow_val is not None:
         line.begin_arrowhead_style.set(

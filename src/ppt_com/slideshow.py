@@ -39,7 +39,7 @@ SHOW_TYPE_MAP = {
 # ---------------------------------------------------------------------------
 class SlideShowStartInput(BaseModel):
     """Input for starting a slide show."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     start_slide: Optional[int] = Field(
         default=None,
@@ -61,7 +61,7 @@ class SlideShowStartInput(BaseModel):
 
 class SlideShowGotoInput(BaseModel):
     """Input for navigating to a specific slide in the slide show."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(
         ...,

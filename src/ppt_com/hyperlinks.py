@@ -32,7 +32,7 @@ ACTION_ON_MAP: dict[str, int] = {
 # ---------------------------------------------------------------------------
 class AddHyperlinkInput(BaseModel):
     """Input for adding a hyperlink to a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -56,14 +56,14 @@ class AddHyperlinkInput(BaseModel):
 
 class GetHyperlinksInput(BaseModel):
     """Input for listing hyperlinks on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
 
 
 class RemoveHyperlinkInput(BaseModel):
     """Input for removing a hyperlink from a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(

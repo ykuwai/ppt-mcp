@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 class AddSectionInput(BaseModel):
     """Input for adding a section to the presentation."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     name: str = Field(..., description="Section name")
     slide_index: int = Field(
@@ -31,7 +31,7 @@ class AddSectionInput(BaseModel):
 
 class ManageSectionInput(BaseModel):
     """Input for managing (rename, move, delete) a section."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     section_index: int = Field(..., ge=1, description="1-based section index")
     action: str = Field(

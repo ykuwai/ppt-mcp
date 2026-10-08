@@ -8,7 +8,7 @@ import json
 import logging
 from typing import List, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from utils.offload import run_offloaded
 from backend import ppt
@@ -22,8 +22,8 @@ from ppt_com.constants import (
     msoAnchorTop, msoAnchorMiddle, msoAnchorBottom,
     ppBorderTop, ppBorderLeft, ppBorderBottom, ppBorderRight,
     ppBorderDiagonalDown, ppBorderDiagonalUp,
-    msoLineSolid, msoLineRoundDot, msoLineDot, msoLineDash,
-    msoLineDashDot, msoLineDashDotDot, msoLineLongDash, msoLineLongDashDot,
+    DASH_STYLE_DESCRIPTION,
+    check_dash_style, dash_style_value,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,16 +52,8 @@ BORDER_SIDE_MAP: dict[str, int] = {
 
 _DIAGONAL_SIDES: set[int] = {ppBorderDiagonalDown, ppBorderDiagonalUp}
 
-DASH_STYLE_MAP: dict[str, int] = {
-    "solid": msoLineSolid,
-    "round_dot": msoLineRoundDot,
-    "dot": msoLineDot,
-    "dash": msoLineDash,
-    "dash_dot": msoLineDashDot,
-    "dash_dot_dot": msoLineDashDotDot,
-    "long_dash": msoLineLongDash,
-    "long_dash_dot": msoLineLongDashDot,
-}
+# DASH_STYLE_MAP lives in ppt_com.constants and is shared by every line tool.
+# This tool used to accept 'dot' as well; it is kept as an alias there.
 
 VERTICAL_ANCHOR_NAMES: dict[int, str] = {
     **{v: k for k, v in VERTICAL_ALIGNMENT_MAP.items()},
@@ -76,7 +68,7 @@ ALIGNMENT_NAMES: dict[int, str] = {v: k for k, v in ALIGNMENT_MAP.items()}
 # ---------------------------------------------------------------------------
 class AddTableInput(BaseModel):
     """Input for adding a table to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     rows: int = Field(..., ge=1, description="Number of rows")
@@ -91,7 +83,7 @@ class AddTableInput(BaseModel):
 
 class GetTableDataInput(BaseModel):
     """Input for getting table data."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -102,7 +94,7 @@ class GetTableDataInput(BaseModel):
 
 class SetTableCellInput(BaseModel):
     """Input for setting text and formatting of a table cell."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -128,7 +120,7 @@ class SetTableCellInput(BaseModel):
 
 class SetTableDataInput(BaseModel):
     """Input for batch-setting table cell text from a 2D array."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -152,7 +144,7 @@ class SetTableDataInput(BaseModel):
 
 class MergeTableCellsInput(BaseModel):
     """Input for merging table cells."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -174,7 +166,7 @@ class MergeTableCellsInput(BaseModel):
 
 class TableRowInput(BaseModel):
     """Input for adding or deleting a table row."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -189,7 +181,7 @@ class TableRowInput(BaseModel):
 
 class TableColumnInput(BaseModel):
     """Input for adding or deleting a table column."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -204,7 +196,7 @@ class TableColumnInput(BaseModel):
 
 class SetTableStyleInput(BaseModel):
     """Input for applying a table style."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -224,7 +216,7 @@ class SetTableStyleInput(BaseModel):
 
 class SetTableLayoutInput(BaseModel):
     """Input for setting row heights and/or column widths of an existing table."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -242,7 +234,7 @@ class SetTableLayoutInput(BaseModel):
 
 class SplitTableCellsInput(BaseModel):
     """Input for splitting (unmerging) a merged table cell."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -256,7 +248,7 @@ class SplitTableCellsInput(BaseModel):
 
 class SetTableBordersInput(BaseModel):
     """Input for setting borders on a range of table cells."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -278,9 +270,13 @@ class SetTableBordersInput(BaseModel):
     color: Optional[str] = Field(default=None, description="Border color as '#RRGGBB'")
     weight: Optional[float] = Field(default=None, description="Border line weight in points (e.g. 1.5)")
     dash_style: Optional[str] = Field(
-        default=None,
-        description="Border line style: 'solid', 'round_dot', 'dot', 'dash', 'dash_dot', 'dash_dot_dot', 'long_dash', 'long_dash_dot'"
+        default=None, description=DASH_STYLE_DESCRIPTION
     )
+
+    @field_validator("dash_style")
+    @classmethod
+    def _dash_style_known(cls, v):
+        return check_dash_style(v)
 
     @model_validator(mode="after")
     def _check_range_order(self) -> "SetTableBordersInput":
@@ -747,12 +743,7 @@ def _set_table_borders_impl(
 
     dash_style_int = None
     if dash_style is not None:
-        key = dash_style.strip().lower()
-        if key not in DASH_STYLE_MAP:
-            raise ValueError(
-                f"Unknown dash_style '{dash_style}'. Use: {', '.join(DASH_STYLE_MAP.keys())}"
-            )
-        dash_style_int = DASH_STYLE_MAP[key]
+        dash_style_int = dash_style_value(dash_style)
 
     diagonal_visible_skipped = False
 

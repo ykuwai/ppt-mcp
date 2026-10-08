@@ -73,7 +73,7 @@ TRANSITION_EFFECT_MAP: dict[str, int] = {
 # ---------------------------------------------------------------------------
 class SetSlideTransitionInput(BaseModel):
     """Input for setting a slide transition effect."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     effect: Union[int, str] = Field(
@@ -100,7 +100,7 @@ class SetSlideTransitionInput(BaseModel):
 
 class AddAnimationInput(BaseModel):
     """Input for adding an animation effect to a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -243,14 +243,14 @@ class AddAnimationInput(BaseModel):
 
 class ListAnimationsInput(BaseModel):
     """Input for listing animations on a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
 
 
 class RemoveAnimationInput(BaseModel):
     """Input for removing a single animation from a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     animation_index: int = Field(
@@ -265,7 +265,7 @@ class RemoveAnimationInput(BaseModel):
 
 class ClearAnimationsInput(BaseModel):
     """Input for clearing all animations from a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     clear_transitions: bool = Field(
@@ -276,7 +276,7 @@ class ClearAnimationsInput(BaseModel):
 
 class UpdateAnimationInput(BaseModel):
     """Input for updating an existing animation in the main or interactive sequence."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     animation_index: int = Field(

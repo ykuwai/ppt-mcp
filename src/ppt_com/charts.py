@@ -84,7 +84,7 @@ CHART_TYPE_NAMES: dict[int, str] = {v: k for k, v in CHART_TYPE_MAP.items()}
 # ---------------------------------------------------------------------------
 class AddChartInput(BaseModel):
     """Input for adding a chart to a slide."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     chart_type: Union[int, str] = Field(
@@ -102,7 +102,7 @@ class AddChartInput(BaseModel):
 
 class SetChartDataInput(BaseModel):
     """Input for setting chart data via Excel workbook."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -122,7 +122,7 @@ class SetChartDataInput(BaseModel):
 
 class GetChartDataInput(BaseModel):
     """Input for reading chart data from the Excel workbook."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -132,7 +132,7 @@ class GetChartDataInput(BaseModel):
 
 class FormatChartInput(BaseModel):
     """Input for formatting chart properties (title, legend, style)."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -188,7 +188,7 @@ class FormatChartInput(BaseModel):
 
 class FormatChartAxisInput(BaseModel):
     """Input for formatting a chart axis (scale, ticks, labels, title)."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -272,7 +272,7 @@ class FormatChartAxisInput(BaseModel):
 
 class SetChartSeriesInput(BaseModel):
     """Input for formatting an individual chart series."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -292,7 +292,7 @@ class SetChartSeriesInput(BaseModel):
 
 class ChangeChartTypeInput(BaseModel):
     """Input for changing a chart's type."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(

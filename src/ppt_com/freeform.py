@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class NodeSpec(BaseModel):
     """A single path segment node for freeform building."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     segment_type: str = Field(
         ...,
@@ -82,7 +82,7 @@ class NodeSpec(BaseModel):
 
 class BuildFreeformInput(BaseModel):
     """Input for creating a new freeform shape from path segments."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     start_x: float = Field(..., description="X position of the first node in points.")
@@ -120,7 +120,7 @@ class BuildFreeformInput(BaseModel):
 
 class ShapeNodeInput(BaseModel):
     """Common input for tools that identify a shape and a node index."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
@@ -130,7 +130,7 @@ class ShapeNodeInput(BaseModel):
 
 class GetShapeNodesInput(BaseModel):
     """Input for reading nodes of an existing freeform shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
@@ -139,7 +139,7 @@ class GetShapeNodesInput(BaseModel):
 
 class SetNodePositionInput(BaseModel):
     """Input for moving a freeform node to new coordinates."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
@@ -151,7 +151,7 @@ class SetNodePositionInput(BaseModel):
 
 class InsertNodeInput(BaseModel):
     """Input for inserting a new node after an existing node."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
@@ -198,7 +198,7 @@ class InsertNodeInput(BaseModel):
 
 class DeleteNodeInput(BaseModel):
     """Input for deleting a node from a freeform shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
@@ -208,7 +208,7 @@ class DeleteNodeInput(BaseModel):
 
 class SetNodeEditingTypeInput(BaseModel):
     """Input for changing a node's editing type."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
@@ -222,7 +222,7 @@ class SetNodeEditingTypeInput(BaseModel):
 
 class SetSegmentTypeInput(BaseModel):
     """Input for changing the segment type after a node."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")

@@ -83,7 +83,7 @@ def nothing_drawn_warning(shape, name):
 # ---------------------------------------------------------------------------
 class SetGlowInput(BaseModel):
     """Input for setting glow effect on a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -106,7 +106,7 @@ class SetGlowInput(BaseModel):
 
 class SetReflectionInput(BaseModel):
     """Input for setting reflection effect on a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(
@@ -137,7 +137,7 @@ class SetReflectionInput(BaseModel):
 
 class SetSoftEdgeInput(BaseModel):
     """Input for setting soft edge effect on a shape."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     shape_name_or_index: Union[str, int] = Field(

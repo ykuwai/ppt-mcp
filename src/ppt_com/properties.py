@@ -33,7 +33,7 @@ READABLE_PROPERTIES = [
 # ---------------------------------------------------------------------------
 class SetPropertiesInput(BaseModel):
     """Input for setting document properties."""
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     title: Optional[str] = Field(default=None, description="Document title")
     author: Optional[str] = Field(default=None, description="Author name")
