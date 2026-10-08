@@ -132,7 +132,7 @@ uv sync
 | Category | Tools | Description |
 |----------|------:|-------------|
 | **App** | 5 | Connect to PowerPoint, app info, active window, window state, list presentations |
-| **Presentation** | 8 | Create (with templates), open, save, close, info, activate target, list templates |
+| **Presentation** | 8 | Create (with templates), open (a local file, or on Windows a SharePoint or OneDrive URL), save, close, info, activate target, list templates |
 | **Slides** | 10 | Add, delete (bulk), duplicate (positional/multi), move (bulk), copy (cross-presentation), list, info, notes, navigation |
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines (with z-order placement, including behind the text), list, info (position, fill, line, text frame), update (one shape, a set, or the whole slide, absolute or by offset), delete, z-order |
 | **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups), textframe, extract all text as Markdown, typography check |
