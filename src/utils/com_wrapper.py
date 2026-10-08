@@ -20,6 +20,7 @@ from concurrent.futures import (
 from contextvars import ContextVar
 from queue import Empty, Queue
 from typing import Any, Callable, Optional
+from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,20 @@ def bind_call_presentation(local: threading.local, wanted: str,
     return bound
 
 
+def full_name_key(full_name: str) -> str:
+    """Return the form in which a full name is compared.
+
+    Case-insensitive, and a URL is percent-decoded first: PowerPoint reports
+    the FullName of a deck opened from SharePoint or OneDrive decoded
+    (".../Shared Documents/Deck.pptx"), while a URL copied from the browser
+    keeps its escapes (".../Shared%20Documents/Deck.pptx").
+    """
+    key = str(full_name).strip()
+    if key.lower().startswith(("http://", "https://")):
+        key = unquote(key)
+    return key.lower()
+
+
 def pick_presentation(candidates, wanted: str):
     """Return the presentation a per-call `presentation` argument names.
 
@@ -130,7 +145,8 @@ def pick_presentation(candidates, wanted: str):
             Never falls back to another deck: the caller named this one.
     """
     key = wanted.strip().lower()
-    by_full = [c for c in candidates if str(c[0]).lower() == key]
+    full_key = full_name_key(wanted)
+    by_full = [c for c in candidates if full_name_key(c[0]) == full_key]
     if len(by_full) == 1:
         return by_full[0][2]
     by_name = [
@@ -991,10 +1007,11 @@ class PowerPointCOMWrapper:
             pres = app.Presentations(name_or_index)
         else:
             name_lower = name_or_index.lower()
+            full_key = full_name_key(name_or_index)
             matches = []
             for i in range(1, app.Presentations.Count + 1):
                 p = app.Presentations(i)
-                if p.Name.lower() == name_lower or p.FullName.lower() == name_lower:
+                if p.Name.lower() == name_lower or full_name_key(p.FullName) == full_key:
                     matches.append(p)
             if len(matches) == 0:
                 open_names = [
