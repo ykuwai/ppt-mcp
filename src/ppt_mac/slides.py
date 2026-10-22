@@ -590,8 +590,9 @@ def _copy_slide_impl(
     )
 
     if src_pres.full_name() != dst_pres.full_name():
-        # Windows copies between decks through the clipboard. The Mac verbs
-        # for that are `copy object` and `paste object`, and `paste object`
+        # Windows copies between decks with InsertFromFile, or through the
+        # clipboard for a password-protected source. The Mac clipboard verbs
+        # are `copy object` and `paste object`, and `paste object`
         # declares a direct parameter whose type does not resolve to any class
         # in the dictionary, so there is no way to say which deck it should
         # paste into. Guessing would paste into whichever deck PowerPoint
