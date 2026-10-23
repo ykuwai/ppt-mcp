@@ -40,6 +40,7 @@ from pydantic import ValidationError
 
 from utils.arguments import describe_unknown_top_level, describe_validation_error
 from utils.com_wrapper import call_presentation
+from utils.coauthoring import CallCoauthoring, call_coauthoring
 
 # Configure logging to stderr (stdout is used for MCP protocol)
 logging.basicConfig(
@@ -213,6 +214,7 @@ class _PowerPointServer(MCPServer):
         if tool is not None and isinstance(arguments, dict):
             _refuse_unknown_arguments(name, tool, arguments)
         token = call_presentation.set(wanted)
+        coauthoring_token = call_coauthoring.set(_coauthoring_call(name, tool, arguments))
         try:
             return await super().call_tool(name, arguments, *args, **kwargs)
         except ToolError as exc:
@@ -221,6 +223,7 @@ class _PowerPointServer(MCPServer):
                 raise
             raise ToolError(readable) from exc.__cause__
         finally:
+            call_coauthoring.reset(coauthoring_token)
             call_presentation.reset(token)
 
     def _registered_tool(self, name):
@@ -233,6 +236,43 @@ class _PowerPointServer(MCPServer):
             return self._tool_manager.get_tool(name)
         except Exception:
             return None
+
+
+# Presentation-bound tools that handle co-authoring themselves (save) or have
+# no deck left to look at afterwards (save as under a new name, close).
+_TOOLS_WITHOUT_COAUTHORING = frozenset({
+    "ppt_save_presentation", "ppt_save_presentation_as", "ppt_close_presentation",
+})
+
+
+def _coauthoring_call(name, tool, arguments):
+    """What utils/coauthoring.py needs to know about this call, or None.
+
+    Only presentation-bound tools take part. A tool writes unless its
+    readOnlyHint says otherwise; its own target fields (the destination of
+    ppt_copy_slide first) name the deck it works on.
+    """
+    if name in _TOOLS_WITHOUT_PRESENTATION_ARG or name in _TOOLS_WITHOUT_COAUTHORING:
+        return None
+    annotations = getattr(tool, "annotations", None)
+    read_only = getattr(annotations, "readOnlyHint", None)
+    if read_only is None:
+        read_only = getattr(annotations, "read_only_hint", None)
+    params = arguments.get("params") if isinstance(arguments, dict) else None
+    if isinstance(params, str):
+        try:
+            params = json.loads(params)
+        except ValueError:
+            params = None
+    if not isinstance(params, dict):
+        params = {}
+    for prefix in ("to_", ""):
+        index = params.get(prefix + "presentation_index")
+        name_ = params.get(prefix + "presentation_name")
+        if index is not None or name_ is not None:
+            return CallCoauthoring(writes=not read_only, presentation_name=name_,
+                                   presentation_index=index)
+    return CallCoauthoring(writes=not read_only)
 
 
 def _arg_model(tool):
@@ -303,6 +343,10 @@ mcp = _PowerPointServer(
 6. Use `ppt_get_slide_preview` to visually inspect slides as you work.
 7. """ + _WRITE_CHECKS + """ When a slide is finished, run `ppt_check_layout` on it, and before calling the deck done, run it once more with no `slide_index`, which also compares the titles across slides. A slide is done when it reports no issues, or only ones you mean to keep: if the same finding comes back after two attempts to fix it, treat it as intended (a photo behind white text, an overlap you designed, something the template draws) and move on. The write tools check only the shapes they touched, and not every tool: paragraph spacing, bullets, picture crops and formats, grouping, SmartArt, chart data, copying a slide and deleting or splitting table cells are not checked, so run `ppt_check_layout` after those. The check measures rather than looks, so it works with or without image input.
 8. Build a slide at a time, not the whole deck at once. Before the first shape, fix the grid (margins, column positions, a type scale and a palette) and keep every shape on it: most alignment issues are coordinates a few points apart. Decide on photos up front, since adding them later changes the layout. Finish each slide, with its issues acted on, `ppt_check_layout` clean, or its remaining findings intended, and a preview checked if you can see images, before starting the next. Fix problems in place with the call each `fix` names. Deleting and rebuilding a slide or the deck to move something a few points costs many calls and finds the same problems again.
+
+## Shared files
+
+On Windows, a presentation opened from a server (SharePoint, OneDrive) can be edited by other people at the same time. PowerPoint takes in their saved changes only when the file is saved: tools do that before they run whenever nothing here is unsaved, and `ppt_save_presentation` always does. Results for such a file carry `coauthoring`: `pending_updates` = changes of others are waiting, `merged_updates` = they were just merged (re-read before relying on slide indices; a writing call whose slides or shapes the merge moved is refused without changes). A `conflict` means both sides changed the same object; unless it was resolved (`overwritten` then lists this copy's version), PowerPoint asks the user in a dialog. Save after each finished step so that conflicts stay small.
 
 ## Key tools
 

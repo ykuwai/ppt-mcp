@@ -22,6 +22,8 @@ from queue import Empty, Queue
 from typing import Any, Callable, Optional
 from urllib.parse import unquote
 
+from utils import coauthoring
+
 logger = logging.getLogger(__name__)
 
 # pywin32 only installs on Windows, and this module has to stay importable
@@ -696,6 +698,11 @@ class PowerPointCOMWrapper:
                 "Restart the MCP server to reconnect to PowerPoint."
             )
 
+        # Co-authoring first, so that it runs inside the per-call target
+        # binding below and finds the same deck as the operation.
+        coauthoring_call = coauthoring.call_coauthoring.get()
+        if coauthoring_call is not None:
+            func = coauthoring.bind_call_coauthoring(self, coauthoring_call, func)
         wanted = call_presentation.get()
         if wanted is not None:
             func = bind_call_presentation(self._call_local, wanted, func)
@@ -1105,12 +1112,16 @@ class PowerPointCOMWrapper:
             if app.Presentations(i).FullName == pres.FullName:
                 index = i
                 break
-        return {
+        result = {
             "success": True,
             "name": pres.Name,
             "full_name": pres.FullName,
             "index": index,
         }
+        state = coauthoring.status(pres, with_count=True)
+        if state is not None:
+            result[coauthoring.FIELD] = state
+        return result
 
     def _ensure_presentation_impl(self) -> Any:
         """Internal: ensure presentation on COM thread."""
