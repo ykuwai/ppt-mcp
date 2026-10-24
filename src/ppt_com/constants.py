@@ -211,6 +211,13 @@ ppAlignJustify = 4
 ppAlignDistribute = 5
 
 # ==============================================================================
+# PpDirection (ParagraphFormat.TextDirection)
+# ==============================================================================
+ppDirectionLeftToRight = 1
+ppDirectionRightToLeft = 2
+ppDirectionMixed = -2
+
+# ==============================================================================
 # MsoTextOrientation
 # ==============================================================================
 msoTextOrientationHorizontal = 1

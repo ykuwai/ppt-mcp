@@ -6,7 +6,7 @@ import os
 import re
 import time
 import unicodedata
-from typing import Annotated, List, Optional, Union
+from typing import Annotated, List, Literal, Optional, Union
 
 from pydantic import (
     BaseModel, ConfigDict, Field, StringConstraints,
@@ -24,6 +24,7 @@ from ppt_com.constants import (
     msoTrue, msoFalse, msoTriStateMixed,
     msoPlaceholder, msoGroup,
     ppAlignLeft, ppAlignCenter, ppAlignRight, ppAlignJustify, ppAlignDistribute,
+    ppDirectionLeftToRight, ppDirectionRightToLeft,
     ppAutoSizeNone, ppAutoSizeShapeToFitText, ppAutoSizeTextToFitShape,
     ppBulletNone, ppBulletUnnumbered, ppBulletNumbered,
     ppBulletAlphaLCPeriod, ppBulletAlphaUCPeriod,
@@ -51,6 +52,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Alignment / orientation / auto-size maps
 # ---------------------------------------------------------------------------
+DIRECTION_MAP = {
+    "ltr": ppDirectionLeftToRight,
+    "rtl": ppDirectionRightToLeft,
+}
+
 ALIGNMENT_MAP = {
     "left": ppAlignLeft,
     "center": ppAlignCenter,
@@ -475,6 +481,16 @@ class SetParagraphFormatInput(BaseModel):
     space_after: Optional[float] = Field(default=None, description="Space after paragraph in points")
     indent_level: Optional[int] = Field(default=None, ge=1, le=9, description="Indent level (1-9)")
     first_line_indent: Optional[float] = Field(default=None, description="First line indent in points")
+    direction: Optional[Literal["rtl", "ltr"]] = Field(
+        default=None,
+        description=(
+            "Reading direction: 'rtl' for Hebrew, Arabic and other right-to-left "
+            "text, 'ltr' otherwise. PowerPoint for Windows draws a paragraph "
+            "left to right unless it is set 'rtl', whatever its letters, so a "
+            "Hebrew line with a number or punctuation in it reads wrong there "
+            "until it is. Set it on every right-to-left paragraph."
+        ),
+    )
 
 
 class SetBulletInput(BaseModel):
@@ -1705,11 +1721,25 @@ def _restore_run_formatting(text_range, runs):
                 logger.debug("Failed to restore NameFarEast: %s", e)
 
 
+def _set_complex_script_font(font, font_name):
+    """Set the font Hebrew and Arabic are drawn in, as Name does for Latin.
+
+    PowerPoint draws right-to-left letters in the run's complex script font,
+    so without this a Hebrew title asked for in David is drawn in the
+    theme's font.
+    """
+    try:
+        font.NameComplexScript = font_name
+    except Exception as e:
+        logger.debug("Failed to set NameComplexScript: %s", e)
+
+
 def _apply_font_props(font, font_name, font_name_fareast, font_size, bold, italic, underline, color, font_color_theme):
     """Apply font properties to a Font COM object."""
     if font_name is not None:
         font.Name = font_name
         font.NameFarEast = font_name  # default: match Latin unless overridden
+        _set_complex_script_font(font, font_name)
     if font_name_fareast is not None:
         font.NameFarEast = font_name_fareast  # override East Asian font independently
     if font_size is not None:
@@ -1878,7 +1908,13 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
 
 def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index,
                                  alignment, line_spacing, space_before, space_after,
-                                 indent_level, first_line_indent) -> dict:
+                                 indent_level, first_line_indent, direction=None) -> dict:
+    # Checked before anything is written, so a bad value changes nothing.
+    if alignment is not None and alignment not in ALIGNMENT_MAP:
+        raise ValueError(
+            f"Invalid alignment '{alignment}'. "
+            f"Valid values: {list(ALIGNMENT_MAP.keys())}"
+        )
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1897,14 +1933,22 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
 
     pf = target.ParagraphFormat
 
+    if direction is not None:
+        # PowerPoint mirrors a paragraph's alignment when its direction
+        # changes, so right-set Hebrew set right to left jumps to the left.
+        # What was drawn on the right stays there.
+        if paragraph_index is not None:
+            paragraphs = [target]
+        else:
+            paragraphs = [tr.Paragraphs(i) for i in range(1, tr.Paragraphs().Count + 1)]
+        kept = [p.ParagraphFormat.Alignment for p in paragraphs]
+        pf.TextDirection = DIRECTION_MAP[direction]
+        if alignment is None:
+            for paragraph, value in zip(paragraphs, kept):
+                paragraph.ParagraphFormat.Alignment = value
+
     if alignment is not None:
-        align_val = ALIGNMENT_MAP.get(alignment)
-        if align_val is None:
-            raise ValueError(
-                f"Invalid alignment '{alignment}'. "
-                f"Valid values: {list(ALIGNMENT_MAP.keys())}"
-            )
-        pf.Alignment = align_val
+        pf.Alignment = ALIGNMENT_MAP[alignment]
 
     if line_spacing is not None:
         pf.LineRuleWithin = msoTrue
@@ -2332,7 +2376,9 @@ def set_paragraph_format(params: SetParagraphFormatInput) -> str:
             params.slide_index, params.shape_name_or_index, params.paragraph_index,
             params.alignment, params.line_spacing, params.space_before,
             params.space_after, params.indent_level, params.first_line_indent,
+            params.direction,
         )
+        report_layout(result, params.slide_index, touched_names(result))
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
@@ -3016,7 +3062,8 @@ def register_tools(mcp):
         """Set paragraph-level formatting for a shape.
 
         Applies alignment, line spacing, space before/after, indent level,
-        and first-line indent. Omit paragraph_index to format all paragraphs.
+        first-line indent and reading direction. Omit paragraph_index to
+        format all paragraphs.
         """
         return await run_offloaded(set_paragraph_format, params)
 

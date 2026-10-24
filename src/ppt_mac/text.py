@@ -1107,7 +1107,7 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
 
 def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index,
                                alignment, line_spacing, space_before, space_after,
-                               indent_level, first_line_indent) -> dict:
+                               indent_level, first_line_indent, direction=None) -> dict:
     from ppt_com.text import ALIGNMENT_MAP
 
     # Translated before goto_slide, so a misspelled alignment costs neither an
@@ -1139,6 +1139,21 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
     pf = target.paragraph_format
     applied = 0
 
+    if direction is not None:
+        # PowerPoint mirrors a paragraph's alignment when its direction
+        # changes, so right-set Hebrew set right to left jumps to the left.
+        # What was drawn on the right stays there.
+        if paragraph_index is not None:
+            paragraphs = [target]
+        else:
+            paragraphs = [tr.paragraphs[i] for i in range(1, count(tr.paragraphs) + 1)]
+        kept = [p.paragraph_format.alignment() for p in paragraphs]
+        pf.text_direction.set(k.right_to_left if direction == "rtl" else k.left_to_right)
+        if align_word is None:
+            for paragraph, value in zip(paragraphs, kept):
+                paragraph.paragraph_format.alignment.set(value)
+        applied += 1
+
     if align_word is not None:
         pf.alignment.set(align_word)
         applied += 1
@@ -1163,6 +1178,7 @@ def _set_paragraph_format_impl(slide_index, shape_name_or_index, paragraph_index
         # format, which is also where the COM code sets it.
         target.indent_level.set(indent_level)
         applied += 1
+
 
     if first_line_indent is None:
         return {

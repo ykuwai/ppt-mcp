@@ -7,6 +7,7 @@ run over fake COM objects, since it is the half CI exercises.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -221,6 +222,14 @@ class TestOverflow:
         [finding] = [f for f in check(box) if f["type"] == "overflow"]
         assert "wider" in finding["fix"]
         assert finding["needed_pt"] == 300
+
+    def test_an_unwrapped_box_sized_to_its_text_cannot_run_out_of_its_side(self):
+        # Live, on the Mac: "1516 עד 1917" at 44 pt, in a box PowerPoint had
+        # sized to it at 283.3 pt, was read as a 276.1 pt line, 7.3 pt past
+        # the insets. It drew inside the box.
+        box = textbox("row1", 516.7, 40, 283.3, 70, text_width=276.1, text_height=60,
+                      word_wrap=False, autofit="shape_to_fit")
+        assert [f for f in check(box) if f["type"] == "overflow"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -748,8 +757,15 @@ class FakeRange:
             Color=SimpleNamespace(RGB=rgb, ObjectThemeColor=theme[0] if theme else 0),
             Size=size, Bold=bold, Name="Calibri Light" if size >= 30 else "Calibri"))
 
-    def Paragraphs(self, i):
-        return SimpleNamespace(ParagraphFormat=SimpleNamespace(Alignment=self._alignment))
+    def Paragraphs(self, i=None):
+        paragraphs = self.Text.split("\r")
+        if i is None:
+            return SimpleNamespace(Count=len(paragraphs))
+        text = paragraphs[i - 1]
+        direction = 2 if text.startswith("\u05d0") else 1
+        language = 1037 if text.startswith("\u05d1") else 1033   # he-IL, en-US
+        return SimpleNamespace(ParagraphFormat=SimpleNamespace(
+            Alignment=self._alignment, TextDirection=direction), LanguageID=language)
 
 
 def fake_shape(name="TextBox 1", content="Hello there", runs=None, bounds=(107.2, 103.6, 150.0, 30.0)):
@@ -813,6 +829,16 @@ class TestTheWindowsReader:
     def test_the_shape_asked_about_is_read_in_full(self):
         words = layout_check._shape_facts(fake_shape(), 1, ["TextBox 1"])["text"]
         assert words["runs"] and words["margins"] == MARGINS
+
+    def test_paragraph_directions_are_read_for_hebrew_text(self):
+        # Set right to left; tagged as Hebrew, which PowerPoint draws from the
+        # right as well; neither.
+        content = "\u05d0 1\r\u05d1 2\r\u05d2 3"
+        shape = fake_shape(content=content, runs=[(content, 0x222222, 20.0, msoFalse)])
+        assert layout_check._shape_facts(shape, 1, None)["text"]["directions"] == ["rtl", "rtl", "ltr"]
+
+    def test_and_not_for_text_without_it(self):
+        assert "directions" not in layout_check._shape_facts(fake_shape(), 1, None)["text"]
 
     def test_alignment_is_read_only_when_powerpoint_will_not_place_the_text(self):
         assert layout_check._shape_facts(fake_shape(), 1, None)["text"]["alignment"] is None
@@ -883,6 +909,14 @@ def recorded(name):
     return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
 
 
+@pytest.fixture
+def without_title_edge(monkeypatch):
+    """The recorded decks were judged before titles were held to the body's
+    edge, and their tests are about the other checks. Which of their titles
+    are off the body's edge is pinned in TestTitleEdge."""
+    monkeypatch.setattr(layout_check, "_title_body_edge", lambda *args: [])
+
+
 def findings_by_slide(deck):
     return {
         s["slide_index"]: [(f["type"], f["shapes"][0])
@@ -891,6 +925,7 @@ def findings_by_slide(deck):
     }
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestARealDeck:
     SEEN = {
         1: [],                                   # cover: centred placeholders, corner logo
@@ -948,6 +983,7 @@ class TestARealDeck:
         assert deck_findings(deck["slides"], deck["slide_height"]) == []
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestASecondRealDeck:
     # Eleven more slides, the patterns the first deck did not have: a photo
     # filling half the slide, a pricing row with its middle plan featured,
@@ -1008,6 +1044,7 @@ def fixes_of(deck):
     return fixes
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestAThemedDeck:
     # Ten slides on PowerPoint's Badge theme, built through its layouts and
     # placeholders: a dark band down the left edge and a yellow strip down the
@@ -1057,6 +1094,7 @@ class TestAThemedDeck:
         assert deck_findings(deck["slides"], deck["slide_height"], deck["slide_width"]) == []
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestACompanyTemplateDeck:
     # Ten slides on a company-style template: a navy bar across the top, an
     # ACME logo bottom right and a confidentiality line bottom left, on the
@@ -1095,6 +1133,7 @@ class TestACompanyTemplateDeck:
         assert deck_findings(deck["slides"], deck["slide_height"], deck["slide_width"]) == []
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestACompanyTemplateDeckOnWindows:
     # The company-style template again, built on Windows through layouts
     # picked by name ("Acme Content", "Acme Section"), with a photo, icons and
@@ -1127,6 +1166,7 @@ class TestACompanyTemplateDeckOnWindows:
         assert deck_findings(fixed["slides"], fixed["slide_height"], fixed["slide_width"]) == []
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestAThemedDeckOnWindows:
     # PowerPoint's Retrospect theme on Windows, where a layout's own graphics
     # can be read: a footer band and a line above it on the master, and a dark
@@ -1167,6 +1207,7 @@ class TestAThemedDeckOnWindows:
         assert deck_findings(fixed["slides"], fixed["slide_height"], fixed["slide_width"]) == []
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestARightToLeftDeckOnWindows:
     # Eight Hebrew slides built on Windows, titles and text set right, as a
     # model writing Hebrew sets them: a title's right edge stays put from slide
@@ -1198,6 +1239,7 @@ class TestARightToLeftDeckOnWindows:
         assert deck_findings(fixed["slides"], fixed["slide_height"], fixed["slide_width"]) == []
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestARightToLeftDeckOnMac:
     # The Hebrew deck again, on PowerPoint for Mac, with a ninth slide on the
     # layout's own title and body: a two-line title in the title placeholder
@@ -1270,6 +1312,7 @@ class TestGradientsAndThemesChangedByHand:
             assert deck_findings(fixed["slides"], fixed["slide_height"], fixed["slide_width"]) == []
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestADeckOnTwoDesigns:
     # Office Theme on slides 1-3 and Retrospect on 4-5, on Windows. Each design
     # has a "Title Only" layout of its own, and each styles its title its own
@@ -1292,6 +1335,7 @@ class TestADeckOnTwoDesigns:
         assert all(found == [] for found in findings_by_slide(fixed).values())
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestThemesDrawnInLinesOnWindows:
     # Slice, a fan of thin lines in the bottom right corner, and Wisp, curves
     # down the left: both on the master, as groups whose boxes are mostly
@@ -1749,6 +1793,143 @@ class TestSampleText:
         assert check(box) == []
 
 
+def worded(name, top, content):
+    box = textbox(name, 100, top, 600, 40)
+    box["text"]["content"] = content
+    return box
+
+
+class TestNumberOrder:
+    """Found on the Hebrew history deck: "1516 – 1917" under a Hebrew heading
+    was drawn with 1516 on the left, so it read 1917 to 1516. Live on both
+    platforms, a line of numbers only draws left to right even when its
+    paragraph is set right to left."""
+
+    def test_a_range_of_numbers_on_a_hebrew_slide_is_reported(self):
+        [finding] = check(worded("heading", 40, "השלטון העות'מאני"),
+                          worded("years", 100, "1516 – 1917"))
+        assert finding["type"] == "number_order"
+        assert finding["shapes"] == ["years"]
+        assert finding["line"] == "1516 – 1917"
+        assert "1516 עד 1917" in finding["fix"]
+        assert 'find_text="1516 – 1917"' in finding["fix"]
+        assert "ppt_set_paragraph_format direction='rtl'" in finding["fix"]
+
+    def test_a_line_already_set_right_to_left_needs_only_the_word(self):
+        years = worded("years", 100, "1516 – 1917")
+        years["text"]["directions"] = ["rtl"]
+        [finding] = check(worded("heading", 40, "השלטון העות'מאני"), years)
+        assert "direction" not in finding["fix"]
+
+    def test_a_list_of_years_is_reported(self):
+        [finding] = check(worded("heading", 40, "מלחמות"),
+                          worded("years", 100, "1948, 1967, 1973"))
+        assert "Hebrew word" in finding["fix"]
+
+    def test_an_arabic_slide_gets_an_arabic_word(self):
+        [finding] = check(worded("heading", 40, "الحكم العثماني"),
+                          worded("years", 100, "1516 – 1917"))
+        assert "من 1516 إلى 1917" in finding["fix"]
+
+    @staticmethod
+    def fix_for(line):
+        found = check(worded("heading", 40, "השלטון העות'מאני"), worded("years", 100, line))
+        return [f["fix"] for f in found if f["type"] == "number_order"]
+
+    def test_the_replacement_is_only_on_this_slide_and_shape(self):
+        # Without them, ppt_find_replace_text rewrites the line on every slide.
+        [fix] = self.fix_for("1516 – 1917")
+        assert "ppt_find_replace_text slide_indices=[1] shape_name='years' find_text=" in fix
+
+    def test_a_range_keeps_the_signs_of_its_ends(self):
+        assert 'replace_text="10% עד 20%"' in self.fix_for("10% – 20%")[0]
+        assert 'replace_text="$5 עד $10"' in self.fix_for("$5 – $10")[0]
+        assert 'replace_text="-5 עד 10"' in self.fix_for("-5 – 10")[0]
+        assert 'replace_text="-10 עד 5"' in self.fix_for("-10 – 5")[0]
+
+    def test_two_numbers_that_are_not_a_range_get_a_word_not_an_until(self):
+        for line in ("3 - 1", "5 - 5", "2020: 5"):
+            [fix] = self.fix_for(line)
+            assert "עד" not in fix and "Hebrew word" in fix
+
+    def test_a_phone_number_is_not_reported(self):
+        assert self.fix_for("(03) 123-4567") == []
+
+    def test_arabic_indic_digits_are_drawn_from_the_right_already(self):
+        assert check(worded("heading", 40, "الحكم العثماني"),
+                     worded("years", 100, "١٩٤٨–١٩٦٧")) == []
+
+    def test_one_line_of_a_shape_is_judged_on_its_own(self):
+        [finding] = check(worded("card", 40, "השלטון העות'מאני\r1516 – 1917"))
+        assert finding["line"] == "1516 – 1917"
+        assert "paragraph_index=2 direction='rtl'" in finding["fix"]
+
+    @pytest.mark.parametrize("content", [
+        "1516 עד 1917",        # a word sets the line right to left
+        "586 לפנה״ס",
+        "1948-1967",           # one hyphen keeps it one number
+        "19.10.2026",
+        "03 123 4567",         # spaces alone: a phone number, read left to right
+        "1917",
+    ])
+    def test_lines_that_read_right_are_not(self, content):
+        assert check(worded("heading", 40, "ציר הזמן"), worded("years", 100, content)) == []
+
+    def test_an_english_slide_is_not(self):
+        assert check(worded("heading", 40, "The Ottoman years"),
+                     worded("years", 100, "1516 – 1917")) == []
+
+    def test_a_slide_of_numbers_alone_is_not_guessed_at(self):
+        assert check(worded("years", 100, "1516 – 1917")) == []
+
+
+def directed(name, top, content, directions):
+    box = worded(name, top, content)
+    box["text"]["directions"] = directions
+    return box
+
+
+class TestTextDirection:
+    """Live on Windows, "1516 עד 1917" in a paragraph not set right to left
+    drew 1516 on the left; set right to left, it drew on the right. The Mac
+    drew both from the right."""
+
+    def test_a_hebrew_paragraph_with_a_number_left_to_right_is_reported(self):
+        [finding] = check(directed("years", 100, "1516 עד 1917", ["ltr"]))
+        assert finding["type"] == "text_direction"
+        assert finding["paragraphs"] == [1]
+        assert finding["fix"] == "Set them right to left (ppt_set_paragraph_format direction='rtl')."
+
+    def test_punctuation_is_enough(self):
+        [finding] = check(directed("t", 100, "שלום, עולם.", ["ltr"]))
+        assert finding["type"] == "text_direction"
+
+    def test_words_alone_draw_the_same_and_are_not(self):
+        assert check(directed("t", 100, "ציר הזמן", ["ltr"])) == []
+
+    def test_an_apostrophe_inside_a_word_draws_the_same_and_is_not(self):
+        # Live: the heading "השלטון העות'מאני" was reported until the check
+        # drew the line both ways instead of looking for punctuation.
+        assert check(directed("t", 100, "השלטון העות'מאני", ["ltr"])) == []
+
+    def test_a_number_after_the_words_is_reported(self):
+        # The Unicode algorithm draws "עד 1917" the same both ways; PowerPoint
+        # for Windows draws digits as Latin letters, and then it does not.
+        [finding] = check(directed("t", 100, "עד 1917", ["ltr"]))
+        assert finding["type"] == "text_direction"
+
+    def test_a_paragraph_set_right_to_left_is_not(self):
+        assert check(directed("t", 100, "1516 עד 1917", ["rtl"])) == []
+
+    def test_an_english_paragraph_beside_it_is_left_alone(self):
+        [finding] = check(directed("t", 100, "Ottoman rule\r1516 עד 1917", ["ltr", "ltr"]))
+        assert finding["paragraphs"] == [2]
+        assert "paragraph_index=2 direction='rtl'" in finding["fix"]
+
+    def test_a_direction_never_read_is_not_guessed(self):
+        assert check(worded("t", 100, "1516 עד 1917")) == []
+
+
 class TestWhatAWriteCannotSee:
     def test_a_text_frame_the_write_did_not_read_is_not_lined_up_against(self):
         # Live: distributing three groups, the write compared the middle one's
@@ -1892,6 +2073,14 @@ def title_placeholder(name="Title 1", left=98.56, top=30, size=28.0, colour="#0B
     return title
 
 
+def set_to(shape, side):
+    """Draw a text box's text at the right of its frame, or at its centre."""
+    words, inset = shape["text"], 7.2
+    room = shape["width"] - 2 * inset - words["width"]
+    words["left"] = shape["left"] + inset + (room if side == "right" else room / 2)
+    return shape
+
+
 class TestTheTemplatesOwnGraphics:
     def test_text_on_a_band_down_the_side_is_moved_clear_of_it(self):
         note = textbox("note", 20, 478, 320, 24)
@@ -1905,6 +2094,38 @@ class TestTheTemplatesOwnGraphics:
         note = textbox("note", 20, 478, 320, 24)
         found = overlaps(check_on([BAND], title_placeholder(), note))
         assert found[0]["fix"].startswith("Move 'note' right by 78.6 pt, in line with 'Title 1'")
+
+    def test_on_a_right_to_left_slide_it_lines_up_the_right_edges(self):
+        title = title_placeholder()
+        title["width"] = 300
+        note = textbox("note", 20, 478, 320, 24)
+        found = overlaps(check_on([BAND], title, note))
+        assert found[0]["fix"].startswith("Move 'note' right by 78.6 pt, in line with 'Title 1'")
+        title["text"]["content"] = "ההיסטוריה של ישראל"
+        set_to(title, "right")
+        note["text"]["content"] = "מקור: הלשכה המרכזית לסטטיסטיקה"
+        found = overlaps(check_on([BAND], title, note))
+        assert found[0]["fix"].startswith("Move 'note' right by 58.6 pt, in line with 'Title 1'")
+
+    def test_a_centred_title_is_not_an_edge_to_line_up_with(self):
+        # Its frame starts at 98.56, but its text 325 pt further in: a note
+        # put at the frame's edge is in line with nothing a reader sees.
+        title = set_to(title_placeholder(), "center")
+        note = textbox("note", 20, 478, 320, 24)
+        [found] = overlaps(check_on([BAND], title, note))
+        assert "in line with 'Title 1'" not in found["fix"]
+        assert found["fix"].startswith("Move 'note' right by 48.8 pt (ppt_update_shape dleft=48.8)")
+
+    def test_only_the_side_text_is_set_to_counts(self):
+        # A right-set title keeps its right edge, not its left.
+        title = set_to(title_placeholder(), "right")
+        note = textbox("note", 20, 478, 320, 24)
+        [found] = overlaps(check_on([BAND], title, note))
+        assert "in line with 'Title 1'" not in found["fix"]
+        # A card keeps both, whatever its text does.
+        card_ = card("panel", 98.56, 150, 300, 200, z=2)
+        [found] = overlaps(check_on([BAND], title, card_, note))
+        assert found["fix"].startswith("Move 'note' right by 78.6 pt, in line with 'panel'")
 
     def test_a_footnote_steps_up_rather_than_across_the_slide(self):
         cards = [card(f"c{i}", 40 + 305 * i, 150, 270, 200, z=2 + i) for i in range(3)]
@@ -2080,6 +2301,7 @@ class TestBarsOfAChart:
         assert "uneven_sizes" in kinds(check(*self.bars(100, 104, 99, 103)))
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestWhatTheCoffeeDeckTaught:
     # Live, a deck on coffee built a slide at a time: three kinds of finding
     # that a model told to act on every finding would have acted on, and
@@ -2130,6 +2352,7 @@ class TestWhatTheCoffeeDeckTaught:
         assert deck_findings(deck["slides"], deck["slide_height"], deck["slide_width"]) == []
 
 
+@pytest.mark.usefixtures("without_title_edge")
 class TestADesignedDeckOnTheMac:
     # Twelve slides on beer, built on PowerPoint for Mac through the server:
     # photos, icons, cards with shadows, a timeline, a colour scale, and a bar
@@ -2255,7 +2478,7 @@ import ast  # noqa: E402
 REPORTING = {
     "shapes.py": ["add_shape", "add_textbox", "add_picture", "update_shape", "duplicate_shape"],
     "text.py": ["set_text", "format_text", "format_text_range", "set_textframe",
-                "find_replace_text"],
+                "find_replace_text", "set_paragraph_format"],
     "advanced_ops.py": ["add_svg_icon", "add_picture_from_url", "replace_font",
                         "set_default_fonts"],
     "layout.py": ["align_shapes", "distribute_shapes", "set_slide_background", "set_slide_size"],
@@ -2418,6 +2641,13 @@ class TestTurnedOff:
         assert report_layout({"shape_name": "c"}, 1, ["c"]) == {"shape_name": "c"}
         assert fake.calls == []
 
+    def test_a_picture_keeps_its_result_clean(self, monkeypatch):
+        # The proportions ppt_add_picture hands the check are not for the caller.
+        fake = FakePpt(facts(card("c", 900, 100, 100, 50)))
+        monkeypatch.setattr(layout_check, "ppt", fake)
+        assert report_layout({"shape_name": "c", "_natural_aspect": 1.5}, 1, ["c"]) == {
+            "shape_name": "c"}
+
     def test_nor_a_new_background(self, monkeypatch):
         fake = FakeDeck([slide(card("c", 10, 10, 50, 50), background="#333333")])
         monkeypatch.setattr(layout_check, "ppt", fake)
@@ -2557,3 +2787,1058 @@ class TestWhatCannotBeReadDoesNotFailTheSlide:
         assert layout_check._commonest(["B", "A", "B", "A"]) == "B"
         assert layout_check._commonest(["A", "B", "B", "A"]) == "A"
         assert layout_check._commonest([]) is None
+
+
+# ---------------------------------------------------------------------------
+# Stretched pictures
+# ---------------------------------------------------------------------------
+import struct  # noqa: E402
+import zipfile  # noqa: E402
+
+from utils.package import image_size, picture_aspects  # noqa: E402
+
+
+def png(width, height):
+    return b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", width, height) + b"\x08\x02\x00\x00\x00"
+
+
+def jpeg(width, height, orientation=None):
+    data = b"\xff\xd8"
+    if orientation is not None:
+        tiff = b"MM\x00\x2a" + struct.pack(">I", 8) + struct.pack(">H", 1) + struct.pack(
+            ">HHIHH", 0x0112, 3, 1, orientation, 0) + b"\x00\x00\x00\x00"
+        exif = b"Exif\x00\x00" + tiff
+        data += b"\xff\xe1" + struct.pack(">H", len(exif) + 2) + exif
+    sof = b"\x08" + struct.pack(">HH", height, width) + b"\x03\x01\x11\x00\x02\x11\x01\x03\x11\x01"
+    return data + b"\xff\xc0" + struct.pack(">H", len(sof) + 2) + sof + b"\xff\xd9"
+
+
+def picture(name, left, top, width, height, aspect=None, z=1):
+    facts = shape(name, left, top, width, height, z=z, type=msoPicture)
+    if aspect is not None:
+        facts["natural_aspect"] = aspect
+    return facts
+
+
+PRESENTATION = (
+    '<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+    '<p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst></p:presentation>')
+RELS = ('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '{}</Relationships>')
+
+
+def pic_xml(name, embed, crop=""):
+    return (f'<p:pic><p:nvPicPr><p:cNvPr id="4" name="{name}"/></p:nvPicPr>'
+            f'<p:blipFill><a:blip r:embed="{embed}"/>{crop}<a:stretch/></p:blipFill></p:pic>')
+
+
+def deck_file(tmp_path, pics, media):
+    slide_xml = (
+        '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<p:cSld><p:spTree>{"".join(pics)}</p:spTree></p:cSld></p:sld>')
+    path = tmp_path / "deck.pptx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("ppt/presentation.xml", PRESENTATION)
+        archive.writestr("ppt/_rels/presentation.xml.rels", RELS.format(
+            '<Relationship Id="rId2" Target="slides/slide1.xml" Type="slide"/>'))
+        archive.writestr("ppt/slides/slide1.xml", slide_xml)
+        archive.writestr("ppt/slides/_rels/slide1.xml.rels", RELS.format("".join(
+            f'<Relationship Id="{rid}" Target="../media/{file}" Type="image"/>'
+            for rid, (file, _) in media.items())))
+        for file, data in media.values():
+            archive.writestr(f"ppt/media/{file}", data)
+    return path
+
+
+class TestImageSizes:
+    def test_png_and_jpeg_are_measured(self):
+        assert image_size(png(1600, 900)) == (1600, 900)
+        assert image_size(jpeg(1200, 800)) == (1200, 800)
+
+    def test_a_jpeg_marked_as_turned_is_not_guessed_at(self):
+        assert image_size(jpeg(1200, 800, orientation=6)) is None
+        assert image_size(jpeg(1200, 800, orientation=1)) == (1200, 800)
+
+    def test_something_else_is_unknown(self):
+        assert image_size(b"<svg/>") is None
+
+
+class TestPictureProportionsFromTheFile:
+    def test_a_picture_takes_its_images_proportions(self, tmp_path):
+        path = deck_file(tmp_path, [pic_xml("Photo", "rId1")], {"rId1": ("a.png", png(1600, 900))})
+        assert picture_aspects(path, [1]) == {1: {"Photo": pytest.approx(16 / 9)}}
+
+    def test_a_crop_is_taken_off_first(self, tmp_path):
+        crop = '<a:srcRect l="25000" r="25000"/>'
+        path = deck_file(tmp_path, [pic_xml("Photo", "rId1", crop)], {"rId1": ("a.png", png(1600, 900))})
+        assert picture_aspects(path, [1])[1]["Photo"] == pytest.approx(800 / 900)
+
+    def test_two_pictures_of_one_name_are_left_unknown(self, tmp_path):
+        path = deck_file(tmp_path, [pic_xml("Photo", "rId1"), pic_xml("Photo", "rId1")],
+                         {"rId1": ("a.png", png(1600, 900))})
+        assert picture_aspects(path, [1]) == {1: {}}
+
+
+class TestStretchedPictures:
+    def test_a_picture_stretched_sideways_is_narrowed_about_its_centre(self):
+        # A 4:3 photo given 400 by 200.
+        [finding] = check(picture("Photo", 100, 100, 400, 200, aspect=4 / 3))
+        assert finding["type"] == "stretched_picture"
+        assert finding["stretch_pct"] == 50
+        assert finding["fix"].startswith(
+            "Crop the image to the proportions it is drawn at, keeping its size "
+            "(ppt_crop_picture shape_name_or_index='Photo' crop_fit='shape'), or make it")
+        assert "ppt_update_shape width=266.67 left=166.67" in finding["fix"]
+
+    def test_a_logo_squeezed_is_made_shorter_before_it_is_cropped(self):
+        [finding] = check(picture("Logo", 100, 100, 80, 80, aspect=2.0))
+        assert finding["fix"].startswith("Make it 40 pt shorter")
+        assert "ppt_update_shape height=40 top=120" in finding["fix"]
+
+    def test_a_point_of_rounding_is_not(self):
+        assert check(picture("Photo", 100, 100, 400, 301, aspect=4 / 3)) == []
+
+    def test_a_picture_whose_image_is_unknown_is_not_judged(self):
+        assert check(picture("Photo", 100, 100, 400, 200)) == []
+
+    def test_a_new_picture_is_judged_by_what_the_write_saw(self, monkeypatch):
+        fake = FakeDeck([slide(picture("Picture 1", 100, 100, 400, 200))])
+        monkeypatch.setattr(layout_check, "ppt", fake)
+        result = report_layout({"success": True, "shape_name": "Picture 1",
+                                "_natural_aspect": 4 / 3}, 1, ["Picture 1"])
+        assert "_natural_aspect" not in result
+        assert [f["type"] for f in result["layout_issues"]] == ["stretched_picture"]
+
+
+def test_a_locked_stretched_picture_is_unlocked_first():
+    photo = picture("Photo", 100, 100, 400, 200, aspect=4 / 3)
+    photo["lock_aspect"] = True
+    [finding] = check(photo)
+    assert "or unlock its proportions first (ppt_lock_aspect_ratio locked=false), then make it" in finding["fix"]
+
+
+# ---------------------------------------------------------------------------
+# Body text sizes across the deck
+# ---------------------------------------------------------------------------
+def body_slide(index, size, chars=120, autofit="none"):
+    title = textbox(f"Title {index}", 40, 30, 880, 60, runs=[
+        {"color_hex": "#111111", "size": 32.0, "bold": True}])
+    body = textbox(f"Body {index}", 40, 120, 880, 300, z=2, chars=chars, autofit=autofit,
+                   runs=[{"color_hex": "#333333", "size": size, "bold": False}])
+    body["text"]["content"] = "Our first point, said plainly.\rAnd the second one, said as plainly."
+    return slide(title, body, index=index)
+
+
+class TestBodyTextSizes:
+    def test_a_slide_whose_copy_was_shrunk_to_fit_is_reported(self):
+        slides = [body_slide(2, 18.0), body_slide(3, 18.0), body_slide(4, 14.0), body_slide(5, 18.0)]
+        [finding] = deck_findings(slides, H, W)
+        assert finding["type"] == "inconsistent_body_text"
+        assert finding["slides"] == [4] and finding["shapes"] == ["Body 4"]
+        assert finding["message"] == "Body text differs in size between slides: 18 pt on slides 2, 3, 5; 14 pt on slide 4."
+        assert "ppt_format_text font_size=18" in finding["fix"] and "split the slide" in finding["fix"]
+
+    def test_text_set_far_larger_is_another_kind_of_text(self):
+        slides = [body_slide(2, 18.0), body_slide(3, 18.0), body_slide(4, 32.0)]
+        assert deck_findings(slides, H, W) == []
+
+    def test_a_point_apart_is_the_same_size(self):
+        slides = [body_slide(2, 18.0), body_slide(3, 18.0), body_slide(4, 17.0)]
+        assert deck_findings(slides, H, W) == []
+
+    def test_text_powerpoint_shrinks_to_fit_is_left_to_it(self):
+        slides = [body_slide(2, 18.0), body_slide(3, 18.0), body_slide(4, 14.0, autofit="shrink_to_fit")]
+        assert deck_findings(slides, H, W) == []
+
+    def test_a_label_is_not_body_text(self):
+        slides = [body_slide(2, 18.0), body_slide(3, 18.0), body_slide(4, 14.0, chars=12)]
+        assert deck_findings(slides, H, W) == []
+
+    def test_a_body_placeholder_is_held_to_its_own_layout(self):
+        def placeholder_slide(index, size, layout):
+            page = body_slide(index, size)
+            page["shapes"][1]["placeholder_type"] = 2   # ppPlaceholderBody
+            page["shapes"][1]["type"] = msoPlaceholder
+            page["layout"] = layout
+            return page
+        slides = [placeholder_slide(2, 20.0, "Text"), placeholder_slide(3, 20.0, "Text"),
+                  placeholder_slide(4, 16.0, "Text"), placeholder_slide(5, 24.0, "Comparison")]
+        [finding] = deck_findings(slides, H, W)
+        assert finding["slides"] == [4]
+
+    def test_none_of_the_recorded_decks_is_reported(self):
+        for path in sorted(FIXTURES.glob("*.json")):
+            deck = json.loads(path.read_text(encoding="utf-8"))
+            found = layout_check._body_sizes(deck["slides"], deck["slide_width"], deck["slide_height"])
+            assert found == [], path.name
+
+
+# ---------------------------------------------------------------------------
+# Charts left with sample data
+# ---------------------------------------------------------------------------
+from ppt_com.constants import msoChart  # noqa: E402
+
+
+def chart_shape(categories, series):
+    facts = shape("Chart 3", 100, 100, 500, 300, type=msoChart)
+    facts["chart"] = {"categories": categories, "series": series}
+    return facts
+
+
+class TestChartSampleData:
+    def test_a_new_chart_is_reported(self):
+        [finding] = check(chart_shape(
+            ["Category 1", "Category 2", "Category 3", "Category 4"],
+            [{"name": "Series 1", "values": [4.3, 2.5, 3.5, 4.5]}]))
+        assert finding["type"] == "chart_sample_data"
+        assert "categories named 'Category 1'" in finding["message"]
+        assert "series named 'Series 1'" in finding["message"]
+        assert "sample numbers" in finding["message"]
+
+    def test_real_numbers_under_sample_names_are_still_reported(self):
+        [finding] = check(chart_shape(
+            ["North", "South"], [{"name": "Series 1", "values": [12.0, 30.0]}]))
+        assert finding["message"].endswith("series named 'Series 1'.")
+
+    def test_a_finished_chart_is_not(self):
+        assert check(chart_shape(["Q1", "Q2"], [{"name": "Revenue", "values": [12.0, 30.0]}])) == []
+
+    QUARTERS = ("1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr")
+
+    def test_a_real_chart_by_quarter_is_not(self):
+        # The pie's sample quarters are what real quarterly data is called too.
+        assert check(chart_shape(self.QUARTERS, [{"name": "Revenue",
+                                                  "values": [12.0, 30.0, 18.0, 25.0]}])) == []
+
+    def test_a_new_pie_is_reported_with_its_quarters(self):
+        [finding] = check(chart_shape(self.QUARTERS, [{"name": "Sales",
+                                                       "values": [8.2, 3.2, 1.4, 1.2]}]))
+        assert "categories named '1st Qtr'" in finding["message"]
+        assert "sample numbers" in finding["message"]
+
+    def test_a_chart_whose_data_is_unknown_is_not_judged(self):
+        assert check(shape("Chart 3", 100, 100, 500, 300, type=msoChart)) == []
+
+
+def test_a_chart_in_the_file_is_read(tmp_path):
+    chart_xml = (
+        '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><c:chart><c:plotArea>'
+        '<c:barChart><c:ser><c:tx><c:strRef><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>Series 1</c:v></c:pt>'
+        '</c:strCache></c:strRef></c:tx><c:cat><c:strRef><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>Category 1</c:v></c:pt>'
+        '</c:strCache></c:strRef></c:cat><c:val><c:numRef><c:numCache><c:ptCount val="1"/><c:pt idx="0"><c:v>4.3</c:v></c:pt>'
+        '</c:numCache></c:numRef></c:val></c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>')
+    frame = ('<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="5" name="Chart 3"/></p:nvGraphicFramePr>'
+             '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">'
+             '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rId9"/>'
+             '</a:graphicData></a:graphic></p:graphicFrame>')
+    path = deck_file(tmp_path, [frame], {})
+    with zipfile.ZipFile(path, "a") as archive:
+        archive.writestr("ppt/charts/chart1.xml", chart_xml)
+        rels = archive.read("ppt/slides/_rels/slide1.xml.rels").decode()
+    # Rewrite the slide's relationships with the chart in them.
+    entries = {n: zipfile.ZipFile(path).read(n) for n in zipfile.ZipFile(path).namelist()}
+    entries["ppt/slides/_rels/slide1.xml.rels"] = rels.replace(
+        "</Relationships>", '<Relationship Id="rId9" Target="../charts/chart1.xml" Type="chart"/></Relationships>').encode()
+    with zipfile.ZipFile(path, "w") as archive:
+        for n, data in entries.items():
+            archive.writestr(n, data)
+    from utils.package import package_facts
+    chart = package_facts(path, [1])["charts"][1]["Chart 3"]
+    assert chart["categories"] == ["Category 1"] and chart["series"][0]["name"] == "Series 1"
+
+
+
+# ---------------------------------------------------------------------------
+# A title's words held to the body's edge
+# ---------------------------------------------------------------------------
+class TestTitleEdge:
+    @staticmethod
+    def big(shape):
+        shape["text"]["runs"] = [{"color_hex": "#222222", "size": 32.0, "bold": True}]
+        return shape
+
+    def test_a_title_box_set_on_the_cards_edge_starts_its_words_inside_it(self):
+        # The title frame at 40 like the cards, its words at 47.2.
+        shapes = titled_row()
+        self.big(shapes[0])
+        [finding] = [f for f in check(*shapes) if f["type"] == "title_edge"]
+        assert finding["shapes"] == ["title", "card0"]
+        assert finding["off_by_pt"] == 7.2
+        # The row is fitted again from the title's words to where it ended.
+        assert finding["fix"].startswith(
+            "Bring the body's left edge to the title's words: ppt_update_shape "
+            "shape_names=['card0', 'card1', 'card2'] width=277.6")
+        assert "The gaps stay 20 pt." in finding["fix"]
+
+    def test_a_single_shape_is_moved_and_narrowed(self):
+        title = self.big(textbox("title", 40, 30, 880, 55.74, z=1, text_width=300, text_height=48))
+        chart = card("chart", 40, 140, 880, 300, z=2)
+        [finding] = [f for f in check(title, chart) if f["type"] == "title_edge"]
+        assert finding["fix"].endswith(
+            "ppt_update_shape shape_name='chart' dleft=7.2 dwidth=-7.2.")
+
+    def test_words_on_the_edge_are_not(self):
+        shapes = titled_row()
+        shapes[0] = self.big(textbox("title", 32.8, 30, 880, 55.74, z=1, text_width=300, text_height=48))
+        assert [f for f in check(*shapes) if f["type"] == "title_edge"] == []
+
+    def test_a_title_set_well_apart_is_a_design(self):
+        shapes = titled_row()
+        shapes[0] = self.big(textbox("title", 80, 30, 800, 55.74, z=1, text_width=300, text_height=48))
+        assert [f for f in check(*shapes) if f["type"] == "title_edge"] == []
+
+    def test_a_row_reaching_left_to_the_title_widens_as_one(self):
+        # Widening only the first card made it the odd one out, and the
+        # uneven-sizes fix took the change back.
+        title = self.big(textbox("title", 40, 30, 880, 56, text_width=400, text_height=40))
+        cards = [card(f"card{i}", left, 140, 268, 180, z=2 + i)
+                 for i, left in enumerate((52, 352, 652))]
+        [finding] = [f for f in check(title, *cards) if f["type"] == "title_edge"]
+        assert "shape_names=['card0', 'card1', 'card2'] width=269.6" in finding["fix"]
+        for c, by in zip(cards, (-4.8, -3.2, -1.6), strict=True):
+            c["left"], c["width"] = c["left"] + by, 269.6
+        assert [f for f in check(title, *cards)
+                if f["type"] in ("title_edge", "uneven_sizes", "uneven_gaps")] == []
+
+    def test_centred_text_keeps_no_edge_to_bring_in(self):
+        # Its words start wherever their length puts them, and move half as
+        # far as its frame does: the fix only ever halved the gap.
+        title = self.big(textbox("title", 40, 30, 880, 56, text_width=400, text_height=40))
+        caption = set_to(textbox("caption", 40, 100, 880, 30, text_width=856, text_height=20),
+                         "center")
+        assert [f for f in check(title, caption) if f["type"] == "title_edge"] == []
+
+    def test_left_set_text_under_a_right_set_title_is_not_held_to_its_right(self):
+        title = self.big(placed("title", 40, 30, 880, 55.74, 920 - 7.2 - 300, 33.6, 300, 48))
+        note = textbox("note", 40, 140, 880, 30, text_width=858, text_height=20)
+        assert [f for f in check(title, note) if f["type"] == "title_edge"] == []
+
+    def test_a_write_does_not_take_the_line_it_touched_for_the_title(self):
+        # Live on the Mac: a write reads only what it touched, so the title's
+        # words were unknown and the touched line under it was taken for it.
+        title = shape("title", 40, 30, 880, 50, unread=True)
+        line = self.big(placed("line", 40, 120, 880, 40, 920 - 7.2 - 150, 123.6, 150, 30))
+        below = placed("below", 40, 200, 874.6, 40, 914.6 - 7.2 - 140, 203.6, 140, 30)
+        page = slide(title, line, below)
+        assert [f for f in slide_findings(page, W, H, only={"line"})
+                if f["type"] == "title_edge"] == []
+        # Read in full, the slide has its real title and the line is body.
+        del title["unread"]
+        assert layout_check.find_title({"shapes": [line, below]}, H) is line
+
+    def test_shapes_a_write_leaves_unread_are_marked(self):
+        at = {"a": (0, 0), "b": (5, 5), "far": (500, 400)}
+        shapes = layout_check.read_shapes(
+            ["a", "b", "far"], lambda ref, z: shape(ref, *at[ref], 10, 10, z=z),
+            lambda facts, ref, full: facts, {"a"})
+        assert [s.get("unread") for s in shapes] == [None, None, True]
+
+    def test_a_right_set_title_is_held_to_the_right_edge(self):
+        shapes = titled_row()
+        shapes[0] = self.big(placed("title", 40, 30, 880, 55.74, 920 - 7.2 - 300, 33.6, 300, 48))
+        [finding] = [f for f in check(*shapes) if f["type"] == "title_edge"]
+        assert finding["edge"] == "right"
+        assert finding["fix"].startswith("Bring the body's right edge to the title's words")
+
+    def test_the_recorded_decks(self):
+        found = {}
+        for path in sorted(FIXTURES.glob("*fixed*.json")):
+            deck = json.loads(path.read_text(encoding="utf-8"))
+            slides = [s["slide_index"] for s in deck["slides"]
+                      for f in slide_findings(s, deck["slide_width"], deck["slide_height"])
+                      if f["type"] == "title_edge"]
+            if slides:
+                found[path.stem] = slides
+        assert found == self.SEEN
+
+    # Each a title box or placeholder over cards, a chart, a table or a
+    # picture: its words 7.2 pt in from the frame, 8.6 pt where its frame's
+    # insets are wider.
+    SEEN = {
+        "companydeck_fixed_mac": [4, 5], "companydeck_fixed_win": [4, 5, 11],
+        "mmdeck_fixed_win": [4, 5], "realdeck2_fixed_mac": [2, 3, 11],
+        "realdeck_fixed_mac": [3, 4, 7, 8, 9, 12], "retrodeck_fixed_win": [6, 8],
+        "rtldeck_fixed_mac": [3, 7], "rtldeck_fixed_win": [3, 7],
+        "themedeck_fixed_mac": [9], "wispdeck_fixed_win": [3],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Fonts this computer does not have, or does not draw with
+# ---------------------------------------------------------------------------
+def styled(name, top, font, content="Quarterly results", **text_extra):
+    box = textbox(name, 100, top, 600, 40, runs=[
+        {"color_hex": "#222222", "size": 20.0, "bold": False, "font": font}])
+    box["text"]["content"] = content
+    box["text"].update(text_extra)
+    return box
+
+
+class TestFonts:
+    def test_a_font_not_installed_is_reported_with_the_slides_own_font(self):
+        page = slide(styled("body", 100, "Calibri"), styled("title", 30, "Frutiger Next Pro"))
+        layout_check._with_fonts([page], lambda: frozenset({"calibri"}))
+        [finding] = slide_findings(page, W, H)
+        assert finding["type"] == "font_missing" and finding["shapes"] == ["title"]
+        assert "ppt_format_text font_name='Calibri'" in finding["fix"]
+
+    def test_a_theme_font_is_not_judged(self):
+        page = slide(styled("body", 100, "+mn-lt"))
+        layout_check._with_fonts([page], lambda: frozenset({"calibri"}))
+        assert slide_findings(page, W, H) == []
+
+    def test_the_list_is_not_read_when_no_text_names_a_font(self):
+        page = slide(card("c", 10, 10, 50, 50))
+        layout_check._with_fonts([page], lambda: pytest.fail("read the fonts"))
+
+    def test_hebrew_drawn_in_another_font_than_asked_is_reported(self):
+        page = slide(styled("title", 30, "David", content="תולדות ישראל", script_font="Arial"))
+        [finding] = slide_findings(page, W, H)
+        assert finding["message"].startswith("The Hebrew in 'title' is drawn in 'Arial', not 'David'")
+        assert finding["fix"].startswith("Set the font again (ppt_format_text font_name='David')")
+
+    def test_hebrew_in_the_font_asked_for_is_not(self):
+        page = slide(styled("title", 30, "David", content="תולדות ישראל", script_font="David"))
+        assert slide_findings(page, W, H) == []
+
+
+class TestOtherFontNames:
+    def test_a_name_the_system_list_leaves_out_is_found_in_the_font_files(self, monkeypatch):
+        # A deck made in Japan asks for 游ゴシック, which an English Windows
+        # lists as Yu Gothic; Japanese Macs name Hiragino the same way.
+        from utils import fonts
+
+        folders = []
+
+        def names_in_folder(folder):
+            folders.append(folder)
+            return {"游ゴシック", "Yu Gothic"} if folder == "fonts" else set()
+
+        monkeypatch.setattr(fonts, "names_in_folder", names_in_folder)
+        installed = layout_check.FontNames({"Yu Gothic"}, ("fonts", "more fonts"))
+        assert "yu gothic" in installed and folders == []
+        assert "游ゴシック" in installed
+        assert "no such font" not in installed
+        assert folders == ["fonts", "more fonts"]
+
+    def test_only_the_name_table_is_read(self, tmp_path):
+        from utils.fonts import file_names
+
+        class Counted:
+            def __init__(self, data):
+                self.data, self.at, self.read_bytes = data, 0, 0
+
+            def seek(self, at):
+                self.at = at
+
+            def read(self, length):
+                self.read_bytes += length
+                return self.data[self.at:self.at + length]
+
+        data = TestFontNames.font_file()
+        padded = data + b"\0" * 1_000_000
+        handle = Counted(padded)
+        assert file_names(handle) == {"Calibri Light", "Calibri"}
+        assert handle.read_bytes < 1000
+
+
+class TestFontNames:
+    @staticmethod
+    def font_file():
+        def record(name_id, text):
+            return struct.pack(">HHHHHH", 3, 1, 0x409, name_id, len(text.encode("utf-16-be")), 0), text.encode("utf-16-be")
+
+        entries, strings = [], b""
+        for name_id, text in ((1, "Calibri Light"), (16, "Calibri")):
+            head, raw = record(name_id, text)
+            entries.append(head[:10] + struct.pack(">H", len(strings)))
+            strings += raw
+        table = struct.pack(">HHH", 0, len(entries), 6 + 12 * len(entries)) + b"".join(entries) + strings
+        return struct.pack(">IHHHH", 0x00010000, 1, 0, 0, 0) + b"name" + struct.pack(">III", 0, 28, len(table)) + table
+
+    def test_a_font_files_names_are_read(self):
+        from utils.fonts import font_names
+
+        assert font_names(self.font_file()) == {"Calibri Light", "Calibri"}
+
+
+class TestTitleCapitals:
+    @staticmethod
+    def worded_title(index, words, **text_extra):
+        page = titled(index)
+        page["shapes"][0]["text"]["content"] = words
+        page["shapes"][0]["text"].update(text_extra)
+        return page
+
+    def test_a_title_typed_in_capitals_among_normal_ones_is_reported(self):
+        slides = [self.worded_title(2, "Where we stand"), self.worded_title(3, "What moved"),
+                  self.worded_title(4, "NEXT STEPS")]
+        [finding] = deck_findings(slides, H, W)
+        assert finding["message"] == ("Slide titles differ in capitals: normal on slides 2, 3; "
+                                      "capitals on slide 4.")
+        assert finding["fix"] == ("Set the titles on slide 4 in normal case (ppt_set_text "
+                                  "with the title retyped in normal case).")
+
+    def test_capitals_the_template_sets_are_its_style(self):
+        slides = [self.worded_title(2, "Where we stand", all_caps=True),
+                  self.worded_title(3, "What moved", all_caps=True),
+                  self.worded_title(4, "NEXT STEPS")]
+        assert deck_findings(slides, H, W) == []
+
+    def test_hebrew_has_no_capitals(self):
+        slides = [self.worded_title(2, "איפה אנחנו"), self.worded_title(3, "מה השתנה"),
+                  self.worded_title(4, "NEXT STEPS")]
+        assert deck_findings(slides, H, W) == []
+
+
+class TestContrastSuggestsTheTheme:
+    THEME = {"dark1": "#1B2A41", "light1": "#FAF7F2", "dark2": "#44546A", "light2": "#E7E6E6"}
+
+    def grey_on(self, background):
+        grey = textbox("grey", 100, 100, 300, 40,
+                       runs=[{"color_hex": "#777777", "size": 14.0, "bold": False}])
+        page = slide(grey, background=background)
+        page["theme_colors"] = self.THEME
+        return page
+
+    def test_a_write_that_knows_no_other_text_suggests_the_themes_colour(self):
+        [finding] = slide_findings(self.grey_on("#FFFFFF"), W, H, only={"grey"})
+        assert "make the text #1B2A41, the theme's text colour" in finding["fix"].lower().replace("#1b2a41", "#1B2A41")
+
+    def test_on_a_dark_background_the_themes_light_colour(self):
+        [finding] = slide_findings(self.grey_on("#101010"), W, H, only={"grey"})
+        assert "#FAF7F2, the theme's text colour" in finding["fix"]
+
+    def test_the_slides_own_text_colour_comes_first(self):
+        page = self.grey_on("#FFFFFF")
+        page["shapes"].append(textbox("body", 100, 200, 300, 40, z=2,
+                                      runs=[{"color_hex": "#0B2545", "size": 14.0, "bold": False}]))
+        [finding] = [f for f in slide_findings(page, W, H) if f["type"] == "low_contrast"]
+        assert "#0B2545, the colour of the other text on the slide" in finding["fix"]
+
+
+class TestTopAndBottomMargins:
+    def row_at(self, bottom_gap):
+        shapes = titled_row()
+        for c in shapes[1:]:
+            c["height"] = H - bottom_gap - c["top"]
+        return shapes
+
+    def test_cards_run_almost_to_the_bottom_are_reported_as_a_row(self):
+        [found] = [f for f in check(*self.row_at(6)) if f["type"] == "narrow_margin"]
+        assert found["edge"] == "bottom" and found["distance_pt"] == 6
+        assert found["shapes"] == ["card0", "card1", "card2"]
+        # 54 pt between the title and the cards: room to move up.
+        assert found["fix"] == ("Move 'card0', 'card1' and 'card2' up by 24 pt "
+                                "(ppt_update_shape shape_names=['card0', 'card1', 'card2'] dtop=-24).")
+
+    def test_with_no_room_above_the_cards_are_shortened(self):
+        shapes = self.row_at(6)
+        for c in shapes[1:]:
+            c["top"], c["height"] = 100, H - 6 - 100
+        [found] = [f for f in check(*shapes) if f["type"] == "narrow_margin"]
+        assert "24 pt shorter, keeping their top" in found["fix"]
+        assert "dheight=-24" in found["fix"]
+
+    def test_shortened_cards_keep_their_margin(self):
+        shapes = self.row_at(6)
+        for c in shapes[1:]:
+            c["top"], c["height"] = 100, H - 6 - 100 - 24
+        assert [f for f in check(*shapes) if f["type"] == "narrow_margin"] == []
+
+    def text_under_a_card(self, words):
+        title = textbox("Title", 40, 30, 880, 56, text_width=400, text_height=40)
+        return title, card("Card", 40, 100, 880, 300), textbox(
+            "Notes", 40, 410, 880, 130, text_width=600, text_height=words)
+
+    def test_text_with_no_room_is_cut_not_its_box_shortened(self):
+        # A shorter box leaves top-set words where they are and spills them,
+        # and the same finding came back after every shortening.
+        [found] = [f for f in check(*self.text_under_a_card(120)) if f["type"] == "narrow_margin"]
+        assert found["fix"].startswith("Cut the text in 'Notes' or make the font smaller, "
+                                       "so it ends 23.6 pt further from the edge")
+        assert "dheight" not in found["fix"]
+
+    def bottom_set(self, height):
+        title, other, _ = self.text_under_a_card(0)
+        other["height"] = 340
+        notes = textbox("Notes", 40, 410, 880, height, text_width=600, text_height=80)
+        notes["text"]["top"] = 410 + height - 3.6 - 80
+        return title, other, notes
+
+    def test_words_set_to_the_bottom_come_up_with_a_shorter_box(self):
+        # Cutting them would leave their last line where it is.
+        [found] = [f for f in check(*self.bottom_set(124)) if f["type"] == "narrow_margin"]
+        assert "20.4 pt shorter, keeping its top" in found["fix"]
+        assert [f for f in check(*self.bottom_set(124 - 20.4))
+                if f["type"] in ("narrow_margin", "overflow")] == []
+
+    def test_cut_text_keeps_its_margin(self):
+        assert [f for f in check(*self.text_under_a_card(120 - 23.6))
+                if f["type"] in ("narrow_margin", "overflow")] == []
+
+    def test_a_card_whose_words_would_spill_is_not_shortened(self):
+        title, other, _ = self.text_under_a_card(0)
+        full = card("Full", 40, 410, 880, 124, z=3,
+                    words=text(width=600, height=110, left=47.2, top=413.6))
+        [found] = [f for f in check(title, other, full) if f["type"] == "narrow_margin"]
+        assert found["fix"].startswith("Cut the text in 'Full'")
+
+    def test_cards_that_keep_room_are_not(self):
+        assert [f for f in check(*self.row_at(40)) if f["type"] == "narrow_margin"] == []
+
+    def test_a_bleed_off_the_bottom_is_not(self):
+        assert [f for f in check(*self.row_at(0)) if f["type"] == "narrow_margin"] == []
+
+    def test_a_footnote_set_low_is_placed_there(self):
+        shapes = titled_row() + [textbox("note", 40, H - 22, 400, 18, z=9, text_height=14)]
+        assert [f for f in check(*shapes) if f["type"] == "narrow_margin"] == []
+
+
+class TestTemplateRules:
+    RULE = graphic("Title rule", 40, 100, 880, 1.5, source="layout")
+
+    def title(self, lines):
+        title = placed("Title 1", 40, 30, 880, 70, 47.2, 40, 600, 40 * lines)
+        title["placeholder_type"] = 1
+        title["type"] = msoPlaceholder
+        title["text"]["runs"] = [{"color_hex": "#0B2545", "size": 32.0, "bold": True}]
+        return title
+
+    def test_a_title_that_wrapped_across_the_rule_is_reported(self):
+        [found] = [f for f in check_on([self.RULE], self.title(2)) if f["type"] == "overlap"]
+        assert found["shapes"] == ["Title 1", "Title rule"]
+        assert "a line the template draws, drawn by the slide's layout" in found["message"]
+        assert found["fix"].startswith("Keep 'Title 1' to the room above the line")
+
+    def test_one_line_above_the_rule_is_not(self):
+        assert [f for f in check_on([self.RULE], self.title(1)) if f["type"] == "overlap"] == []
+
+    def test_a_card_set_over_the_rule_takes_back_its_top(self):
+        over = card("card", 40, 90, 300, 100, z=2)
+        [found] = [f for f in check_on([self.RULE], over) if f["type"] == "overlap"]
+        assert found["fix"].startswith("Make 'card' 82.5 pt tall, keeping its far edge "
+                                       "(ppt_update_shape top=107.5 height=82.5)")
+
+    FOOTER = graphic("Footer rule", 40, 500, 880, 1.5, source="master")
+
+    def test_a_card_over_a_footer_rule_stays_on_the_slide(self):
+        # It was told to move down 387.5 pt, to 507-892 on a 540 pt slide.
+        over = card("card", 40, 120, 880, 385, z=2)
+        [found] = [f for f in check_on([self.FOOTER], over) if f["type"] == "overlap"]
+        assert found["fix"].startswith("Make 'card' 374 pt tall (ppt_update_shape height=374)")
+
+    def test_a_card_with_words_is_resized_not_its_words_cut(self):
+        over = card("card", 40, 120, 880, 385, z=2,
+                    words=text(width=400, height=30, left=47.2, top=123.6))
+        [found] = [f for f in check_on([self.FOOTER], over) if f["type"] == "overlap"]
+        assert found["message"].startswith("'card' runs across")
+        assert found["fix"].startswith("Make 'card' 374 pt tall")
+
+    def test_a_card_is_not_narrowed_past_its_words(self):
+        # Narrower than its words, the card wraps them onto more lines than
+        # it was measured with, and they spill.
+        rule = graphic("Side rule", 280, 50, 1.5, 400, source="layout")
+        over = card("card", 100, 150, 200, 100, z=2,
+                    words=text(width=180, height=80, left=107.2, top=153.6))
+        [found] = [f for f in check_on([rule], over) if f["type"] == "overlap"]
+        assert "174 pt wide" not in found["fix"]
+        assert found["fix"].startswith("Move 'card' left")
+
+    def test_a_card_its_words_fill_is_moved_rather_than_shortened(self):
+        over = card("card", 40, 120, 880, 385, z=2,
+                    words=text(width=800, height=370, left=47.2, top=123.6))
+        [found] = [f for f in check_on([self.FOOTER], over) if f["type"] == "overlap"]
+        assert found["fix"].startswith("Move 'card' up by 11 pt (ppt_update_shape dtop=-11)")
+        over["top"] -= 11
+        assert [f for f in check_on([self.FOOTER], over) if f["type"] == "overlap"] == []
+
+    def test_a_slanting_line_is_not_a_rule(self):
+        slant = graphic("Slant", 600, 0, 200, 540, source="layout")
+        slant["type"] = 9   # msoLine
+        assert [f for f in check_on([slant], self.title(2)) if f["type"] == "overlap"] == []
+
+
+class TestATitleOffItsLayout:
+    def page(self, index, layout, left=40.0, width=880.0, home=(40.0, 30.0, 880.0, 60.0)):
+        title = textbox("Title 1", left, 30, width, 60)
+        title["placeholder_type"] = 1
+        title["type"] = msoPlaceholder
+        page = slide(title, index=index, layout=layout)
+        page["layout_title"] = list(home)
+        return page
+
+    def test_a_title_nudged_on_a_layout_used_once_is_reported(self):
+        slides = [self.page(2, "Title and Content"), self.page(3, "Title and Content"),
+                  self.page(4, "Quote", left=44.0, width=876.0)]
+        [finding] = layout_check._titles_off_their_layout(slides)
+        assert finding["slides"] == [4]
+        assert "left 44 pt where the layout has 40 pt" in finding["message"]
+        assert finding["fix"] == ("Put it back (ppt_update_shape shape_name='Title 1' left=40 "
+                                  "top=30 width=880 height=60).")
+
+    def test_a_layout_used_twice_is_left_to_the_titles_comparison(self):
+        slides = [self.page(2, "Quote", left=44.0), self.page(3, "Quote")]
+        assert layout_check._titles_off_their_layout(slides) == []
+
+    def test_a_title_moved_far_is_a_decision(self):
+        slides = [self.page(4, "Cover", left=200.0)]
+        assert layout_check._titles_off_their_layout(slides) == []
+
+    def grown(self, words, left=40.0):
+        page = self.page(4, "Section", left=left, home=(40.0, 30.0, 880.0, 56.0))
+        title = page["shapes"][0]
+        title["height"], title["text"]["height"] = 65.2, words
+        return page
+
+    def test_a_title_grown_to_hold_its_words_is_left_taller(self):
+        # The overflow fix grew it from 56 to 65.2 pt; putting it back spilled
+        # the words again, and the two findings took turns.
+        page = self.grown(58)
+        assert [f["type"] for f in slide_findings(page, W, H) if f["type"] == "overflow"] == []
+        assert layout_check._titles_off_their_layout([page]) == []
+
+    def test_a_grown_title_that_also_moved_keeps_its_height(self):
+        [finding] = layout_check._titles_off_their_layout([self.grown(58, left=44.0)])
+        assert "height" not in finding["message"]
+        assert finding["fix"].endswith("left=40 top=30 width=880 height=65.2).")
+
+    def test_a_title_grown_past_its_words_is_reported(self):
+        [finding] = layout_check._titles_off_their_layout([self.grown(30)])
+        assert finding["fix"].endswith("height=56).")
+
+
+def test_a_layouts_own_graphics_and_title_are_read_from_the_file(tmp_path):
+    from utils.package import layout_facts
+
+    ns = ('xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+          'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+          'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"')
+    layout = (f'<p:sldLayout {ns} showMasterSp="0"><p:cSld><p:spTree>'
+              '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Title 1"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>'
+              '<p:spPr><a:xfrm><a:off x="508000" y="381000"/><a:ext cx="11176000" cy="762000"/></a:xfrm></p:spPr></p:sp>'
+              '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Rule"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>'
+              '<p:spPr><a:xfrm><a:off x="508000" y="1270000"/><a:ext cx="11176000" cy="19050"/></a:xfrm>'
+              '<a:solidFill><a:schemeClr val="accent1"/></a:solidFill></p:spPr></p:sp>'
+              '</p:spTree></p:cSld></p:sldLayout>')
+    master = (f'<p:sldMaster {ns}><p:cSld><p:spTree/></p:cSld>'
+              '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2"/></p:sldMaster>')
+    theme = ('<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements>'
+             '<a:clrScheme name="x"><a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>'
+             '<a:accent1><a:srgbClr val="C0504D"/></a:accent1></a:clrScheme>'
+             '<a:fontScheme name="x"><a:majorFont><a:latin typeface="Calibri Light"/><a:cs typeface=""/>'
+             '</a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:cs typeface="Arial"/>'
+             '</a:minorFont></a:fontScheme></a:themeElements></a:theme>')
+    path = deck_file(tmp_path, [], {})
+    entries = {n: zipfile.ZipFile(path).read(n) for n in zipfile.ZipFile(path).namelist()}
+    entries["ppt/slides/_rels/slide1.xml.rels"] = RELS.format(
+        '<Relationship Id="rId1" Target="../slideLayouts/slideLayout1.xml" Type="slideLayout"/>').encode()
+    entries["ppt/slideLayouts/slideLayout1.xml"] = layout.encode()
+    entries["ppt/slideLayouts/_rels/slideLayout1.xml.rels"] = RELS.format(
+        '<Relationship Id="rId1" Target="../slideMasters/slideMaster1.xml" Type="slideMaster"/>').encode()
+    entries["ppt/slideMasters/slideMaster1.xml"] = master.encode()
+    entries["ppt/slideMasters/_rels/slideMaster1.xml.rels"] = RELS.format(
+        '<Relationship Id="rId1" Target="../theme/theme1.xml" Type="theme"/>').encode()
+    entries["ppt/theme/theme1.xml"] = theme.encode()
+    with zipfile.ZipFile(path, "w") as archive:
+        for n, data in entries.items():
+            archive.writestr(n, data)
+    found = layout_facts(path, [1])[1]
+    assert found["title"] == [40.0, 30.0, 880.0, 60.0]
+    assert found["shows_master"] is False
+    [rule] = found["graphics"]
+    assert (rule["name"], rule["top"], rule["height"]) == ("Rule", 100.0, 1.5)
+    assert rule["fill"]["color_hex"] == "#C0504D"
+    assert rule["visible"] is True
+    # The theme's fonts, which the Mac holds a chosen right-to-left font to.
+    assert found["theme_fonts"] == {"latin": ["Calibri Light", "Calibri"], "script": ["Arial"]}
+    # A rule the layout hides is not drawn, and nothing runs across it.
+    entries["ppt/slideLayouts/slideLayout1.xml"] = layout.replace(
+        'name="Rule"/>', 'name="Rule" hidden="1"/>').encode()
+    with zipfile.ZipFile(path, "w") as archive:
+        for n, data in entries.items():
+            archive.writestr(n, data)
+    [rule] = layout_facts(path, [1])[1]["graphics"]
+    assert rule["visible"] is False
+
+
+class TestInsideGroups:
+    def grouped(self, *children, under=()):
+        group = shape("Group 4", 100, 100, 400, 200, z=2, type=6)   # msoGroup
+        page = slide(*under, group)
+        for order, child in enumerate(children, start=1):
+            child["name"] = "Group 4/" + child["name"]
+            child["in_group"] = "Group 4"
+            child["z"] = 2 + order / 1000
+        page["inner"] = list(children)
+        return page
+
+    def test_stand_in_words_inside_a_group_are_reported_by_their_path(self):
+        words = textbox("TextBox 2", 110, 110, 300, 40)
+        words["text"]["content"] = "Lorem ipsum dolor"
+        [finding] = slide_findings(self.grouped(words), W, H)
+        assert finding["type"] == "sample_text" and finding["shapes"] == ["Group 4/TextBox 2"]
+
+    def test_text_spilling_out_of_its_box_inside_a_group(self):
+        words = textbox("TextBox 2", 110, 110, 300, 40, text_height=80)
+        [finding] = slide_findings(self.grouped(words), W, H)
+        assert finding["type"] == "overflow"
+
+    def test_white_words_on_a_dark_card_in_the_group_read(self):
+        dark = card("Card", 100, 100, 400, 200, colour="#1F2937")
+        words = textbox("TextBox 2", 110, 110, 300, 40,
+                        runs=[{"color_hex": "#FFFFFF", "size": 14.0, "bold": False}])
+        assert slide_findings(self.grouped(dark, words), W, H) == []
+
+    def test_white_words_in_a_group_on_a_dark_slide_card_read(self):
+        dark = card("Backing", 90, 90, 420, 220, z=1, colour="#1F2937")
+        words = textbox("TextBox 2", 110, 110, 300, 40,
+                        runs=[{"color_hex": "#FFFFFF", "size": 14.0, "bold": False}])
+        found = [f for f in slide_findings(self.grouped(words, under=(dark,)), W, H)
+                 if f["type"] == "low_contrast"]
+        assert found == []
+
+    def test_white_words_in_a_group_on_white_do_not(self):
+        words = textbox("TextBox 2", 110, 110, 300, 40,
+                        runs=[{"color_hex": "#FFFFFF", "size": 14.0, "bold": False}])
+        [finding] = slide_findings(self.grouped(words), W, H)
+        assert finding["type"] == "low_contrast" and finding["shapes"][0] == "Group 4/TextBox 2"
+
+
+def test_the_text_inside_a_group_is_read_from_the_file(tmp_path):
+    from utils.package import group_texts
+
+    group = ('<p:grpSp><p:nvGrpSpPr><p:cNvPr id="4" name="Group 4"/></p:nvGrpSpPr><p:grpSpPr/>'
+             '<p:sp><p:nvSpPr><p:cNvPr id="5" name="TextBox 2"/></p:nvSpPr><p:spPr/>'
+             '<p:txBody><a:p><a:pPr rtl="1"/><a:r><a:rPr sz="2000"><a:latin typeface="David"/>'
+             '<a:cs typeface="Arial"/></a:rPr><a:t>1516 עד 1917</a:t></a:r></a:p></p:txBody></p:sp>'
+             '</p:grpSp>')
+    path = deck_file(tmp_path, [group], {})
+    [inner] = group_texts(path, [1])[1]
+    assert inner["name"] == "Group 4/TextBox 2" and inner["in_group"] == "Group 4"
+    text = inner["text"]
+    assert text["content"] == "1516 עד 1917" and text["directions"] == ["rtl"]
+    assert text["runs"][0]["font"] == "David" and text["script_font"] == "Arial"
+
+
+def group_file(tmp_path, body, outer="", inner="", member=""):
+    group = (f'<p:grpSp><p:nvGrpSpPr><p:cNvPr id="4" name="Group 1"{outer}/></p:nvGrpSpPr><p:grpSpPr/>'
+             f'<p:grpSp><p:nvGrpSpPr><p:cNvPr id="6" name="Group 2"{inner}/></p:nvGrpSpPr><p:grpSpPr/>'
+             f'<p:sp><p:nvSpPr><p:cNvPr id="5" name="TextBox 3"{member}/></p:nvSpPr><p:spPr/>'
+             f'<p:txBody>{body}</p:txBody></p:sp></p:grpSp></p:grpSp>')
+    return deck_file(tmp_path, [group], {})
+
+
+ENGLISH = ('<a:p><a:r><a:rPr><a:latin typeface="Helvetica"/><a:cs typeface="Times New Roman"/>'
+           '</a:rPr><a:t>Quarterly results</a:t></a:r></a:p>')
+
+
+class TestGroupTextFromTheFile:
+    def test_english_has_no_right_to_left_font(self, tmp_path):
+        # It was reported as drawn in its unused right-to-left font.
+        from utils.package import group_texts
+
+        [inner] = group_texts(group_file(tmp_path, ENGLISH), [1])[1]
+        assert inner["text"]["script_font"] is None
+        assert [f for f in layout_check._fonts(1, [inner]) if f["type"] == "font_missing"] == []
+
+    @pytest.mark.parametrize("where", ["outer", "inner", "member"])
+    def test_hidden_text_is_not_visible(self, tmp_path, where):
+        from utils.package import group_texts
+
+        [inner] = group_texts(group_file(tmp_path, ENGLISH, **{where: ' hidden="1"'}), [1])[1]
+        assert inner["visible"] is False
+
+    def test_a_group_in_a_group_is_ungrouped_in_turn(self, tmp_path):
+        from utils.package import group_texts
+
+        body = '<a:p><a:r><a:t>Lorem ipsum dolor</a:t></a:r></a:p>'
+        [inner] = group_texts(group_file(tmp_path, body), [1])[1]
+        assert inner["groups"] == ["Group 1", "Group 2"]
+        page = slide()
+        page["inner"] = [inner]
+        [finding] = slide_findings(page, W, H)
+        assert finding["fix"].startswith(
+            "Ungroup 'Group 1' and then 'Group 2' first (ppt_ungroup_shapes "
+            "shape_name_or_index='Group 1', then ppt_ungroup_shapes shape_name_or_index='Group 2')")
+
+    def test_a_line_break_and_a_field_are_kept(self, tmp_path):
+        from utils.package import group_texts
+
+        body = ('<a:p><a:r><a:t>Hello</a:t></a:r><a:br/><a:r><a:t>World </a:t></a:r>'
+                '<a:fld id="{1}" type="slidenum"><a:t>3</a:t></a:fld></a:p>')
+        [inner] = group_texts(group_file(tmp_path, body), [1])[1]
+        assert inner["text"]["content"] == "Hello\vWorld 3"
+
+    def test_a_direction_set_by_the_shapes_list_style_is_read(self, tmp_path):
+        from utils.package import group_texts
+
+        body = ('<a:lstStyle><a:lvl1pPr rtl="1"/></a:lstStyle>'
+                '<a:p><a:r><a:t>שלום</a:t></a:r></a:p><a:p><a:pPr rtl="0"/><a:r><a:t>שלום</a:t></a:r></a:p>')
+        [inner] = group_texts(group_file(tmp_path, body), [1])[1]
+        assert inner["text"]["directions"] == ["rtl", "ltr"]
+
+    def test_a_direction_set_for_the_whole_deck_is_read(self, tmp_path):
+        from utils.package import group_texts
+
+        path = group_file(tmp_path, '<a:p><a:r><a:t>שלום</a:t></a:r></a:p>')
+        entries = {n: zipfile.ZipFile(path).read(n) for n in zipfile.ZipFile(path).namelist()}
+        entries["ppt/presentation.xml"] = PRESENTATION.replace(
+            "</p:presentation>",
+            '<p:defaultTextStyle><a:lvl1pPr xmlns:a="http://schemas.openxmlformats.org/'
+            'drawingml/2006/main" rtl="1"/></p:defaultTextStyle></p:presentation>').encode()
+        with zipfile.ZipFile(path, "w") as archive:
+            for n, data in entries.items():
+                archive.writestr(n, data)
+        [inner] = group_texts(path, [1])[1]
+        assert inner["text"]["directions"] == ["rtl"]
+
+
+# ---------------------------------------------------------------------------
+# Text on a photo
+# ---------------------------------------------------------------------------
+from utils.bitmap import sample_bmp  # noqa: E402
+
+
+def bmp(width, height, pixel):
+    """A 24-bit BMP whose pixel (x, y), from the top, is pixel(x, y)."""
+    stride = (width * 3 + 3) & ~3
+    rows = b""
+    for y in range(height - 1, -1, -1):
+        row = b"".join(bytes(reversed(pixel(x, y))) for x in range(width))
+        rows += row + b"\x00" * (stride - len(row))
+    header = struct.pack("<2sIHHI", b"BM", 54 + len(rows), 0, 0, 54)
+    info = struct.pack("<IiiHHIIiiII", 40, width, height, 1, 24, 0, len(rows), 2835, 2835, 0, 0)
+    return header + info + rows
+
+
+class TestTextOnAPhoto:
+    def photo_slide(self, top_half, bottom_half, text_colour="#FFFFFF", text_top=110):
+        photo = picture("Photo", 0, 0, 960, 540)
+        photo["photo"] = sample_bmp(bmp(96, 54, lambda x, y: top_half if y < 27 else bottom_half))
+        words = textbox("Caption", 100, text_top, 400, 60, z=2, runs=[
+            {"color_hex": text_colour, "size": 28.0, "bold": True}])
+        return slide(photo, words)
+
+    def test_the_sampler_reads_rows_from_the_top(self):
+        grid = sample_bmp(bmp(4, 2, lambda x, y: (255, 0, 0) if y == 0 else (0, 0, 255)), columns=4)
+        assert grid["colours"][:4] == ["#FF0000"] * 4 and grid["colours"][4:] == ["#0000FF"] * 4
+
+    def test_white_text_on_the_sky_is_reported_with_a_colour_that_reads(self):
+        [finding] = slide_findings(self.photo_slide((200, 220, 240), (40, 40, 40)), W, H)
+        assert finding["type"] == "low_contrast" and finding["on_photo"]
+        assert finding["shapes"] == ["Caption", "Photo"]
+        assert finding["fix"].startswith("Make the text #000000")
+
+    def test_white_text_on_the_dark_ground_reads(self):
+        page = self.photo_slide((200, 220, 240), (40, 40, 40), text_top=380)
+        assert slide_findings(page, W, H) == []
+
+    def test_text_across_light_and_dark_gets_a_card_behind_it(self):
+        page = self.photo_slide((250, 250, 250), (10, 10, 10), text_top=240)
+        page["shapes"][1]["height"] = 120
+        page["shapes"][1]["text"]["height"] = 100
+        [finding] = slide_findings(page, W, H)
+        assert "ppt_add_shape shape_type='rectangle'" in finding["fix"]
+        # Added at the front and the text brought over it: 'behind_text' goes
+        # under the lowest text on the slide, often the title, under the photo.
+        assert "zorder" not in finding["fix"].split("ppt_set_shape_zorder")[0]
+        assert ("ppt_set_shape_zorder shape_name='Caption' command='bring_to_front'"
+                in finding["fix"])
+
+    def test_following_the_card_fix_leaves_the_slide_clean(self):
+        # The card sat 0.8 pt off the text box, which read as a slip.
+        page = self.photo_slide((250, 250, 250), (10, 10, 10), text_top=240)
+        caption = page["shapes"][1]
+        caption["height"], caption["text"]["height"] = 120, 100
+        [finding] = slide_findings(page, W, H)
+        at = {k: float(v) for k, v in re.findall(r"\b(left|top|width|height)=([\d.]+)",
+                                                  finding["fix"])}
+        assert (at["left"], at["top"]) == (caption["left"], caption["top"])
+        backing = card("Scrim", at["left"], at["top"], at["width"], at["height"], z=3,
+                       colour="#000000")
+        backing["fill"]["transparency"] = 0.35
+        caption["z"] = 4
+        caption["text"]["runs"][0]["color_hex"] = "#FFFFFF"
+        page["shapes"].append(backing)
+        assert slide_findings(page, W, H) == []
+
+    def test_a_see_through_part_of_a_picture_is_not_judged(self):
+        page = self.photo_slide((200, 220, 240), (40, 40, 40))
+        photo = page["shapes"][0]["photo"]
+        photo["colours"] = [None] * len(photo["colours"])
+        assert slide_findings(page, W, H) == []
+
+    def test_a_photo_never_sampled_is_not_judged(self):
+        page = self.photo_slide((200, 220, 240), (40, 40, 40))
+        del page["shapes"][0]["photo"]
+        assert slide_findings(page, W, H) == []
+
+
+def test_hebrew_in_the_themes_own_pair_of_fonts_is_its_design():
+    page = slide(styled("body", 30, "Calibri", content="שלום, עולם.", script_font="Arial"))
+    page["theme_fonts"] = {"latin": ["Calibri Light", "Calibri"], "script": ["Arial", "Arial"]}
+    assert [f for f in slide_findings(page, W, H) if f["type"] == "font_missing"] == []
+
+
+def test_a_theme_naming_no_right_to_left_font_leaves_it_to_powerpoint():
+    # Live on Windows: the Office theme's complex script fonts are empty, and
+    # Hebrew in a text box with no font asked for drew in Arial.
+    page = slide(styled("body", 30, "Calibri", content="שלום, עולם.", script_font="Arial"))
+    page["theme_fonts"] = {"latin": ["Calibri Light", "Calibri"], "script": []}
+    assert [f for f in slide_findings(page, W, H) if f["type"] == "font_missing"] == []
+
+
+THEME_FONTS = {"latin": ["Calibri Light", "Calibri"], "script": ["Arial", "Arial"]}
+
+
+@pytest.mark.parametrize("latin", ["Calibri", "+mn-lt"])
+def test_a_hebrew_font_chosen_beside_the_themes_latin_one_is_a_choice(latin):
+    # The fix set the Hebrew to Calibri, which has no Hebrew letters, or to
+    # font_name='+mn-lt'.
+    page = slide(styled("body", 30, latin, content="שלום, עולם.", script_font="David"))
+    page["theme_fonts"] = THEME_FONTS
+    assert [f for f in slide_findings(page, W, H) if f["type"] == "font_missing"] == []
+
+
+def test_a_hebrew_font_chosen_beside_a_named_latin_one_is_a_choice():
+    page = slide(styled("body", 30, "Georgia", content="שלום, עולם.", script_font="David"))
+    page["theme_fonts"] = THEME_FONTS
+    assert [f for f in slide_findings(page, W, H) if f["type"] == "font_missing"] == []
+
+
+def test_hebrew_left_in_the_themes_font_under_a_named_one_is_reported():
+    page = slide(styled("title", 30, "David", content="תולדות ישראל", script_font="Arial"))
+    page["theme_fonts"] = THEME_FONTS
+    [finding] = [f for f in slide_findings(page, W, H) if f["type"] == "font_missing"]
+    assert finding["fix"].startswith("Set the font again (ppt_format_text font_name='David')")
+
+
+class TestCropToFit:
+    def test_shape_keeps_the_box_and_crops_the_image(self):
+        from ppt_com.advanced_ops import _fit_aspect, _fit_crops, _fit_size
+        # A 3:2 image in a 16:9 box.
+        aspect = _fit_aspect("shape", 960, 540)
+        crops = _fit_crops(300, 200, aspect, 0.5)
+        assert crops["left"] == crops["right"] == 0
+        assert crops["top"] == pytest.approx(crops["bottom"])
+        assert (200 - crops["top"] - crops["bottom"]) * aspect == pytest.approx(300)
+        assert _fit_size(960, 540, aspect, "shape") == (960, 540)
+
+    def test_a_ratio_fits_inside_the_box(self):
+        from ppt_com.advanced_ops import _fit_aspect, _fit_size
+        assert _fit_size(400, 400, _fit_aspect("16:9"), "16:9") == (400, 225)
+
+    def test_square_is_as_before(self):
+        from ppt_com.advanced_ops import _fit_aspect, _fit_crops
+        assert _fit_crops(400, 300, _fit_aspect("square"), 0.5) == {
+            "left": 50.0, "right": 50.0, "top": 0.0, "bottom": 0.0}
+
+    def test_anything_else_is_refused(self):
+        from ppt_com.advanced_ops import _fit_aspect
+        with pytest.raises(ValueError, match="Supported values"):
+            _fit_aspect("wide")

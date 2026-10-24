@@ -825,11 +825,30 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height,
                 os.remove(staged)
             except OSError:
                 logger.debug("Could not remove the staged image at %s", staged)
+    # PowerPoint for Mac makes the picture 25 pt square, whatever the image,
+    # and keeping that square's proportions while setting one side keeps it
+    # square. The image's own size is read from the file instead, and both
+    # sides are set from it: at 96 dpi when no size was asked for, as
+    # PowerPoint for Windows places an image with no resolution of its own.
+    pixels = _image_pixels(absolute)
+    natural = pixels[0] / pixels[1] if pixels else None
+    # Both given: the caller means those proportions, as on Windows. A side
+    # worked out here only puts the image's own back, and the picture stays
+    # locked to them, as PowerPoint locks a picture it places.
+    stretched = width is not None and height is not None
+    if natural is not None:
+        if width is None and height is None:
+            width, height = pixels[0] * 0.75, pixels[1] * 0.75
+        elif height is None:
+            height = width / natural
+        elif width is None:
+            width = height * natural
     if width is not None and height is not None:
-        # Both specified: user intentionally overrides aspect ratio.
         pic.lock_aspect_ratio.set(False)
         pic.width.set(width)
         pic.height.set(height)
+        if not stretched:
+            pic.lock_aspect_ratio.set(True)
     elif width is not None:
         pic.lock_aspect_ratio.set(True)
         pic.width.set(width)
@@ -846,7 +865,21 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height,
         "width": size[0],
         "height": size[1],
         **placed,
+        # The image's own proportions, for the layout check; report_layout
+        # takes it out of the result.
+        "_natural_aspect": natural,
     }
+
+
+def _image_pixels(path):
+    """An image file's width and height in pixels, or None."""
+    from utils.package import image_size
+
+    try:
+        with open(path, "rb") as handle:
+            return image_size(handle.read())
+    except OSError:
+        return None
 
 
 def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y,

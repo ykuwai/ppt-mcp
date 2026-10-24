@@ -47,7 +47,9 @@ from backend.mac_enums import (
     PpParagraphAlignment,
     PpPlaceholderType,
 )
-from ppt_com.constants import msoFillGradient, msoFillSolid, msoGroup, msoPlaceholder
+from ppt_com.constants import (
+    msoFillGradient, msoFillSolid, msoGroup, msoLinkedPicture, msoPicture, msoPlaceholder,
+)
 from utils.color import rgb_list_to_hex
 from utils.navigation import goto_slide
 
@@ -161,7 +163,7 @@ def _run_styles(text_range) -> list:
     Most text is set in one style, and the range's own font record answers
     that in one event: a property the characters disagree on reads back as
     ``missing value``, so a record with all three is the whole answer. Mixed
-    text is read as columns, five events however long it is, and when
+    text is read as columns, six events however long it is, and when
     PowerPoint will not answer per character either, nothing is guessed.
     """
     font = _record(text_range.font)
@@ -179,7 +181,7 @@ def _run_styles(text_range) -> list:
         texts = chars.content.get()
         font = chars.font
         columns = [font.font_color.get(), font.font_size.get(), font.bold.get(),
-                   font.font_color_theme_index.get()]
+                   font.font_color_theme_index.get(), font.font_name.get()]
         if not isinstance(texts, list) or any(
             not isinstance(column, list) or len(column) != len(texts)
             for column in columns
@@ -191,21 +193,21 @@ def _run_styles(text_range) -> list:
         return []
 
     styles = set()
-    for char, colour, size, bold, index in rows:
+    for char, colour, size, bold, index, name in rows:
         if not isinstance(char, str) or not char.strip():
             continue
-        colour, size = _value(colour), _value(size)
+        colour, size, name = _value(colour), _value(size), _value(name)
         styles.add((
             rgb_list_to_hex(colour) if isinstance(colour, list) else None,
             round(size, 1) if isinstance(size, (int, float)) else None,
             _value(bold) is True,
             _theme_flag(index),
+            name if isinstance(name, str) else None,
         ))
-    # The typeface would cost one more event per column; mixed text leaves it
-    # unknown rather than guessed.
     return [
-        {"color_hex": colour, "size": size, "bold": bold, "font": None, "theme": theme}
-        for colour, size, bold, theme in sorted(styles, key=lambda s: (s[0] or "", s[1] or 0))
+        {"color_hex": colour, "size": size, "bold": bold, "font": name, "theme": theme}
+        for colour, size, bold, theme, name in sorted(
+            styles, key=lambda s: (s[0] or "", s[1] or 0, s[4] or ""))
     ]
 
 
@@ -216,7 +218,7 @@ def _text_facts(shape, full):
     shape that is read only for where its text sits costs one event. In full,
     the frame's record and the character columns are added.
     """
-    from ppt_com.layout_check import _CONTENT_KEPT
+    from ppt_com.layout_check import _CONTENT_KEPT, has_right_to_left
 
     frame = shape.text_frame
     facts = {
@@ -251,7 +253,35 @@ def _text_facts(shape, full):
             pass
     if full:
         facts["runs"] = _run_styles(tr)
+        caps = _value(_record(tr.font).get(k.caps_type))
+        facts["all_caps"] = {k.all_caps: True, k.no_caps: False}.get(caps)
+        if has_right_to_left(content):
+            facts["directions"] = _directions(tr, content)
     return facts
+
+
+def _directions(tr, content):
+    """The macOS half of ppt_com.layout_check._directions, in one event.
+
+    A paragraph set right to left is known. One that is not may still be
+    drawn right to left, since PowerPoint draws text tagged as Hebrew or
+    Arabic from the right, and the dictionary has no way to read a text's
+    language: it is None, unknown, rather than a guess. A text of one
+    paragraph answers its one value rather than a list.
+    """
+    from ppt_com.layout_check import _paragraphs
+
+    names = {k.right_to_left: "rtl"}
+    try:
+        values = tr.paragraphs.paragraph_format.text_direction.get()
+    except Exception:
+        logger.debug("Cannot read the paragraphs' direction", exc_info=True)
+        return None
+    if not isinstance(values, list):
+        if len(_paragraphs(content)) != 1:
+            return None
+        values = [values]
+    return [names.get(value) for value in values]
 
 
 def _geometry_facts(shape, record, z):
@@ -284,6 +314,10 @@ def _geometry_facts(shape, record, z):
     if type_int == msoPlaceholder:
         facts["placeholder_type"] = _windows_constant(
             PpPlaceholderType, record.get(k.placeholder_type))
+    if type_int in (msoPicture, msoLinkedPicture):
+        locked = _value(record.get(k.lock_aspect_ratio))
+        if locked is not None:
+            facts["lock_aspect"] = bool(locked)
     # Kept for _read_appearance, which has no record; dropped before return.
     facts["_has_text_frame"] = bool(
         _from_record(record, k.has_text_frame, shape, "has_text_frame"))
@@ -451,6 +485,14 @@ def _slide_facts_impl(slide_indices, navigate, detail, template_cache=None):
         template, area = _template_facts(
             slide, None if shows is None else bool(shows), template_cache,
             None if detail is None else [s for s in shapes if s["name"] in detail])
+        drawn = _saved_layout(pres, slide_index, template_cache) if detail is None else None
+        inner = _saved_groups(slide_index, template_cache) if detail is None else []
+        if drawn and shows is not False:
+            from ppt_com.layout_check import _TEMPLATE_Z
+
+            for graphic in drawn["graphics"]:
+                template.append({**graphic, "z": _TEMPLATE_Z + len(template),
+                                 "source": "layout"})
         background_hex, background_gradient = (
             _background(slide, True if follows is None else bool(follows))
             if needs_background(shapes, detail) else (None, None))
@@ -459,6 +501,10 @@ def _slide_facts_impl(slide_indices, navigate, detail, template_cache=None):
             themes[design] = _theme_colours(slide)
         facts["slides"].append({
             "slide_index": slide_index,
+            "layout_title": (drawn or {}).get("title"),
+            # From the saved file, like the right-to-left fonts it is held to.
+            "theme_fonts": (drawn or {}).get("theme_fonts"),
+            "inner": inner,
             "design": design,
             "layout": _layout_name(own.get(k.layout)),
             "background_hex": background_hex,
@@ -470,3 +516,234 @@ def _slide_facts_impl(slide_indices, navigate, detail, template_cache=None):
             "shapes": shapes,
         })
     return facts
+
+
+def _package_facts_impl(slide_indices, charts=False):
+    """The macOS half of ppt_com.layout_check._package_facts_impl.
+
+    PowerPoint for Mac has no way to save a copy aside: saving to another
+    path moves the open deck to it. So the deck's own file is read, and only
+    while it holds what is on screen. Otherwise the pictures go unjudged, and
+    with ``charts`` each chart is read the way ppt_get_chart_data reads it,
+    through the clipboard, which is put back afterwards.
+    """
+    from ppt_com.layout_check import package_facts
+    from ppt_mac.presentation import _local_path
+
+    pres = ppt._get_pres_impl()
+    try:
+        path = _local_path(pres.full_name()) if pres.saved() else None
+    except Exception:
+        logger.debug("Cannot tell whether the deck is saved", exc_info=True)
+        path = None
+    if path and path.lower().endswith((".pptx", ".pptm", ".potx", ".ppsx")):
+        return package_facts(path, slide_indices)
+    if not charts:
+        return {}
+    return {"charts": _charts_by_clipboard(pres, slide_indices)}
+
+
+def _charts_by_clipboard(pres, slide_indices):
+    from ppt_com.constants import msoChart
+    from ppt_mac.charts import _get_chart_data_impl
+    from ppt_mac.shapes import _WIN_SHAPE_TYPE, _win_constant
+
+    found = {}
+    for index in slide_indices:
+        data = {}
+        for shape in shapes_of(_slide(pres, index)):
+            try:
+                if _win_constant(_WIN_SHAPE_TYPE, shape.shape_type()) != msoChart:
+                    continue
+                read = _get_chart_data_impl(index, shape.name())
+            except Exception:
+                logger.debug("Cannot read a chart's data", exc_info=True)
+                continue
+            if read.get("success"):
+                data[read["shape_name"]] = {"categories": read["categories"],
+                                            "series": read["series"]}
+        found[index] = data
+    return found
+
+
+_FONTS = {}
+
+
+def _installed_fonts_impl():
+    """The macOS half of ppt_com.layout_check._installed_fonts_impl.
+
+    The system's fonts, the Office fonts PowerPoint for Mac carries inside
+    its own bundle, where the system's list does not see them, and the
+    Office cloud fonts already downloaded.
+    """
+    if "installed" in _FONTS:
+        return _FONTS["installed"]
+    import os
+
+    from AppKit import NSFontManager
+
+    from ppt_com.layout_check import FontNames
+    from utils.fonts import names_in_folder
+
+    names = set()
+    manager = NSFontManager.sharedFontManager()
+    for family in manager.availableFontFamilies() or []:
+        names.add(str(family))
+        for member in manager.availableMembersOfFontFamily_(family) or []:
+            names.add(f"{family} {member[1]}")
+    bundle = "/Applications/Microsoft PowerPoint.app/Contents/Resources/DFonts"
+    names |= names_in_folder(bundle)
+    cloud = os.path.expanduser(
+        "~/Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts")
+    if os.path.isdir(cloud):
+        for family in os.listdir(cloud):
+            names.add(family)
+            names |= names_in_folder(os.path.join(cloud, family))
+    # The system's list names a font once; the files hold the names a deck
+    # made elsewhere asks for it by: "ヒラギノ角ゴシック W3" and "Hiragino Kaku
+    # Gothic ProN W3" for what it lists as "Hiragino Sans".
+    _FONTS["installed"] = FontNames(
+        names, ("/System/Library/Fonts", "/Library/Fonts", os.path.expanduser("~/Library/Fonts")))
+    return _FONTS["installed"]
+
+
+
+def _saved_layout(pres, slide_index, cache):
+    """What the slide's layout draws, from the deck's own file.
+
+    PowerPoint for Mac answers no shapes for a custom layout, so a layout's
+    own graphics, a band or a rule a title or section layout draws, and
+    where it puts its title, are read from the saved file, while it holds
+    what is on screen. A deck never saved, or changed since, answers None.
+    """
+    from ppt_mac.presentation import _local_path
+    from utils.package import layout_facts
+
+    if "saved file" not in cache:
+        path = None
+        try:
+            if pres.saved():
+                path = _local_path(pres.full_name())
+        except Exception:
+            logger.debug("Cannot tell whether the deck is saved", exc_info=True)
+        if path and not path.lower().endswith((".pptx", ".pptm", ".potx", ".ppsx")):
+            path = None
+        cache["saved file"] = path
+    path = cache["saved file"]
+    if not path:
+        return None
+    try:
+        return layout_facts(path, [slide_index]).get(slide_index)
+    except Exception:
+        logger.debug("Cannot read the layouts from %s", path, exc_info=True)
+        return None
+
+
+def _saved_groups(slide_index, cache):
+    """The text inside the slide's groups, from the deck's own file.
+
+    A group answers no members over Apple Events, so what is inside it is
+    read from the saved file, while it holds what is on screen: its words,
+    fonts and paragraph directions, enough for the checks on those. Where
+    PowerPoint draws them is not in the file, so whether they fit is not
+    known here. ``_saved_layout`` has already decided whether the file can
+    be used.
+    """
+    from utils.package import group_texts
+
+    path = cache.get("saved file")
+    if not path:
+        return []
+    try:
+        return group_texts(path, [slide_index]).get(slide_index, [])
+    except Exception:
+        logger.debug("Cannot read the groups from %s", path, exc_info=True)
+        return []
+
+
+def _photo_samples_impl(slide_index, names):
+    """The macOS half of ppt_com.layout_check._photo_samples_impl.
+
+    ``save as picture`` writes a picture's own image file, whatever format it
+    is asked for, and only inside PowerPoint's container. Quartz reads any of
+    them, turned the way PowerPoint shows it. Being the whole image, it lines
+    up with what is drawn only when the picture is not cropped, so a cropped
+    one is left unjudged.
+    """
+    import os
+
+    from ppt_mac.export import _staging_path
+
+    slide = _slide(ppt._get_pres_impl(), slide_index)
+    by_name = {}
+    for ref in shapes_of(slide):
+        try:
+            by_name[ref.name()] = ref
+        except Exception:
+            continue
+    found = {}
+    for name in names:
+        shape = by_name.get(name)
+        if shape is None:
+            continue
+        crop = _record(shape.picture_format)
+        if any(abs(_value(crop.get(side)) or 0) > 0.5
+               for side in (k.crop_left, k.crop_right, k.crop_top, k.crop_bottom)):
+            continue
+        staged = _staging_path(".img")
+        try:
+            shape.save_as_picture(picture_type=k.save_as_PNG_file, file_name=staged)
+            with open(staged, "rb") as image:
+                sampled = _sample_image(image.read(), shape.width() / max(shape.height(), 1))
+            if sampled:
+                # A flipped or half-turned picture comes out as the slide
+                # shows it (checked live), so the sample needs no turning.
+                found[name] = sampled
+        except Exception:
+            logger.debug("Cannot export '%s'", name, exc_info=True)
+        finally:
+            if os.path.exists(staged):
+                os.remove(staged)
+    return found
+
+
+def _sample_image(data, aspect, columns=96):
+    """A grid of an image file's colours, as utils.bitmap.sample_bmp gives it,
+    drawn at the proportions the picture is shown at."""
+    import Quartz
+    from Foundation import NSData
+
+    source = Quartz.CGImageSourceCreateWithData(NSData.dataWithBytes_length_(data, len(data)), None)
+    if source is None:
+        return None
+    image = Quartz.CGImageSourceCreateThumbnailAtIndex(source, 0, {
+        Quartz.kCGImageSourceCreateThumbnailFromImageAlways: True,
+        Quartz.kCGImageSourceCreateThumbnailWithTransform: True,
+        Quartz.kCGImageSourceThumbnailMaxPixelSize: 1024,
+    })
+    if image is None:
+        return None
+    rows = max(1, round(columns / max(aspect, 0.01)))
+    space = Quartz.CGColorSpaceCreateWithName(Quartz.kCGColorSpaceSRGB)
+    context = Quartz.CGBitmapContextCreate(None, columns, rows, 8, columns * 4, space,
+                                           Quartz.kCGImageAlphaPremultipliedLast)
+    Quartz.CGContextSetInterpolationQuality(context, Quartz.kCGInterpolationNone)
+    Quartz.CGContextDrawImage(context, Quartz.CGRectMake(0, 0, columns, rows), image)
+    pixels = Quartz.CGBitmapContextGetData(context)
+    raw = bytes(pixels.as_buffer(columns * rows * 4))
+    return {"columns": columns, "rows": rows, "colours": _colours(raw)}
+
+
+def _colours(raw):
+    """Premultiplied RGBA bytes as colours, None where the image is see-through:
+    what shows there is whatever is under the picture, not black."""
+    colours = []
+    for i in range(0, len(raw), 4):
+        alpha = raw[i + 3]
+        if alpha < 128:
+            colours.append(None)
+            continue
+        colours.append("#" + "".join(f"{min(255, round(raw[i + c] * 255 / alpha)):02X}"
+                                     for c in range(3)))
+    return colours
+

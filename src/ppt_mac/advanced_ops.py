@@ -610,11 +610,9 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
             auto_shape_int = int(crop_shape)
 
     if crop_fit is not None:
-        fit_key = crop_fit.strip().lower()
-        if fit_key not in ("square", "1:1"):
-            raise ValueError(
-                f"Unknown crop_fit '{crop_fit}'. Supported values: 'square', '1:1'"
-            )
+        from ppt_com.advanced_ops import _fit_aspect
+
+        _fit_aspect(crop_fit, 1.0, 1.0)
 
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -628,6 +626,12 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
     if crop_fit is not None:
         anchor = crop_anchor if crop_anchor is not None else 0.5
 
+        # The box it is drawn in, before an earlier crop is undone and the
+        # picture grows back to the whole image.
+        cur_w = shape.width()
+        cur_h = shape.height()
+        cur_left, cur_top = shape.left_position(), shape.top()
+
         pic_fmt.crop_left.set(0)
         pic_fmt.crop_right.set(0)
         pic_fmt.crop_top.set(0)
@@ -635,9 +639,6 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
 
         old_lock = shape.lock_aspect_ratio()
         shape.lock_aspect_ratio.set(False)
-
-        cur_w = shape.width()
-        cur_h = shape.height()
 
         # `scale width` and `scale height` take the same three arguments as
         # Windows's ScaleWidth and ScaleHeight, and a factor of 1 measured
@@ -659,18 +660,21 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
         shape.width.set(cur_w)
         shape.height.set(cur_h)
 
-        if orig_w > orig_h:
-            excess = orig_w - orig_h
-            pic_fmt.crop_left.set(excess * anchor)
-            pic_fmt.crop_right.set(excess * (1.0 - anchor))
-        elif orig_h > orig_w:
-            excess = orig_h - orig_w
-            pic_fmt.crop_top.set(excess * anchor)
-            pic_fmt.crop_bottom.set(excess * (1.0 - anchor))
+        from ppt_com.advanced_ops import _fit_aspect, _fit_crops, _fit_size
 
-        min_dim = min(cur_w, cur_h)
-        shape.width.set(min_dim)
-        shape.height.set(min_dim)
+        aspect = _fit_aspect(crop_fit, cur_w, cur_h)
+        crops = _fit_crops(orig_w, orig_h, aspect, anchor)
+        pic_fmt.crop_left.set(crops["left"])
+        pic_fmt.crop_right.set(crops["right"])
+        pic_fmt.crop_top.set(crops["top"])
+        pic_fmt.crop_bottom.set(crops["bottom"])
+
+        width, height = _fit_size(cur_w, cur_h, aspect, crop_fit)
+        shape.width.set(width)
+        shape.height.set(height)
+        # Cropping a side moves that edge; the picture stays where it was put.
+        shape.left_position.set(cur_left)
+        shape.top.set(cur_top)
 
         shape.lock_aspect_ratio.set(bool(old_lock))
     else:

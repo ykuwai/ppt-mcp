@@ -176,3 +176,17 @@ class TestReadingAFrame:
         state = _text_frame_state(FakeShape(auto_size=-2, anchor=99))
         assert state["autofit"] is None
         assert state["vertical_anchor"] is None
+
+
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="on macOS the Apple Event impl takes the place of the COM one")
+def test_a_bad_alignment_changes_nothing(monkeypatch):
+    # The direction was set before the alignment was checked, so the call
+    # reported an error after changing the paragraph.
+    from ppt_com import text
+
+    monkeypatch.setattr(text.ppt, "_get_app_impl",
+                        lambda: pytest.fail("PowerPoint was reached"))
+    with pytest.raises(ValueError, match="Invalid alignment 'middle'"):
+        text._set_paragraph_format_impl(1, "Title", None, "middle", None, None, None,
+                                        None, None, direction="rtl")

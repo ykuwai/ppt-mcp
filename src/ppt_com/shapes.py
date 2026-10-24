@@ -18,6 +18,7 @@ from utils.redraw import FrozenRedraw
 from utils.validation import font_size_warning
 from ppt_com.shape_lookup import resolve_shape, walk_group_children
 from ppt_com.layout_check import report_layout, touched_names
+from ppt_com.text import _set_complex_script_font
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
     msoTrue, msoFalse, msoTriStateMixed,
@@ -705,6 +706,7 @@ def _apply_shape_attrs(
             if font_name is not None:
                 font.Name = font_name
                 font.NameFarEast = font_name
+                _set_complex_script_font(font, font_name)
             if font_size is not None:
                 font.Size = font_size
             if bold is not None:
@@ -801,6 +803,7 @@ def _add_textbox_impl(
         if font_name is not None:
             font.Name = font_name
             font.NameFarEast = font_name  # East Asian characters (e.g. Japanese)
+            _set_complex_script_font(font, font_name)
         if font_size is not None:
             font.Size = font_size
         if bold is not None:
@@ -861,6 +864,7 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height,
         SaveWithDocument=msoTrue,
         Left=left, Top=top, Width=-1, Height=-1,
     )
+    natural = _file_aspect(file_path) or (pic.Width / pic.Height if pic.Height else None)
     if width is not None and height is not None:
         # Both specified: user intentionally overrides aspect ratio.
         pic.LockAspectRatio = msoFalse
@@ -880,7 +884,22 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height,
         "width": round(pic.Width, 2),
         "height": round(pic.Height, 2),
         **placed,
+        # The image's own proportions, for the layout check; report_layout
+        # takes it out of the result.
+        "_natural_aspect": natural,
     }
+
+
+def _file_aspect(path):
+    """An image file's width over its height, or None when it cannot be read."""
+    from utils.package import image_size
+
+    try:
+        with open(path, "rb") as handle:
+            size = image_size(handle.read())
+    except OSError:
+        return None
+    return size[0] / size[1] if size and size[1] else None
 
 
 def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y,
