@@ -1555,6 +1555,8 @@ def crop_picture(params: CropPictureInput) -> str:
             params.crop_shape, params.crop_fit, params.crop_anchor,
             params.corner_radius_pt,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to crop picture: {str(e)}"})
@@ -1625,6 +1627,8 @@ def set_picture_format(params: SetPictureFormatInput) -> str:
             params.brightness, params.contrast, params.color_type,
             params.transparent_color, params.transparent_background,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set picture format: {str(e)}"})

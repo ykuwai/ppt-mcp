@@ -14,6 +14,7 @@ from utils.offload import run_offloaded
 from backend import ppt
 from utils.navigation import goto_slide
 from ppt_com.constants import msoGroup, SHAPE_TYPE_NAMES
+from ppt_com.layout_check import report_layout
 from ppt_com.shape_lookup import (
     PATH_SEPARATOR, require_top_level, resolve_shape as _get_shape,
     resolve_with_path,
@@ -160,6 +161,7 @@ def group_shapes(params: GroupShapesInput) -> str:
             _group_shapes_impl,
             params.slide_index, params.shape_names,
         )
+        report_layout(result, params.slide_index, [result.get("group_name")])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to group shapes: {str(e)}"})

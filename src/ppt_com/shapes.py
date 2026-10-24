@@ -1549,6 +1549,7 @@ def add_line(params: AddLineInput) -> str:
             params.begin_x, params.begin_y, params.end_x, params.end_y,
             params.zorder,
         )
+        report_layout(result, params.slide_index, touched_names(result))
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add line: {str(e)}"})

@@ -819,21 +819,23 @@ def _grow(card, side, amount, layout):
     """The fix that gives ``card`` ``amount`` more room on ``side``.
 
     The rest of its row grows with it when the room is height, and the rest
-    of its column when it is width, so like cards stay one size.
+    of its column when it is width, so like cards stay one size. The call is
+    relative, so each card grows from where it is: a row set out in steps
+    keeps its steps.
     """
-    name, box = card["name"], layout["boxes"][card["name"]]
+    name = card["name"]
     if side in ("top", "bottom"):
         word, group = "taller", "row"
-        call = f"height={_num(_height(box) + amount)}"
+        call = f"dheight={_num(amount)}"
         mates = layout["rows"].get(name, [])
     else:
         word, group = "wider", "column"
-        call = f"width={_num(_width(box) + amount)}"
+        call = f"dwidth={_num(amount)}"
         mates = layout["columns"].get(name, [])
     if side == "top":
-        call += f" top={_num(box[1] - amount)}"
+        call += f" dtop={_num(-amount)}"
     elif side == "left":
-        call += f" left={_num(box[0] - amount)}"
+        call += f" dleft={_num(-amount)}"
     others = [m for m in mates if m != name]
     if not others:
         return f"make '{name}' {_pt(amount)} {word} (ppt_update_shape {call})"
@@ -857,6 +859,21 @@ def _finding(slide_index, kind, shapes, message, fix, severity="error", **extra)
     }
     finding.update(extra)
     return finding
+
+
+def _bleeds(shape, box, low, high, start, end) -> bool:
+    """Whether a shape runs edge to edge along one axis on purpose.
+
+    A background or a band drawn across the whole slide often hangs a point
+    or two over, or well past both edges: nothing of it is lost, since what
+    is past the edge was never meant to show. Its words, if any, still have
+    to be on the slide.
+    """
+    if not paints_box(shape) or box[low] > start + _EDGE_TOLERANCE or box[high] < end - _EDGE_TOLERANCE:
+        return False
+    words = text_box(shape)
+    return words is None or (words[low] >= start - _EDGE_TOLERANCE
+                             and words[high] <= end + _EDGE_TOLERANCE)
 
 
 def _off_slide(slide_index, shapes, slide_w, slide_h, layout):
@@ -888,17 +905,30 @@ def _off_slide(slide_index, shapes, slide_w, slide_h, layout):
         }
         past = {edge: round(amount, 1) for edge, amount in past.items()
                 if amount > _EDGE_TOLERANCE}
+        for low, high, start, end in ((0, 2, 0.0, slide_w), (1, 3, 0.0, slide_h)):
+            if _bleeds(shape, box, low, high, start, end):
+                for edge in (("left", "right") if low == 0 else ("top", "bottom")):
+                    past.pop(edge, None)
         if not past:
             continue
         parts = [f"{_pt(amount)} past the {edge} edge" for edge, amount in past.items()]
         name = shape["name"]
-        moves, calls, kept, too_big = [], [], [], []
-        for low, high, field, keep, words, bigger in (
-            ("left", "right", "left", margins.get("horizontal"), ("right", "left"), "wider"),
-            ("top", "bottom", "top", margins.get("vertical"), ("down", "up"), "taller"),
+        moves, calls, kept, too_big, fits = [], [], [], [], []
+        for low, high, field, size, keep, words, bigger, span in (
+            ("left", "right", "left", "width", margins.get("horizontal"), ("right", "left"),
+             "wider", slide_w),
+            ("top", "bottom", "top", "height", margins.get("vertical"), ("down", "up"),
+             "taller", slide_h),
         ):
-            if low in past and high in past:
-                too_big.append(bigger)
+            if low not in past and high not in past:
+                continue
+            room = span - 2 * (keep or 0.0)
+            if (low in past and high in past) or shape[size] > room + _EDGE_TOLERANCE:
+                # No move puts it inside the margins: moved off one edge, it
+                # runs off the other. It is brought to the margin and given
+                # the room between the margins.
+                (too_big if low in past and high in past else fits).append(
+                    (bigger, field, size, keep or 0.0, room))
                 continue
             for edge, sign, word in ((low, 1, words[0]), (high, -1, words[1])):
                 if edge not in past:
@@ -914,8 +944,19 @@ def _off_slide(slide_index, shapes, slide_w, slide_h, layout):
             # Moved, centred text would leave what it is centred on.
             centred = _centred_fit(shape, keep, slide_w - keep) or _centred_shorten(
                 shape, keep, slide_w - keep)
-        if too_big:
-            fix = f"'{name}' is {' and '.join(too_big)} than the slide: make it smaller."
+        if too_big or fits:
+            sized = too_big + fits
+            what = " and ".join(
+                f"{bigger} than the slide" if (bigger, field, size, keep, room) in too_big
+                else f"{bigger} than the {_pt(room)} between the margins the rest of the "
+                     f"slide keeps"
+                for bigger, field, size, keep, room in sized)
+            calls += [f"{field}={_num(keep)} {size}={_num(room)}"
+                      for _, field, size, keep, room in sized]
+            why = ("no move puts it on the slide" if too_big
+                   else "moving it back would run it past the other edge")
+            fix = (f"'{name}' is {what}, so {why}: bring it to the margin and make it "
+                   f"fit (ppt_update_shape {' '.join(calls)}).")
         elif centred:
             fix = centred
         else:
@@ -1161,26 +1202,62 @@ def _collision_finding(slide_index, a, a_text, group, shapes, layout):
     # Shorter words help text that crosses an edge, not text lying on a table.
     shorten = "" if on_table else f", or shorten the text of '{a_name}'"
     # The smaller of the two moves, a caption rather than the table it
-    # captions, unless that would put it on something else: then the other.
+    # captions, unless that would put it on something else: then the other,
+    # and then each the other way. A move that lands on something, or off
+    # the slide, is not offered: a model would make it and be told again.
     a_box = shape_box(a)
     theirs = sum(_width(shape_box(b)) * _height(shape_box(b)) for b in others)
-    if _width(a_box) * _height(a_box) <= theirs and not _lands_on_something(
-            a, a_text, vertical, sign * clear, shapes, others, layout):
-        fix = (f"Move '{a_name}' {ways[0] if sign > 0 else ways[1]} by {_pt(clear)} "
-               f"(ppt_update_shape d{field}={_num(sign * clear)}), which leaves "
-               f"{_pt(_CLEARANCE)} between it and {targets}{shorten}.")
-    else:
-        boxes = layout["boxes"]
-        carried = [s for s in layout["arranged"]
-                   if s is not a and all(s is not b for b in others)
-                   and any(b["name"] in boxes and _belongs_to(s, b, boxes) for b in others)]
-        names = [b["name"] for b in others] + [c["name"] for c in carried]
-        them = "it" if len(others) == 1 else "them"
-        with_them = f" together with the shapes on {them}" if carried else ""
-        fix = (f"Move {targets} {ways[1] if sign > 0 else ways[0]} by {_pt(clear)}"
-               f"{with_them} (ppt_update_shape shape_names={names} "
-               f"d{field}={_num(-sign * clear)}), which leaves {_pt(_CLEARANCE)} "
-               f"between {them} and the text of '{a_name}'{shorten}.")
+    boxes = layout["boxes"]
+    carried = [s for s in layout["arranged"]
+               if s is not a and all(s is not b for b in others)
+               and any(b["name"] in boxes and _belongs_to(s, b, boxes) for b in others)]
+    names = [b["name"] for b in others] + [c["name"] for c in carried]
+    them = "it" if len(others) == 1 else "them"
+    with_them = f" together with the shapes on {them}" if carried else ""
+    # How far each would go the other way: the text past the near side of
+    # what it ran into, or that past the near side of the text.
+    back = (a_text[high] - union[low] if sign > 0 else union[high] - a_text[low]) + _CLEARANCE
+
+    def move_text(way, by):
+        if _lands_on_something(a, a_text, vertical, way * by, shapes, others, layout):
+            return None
+        return (f"Move '{a_name}' {ways[0] if way > 0 else ways[1]} by {_pt(by)} "
+                f"(ppt_update_shape d{field}={_num(way * by)}), which leaves "
+                f"{_pt(_CLEARANCE)} between it and {targets}{shorten}.")
+
+    def move_them(way, by):
+        moving = [(s, ink_box(s)) for s in others + carried]
+        if _lands(moving, vertical, way * by, shapes, {a_name} | set(names), layout):
+            return None
+        return (f"Move {targets} {ways[0] if way > 0 else ways[1]} by {_pt(by)}"
+                f"{with_them} (ppt_update_shape shape_names={names} "
+                f"d{field}={_num(way * by)}), which leaves {_pt(_CLEARANCE)} "
+                f"between {them} and the text of '{a_name}'{shorten}.")
+
+    tries = [lambda: move_text(sign, clear), lambda: move_them(-sign, clear),
+             lambda: move_text(-sign, back), lambda: move_them(sign, back)]
+    if _width(a_box) * _height(a_box) > theirs:
+        tries[0:2] = tries[1::-1]
+    fix = next((found for found in (attempt() for attempt in tries) if found), None)
+    size = "height" if vertical else "width"
+    # A picture keeps its proportions, so it would narrow as well; a table's
+    # rows do not give.
+    if fix is None and len(others) == 1 and not carried and others[0][size] > 2 * clear \
+            and others[0]["type"] not in (msoTable, msoPicture, msoLinkedPicture):
+        # Trimmed on the side the text is on, it keeps the rest of its place.
+        b = others[0]
+        trim = (f"d{field}={_num(clear)} d{size}={_num(-clear)}" if sign < 0
+                else f"d{size}={_num(-clear)}")
+        fix = (f"Make '{b['name']}' {_pt(clear)} {'shorter' if vertical else 'narrower'} on "
+               f"the side of the text of '{a_name}', which leaves {_pt(_CLEARANCE)} between "
+               f"them: nothing can move {'up or down' if vertical else 'sideways'} without "
+               f"running into something else or off the slide (ppt_update_shape "
+               f"shape_name='{b['name']}' {trim}){shorten}.")
+    if fix is None:
+        fix = (f"Make room between the text of '{a_name}' and {targets}: neither can move "
+               f"{'up or down' if vertical else 'sideways'} without running into something "
+               f"else or off the slide, so make one of them smaller (ppt_update_shape)"
+               f"{shorten}.")
     if on_table:
         where = "is hidden under" if in_front else "lies on"
         message = f"The text of '{a_name}' {where} {targets}, over its cells."
@@ -1202,18 +1279,31 @@ def _solid_fill(shape) -> bool:
 
 def _lands_on_something(a, a_text, vertical, by, shapes, others, layout):
     """Whether text moved this far would run into something else, or off the slide."""
-    moved = ((a_text[0], a_text[1] + by, a_text[2], a_text[3] + by) if vertical
-             else (a_text[0] + by, a_text[1], a_text[2] + by, a_text[3]))
+    return _lands([(a, a_text)], vertical, by, shapes,
+                  {a["name"]} | {b["name"] for b in others}, layout)
+
+
+def _lands(moving, vertical, by, shapes, skip, layout):
+    """Whether shapes moved this far would run into something else, or off
+    the slide. ``moving`` pairs each shape with the box it draws; ``skip``
+    names what is not in their way."""
     slide_w, slide_h = layout.get("slide_width"), layout.get("slide_height")
-    if slide_w and slide_h and (
-            moved[0] < -_EDGE_TOLERANCE or moved[1] < -_EDGE_TOLERANCE
-            or moved[2] > slide_w + _EDGE_TOLERANCE or moved[3] > slide_h + _EDGE_TOLERANCE):
-        return True
     boxes = layout["boxes"]
-    # The card it sits on is not in its way.
-    holders = {s["name"] for s in layout["arranged"]
-               if a["name"] in boxes and s is not a and _belongs_to(a, s, boxes)}
-    skip = {a["name"]} | {b["name"] for b in others} | holders
+    # The card a moving shape sits on is not in its way.
+    skip = set(skip) | {s["name"] for shape, _ in moving for s in layout["arranged"]
+                        if shape["name"] in boxes and s is not shape
+                        and _belongs_to(shape, s, boxes)}
+    moved = []
+    for _, box in moving:
+        if box is None:
+            continue
+        box = ((box[0], box[1] + by, box[2], box[3] + by) if vertical
+               else (box[0] + by, box[1], box[2] + by, box[3]))
+        if slide_w and slide_h and (
+                box[0] < -_EDGE_TOLERANCE or box[1] < -_EDGE_TOLERANCE
+                or box[2] > slide_w + _EDGE_TOLERANCE or box[3] > slide_h + _EDGE_TOLERANCE):
+            return True
+        moved.append(box)
     for shape in shapes:
         if shape["name"] in skip or not shape.get("visible", True) or _is_line(shape):
             continue
@@ -1225,9 +1315,10 @@ def _lands_on_something(a, a_text, vertical, by, shapes, others, layout):
         # Close enough to touch is as bad as touching: the fix would jam it
         # against the next thing, a subtitle up against the title.
         near = _CLEARANCE / 2
-        width, height = _shared((moved[0] - near, moved[1] - near, moved[2] + near, moved[3] + near), ink)
-        if width > _MIN_OVERLAP and height > _MIN_OVERLAP:
-            return True
+        for box in moved:
+            width, height = _shared((box[0] - near, box[1] - near, box[2] + near, box[3] + near), ink)
+            if width > _MIN_OVERLAP and height > _MIN_OVERLAP:
+                return True
     return False
 
 
@@ -3680,6 +3771,23 @@ def report_layout(result: dict, slide_index: int, shape_names) -> dict:
     shapes were checked and are fine.
     """
     return report_layouts(result, {slide_index: shape_names})
+
+
+def report_slides(result: dict, slide_indices) -> dict:
+    """report_layout for slides a write made whole, such as copies: every
+    shape on each is checked as the write's own."""
+    if not CHECK_EACH_WRITE or not isinstance(result, dict) or "error" in result:
+        return result
+    touched = {}
+    try:
+        for index in slide_indices:
+            facts = ppt.execute(_slide_facts_impl, [index], False, [], None)
+            touched[index] = [s["name"] for s in facts["slides"][0]["shapes"]]
+    except Exception as e:  # the write itself already succeeded
+        logger.debug("Layout check after a write failed", exc_info=True)
+        result["layout_check_failed"] = str(e)
+        return result
+    return report_layouts(result, touched)
 
 
 def report_layouts(result: dict, touched) -> dict:

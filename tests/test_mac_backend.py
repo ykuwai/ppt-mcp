@@ -1147,36 +1147,70 @@ class TestStagingThroughPowerPointsContainer:
     """Every file PowerPoint for Mac reads or writes for the server passes
     through its container, which macOS may keep other apps out of."""
 
-    def blocked(self, tmp_path, monkeypatch):
+    def refused(self, tmp_path, monkeypatch):
+        """macOS's privacy protection: the folder is this user's, and still shut."""
+        import errno
+
         from backend import mac_ae
 
         folder = tmp_path / "Documents"
-        folder.mkdir()
-        folder.chmod(0o500)  # a refusal, as macOS gives one
         monkeypatch.setattr(mac_ae, "EXPORT_STAGING_DIR", str(folder))
+
+        def shut(*args, **kwargs):
+            raise PermissionError(errno.EPERM, "Operation not permitted")
+
+        monkeypatch.setattr(mac_ae.tempfile, "NamedTemporaryFile", shut)
         return mac_ae, folder
 
     def test_a_refusal_says_why_and_what_to_do(self, tmp_path, monkeypatch):
-        mac_ae, folder = self.blocked(tmp_path, monkeypatch)
-        try:
-            with pytest.raises(mac_ae.StagingBlocked) as caught:
-                mac_ae.staging_dir()
-        finally:
-            folder.chmod(0o700)
+        mac_ae, folder = self.refused(tmp_path, monkeypatch)
+        with pytest.raises(mac_ae.StagingBlocked) as caught:
+            mac_ae.staging_dir()
         message = str(caught.value)
         assert str(folder) in message
         assert "Full Disk Access" in message and "Privacy & Security" in message
         assert "Shapes, text, tables and charts work without it." in message
 
     def test_staging_a_picture_fails_the_same_way(self, tmp_path, monkeypatch):
-        mac_ae, folder = self.blocked(tmp_path, monkeypatch)
+        mac_ae, _ = self.refused(tmp_path, monkeypatch)
         picture = tmp_path / "logo.png"
         picture.write_bytes(b"png")
+        with pytest.raises(PermissionError, match="Full Disk Access"):
+            mac_ae.stage_into_container(str(picture))
+
+    def test_a_folder_shut_by_its_permissions_is_not_full_disk_access(self, tmp_path, monkeypatch):
+        # #264: every PermissionError was put down to Full Disk Access.
+        from backend import mac_ae
+
+        folder = tmp_path / "Documents"
+        folder.mkdir()
+        folder.chmod(0o500)
+        monkeypatch.setattr(mac_ae, "EXPORT_STAGING_DIR", str(folder))
         try:
-            with pytest.raises(PermissionError, match="Full Disk Access"):
-                mac_ae.stage_into_container(str(picture))
+            with pytest.raises(mac_ae.StagingBlocked) as caught:
+                mac_ae.staging_dir()
         finally:
             folder.chmod(0o700)
+        message = str(caught.value)
+        assert "do not let this user write to it" in message and "chmod u+rwx" in message
+        assert "Full Disk Access" not in message
+
+    def test_powerpoint_never_started_has_no_folder(self, tmp_path, monkeypatch):
+        from backend import mac_ae
+
+        containers = tmp_path / "Containers"
+        containers.mkdir()
+        containers.chmod(0o500)
+        folder = containers / "com.microsoft.Powerpoint" / "Data" / "Documents"
+        monkeypatch.setattr(mac_ae, "EXPORT_STAGING_DIR", str(folder))
+        try:
+            with pytest.raises(mac_ae.StagingBlocked) as caught:
+                mac_ae.staging_dir()
+        finally:
+            containers.chmod(0o700)
+        message = str(caught.value)
+        assert "not installed, or has never been started" in message
+        assert "Full Disk Access" not in message
 
     def test_an_open_folder_is_used_and_left_clean(self, tmp_path, monkeypatch):
         from backend import mac_ae

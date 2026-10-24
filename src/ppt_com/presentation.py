@@ -533,17 +533,41 @@ def _close_presentation_impl(
     )
     name = pres.Name
 
-    if save_changes:
-        pres.Save()
+    window = _protected_view_window(app, pres)
+    if window is not None:
+        # Read-only: it takes neither a save nor being marked as saved, and
+        # it is closed through its window.
+        if save_changes:
+            raise ValueError(
+                f"'{name}' is open in Protected View, which is read-only, so it "
+                "cannot be saved. Close it with save_changes=false, or choose "
+                "Enable Editing in PowerPoint first."
+            )
+        window.Close()
     else:
-        # Suppress "save changes?" dialog
-        pres.Saved = True
-
-    pres.Close()
+        if save_changes:
+            pres.Save()
+        else:
+            # Suppress "save changes?" dialog
+            pres.Saved = True
+        pres.Close()
     result = {"success": True, "closed": name}
     if not keep_powerpoint_open and _nothing_is_open(app):
         result.update(quit_if_ours(lambda: app.Quit()))
     return result
+
+
+def _protected_view_window(app, pres):
+    """The Protected View window ``pres`` is shown in, or None."""
+    try:
+        path = pres.FullName
+        for i in range(1, app.ProtectedViewWindows.Count + 1):
+            window = app.ProtectedViewWindows(i)
+            if window.Presentation.FullName == path:
+                return window
+    except Exception:  # noqa: BLE001 - no such window to be found: close as usual
+        return None
+    return None
 
 
 def _nothing_is_open(app) -> bool:

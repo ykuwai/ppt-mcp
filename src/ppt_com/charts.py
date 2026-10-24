@@ -828,6 +828,8 @@ def set_chart_data(params: SetChartDataInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.categories, params.series,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set chart data: {str(e)}"})
