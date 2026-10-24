@@ -3726,6 +3726,20 @@ class TestColoursCheckedBeforeAShapeIsMade:
             AddTextboxInput(slide_index=1, text="x", left=0, top=0, width=100,
                             height=50, font_color="none")
 
+    @pytest.mark.parametrize("field, value", [
+        ("align", "middle"), ("fill_type", "pattern"), ("fill_gradient_style", "radial")])
+    def test_a_choice_that_is_not_one_is_refused_too(self, field, value):
+        # The #256 follow-up: these were checked only once the shape existed,
+        # and an unknown gradient direction quietly became horizontal.
+        with pytest.raises(ValidationError, match="Input should be"):
+            AddShapeInput(**self.BOX, **{field: value})
+
+    def test_a_choice_in_any_case_is_taken(self):
+        inp = AddShapeInput(**self.BOX, align="Center", fill_type="GRADIENT",
+                            fill_gradient_style="From_Corner")
+        assert (inp.align, inp.fill_type, inp.fill_gradient_style) == (
+            "center", "gradient", "from_corner")
+
     def test_smartart_checks_its_colour_too(self):
         from ppt_com.smartart import AddSmartArtInput
 

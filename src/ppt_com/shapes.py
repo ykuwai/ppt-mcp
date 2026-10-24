@@ -221,7 +221,7 @@ class AddShapeInput(BaseModel):
         default=None,
         description="Text color '#RRGGBB'.",
     )
-    align: Optional[str] = Field(
+    align: Optional[Literal["left", "center", "right", "justify"]] = Field(
         default=None,
         description="Paragraph alignment for shape text: 'left', 'center', 'right', or 'justify'.",
     )
@@ -233,7 +233,7 @@ class AddShapeInput(BaseModel):
             "For gradient fills this is the start/fore color."
         ),
     )
-    fill_type: Optional[str] = Field(
+    fill_type: Optional[Literal["solid", "none", "gradient"]] = Field(
         default=None,
         description="Fill type: 'solid', 'none', or 'gradient'. Defaults to 'solid' when fill_color is given.",
     )
@@ -241,7 +241,9 @@ class AddShapeInput(BaseModel):
         default=None,
         description="Gradient end/back color '#RRGGBB'. Only used when fill_type='gradient'.",
     )
-    fill_gradient_style: Optional[str] = Field(
+    fill_gradient_style: Optional[Literal[
+        "horizontal", "vertical", "diagonal_up", "diagonal_down", "from_corner", "from_center",
+    ]] = Field(
         default=None,
         description=(
             "Gradient direction. One of: 'horizontal', 'vertical', 'diagonal_up', "
@@ -299,6 +301,14 @@ class AddShapeInput(BaseModel):
     @classmethod
     def validate_colours(cls, value, info):
         return check_hex(value, _NO_COLOUR.get(info.field_name, ""))
+
+    # Checked here, like the colours, so a wrong one is refused before the
+    # shape exists rather than leaving it behind unstyled. Any case is taken,
+    # as it always was.
+    @field_validator("align", "fill_type", "fill_gradient_style", mode="before")
+    @classmethod
+    def lower_case_choices(cls, value):
+        return value.lower() if isinstance(value, str) else value
 
 
 class AddTextboxInput(BaseModel):
