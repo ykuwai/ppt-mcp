@@ -199,18 +199,33 @@ def _realize_order(pres, final_ids: list) -> None:
 def _duplicate_once(app, pres, slide_index: int) -> int:
     """Duplicate one slide and return the new slide's ID.
 
-    ``ref.duplicate()`` raises "unpack requires a buffer of 4 bytes" here,
-    a struct error rather than an Apple Event one, because appscript falls back
-    to a code PowerPoint does not answer. The AppleScript form does work, so
-    that is what runs, and the copy is then found by diffing the slide IDs
-    rather than by trusting a return value.
+    PowerPoint for Mac has no duplicate command of its own. ``ref.duplicate()``
+    raises "unpack requires a buffer of 4 bytes", a struct error rather than an
+    Apple Event one, because appscript falls back to a code PowerPoint does not
+    answer, and the AppleScript ``duplicate slide`` answers "Parameter error"
+    (-50) on PowerPoint 16.114. So the slide is copied and pasted into its own
+    presentation, the user's clipboard put back afterwards, and the copy is
+    found by diffing the slide IDs rather than by trusting a return value.
     """
+    from ppt_mac.gvml_paste import Clipboard
+
     before = _slide_ids(pres)
     pres_index = _presentation_index(app, pres)
-    osascript(
-        'tell application "Microsoft PowerPoint" to duplicate '
-        "slide %d of presentation %d" % (slide_index, pres_index)
-    )
+    clip = Clipboard.take()
+    try:
+        osascript(
+            'tell application "Microsoft PowerPoint" to copy object '
+            f"slide {slide_index} of presentation {pres_index}"
+        )
+        clip.claim()
+        osascript(
+            'tell application "Microsoft PowerPoint" to paste object '
+            f"presentation {pres_index}"
+        )
+    finally:
+        clip.restore()
+        for warning in clip.warnings:
+            logger.warning("Duplicating slide %d: %s", slide_index, warning)
     after = _slide_ids(pres)
     fresh = [sid for sid in after if sid not in set(before)]
     if len(fresh) != 1:
