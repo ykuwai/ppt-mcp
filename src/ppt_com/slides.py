@@ -5,6 +5,11 @@ Add, delete, duplicate, move, list, and query slides. Manage speaker notes.
 
 import json
 import logging
+import os
+import shutil
+import tempfile
+import time
+import zipfile
 from typing import NamedTuple, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
@@ -13,7 +18,10 @@ from utils.offload import run_offloaded
 from utils.color import hex_to_int
 from backend import ppt
 from utils.navigation import goto_slide as nav_goto_slide
-from ppt_com.constants import ppLayoutBlank, msoTrue, msoFalse
+from ppt_com.constants import (
+    ppLayoutBlank, msoTrue, msoFalse, msoPlaceholder,
+    ppPlaceholderSlideNumber, ppPlaceholderFooter, ppPlaceholderDate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -961,25 +969,42 @@ def _copy_slide_impl(
                 f"(1-{dst_pres.Slides.Count + 1})"
             )
 
-    # Capture source SlideIDs up front. For a same-presentation copy each paste
-    # shifts the numbering, so a fixed src_i would select the wrong slide on
-    # later iterations — resolve by SlideID each time instead.
+    # Capture source SlideIDs up front. For a same-presentation copy each
+    # insert shifts the numbering, so a fixed src_i would select the wrong
+    # slide on later iterations — resolve by SlideID each time instead.
     src_ids = [src_pres.Slides(i).SlideID for i in sources]
+    expected = [_slide_fingerprint(src_pres.Slides.FindBySlideID(sid)) for sid in src_ids]
+    first = dst_pres.Slides.Count + 1 if append else insert_at
 
-    # Copy each source slide via the clipboard, which preserves formatting and
-    # carries the source design across presentations.
-    new_indices = []
-    for j, sid in enumerate(src_ids):
-        src_pres.Slides.FindBySlideID(sid).Copy()
-        # Paste(Index) inserts before slide Index; there is no slide one past
-        # the end to paste before, so fall back to append in that case.
-        if append or (insert_at + j) > dst_pres.Slides.Count:
-            rng = dst_pres.Slides.Paste()
+    # On failure every slide that was not there before is removed again (also
+    # one a raising COM call inserted), so the destination stays as it was.
+    before = {s.SlideID for s in dst_pres.Slides}
+    inserted = []  # SlideIDs of the copies, in source order
+    folder = tempfile.mkdtemp(prefix="ppt-mcp-copy-")
+    try:
+        snapshot = _snapshot(src_pres, folder)
+        if snapshot:
+            method = "insert_from_file"
+            _insert_from_file(dst_pres, snapshot, sources, first - 1, inserted)
+            _check_copies(dst_pres, inserted, expected, sources)
         else:
-            rng = dst_pres.Slides.Paste(insert_at + j)
-        new_indices.append(rng(1).SlideIndex)
+            method = "clipboard"
+            _paste_checked(src_pres, dst_pres, src_ids, expected, sources,
+                           first, inserted)
+    except Exception:
+        for slide in [s for s in dst_pres.Slides if s.SlideID not in before]:
+            try:
+                slide.Delete()
+            except Exception:
+                pass
+        raise
+    finally:
+        _remove_folder(folder)
 
-    # Navigate the destination's window to the last pasted slide.
+    copies = [dst_pres.Slides.FindBySlideID(sid) for sid in inserted]
+    new_indices = [s.SlideIndex for s in copies]
+
+    # Navigate the destination's window to the last copy.
     try:
         nav_goto_slide(app, new_indices[-1])
     except Exception:
@@ -989,9 +1014,155 @@ def _copy_slide_impl(
         "success": True,
         "copied_count": len(new_indices),
         "new_slide_indices": new_indices,
+        "copied": [
+            {"source_index": src_i, "new_index": s.SlideIndex, "title": _slide_title(s)}
+            for src_i, s in zip(sources, copies)
+        ],
+        "method": method,
         "target_presentation": dst_pres.Name,
         "source_presentation": src_pres.Name,
     }
+
+
+# Open XML extensions SaveCopyAs keeps in the presentation's own format;
+# anything else (e.g. a new, never saved presentation) is written as .pptx.
+_SNAPSHOT_EXTENSIONS = {".pptx", ".pptm", ".potx", ".potm", ".ppsx", ".ppsm"}
+# Legacy binary formats are no zip either way, so they go via the clipboard
+# without saving a snapshot first.
+_LEGACY_EXTENSIONS = {".ppt", ".pot", ".pps"}
+
+# How often a clipboard copy is tried before giving up. Right after Copy() the
+# clipboard can still hold the previous slide, so a paste may bring the wrong
+# one; it is then removed and copied again.
+_PASTE_ATTEMPTS = 3
+
+# Placeholders whose text depends on the slide's position or the day, not on
+# its content.
+_VOLATILE_PLACEHOLDERS = {ppPlaceholderSlideNumber, ppPlaceholderFooter,
+                          ppPlaceholderDate}
+
+
+def _slide_fingerprint(slide) -> tuple:
+    """Type and text of each shape, to tell a slide's copy from another slide."""
+    parts = []
+    for shape in slide.Shapes:
+        text = ""
+        try:
+            if (shape.Type == msoPlaceholder
+                    and shape.PlaceholderFormat.Type in _VOLATILE_PLACEHOLDERS):
+                continue
+            if shape.HasTextFrame and shape.TextFrame.HasText:
+                text = shape.TextFrame.TextRange.Text
+        except Exception:
+            pass
+        parts.append((shape.Type, text))
+    return tuple(parts)
+
+
+def _remove_folder(folder: str) -> None:
+    """Delete the snapshot folder; PowerPoint may release the file late."""
+    for attempt in range(3):
+        shutil.rmtree(folder, ignore_errors=True)
+        if not os.path.exists(folder):
+            return
+        time.sleep(0.2 * (attempt + 1))
+    logger.warning("Could not delete the slide snapshot in %s", folder)
+
+
+def _slide_title(slide) -> str:
+    try:
+        if slide.Shapes.HasTitle:
+            return slide.Shapes.Title.TextFrame.TextRange.Text
+    except Exception:
+        pass
+    return ""
+
+
+def _runs(indices: list) -> list:
+    """Split slide indices into (start, end) runs of consecutive slides,
+    keeping the given order: [2, 3, 4, 7, 5] -> [(2, 4), (7, 7), (5, 5)]."""
+    runs = []
+    for i in indices:
+        if runs and i == runs[-1][1] + 1:
+            runs[-1][1] = i
+        else:
+            runs.append([i, i])
+    return [tuple(r) for r in runs]
+
+
+def _snapshot(src_pres, folder: str) -> Optional[str]:
+    """Save the source as it is in memory (unsaved changes included) to a file
+    in folder and return its path.
+
+    Returns None when the slides cannot be read from a file without a prompt:
+    the snapshot is password-protected (InsertFromFile would ask for the
+    password), is in a legacy binary format, or cannot be saved at all.
+    """
+    ext = os.path.splitext(src_pres.Name)[1].lower()
+    if ext in _LEGACY_EXTENSIONS:
+        return None
+    if ext not in _SNAPSHOT_EXTENSIONS:
+        ext = ".pptx"
+    path = os.path.join(folder, "source" + ext)
+    try:
+        src_pres.SaveCopyAs(path)
+    except Exception as e:
+        logger.info("SaveCopyAs failed, copying via the clipboard: %s", e)
+        return None
+    # A password-protected OOXML file is saved as an encrypted OLE container
+    # rather than a zip; Presentation.Password cannot tell, it reads
+    # '********' either way.
+    if not zipfile.is_zipfile(path):
+        return None
+    return path
+
+
+def _insert_from_file(dst_pres, path: str, sources: list, after: int,
+                      inserted: list) -> None:
+    """Insert the source slides from the snapshot at path after slide `after`,
+    one InsertFromFile call per run of consecutive slides."""
+    for start, end in _runs(sources):
+        count = dst_pres.Slides.InsertFromFile(path, after, start, end)
+        inserted.extend(dst_pres.Slides(after + k).SlideID for k in range(1, count + 1))
+        after += count
+
+
+def _check_copies(dst_pres, inserted: list, expected: list, sources: list) -> None:
+    if len(inserted) != len(expected):
+        raise RuntimeError(
+            f"Expected {len(expected)} copied slide(s), PowerPoint inserted "
+            f"{len(inserted)}"
+        )
+    for sid, fingerprint, src_i in zip(inserted, expected, sources):
+        if _slide_fingerprint(dst_pres.Slides.FindBySlideID(sid)) != fingerprint:
+            raise RuntimeError(
+                f"The copy of source slide {src_i} does not match it"
+            )
+
+
+def _paste_checked(src_pres, dst_pres, src_ids: list, expected: list,
+                   sources: list, first: int, inserted: list) -> None:
+    """Copy slide by slide via the clipboard, checking each pasted slide
+    against its source."""
+    for j, sid in enumerate(src_ids):
+        for attempt in range(_PASTE_ATTEMPTS):
+            src_pres.Slides.FindBySlideID(sid).Copy()
+            # Paste(Index) inserts before slide Index; there is no slide one
+            # past the end to paste before, so fall back to append in that case.
+            if first + j > dst_pres.Slides.Count:
+                rng = dst_pres.Slides.Paste()
+            else:
+                rng = dst_pres.Slides.Paste(first + j)
+            if rng.Count == 1 and _slide_fingerprint(rng(1)) == expected[j]:
+                inserted.append(rng(1).SlideID)
+                break
+            rng.Delete()
+            time.sleep(0.2 * (attempt + 1))
+        else:
+            raise RuntimeError(
+                f"Source slide {sources[j]} could not be copied: the pasted "
+                f"slide did not match it in {_PASTE_ATTEMPTS} attempts"
+            )
 
 
 def _list_slides_impl(
@@ -1455,11 +1626,16 @@ def register_tools(mcp):
         deck into the deck you are building.
 
         insert_at is the 1-based destination position for the first copy; omit
-        it (or use -1) to append at the end. Copies are made via the clipboard,
-        which preserves formatting and carries the source design across files.
+        it (or use -1) to append at the end. The slides come from a snapshot of
+        the source (unsaved changes included) via InsertFromFile and do not
+        touch the clipboard; a password-protected source is copied via the
+        clipboard instead. Either way the copies take on the destination's
+        design (slide master and layouts), and each copy is checked against
+        its source.
 
         Both presentations must already be open (use ppt_open_presentation).
-        Returns new_slide_indices and the destination presentation name.
+        Returns new_slide_indices, per copy its source index and title
+        (copied), and the destination presentation name.
         """
         return await run_offloaded(copy_slide, params)
 
