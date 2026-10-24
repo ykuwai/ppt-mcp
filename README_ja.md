@@ -251,6 +251,14 @@ ppt_add_textbox(params={...}, presentation="report.pptx")
 # 他の会話が何をアクティブ化していても report.pptx に追加される
 ```
 
+### 👥 他のユーザーと同時に編集されるファイル（Windows）
+
+SharePoint や OneDrive から開いたプレゼンテーションは、サーバーが操作している間にも他のユーザーが編集できます。自動保存がオフの場合、PowerPoint は他のユーザーが保存した変更を保存時にしか取り込まず、それまでは「更新プログラムを利用できます」と表示します。そのままでは古い状態を読み書きすることになるため、サーバーは次のように扱います。
+
+- **ツール呼び出しの前に**、このコピーに未保存の変更がなければ他のユーザーの変更を取り込みます。読み取りは常に最新の状態を見ます。取り込みによってスライドや図形の位置が変わった場合、書き込みの呼び出しは何も変更せずに拒否されます（インデックスが古い状態に基づいているため）。
+- **結果**には `coauthoring` が付きます: `pending_updates`（変更が待機中。`ppt_save_presentation` で取り込まれます）、`merged_updates`（いま取り込まれました）、`conflict`。`ppt_open_presentation`、`ppt_activate_presentation`、`ppt_get_presentation_info` は `coauthor_count` とともに常に状態を返し、`ppt_list_presentations` はファイルごとに `pending_updates` を返します。
+- **競合**（双方が同じオブジェクトを変更）が起きると、PowerPoint の「競合の解決」ダイアログが開きます。オブジェクトモデルからは応答できないため、ユーザーに任されます。組み込み側で応答することもできます: `utils.coauthoring.set_conflict_resolver(fn)` で関数を登録すると、COM スレッド上で Presentation を受け取り、ダイアログに応答したら `True` を返します。その場合、結果の `overwritten` に、このコピーの版と異なるスライドとここでのテキストが列挙されます。
+
 ### 📁 テンプレート対応
 
 個人用のPowerPointテンプレートフォルダを自動検出します（レジストリ、OneDrive、デフォルトパスを順に確認）。`ppt_list_templates` でテンプレートを一覧し、`ppt_create_presentation(template_path=...)` で任意のテンプレートから新規プレゼンテーションを作成できます。

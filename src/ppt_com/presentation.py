@@ -16,6 +16,7 @@ from utils.color import int_to_hex
 from backend import ppt, quit_if_ours
 from utils.onedrive import resolve_local_path
 from utils.com_wrapper import pywintypes
+from utils import coauthoring
 from ppt_com.constants import (
     msoTrue,
     msoFalse,
@@ -474,7 +475,17 @@ def _open_presentation_impl(
         "slides_count": pres.Slides.Count,
         "read_only": int(pres.ReadOnly) == -1,  # msoTrue=-1; bool() misidentifies msoCTrue(1)
         "activated": activate,
+        **_coauthoring_field(pres),
     }
+
+
+def _coauthoring_field(pres) -> dict:
+    """{"coauthoring": state} for a deck on a server, {} otherwise."""
+    try:
+        state = coauthoring.status(pres, with_count=True)
+    except Exception:
+        return {}
+    return {coauthoring.FIELD: state} if state is not None else {}
 
 
 def _save_presentation_impl(
@@ -485,12 +496,18 @@ def _save_presentation_impl(
     pres = _resolve_presentation(
         app, presentation_index=presentation_index, presentation_name=presentation_name
     )
+    # Saving is how PowerPoint takes in what co-authors have saved; see
+    # utils/coauthoring.py for what a save then reports.
+    pending = coauthoring.on_server(pres) and bool(pres.Coauthoring.PendingUpdates)
     pres.Save()
-    return {
+    result = {
         "success": True,
         "name": pres.Name,
         "saved": bool(pres.Saved),
     }
+    if coauthoring.on_server(pres):
+        result[coauthoring.FIELD] = coauthoring.after_save(pres, pending)
+    return result
 
 
 def _save_presentation_as_impl(
@@ -643,6 +660,7 @@ def _get_presentation_info_impl(
         "template_name": template_name,
         "fonts": fonts,
         "accent_colors": accent_colors,
+        **_coauthoring_field(pres),
     }
 
 
@@ -937,6 +955,9 @@ def register_tools(mcp):
 
         This overwrites the existing file. Use ppt_save_presentation_as to
         save to a new location or format.
+
+        For a file on a server that others edit, saving also merges the
+        changes they have saved (result field coauthoring).
         """
         return await run_offloaded(save_presentation, params)
 
