@@ -33,7 +33,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 - **157 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
-- **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
+- **Theme color awareness** — Pass `accent1`, `accent2`, etc. wherever a fill, line, shadow, glow or text color is taken, instead of hardcoded RGB values; the shapes follow the theme when it changes
 - **Windows and macOS** — The same tools, arguments and return values on both; where PowerPoint for Mac cannot do something, the tool says so rather than quietly doing nothing
 
 ## 📋 Requirements
