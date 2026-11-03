@@ -485,6 +485,21 @@ def replace_shape(
             error=f"{tool_name} left both the original and its replacement on the slide",
         ))
 
+    # A paste carrying a default name PowerPoint would give ('Chart 5') is
+    # given the next one instead ('Chart 6'), while a name someone chose
+    # comes back as it was. The original is gone now, so its name is put back.
+    last = len(names_now)
+    renamed = None
+    if names_now[-1] != name:
+        try:
+            slide.shapes[last].name.set(name)
+        except CommandError as exc:
+            logger.warning("Could not rename '%s' back to '%s': %s", names_now[-1], name, exc)
+        names_now = _names(slide)
+        if names_now[-1] != name:
+            renamed = names_now[-1]
+            names_before[original_index - 1] = renamed
+
     warnings = [_recreated_warning(name, what)]
     if effects is None:
         warnings.append(
@@ -496,10 +511,15 @@ def replace_shape(
             f"{effects} animation effect(s) on '{name}' were lost with the "
             "original; the clipboard package does not carry them."
         )
+    if renamed is not None:
+        warnings.append(
+            f"PowerPoint named the new shape '{renamed}' and it could not be "
+            f"renamed '{name}', so it is '{renamed}' now."
+        )
+        name = renamed
     warnings.extend(pasted.warnings)
 
     # The new shape is last. Walk it back to where the original was.
-    last = len(names_now)
     try:
         _send_backward(slide, last, original_index)
     except CommandError as exc:

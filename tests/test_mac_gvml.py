@@ -453,6 +453,34 @@ class TestTheReplaceProcedure:
             "'Sales' was recreated by paste; name, position and z order kept, animations not."
         ]
 
+    def test_a_paste_powerpoint_names_afresh_gets_the_original_name_back(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("A", "auto"), ("Chart 5", "chart", _fixture_bytes("chart")), ("B", "auto")]
+        with _fake_deck(shapes=deck_shapes, renames_paste=True) as deck:
+            result = _set_chart_data_impl(1, "Chart 5", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert result["shape_name"] == "Chart 5"
+        assert [s.name() for s in deck.shapes] == ["A", "Chart 5", "B"]
+        # Renamed once the original is gone, so the name is never on two shapes.
+        assert deck.order.index("delete") < deck.order.index("rename") < deck.order.index("backward")
+        assert len(result["warnings"]) == 1
+
+    def test_a_paste_that_will_not_take_the_name_back_is_reported_by_its_own(self):
+        from ppt_mac.charts import _set_chart_data_impl
+
+        deck_shapes = [("A", "auto"), ("Chart 5", "chart", _fixture_bytes("chart")), ("B", "auto")]
+        with _fake_deck(shapes=deck_shapes, renames_paste=True, unrenamable=True) as deck:
+            result = _set_chart_data_impl(1, "Chart 5", ["Q1"], [{"name": "S", "values": [1]}])
+
+        assert result["success"] is True
+        assert result["shape_name"] == "Chart 10"
+        assert [s.name() for s in deck.shapes] == ["A", "Chart 10", "B"]
+        assert result["warnings"][-1] == (
+            "PowerPoint named the new shape 'Chart 10' and it could not be "
+            "renamed 'Chart 5', so it is 'Chart 10' now."
+        )
+
     def test_lost_animations_are_counted_before_the_original_goes(self):
         from ppt_mac.charts import _set_chart_data_impl
 
@@ -1005,6 +1033,7 @@ class _FakeShape:
 
         self.deck = deck
         self._name = name
+        self.name = _Name(self)
         self._type = {
             "auto": k.shape_type_auto, "chart": k.shape_type_chart,
             "freeform": k.shape_type_free_form, "group": k.shape_type_group,
@@ -1016,9 +1045,6 @@ class _FakeShape:
         self.top = _Property(top)
         self.width = _Property(width)
         self.height = _Property(height)
-
-    def name(self):
-        return self._name
 
     def shape_type(self):
         return self._type
@@ -1080,6 +1106,24 @@ class _FakeShape:
         return build(canvas.wrap(shapes.shape_xml(2, self._name, x, y, cx, cy), x, y, cx, cy))
 
 
+class _Name:
+    """A shape's name: read by calling it, written with `set`, which is a
+    step of its own."""
+
+    def __init__(self, shape):
+        self.shape = shape
+
+    def __call__(self):
+        return self.shape._name
+
+    def set(self, value):
+        deck = self.shape.deck
+        deck.order.append("rename")
+        if deck.unrenamable:
+            raise _command_error(-10000)
+        self.shape._name = value
+
+
 class _FakeShapes:
     def __init__(self, deck):
         self.deck = deck
@@ -1134,7 +1178,11 @@ class _FakeView:
         }[info.type]
         # Where PowerPoint drops a paste: the middle of the view, not the
         # package's own offset.
-        landed = _FakeShape(deck, info.name, kind, left=380.0, top=210.0,
+        # PowerPoint gives a paste with a default name the next default name.
+        name = info.name
+        if deck.renames_paste:
+            name = f"{kind.title()} {len(deck.shapes) + 7}"
+        landed = _FakeShape(deck, name, kind, left=380.0, top=210.0,
                             width=canvas.pt(info.cx), height=canvas.pt(info.cy))
         # What `copy shape` on the new shape answers: the package pasted,
         # unless the test wants PowerPoint to have kept something else.
@@ -1168,8 +1216,10 @@ class _FakeDeck:
     def __init__(self, shapes, deaf=False, goto_error=None, lands_as=None, lands_twice=False,
                  stuck_position=None, rewrite_after_write=False, rewrite_after_paste=False,
                  too_large=False, undeletable=(), effects=(), stale_package=None,
-                 stuck_z=False, no_timeline=False):
+                 stuck_z=False, no_timeline=False, renames_paste=False, unrenamable=False):
         self.order = []
+        self.renames_paste = renames_paste
+        self.unrenamable = unrenamable
         # Shape names, one per effect of the slide's main sequence.
         self.effects = list(effects)
         self.stale_package = stale_package
