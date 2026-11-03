@@ -6248,6 +6248,26 @@ def _issue_key(finding):
     return finding.get("slide_index"), finding["type"], tuple(finding["shapes"])
 
 
+# The most shapes a change to the whole deck reads before and after itself.
+# Reading a shape costs about 5 ms on the Mac and, with the type information
+# shared, about 20 ms over COM; #264 measured a deck of 50 slides of 25 shapes
+# at 14 s on the Mac and over two minutes on Windows for the two reads, against
+# 0.1 to 3 s for the change. At this many the two reads stay within seconds.
+DECK_CHECK_MOST_SHAPES = 300
+
+
+class DeckTooLarge:
+    """What deck_snapshot answers for a deck past DECK_CHECK_MOST_SHAPES."""
+
+    def __init__(self, shapes):
+        self.shapes = shapes
+
+
+def _deck_shape_count_impl():
+    pres = ppt._get_pres_impl()
+    return sum(pres.Slides(i).Shapes.Count for i in range(1, pres.Slides.Count + 1))
+
+
 def deck_snapshot(trust_template=True):
     """What is wrong with the deck before a change to the whole of it.
 
@@ -6255,11 +6275,16 @@ def deck_snapshot(trust_template=True):
     than blaming itself for problems that were already there. A change to the
     theme's colours is the caller's choice, not the template's, so it is read
     without ``trust_template``; see ``_as_designed``. None too while
-    ``CHECK_EACH_WRITE`` is off, without reading anything.
+    ``CHECK_EACH_WRITE`` is off, without reading anything. A DeckTooLarge for
+    a deck with more shapes than DECK_CHECK_MOST_SHAPES, which is counted, not
+    read, and left to ``ppt_check_layout``.
     """
     if not CHECK_EACH_WRITE:
         return None
     try:
+        shapes = ppt.execute(_deck_shape_count_impl)
+        if shapes > DECK_CHECK_MOST_SHAPES:
+            return DeckTooLarge(shapes)
         return {_issue_key(f) for f in _deck_findings_now(trust_template)}
     except Exception:  # noqa: BLE001 - the change itself still goes ahead
         logger.debug("Reading the deck before a deck-wide change failed", exc_info=True)
@@ -6275,6 +6300,14 @@ def report_deck_change(result: dict, before, trust_template=True) -> dict:
     so only what is new is reported.
     """
     if not isinstance(result, dict) or "error" in result or before is None:
+        return result
+    if isinstance(before, DeckTooLarge):
+        result["layout_check_skipped"] = (
+            f"The deck has {before.shapes} shapes, more than the "
+            f"{DECK_CHECK_MOST_SHAPES} a change to the whole deck checks before and "
+            "after itself, since reading them all twice would take longer than the "
+            "change. Run ppt_check_layout on the slides that matter, or on the whole "
+            "deck once the changes are done.")
         return result
     try:
         after = _deck_findings_now(trust_template)

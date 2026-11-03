@@ -841,6 +841,8 @@ class FakeDeck:
         self.calls.append((func.__name__, args))
         if func.__name__ == "_slide_count_impl":
             return len(self.slides)
+        if func.__name__ == "_deck_shape_count_impl":
+            return sum(len(page["shapes"]) for page in self.slides)
         return {"slide_width": W, "slide_height": H,
                 "slides": [self.slides[i - 1] for i in args[0]]}
 
@@ -2843,6 +2845,25 @@ class TestAChangeToTheWholeDeck:
         before = layout_check.deck_snapshot()
         fake.slides = deck("#0B2545", "#111827")
         assert "layout_issues" not in layout_check.report_deck_change({"success": True}, before)
+
+    def test_a_deck_past_the_budget_is_counted_not_read(self, monkeypatch):
+        # #264: 50 slides of 25 shapes took 14 s on the Mac and minutes on
+        # Windows to read before and after a change that itself took seconds.
+        pages = [slide(*[card(f"c{n}", 10 + n, 10, 5, 5) for n in range(4)], index=i)
+                 for i in (1, 2, 3)]
+        fake = FakeDeck(pages)
+        monkeypatch.setattr(layout_check, "ppt", fake)
+        monkeypatch.setattr(layout_check, "DECK_CHECK_MOST_SHAPES", 10)
+        before = layout_check.deck_snapshot()
+        assert [name for name, _ in fake.calls] == ["_deck_shape_count_impl"]
+        result = layout_check.report_deck_change({"success": True}, before)
+        assert "layout_issues" not in result
+        assert result["layout_check_skipped"].startswith("The deck has 12 shapes, more than the 10")
+        assert "ppt_check_layout" in result["layout_check_skipped"]
+        assert [name for name, _ in fake.calls] == ["_deck_shape_count_impl"]
+
+        monkeypatch.setattr(layout_check, "DECK_CHECK_MOST_SHAPES", 12)
+        assert isinstance(layout_check.deck_snapshot(), set)
 
     def test_setting_theme_colours_judges_the_placeholders(self):
         source = (Path(__file__).parent.parent / "src" / "ppt_com" / "themes.py").read_text(encoding="utf-8")

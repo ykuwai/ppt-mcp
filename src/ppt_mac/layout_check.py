@@ -34,6 +34,7 @@ import logging
 from appscript import k
 
 from backend.mac_ae import (
+    count_of,
     elements,
     is_missing,
     ppt,
@@ -802,4 +803,17 @@ def _colours(raw):
         colours.append("#" + "".join(f"{min(255, round(raw[i + c] * 255 / alpha)):02X}"
                                      for c in range(3)))
     return colours
+
+
+def _deck_shape_count_impl():
+    """How many shapes the deck has, one event per slide.
+
+    The counterpart of the COM helper, for ``deck_snapshot`` to tell a deck too
+    large to read twice. Counted through each slide, which is safe where the
+    collection itself is not (see ``count_of``).
+    """
+    from ppt_mac.slides import _slide_count
+
+    pres = ppt._get_pres_impl()
+    return sum(count_of(_slide(pres, i), k.shape) for i in range(1, _slide_count(pres) + 1))
 
