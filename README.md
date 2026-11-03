@@ -452,6 +452,10 @@ Smaller differences:
   on a slide that already has animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.
+- **A template's own layouts are found by name in the deck's saved file**, so
+  save a new deck before asking `ppt_add_slide` for one by name. PowerPoint for
+  Mac names no layouts to a script, so the slide is pasted in on its layout,
+  which takes about a second.
 - Slide images come from a PDF render rather than PNG export, which is sharper
   than the Windows route.
 - Automation consent belongs to whichever application launched the server, so

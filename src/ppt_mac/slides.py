@@ -34,6 +34,7 @@ from backend.mac_ae import (
     count,
     elements,
     full_names as _full_names,
+    error_number,
     is_missing,
     osascript,
     positional,
@@ -248,6 +249,139 @@ def _paste_copy(app, src_pres, slide_index: int, dst_pres) -> int:
     return fresh[0]
 
 
+def _layout_by_name(app, pres, layout_name: str, design_index: Optional[int],
+                    count: int) -> dict:
+    """Make ``count`` slides on a template's layout found by name.
+
+    The dictionary has no layout names and will not hand a master's layout
+    to a slide (see ``utils.layouts``), so the names are read from the file
+    on disk, matched exactly as Windows matches them. Nor will a custom
+    layout pass from one slide to another: setting a new slide's
+    ``custom layout`` to an existing slide's answers -1708 for one (16.114,
+    the Ion theme's "Quote with Caption"). So the slides are pasted, from a
+    copy of the file holding one slide on the layout; each lands at the
+    deck's end on its own layout of that name, placeholders and all. If a
+    paste fails, the slides already pasted are removed.
+
+    Answers ``slide_ids`` (the new slides, in order), ``layout_name``,
+    ``design_name`` and, when the name is in more than one design,
+    ``ambiguous`` (the designs' names).
+    """
+    from utils import layouts
+
+    path = _saved_file(pres, f"Layout '{layout_name}' cannot be looked up")
+
+    all_masters = layouts.masters(path)
+    if design_index is not None and not 1 <= design_index <= len(all_masters):
+        raise ValueError(f"Design index {design_index} out of range (1-{len(all_masters)})")
+    matches = layouts.find(path, layout_name, design_index)
+    if not matches:
+        searched = [m for m in all_masters if design_index in (None, m.index)]
+        available = {m.name: [lay.name for lay in m.layouts] for m in searched}
+        raise ValueError(
+            f"Layout '{layout_name}' not found. Available custom layouts by "
+            f"design: {available} (read from the deck's saved file; a layout "
+            "added since the last save is not listed until the deck is saved)"
+        )
+    master, layout = matches[0]  # the first design, as Windows prefers the default
+    return {
+        "layout_name": layout.name,
+        "design_name": master.name or None,
+        "ambiguous": [m.name for m, _ in matches] if len(matches) > 1 else None,
+        "slide_ids": _paste_on_layout(app, pres, path, layout.part, count),
+    }
+
+
+def _saved_file(pres, what: str) -> str:
+    """The deck's file on disk, or a ValueError saying it has to be saved."""
+    import os
+
+    try:
+        path = pres.full_name()
+    except Exception:
+        path = None
+    path = None if path is None or is_missing(path) else str(path)
+    if not path or not os.path.isfile(path):
+        raise ValueError(
+            f"{what}: PowerPoint for Mac names no layouts through scripting, "
+            "so they are read from the deck's saved file, and this deck has "
+            "not been saved. Save it (ppt_save_presentation_as), or use a "
+            "built-in layout ('blank', 'title', 'title_only', "
+            "'section_header', 'comparison', 'content_with_caption', "
+            "'picture_with_caption')."
+        )
+    return path
+
+
+def _paste_on_layout(app, pres, path: str, layout_part: str, count: int) -> list:
+    """Paste ``count`` slides on the layout ``layout_part`` of the deck's file,
+    from a copy of it holding one slide on that layout; answers their IDs."""
+    import os
+    import uuid
+
+    from backend.mac_ae import EXPORT_STAGING_DIR, staging_dir
+    from ppt_mac.presentation import _open_and_find
+    from utils import layouts
+
+    staging_dir(EXPORT_STAGING_DIR)
+    copy_path = os.path.join(EXPORT_STAGING_DIR, f"ppt-mcp layout {uuid.uuid4().hex[:8]}.pptx")
+    helper = None
+    pasted = []
+    try:
+        layouts.one_slide_copy(path, layout_part, copy_path)
+        helper = _open_and_find(app, copy_path)
+        for _ in range(count):
+            pasted.append(_paste_copy(app, helper, 1, pres))
+    except Exception:
+        _remove_slides(pres, pasted)
+        raise
+    finally:
+        if helper is not None:
+            try:
+                helper.close(saving=k.no)
+            except Exception:
+                logger.warning("Could not close the layout copy %s", copy_path, exc_info=True)
+        if os.path.exists(copy_path):
+            os.remove(copy_path)
+    return pasted
+
+
+def _like_saved_slide(app, pres, like_slide_index: int, count: int) -> dict:
+    """``like_slide_index`` for a slide whose custom layout PowerPoint will not
+    hand to another slide (-1708): the slide's layout is read from the saved
+    file and pasted, as ``_layout_by_name`` does."""
+    from utils import layouts
+
+    what = f"The layout of slide {like_slide_index} cannot be copied"
+    path = _saved_file(pres, what)
+    slide_id = _slide_ids(pres)[like_slide_index - 1]
+    part = layouts.slide_layouts(path).get(slide_id)
+    if part is None:
+        raise ValueError(
+            f"{what}: PowerPoint for Mac will not pass a custom layout from one "
+            "slide to another, so it is read from the deck's saved file, and "
+            f"slide {like_slide_index} is not in it yet. Save the deck and try "
+            "again."
+        )
+    for master in layouts.masters(path):
+        for layout in master.layouts:
+            if layout.part == part:
+                return {"layout_name": layout.name, "design_name": master.name or None,
+                        "slide_ids": _paste_on_layout(app, pres, path, part, count)}
+    raise ValueError(f"{what}: its layout is not listed by any master in the saved file.")
+
+
+def _remove_slides(pres, slide_ids) -> None:
+    """Delete the slides with these IDs, last first, after a failed add."""
+    for slide_id in reversed(list(slide_ids)):
+        try:
+            ids = _slide_ids(pres)
+            if slide_id in ids:
+                pres.slides[ids.index(slide_id) + 1].delete()
+        except Exception:
+            logger.warning("Could not remove slide %s after a failed add", slide_id, exc_info=True)
+
+
 def _friendly_layout(key: str) -> Optional[int]:
     """Look a friendly layout name up in the table ppt_com/slides.py owns.
 
@@ -288,6 +422,9 @@ def _add_slide_impl(
     custom_layout = None
     layout_keyword = None
     resolved_layout_name = None
+    resolved_design_name = None
+    pasted_ids = []
+    ambiguous = None
 
     if like_slide_index is not None:
         # Highest precedence, and the only way to reach a design's own layouts
@@ -312,27 +449,11 @@ def _add_slide_impl(
             # caller their own argument had been ignored.
             resolved_layout_name = friendly_key
         else:
-            designs = elements(pres.designs)
-            if design_index is not None and (
-                design_index < 1 or design_index > len(designs)
-            ):
-                raise ValueError(
-                    f"Design index {design_index} out of range (1-{len(designs)})"
-                )
-            # Every route into a design's custom layouts goes through their
-            # names, and PowerPoint for Mac publishes none, so the search
-            # cannot even be attempted honestly. Say so, and name the two
-            # routes that do work.
-            raise ValueError(
-                f"Layout '{layout_name}' cannot be looked up on macOS. "
-                "PowerPoint for Mac's dictionary declares no name on "
-                "'custom layout' or on 'design', so custom layouts cannot be "
-                "matched by name. Pass like_slide_index to inherit the exact "
-                "layout of an existing slide, or use a built-in layout "
-                "('blank', 'title', 'title_only', 'section_header', "
-                "'comparison', 'content_with_caption', 'picture_with_caption') "
-                "or a PpSlideLayout constant."
-            )
+            found = _layout_by_name(app, pres, layout_name, design_index, count)
+            pasted_ids = found["slide_ids"]
+            resolved_layout_name = found["layout_name"]
+            resolved_design_name = found["design_name"]
+            ambiguous = found["ambiguous"]
     else:
         layout_keyword = to_keyword(
             PpSlideLayout,
@@ -343,26 +464,40 @@ def _add_slide_impl(
     # Create every slide at the end of the deck, then put the block where it
     # was asked for. `at=pres.end` is the working form; `at=pres.slides.end`
     # raises -1708.
-    existing_ids = _slide_ids(pres)
-    new_ids = []
-    for _ in range(count):
-        expected = _slide_count(pres) + 1
-        if custom_layout is not None:
-            # Windows makes the slide and applies the layout in one call.
-            # There is no such form here, so the slide is made and the layout
-            # assigned to it, and the placeholders that are supposed to come
-            # with it are checked for below.
-            created = app.make(new=k.slide, at=pres.end)
-            created.custom_layout.set(custom_layout)
-        else:
-            created = app.make(
-                new=k.slide, at=pres.end, with_properties={k.layout: layout_keyword}
-            )
-        if _slide_count(pres) != expected:
-            raise RuntimeError(
-                "PowerPoint reported no error but did not add a slide."
-            )
-        new_ids.append(int(created.slide_ID()))
+    existing_ids = [sid for sid in _slide_ids(pres) if sid not in set(pasted_ids)]
+    new_ids = list(pasted_ids)
+    try:
+        for _ in range(count - len(new_ids)):
+            expected = _slide_count(pres) + 1
+            if custom_layout is not None:
+                # Windows makes the slide and applies the layout in one call.
+                # There is no such form here, so the slide is made and the
+                # layout assigned to it, and the placeholders that are
+                # supposed to come with it are checked for below.
+                created = app.make(new=k.slide, at=pres.end)
+                new_ids.append(int(created.slide_ID()))
+                created.custom_layout.set(custom_layout)
+            else:
+                created = app.make(
+                    new=k.slide, at=pres.end, with_properties={k.layout: layout_keyword}
+                )
+                new_ids.append(int(created.slide_ID()))
+            if _slide_count(pres) != expected:
+                raise RuntimeError(
+                    "PowerPoint reported no error but did not add a slide."
+                )
+    except Exception as exc:
+        _remove_slides(pres, new_ids)
+        # A custom layout, as opposed to one of the built-in ones, will not
+        # pass from one slide to another (-1708, 16.114); the saved file
+        # names it, and a slide on it can be pasted instead.
+        if like_slide_index is None or error_number(exc) != -1708:
+            raise
+        found = _like_saved_slide(app, pres, like_slide_index, count)
+        new_ids = found["slide_ids"]
+        resolved_layout_name = found["layout_name"]
+        resolved_design_name = found["design_name"]
+        custom_layout = None
 
     final_ids = (
         existing_ids[: position - 1] + new_ids + existing_ids[position - 1:]
@@ -405,10 +540,16 @@ def _add_slide_impl(
         # back from the enumerator PowerPoint answers with.
         "layout": _windows_constant(PpSlideLayout, first_slide.layout()),
         "layout_name": final_layout_name,
-        # `design` carries no name in the dictionary, and a made-up one would
-        # read as real. Null is the honest answer.
-        "design_name": None,
+        # `design` carries no name in the dictionary; a layout found by name
+        # was found in the saved file, which does name its design.
+        "design_name": resolved_design_name,
         **({"warning": warning} if warning else {}),
+        **({"layout_ambiguous": True,
+            "warning": (f"Layout '{layout_name}' exists in multiple designs "
+                        f"({', '.join(ambiguous)}); used design "
+                        f"'{resolved_design_name}'. Pass design_index or "
+                        "like_slide_index to select a specific one.")}
+           if ambiguous else {}),
         # Backward compatibility: a single slide also reports at the top level.
         **(
             {

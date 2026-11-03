@@ -223,7 +223,7 @@ round trip.
 | read every property of every shape on a slide, one event | 0.011 s |
 | read names and geometry of every shape in bulk | 0.007 s |
 | placeholders, their type and their text | works |
-| custom layouts of the slide master, 11 found | works |
+| custom layouts of the slide master | counted (11), but none names itself or can be given to a slide (-1708); `ppt_add_slide` finds a layout by name in the deck's saved file and pastes a slide on it from a one-slide copy of that file |
 | create a table with `make new shape table`, addressed with `get cell from` | works |
 | slide dimensions | width from `page setup`, height from `slide master` |
 | sections count through `section properties` | works |
