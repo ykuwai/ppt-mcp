@@ -262,14 +262,38 @@ class TestAnimationEnums:
         assert _windows_constant(MsoAnimEffect, k.animation_type_teeter) == 80
         assert _windows_constant(MsoAnimEffect, k.animation_type_grow_shrink) == 59
 
-    def test_a_transition_with_four_directions_and_no_plain_form(self):
-        """These are not missing. They are four each, and choosing is a guess."""
+    def test_the_transitions_are_powerpoints_own_numbers(self):
+        """3844 to 3848 were sent for fade to reveal, and are none of them."""
+        from appscript import k
+
         from backend.mac_enums import PpEntryEffect, to_keyword
         from ppt_mac.animation import _WHAT_TRANSITION
 
-        assert to_keyword(PpEntryEffect, 3844, _WHAT_TRANSITION)  # fade
-        with pytest.raises(ValueError, match="four directional variants"):
-            to_keyword(PpEntryEffect, 3845, _WHAT_TRANSITION)  # ppEffectPush
+        assert to_keyword(PpEntryEffect, 3849, _WHAT_TRANSITION) == k.entry_effect_fade
+        assert to_keyword(PpEntryEffect, 3855, _WHAT_TRANSITION) == k.entry_effect_push_up
+        with pytest.raises(ValueError, match="not one of them"):
+            to_keyword(PpEntryEffect, 3844, _WHAT_TRANSITION)
+
+    def test_every_transition_matches_the_dictionary(self):
+        """PowerPoint for Mac's codes end in the Windows number: push down is
+        0x00f60f0c, and 0x0f0c is 3852. So the table is checked against them."""
+        import re
+        from pathlib import Path
+
+        from backend.mac_enums import PpEntryEffect
+
+        sdef = Path("/Applications/Microsoft PowerPoint.app/Contents/Resources/PowerPoint.sdef")
+        if not sdef.exists():
+            pytest.skip("PowerPoint for Mac is not installed here")
+        codes = {
+            name: int(code, 16) & 0xFFFF
+            for name, code in re.findall(
+                r'<enumerator name="entry effect ([^"]+)" code="0x([0-9a-f]+)"',
+                sdef.read_text(encoding="utf-8"))
+        }
+        for number, keyword in PpEntryEffect.items():
+            name = keyword.name[len("entry_effect_"):].replace("_", " ")
+            assert codes.get(name) == number, (number, keyword.name)
 
     def test_every_shape_the_tool_advertises_is_reachable(self):
         """Fourteen of the sixty used to fail, for the same reason as above."""
@@ -388,8 +412,9 @@ class TestSlideTransition:
         from ppt_mac.animation import _set_slide_transition_impl
 
         with _fake_deck([], shape_names=["Title"]) as deck:
-            with pytest.raises(ValueError, match="push, wipe, split and reveal"):
-                _set_slide_transition_impl(1, "push", None, None, None, None)
+            # 3845 is circle on Windows, and not in the table here.
+            with pytest.raises(ValueError, match="matching the Windows constant 3845"):
+                _set_slide_transition_impl(1, 3845, None, None, None, None)
 
         # Refused before the slide is even looked up, so nothing was touched.
         assert not hasattr(deck, "transition")

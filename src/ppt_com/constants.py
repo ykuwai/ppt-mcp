@@ -607,13 +607,29 @@ msoAnimTriggerOnShapeClick = 4
 # ==============================================================================
 # PpEntryEffect (slide transitions)
 # ==============================================================================
+# PowerPoint's own numbers. Fade, push, wipe, split and reveal used to be
+# 3844 to 3848 here, which PowerPoint for Windows takes as no transition (a
+# cut), circle, diamond and comb.
 ppEffectNone = 0
 ppEffectCut = 257
-ppEffectFade = 3844
-ppEffectPush = 3845
-ppEffectWipe = 3846
-ppEffectSplit = 3847
-ppEffectReveal = 3848
+ppEffectFade = 1793  # through black
+ppEffectFadeSmoothly = 3849  # what PowerPoint calls Fade
+ppEffectPushDown = 3852
+ppEffectPushLeft = 3853
+ppEffectPushRight = 3854
+ppEffectPushUp = 3855
+ppEffectWipeLeft = 2817
+ppEffectWipeUp = 2818
+ppEffectWipeRight = 2819
+ppEffectWipeDown = 2820
+ppEffectSplitHorizontalOut = 3585
+ppEffectSplitHorizontalIn = 3586
+ppEffectSplitVerticalOut = 3587
+ppEffectSplitVerticalIn = 3588
+ppEffectRevealSmoothLeft = 3894
+ppEffectRevealSmoothRight = 3895
+ppEffectRevealBlackLeft = 3896
+ppEffectRevealBlackRight = 3897
 ppEffectRandom = 513
 ppEffectBlindsHorizontal = 769
 ppEffectBlindsVertical = 770

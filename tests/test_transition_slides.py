@@ -206,6 +206,7 @@ class TestOnTheMac:
     def test_a_transition_the_mac_lacks_is_refused_before_any_slide(self, mac_deck):
         from ppt_mac.animation import _set_slide_transition_impl
 
-        with pytest.raises(ValueError, match="push, wipe, split and reveal"):
-            _set_slide_transition_impl(None, "push", None, None, None, None, [1, 2])
+        # 3845 is circle on Windows, and not in the Mac's table.
+        with pytest.raises(ValueError, match="matching the Windows constant 3845"):
+            _set_slide_transition_impl(None, 3845, None, None, None, None, [1, 2])
         assert all(s.slide_show_transition.entry_effect() is None for s in mac_deck)
