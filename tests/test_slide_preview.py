@@ -63,7 +63,9 @@ def test_the_tool_answers_the_image_and_then_its_scale():
                            {"params": {"slide_index": 2}})
     blocks = server._content_of(result)
     assert [b.type for b in blocks] == ["image", "text"]
-    assert blocks[0].mimeType == "image/png"
+    # 1.x calls it mimeType, 2.x mime_type.
+    mime = getattr(blocks[0], "mime_type", None) or getattr(blocks[0], "mimeType", None)
+    assert mime == "image/png"
     said = json.loads(blocks[1].text)
     assert said["pixels_per_point"] == 2.0
     assert (said["image_width_px"], said["slide_width_pt"]) == (64, 32.0)

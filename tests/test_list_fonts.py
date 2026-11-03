@@ -70,7 +70,7 @@ class TestTheTool:
 
         tool = server.mcp._registered_tool("ppt_list_fonts")
         assert server._summary(tool.description).startswith(
-            "List the fonts this presentation uses")
+            "List the fonts the active presentation uses")
 
 
 class TestThroughTheServer:
