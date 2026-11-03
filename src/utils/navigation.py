@@ -29,7 +29,7 @@ def _follow_edits(value):
 FOLLOW_EDITS = _follow_edits(os.getenv("PPT_FOLLOW_EDITS", "on"))
 
 
-def goto_slide(app, slide_index: int) -> None:
+def goto_slide(app, slide_index: int, force: bool = False) -> None:
     """Navigate the target presentation's window to the specified slide.
 
     Call this at the start of write operations so the user can see
@@ -47,9 +47,11 @@ def goto_slide(app, slide_index: int) -> None:
             session target rather than from this.
         slide_index: 1-based slide index to navigate to.
 
-    Does nothing while ``FOLLOW_EDITS`` is off.
+    Does nothing while ``FOLLOW_EDITS`` is off, unless ``force``: a tool
+    whose work needs the slide on screen, such as selecting shapes, which
+    PowerPoint does only on the slide the window shows.
     """
-    if not FOLLOW_EDITS:
+    if not FOLLOW_EDITS and not force:
         return
     try:
         if IS_MACOS:
@@ -74,3 +76,35 @@ def goto_slide(app, slide_index: int) -> None:
             window.View.GotoSlide(slide_index)
     except Exception:
         pass
+
+
+def shown_slide(window):
+    """The slide a deck's window is showing, or None when it cannot be read.
+
+    For the edits that must move the window to work, a paste on the Mac or a
+    selection on Windows: they read it first, so ``return_to`` can put it back.
+    """
+    try:
+        if IS_MACOS:
+            return window.view.slide.slide_index()
+        return window.View.Slide.SlideIndex
+    except Exception:
+        return None
+
+
+def return_to(window, slide_index) -> None:
+    """Put the window back on the slide it showed, while FOLLOW_EDITS is off.
+
+    On, the window stays on the slide the edit worked on, as every other write
+    leaves it.
+    """
+    if FOLLOW_EDITS or slide_index is None:
+        return
+    try:
+        if IS_MACOS:
+            window.view.go_to_slide(number=slide_index)
+        else:
+            window.View.GotoSlide(slide_index)
+    except Exception:
+        pass
+

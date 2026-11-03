@@ -1034,7 +1034,9 @@ def _select_shapes_impl(slide_index, shape_names):
     # view must be active to select a shape"), so this tool deliberately
     # brings the target presentation's window to the foreground.
     ppt._activate_target_window_impl()
-    goto_slide(app, slide_index)
+    # Moved whatever PPT_FOLLOW_EDITS says: a selection is made on the slide
+    # the window shows, and showing it is what selecting asks for.
+    goto_slide(app, slide_index, force=True)
 
     # Select first shape (replace=True is default)
     first_shape = _get_shape(slide, shape_names[0])

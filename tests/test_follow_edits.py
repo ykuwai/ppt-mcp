@@ -61,3 +61,70 @@ def test_on_moves_the_window(monkeypatch):
                             lambda pres: type("MacWindow", (), {"view": view})())
     navigation.goto_slide(None, 3)
     assert moved == [3]
+
+
+def test_a_tool_that_needs_the_slide_on_screen_moves_it_anyway(monkeypatch):
+    moved = []
+
+    class View:
+        def GotoSlide(self, index):
+            moved.append(index)
+
+        def go_to_slide(self, number):
+            moved.append(number)
+
+    view = View()
+    monkeypatch.setattr(navigation, "FOLLOW_EDITS", False)
+    monkeypatch.setattr(navigation.ppt, "_get_target_window_impl",
+                        lambda: type("W", (), {"View": view})(), raising=False)
+    monkeypatch.setattr(navigation.ppt, "_get_pres_impl", lambda: object(), raising=False)
+    if navigation.IS_MACOS:
+        from backend import mac_ae
+        monkeypatch.setattr(mac_ae, "target_window",
+                            lambda pres: type("MacWindow", (), {"view": view})())
+    navigation.goto_slide(None, 4, force=True)
+    assert moved == [4]
+
+
+class _Window:
+    """A deck's window on either platform, showing one slide."""
+
+    def __init__(self, showing):
+        self.showing, self.moves = showing, []
+        window = self
+
+        class Slide:
+            SlideIndex = showing
+
+            def slide_index(self):
+                return window.showing
+
+        shown = Slide()
+
+        class View:
+            slide = shown
+            Slide = shown
+
+            def GotoSlide(self, index):
+                window.moves.append(index)
+
+            def go_to_slide(self, number):
+                window.moves.append(number)
+
+        self.view = self.View = View()
+
+
+def test_a_paste_puts_the_users_slide_back_while_off(monkeypatch):
+    window = _Window(showing=2)
+    monkeypatch.setattr(navigation, "FOLLOW_EDITS", False)
+    was = navigation.shown_slide(window)
+    assert was == 2
+    navigation.return_to(window, was)
+    assert window.moves == [2]
+
+
+def test_a_paste_leaves_the_window_on_its_slide_while_on(monkeypatch):
+    window = _Window(showing=2)
+    monkeypatch.setattr(navigation, "FOLLOW_EDITS", True)
+    navigation.return_to(window, navigation.shown_slide(window))
+    assert window.moves == []
