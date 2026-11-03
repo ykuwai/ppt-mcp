@@ -364,6 +364,37 @@ class TestTextAtCreation:
                     None, None, None, None, None, None, None,
                 )
 
+    @pytest.mark.parametrize("anchor", ["middle", "bottom"])
+    def test_a_text_box_set_off_the_top_keeps_its_height(self, anchor):
+        """PowerPoint shrinks a text box to its text once the text is in, so
+        a 120 pt box asked to centre its text came back 27 pt tall. Off the
+        top, the box stops fitting its text and keeps the height it was given."""
+        from appscript import k
+
+        from ppt_mac.shapes import _add_textbox_impl
+
+        with _fake_deck([]) as deck:
+            deck.make_is_a_text_box = True
+            _add_textbox_impl(
+                1, 10, 10, 300, 120, "Hello",
+                None, None, None, None, None, None, anchor,
+            )
+            box = deck.slide_shapes[-1]
+        assert box.text_frame.auto_size() == k.ppAutoSizeNone
+        assert box.height() == 120
+
+    def test_a_text_box_at_the_top_still_fits_its_text(self):
+        from ppt_mac.shapes import _add_textbox_impl
+
+        with _fake_deck([]) as deck:
+            deck.make_is_a_text_box = True
+            _add_textbox_impl(
+                1, 10, 10, 300, 120, "Hello",
+                None, None, None, None, None, None, "top",
+            )
+            box = deck.slide_shapes[-1]
+        assert box.text_frame.auto_size() is None
+
     def test_text_that_lands_is_not_complained_about(self):
         from ppt_mac.shapes import _add_shape_impl
 

@@ -47,12 +47,13 @@ from backend.mac_enums import (
     MsoTextOrientation,
     MsoVerticalAnchor,
     MsoZOrderCmd,
+    PpAutoSize,
     PpParagraphAlignment,
     to_keyword,
 )
 from ppt_com.constants import (
     DASH_STYLE_MAP, DASH_STYLE_NAMES, GRADIENT_STYLE_MAP, SHAPE_TYPE_NAMES,
-    msoBringForward, msoGroup, msoSendToBack,
+    msoBringForward, msoGroup, msoSendToBack, ppAutoSizeNone,
 )
 from utils.color import hex_to_rgb_list, rgb_list_to_hex
 from utils.navigation import goto_slide
@@ -767,7 +768,13 @@ def _add_textbox_impl(
     if align is not None:
         _apply_alignment(textbox.text_frame.text_range, align)
 
-    # Inline vertical anchor, which saves a follow-up ppt_set_textframe call
+    # Inline vertical anchor, which saves a follow-up ppt_set_textframe call.
+    # A text box shrinks to its text as soon as the text is written, so a 120 pt
+    # box asked to sit its text in the middle came back 27 pt tall with nothing
+    # to centre in. Off the top, the box keeps the height it was given.
+    if vertical_anchor is not None and vertical_anchor.lower() != "top":
+        textbox.text_frame.auto_size.set(to_keyword(PpAutoSize, ppAutoSizeNone, "auto size"))
+        textbox.height.set(height)
     if vertical_anchor is not None:
         textbox.text_frame.vertical_anchor.set(
             to_keyword(
