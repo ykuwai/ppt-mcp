@@ -226,6 +226,15 @@ class _PowerPointServer(MCPServer):
             call_coauthoring.reset(coauthoring_token)
             call_presentation.reset(token)
 
+    async def list_tools(self, *args, **kwargs):
+        tools = await super().list_tools(*args, **kwargs)
+        # Catalog mode, the default, lists the three tools that reach the
+        # rest; every tool stays registered, so ppt_run dispatches through
+        # call_tool above. PPT_TOOL_MODE=full lists every tool but those three.
+        if CATALOG_MODE:
+            return [t for t in tools if t.name in _CATALOG_TOOLS]
+        return [t for t in tools if t.name not in _CATALOG_TOOLS]
+
     def _registered_tool(self, name):
         """The SDK's Tool for `name`, or None.
 
@@ -919,6 +928,210 @@ except Exception:
         exc_info=True,
     )
     _presentation_arg_count = 0
+
+
+# ---------------------------------------------------------------------------
+# Catalog mode, the default (PPT_TOOL_MODE=full to list every tool)
+# ---------------------------------------------------------------------------
+# A client sends every listed tool's schema with every request, and the 157
+# come to about 112k tokens. In catalog mode the server lists three tools: one
+# that answers the list of tools, a line each, and full schemas on request,
+# one that runs any tool, and one that runs a list of calls. The tools
+# themselves are unchanged and run through the same call_tool, so their
+# validation, their checks and their layout findings are all as before. The
+# three are registered either way; full mode leaves them off the list.
+
+def _tool_mode(value):
+    """'catalog' or 'full', from PPT_TOOL_MODE."""
+    value = value.strip().lower()
+    if value in ("catalog", ""):
+        return "catalog"
+    if value in ("full", "all"):
+        return "full"
+    # Read at import, so a typo must not stop the server from starting.
+    logger.warning(
+        "PPT_TOOL_MODE=%r is not a setting; use 'catalog' (the default), or 'full' "
+        "to list every tool. Using 'catalog'.", value)
+    return "catalog"
+
+
+CATALOG_MODE = _tool_mode(os.getenv("PPT_TOOL_MODE", "catalog")) == "catalog"
+_CATALOG_TOOLS = frozenset({"ppt_describe", "ppt_run", "ppt_run_steps"})
+
+
+def _summary(description):
+    """The first sentence of a tool's description, for its catalog line."""
+    text = " ".join((description or "").split())
+    for end in (". ", "! ", "? "):
+        if end in text:
+            text = text.split(end, 1)[0] + end.strip()
+            break
+    return text[:120]
+
+
+def _catalog_lines():
+    return "\n".join(
+        f"{tool.name}: {_summary(tool.description)}"
+        for tool in mcp._tool_manager.list_tools()
+        if tool.name not in _CATALOG_TOOLS
+    )
+
+
+def _content_of(result):
+    """What call_tool answered, as a list of content blocks under either SDK major."""
+    if hasattr(result, "content") and not isinstance(result, (list, tuple, dict)):
+        # mcp 2.x answers a CallToolResult, and an error in it is not raised.
+        if getattr(result, "isError", False) or getattr(result, "is_error", False):
+            raise ToolError(_text_of(result.content) or "The tool failed.")
+        result = result.content
+    if isinstance(result, tuple):  # mcp 1.x: (unstructured, structured)
+        result = result[0]
+    if isinstance(result, dict):
+        return [json.dumps(result, ensure_ascii=False)]
+    return list(result or [])
+
+
+def _text_of(blocks):
+    return "".join(getattr(b, "text", "") or "" for b in blocks if getattr(b, "type", "") == "text")
+
+
+async def _run(tool, params, presentation):
+    if not isinstance(tool, str) or not tool:
+        raise ToolError("A step needs a 'tool': the name of the tool to run, "
+                        "such as \"ppt_add_textbox\".")
+    target = mcp._registered_tool(tool)
+    if target is None or tool in _CATALOG_TOOLS:
+        import difflib
+        names = [t.name for t in mcp._tool_manager.list_tools() if t.name not in _CATALOG_TOOLS]
+        close = difflib.get_close_matches(tool, names, n=3)
+        hint = f" Did you mean {', '.join(close)}?" if close else ""
+        raise ToolError(f"No tool called '{tool}'.{hint} The list is in ppt_describe's description.")
+    arguments = {}
+    declared = (target.parameters or {}).get("properties") or {}
+    if "params" in declared:
+        arguments["params"] = params or {}
+    elif params:
+        raise ToolError(f"{tool} takes no params.")
+    if presentation is not None:
+        arguments[PRESENTATION_ARG] = presentation
+    return _content_of(await mcp.call_tool(tool, arguments))
+
+
+def _resolve_refs(value, results):
+    """Replace "$prev.key" and "$N.key" (N counts steps from 1) with what that
+    step answered, read from its JSON result."""
+    if isinstance(value, dict):
+        return {k: _resolve_refs(v, results) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_refs(v, results) for v in value]
+    if not (isinstance(value, str) and value.startswith("$") and "." in value):
+        return value
+    which, key = value[1:].split(".", 1)
+    if which == "prev":
+        index = len(results) - 1
+    elif which.isdigit():
+        index = int(which) - 1
+    else:
+        return value
+    if not 0 <= index < len(results) or results[index] is None:
+        raise ToolError(f"'{value}' refers to a step that has no result.")
+    node = results[index]
+    for part in key.split("."):
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+        else:
+            raise ToolError(f"'{value}': the step's result has no '{key}'.")
+    return node
+
+
+@mcp.tool(name="ppt_describe")
+async def ppt_describe(names: list[str] | None = None) -> str:
+    """The PowerPoint tools: call with no names first for the list of all
+    of them, one line each; then with the names you are about to use, once
+    each, for their full description and argument schema.
+
+    Every PowerPoint tool is run through ppt_run (one call) or
+    ppt_run_steps (several), not called directly, with exactly the
+    arguments its schema gives. Start a task with ppt_describe().
+    """
+    # The list is an answer, not part of this description: clients cut
+    # long descriptions short (Claude Code kept 54 of 157 lines), while a
+    # tool's answer reaches the model whole.
+    if not names:
+        return _catalog_lines()
+    found, missing = {}, []
+    for name in names:
+        tool = mcp._registered_tool(name)
+        if tool is None or name in _CATALOG_TOOLS:
+            missing.append(name)
+            continue
+        schema = dict(tool.parameters or {})
+        schema.get("properties", {}).pop(PRESENTATION_ARG, None)
+        params = (schema.get("properties") or {}).get("params")
+        found[name] = {"description": tool.description, "params": params}
+    result = {"tools": found}
+    if missing:
+        result["unknown"] = missing
+    return json.dumps(result, ensure_ascii=False)
+
+@mcp.tool(name="ppt_run")
+async def ppt_run(tool: str, params: dict | None = None, presentation: str | None = None):
+    """Run one PowerPoint tool: `tool` is its name, `params` its arguments
+    as ppt_describe gives them, `presentation` the deck it works on
+    (optional, as on every tool). Answers exactly what the tool answers."""
+    return await _run(tool, params, presentation)
+
+@mcp.tool(name="ppt_run_steps")
+async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
+                        stop_on_error: bool = True):
+    """Run several PowerPoint tools in order, in one call.
+
+    Each step is {"tool": name, "params": {...}}. A value "$prev.key" is
+    the previous step's result field, and "$2.shape_name" the second
+    step's, so a step can use the shape the one before it made. The answer
+    lists each step's result; images (slide previews) follow it. With
+    stop_on_error, the first failing step ends the run and says why.
+    """
+    report, results, images = [], [], []
+    for number, step in enumerate(steps, start=1):
+        step = step if isinstance(step, dict) else {}
+        tool = step.get("tool")
+        try:
+            params = _resolve_refs(step.get("params") or {}, results)
+            blocks = await _run(tool, params, step.get("presentation", presentation))
+        except Exception as exc:  # noqa: BLE001 - reported per step
+            report.append({"step": number, "tool": tool, "error": str(exc)})
+            results.append(None)
+            if stop_on_error:
+                break
+            continue
+        text = _text_of(blocks)
+        try:
+            data = json.loads(text) if text else {}
+        except ValueError:
+            data = {"text": text}
+        results.append(data)
+        report.append({"step": number, "tool": tool, "result": data})
+        images += [b for b in blocks if getattr(b, "type", "") == "image"]
+    summary = json.dumps({"steps": report, "ran": len(report), "of": len(steps)},
+                         ensure_ascii=False)
+    return [summary, *images] if images else summary
+
+if CATALOG_MODE:
+    try:
+        # MCPServer.instructions is read-only under both majors; the low-level
+        # server it reads from is _mcp_server under 1.x, _lowlevel_server under 2.x.
+        lowlevel = getattr(mcp, "_lowlevel_server", None) or mcp._mcp_server
+        lowlevel.instructions = (
+            "Catalog mode: call ppt_describe() for the list of PowerPoint tools, "
+            "ppt_describe(names) for their arguments, and run them with ppt_run or "
+            "ppt_run_steps. Wherever the instructions say to call a tool, do it that way.\n\n"
+            + (mcp.instructions or "")
+        )
+    except Exception:
+        logger.warning("Could not add the catalog note to the instructions", exc_info=True)
 
 
 def main():

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="README_ja.md">日本語版はこちら</a>
+  <a href="README_ja.md">日本語版はこちら</a> · <a href="README_he.md">עברית</a>
 </p>
 
 <p align="center">
@@ -382,6 +382,32 @@ When a close leaves no presentation open in a PowerPoint the server started, `pp
       "env": {
         "PPT_ICON_BASE_URL": "https://unpkg.com/@material-symbols/svg-400@0.31.3"
       }
+    }
+  }
+}
+```
+
+### The tool list: catalog mode
+
+A client sends the description of every tool it lists with every request, and this server's 157 come to about 112k tokens, a large part of a 128k or 200k window before any work. So the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
+
+| Tool | What it does |
+|---|---|
+| `ppt_describe` | With no names, the list of all the tools, one line each. With names, their full description and arguments. |
+| `ppt_run` | Runs one tool: `{"tool": "ppt_add_textbox", "params": {...}}`. |
+| `ppt_run_steps` | Runs several in order, in one call. A step can use what an earlier one answered: `"$prev.shape_name"` is the previous step's `shape_name`, `"$2.shape_name"` the second step's. The first step that fails ends the run and says why. |
+
+The tools themselves are the same, with the same arguments, checks and answers, and `presentation` is passed the same way. The model asks `ppt_describe` before using a tool for the first time, which costs one call. Building the same 12-slide deck through Claude Code, the context peaked at 136k tokens in catalog mode against 206k with every tool listed, and the run cost a third less.
+
+What catalog mode gives up is per-tool control in the client: approving or blocking a tool by its name, and its read-only hint, apply to the three tools above rather than to each one. To list every tool by its own name, as before, set `PPT_TOOL_MODE=full` in the server's `env`. A value other than `catalog` or `full` is ignored with a warning, and catalog mode is used.
+
+```json
+{
+  "mcpServers": {
+    "powerpoint": {
+      "command": "uvx",
+      "args": ["ppt-mcp"],
+      "env": { "PPT_TOOL_MODE": "full" }
     }
   }
 }
