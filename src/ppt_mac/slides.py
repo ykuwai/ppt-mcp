@@ -196,7 +196,7 @@ def _realize_order(pres, final_ids: list) -> None:
         )
 
 
-def _duplicate_once(app, pres, slide_index: int) -> int:
+def _duplicate_once(app, pres, slide_index: int, into=None) -> int:
     """Duplicate one slide and return the new slide's ID.
 
     PowerPoint for Mac has no duplicate command of its own. ``ref.duplicate()``
@@ -206,11 +206,17 @@ def _duplicate_once(app, pres, slide_index: int) -> int:
     (-50) on PowerPoint 16.114. So the slide is copied and pasted into its own
     presentation, the user's clipboard put back afterwards, and the copy is
     found by diffing the slide IDs rather than by trusting a return value.
+
+    ``into`` is another presentation to paste the copy into, for
+    ``ppt_copy_slide`` between decks: ``paste object`` takes the presentation
+    to paste into (#246), and the new ID is then one of that deck's.
     """
     from ppt_mac.gvml_paste import Clipboard
 
-    before = _slide_ids(pres)
+    into = into or pres
+    before = _slide_ids(into)
     pres_index = _presentation_index(app, pres)
+    into_index = _presentation_index(app, into)
     clip = Clipboard.take()
     try:
         osascript(
@@ -220,17 +226,17 @@ def _duplicate_once(app, pres, slide_index: int) -> int:
         clip.claim()
         osascript(
             'tell application "Microsoft PowerPoint" to paste object '
-            f"presentation {pres_index}"
+            f"presentation {into_index}"
         )
     finally:
         clip.restore()
         for warning in clip.warnings:
-            logger.warning("Duplicating slide %d: %s", slide_index, warning)
-    after = _slide_ids(pres)
+            logger.warning("Copying slide %d: %s", slide_index, warning)
+    after = _slide_ids(into)
     fresh = [sid for sid in after if sid not in set(before)]
     if len(fresh) != 1:
         raise RuntimeError(
-            "PowerPoint reported no error but did not duplicate slide "
+            "PowerPoint reported no error but did not copy slide "
             f"{slide_index} (the deck went from {len(before)} to "
             f"{len(after)} slides)."
         )
@@ -604,28 +610,9 @@ def _copy_slide_impl(
         presentation_name=to_presentation_name,
     )
 
-    if src_pres.full_name() != dst_pres.full_name():
-        # Windows copies between decks with InsertFromFile, or through the
-        # clipboard for a password-protected source. The Mac clipboard verbs
-        # are `copy object` and `paste object`, and `paste object`
-        # declares a direct parameter whose type does not resolve to any class
-        # in the dictionary, so there is no way to say which deck it should
-        # paste into. Guessing would paste into whichever deck PowerPoint
-        # happens to consider current, which is a silent write to the wrong
-        # file, so this refuses instead.
-        return {
-            "error": "ppt_copy_slide across presentations is not available on macOS",
-            "reason": (
-                "PowerPoint for Mac's 'paste object' command takes no "
-                "addressable destination, so a slide cannot be pasted into a "
-                "chosen presentation. Copying within one presentation works."
-            ),
-            "platform": "macOS",
-            "alternatives": [
-                "ppt_copy_slide within a single presentation",
-                "ppt_duplicate_slide",
-            ],
-        }
+    # Between two decks too: `paste object` takes the presentation to paste
+    # into, which #246 found the earlier refusal here had wrong.
+    across = src_pres.full_name() != dst_pres.full_name()
 
     sources = [slide_index] if slide_index is not None else list(slide_indices)
 
@@ -637,34 +624,38 @@ def _copy_slide_impl(
         )
 
     append = insert_at is None or insert_at == -1
+    dst_total = _slide_count(dst_pres)
     if not append:
         # Allow inserting anywhere from the front up to one past the end.
-        if insert_at < 1 or insert_at > src_total + 1:
-            raise ValueError(f"insert_at {insert_at} out of range (1-{src_total + 1})")
+        if insert_at < 1 or insert_at > dst_total + 1:
+            raise ValueError(f"insert_at {insert_at} out of range (1-{dst_total + 1})")
 
-    # Within one deck a copy is a duplicate, which is a verified route here.
+    # A copy is pasted into the destination and found there by its new ID;
+    # within one deck that is a duplicate, which is a verified route here.
     src_ids = [_slide_ids(src_pres)[i - 1] for i in sources]
 
     new_ids = []
     for sid in src_ids:
         ids = _slide_ids(src_pres)
-        new_ids.append(_duplicate_once(app, src_pres, ids.index(sid) + 1))
+        new_ids.append(_duplicate_once(app, src_pres, ids.index(sid) + 1, into=dst_pres))
 
-    ids = _slide_ids(src_pres)
+    ids = _slide_ids(dst_pres)
     without = [s for s in ids if s not in set(new_ids)]
     target = len(without) + 1 if append else insert_at
     _realize_order(
-        src_pres, without[: target - 1] + new_ids + without[target - 1:]
+        dst_pres, without[: target - 1] + new_ids + without[target - 1:]
     )
 
-    ids_now = _slide_ids(src_pres)
+    ids_now = _slide_ids(dst_pres)
     new_indices = [ids_now.index(sid) + 1 for sid in new_ids]
 
-    # Navigate the window to the last copy.
-    try:
-        nav_goto_slide(app, new_indices[-1])
-    except Exception:
-        pass
+    # Navigate the window to the last copy. The helper moves the window of the
+    # deck the server is working on, which a copy into another deck is not in.
+    if not across:
+        try:
+            nav_goto_slide(app, new_indices[-1])
+        except Exception:
+            pass
 
     return {
         "success": True,

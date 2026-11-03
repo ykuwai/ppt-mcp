@@ -1337,6 +1337,52 @@ class TestDuplicatingASlide:
 
 
 @macos_only
+class TestCopyingASlideIntoAnotherDeck:
+    """#246: `paste object` takes the presentation to paste into, so a slide
+    copied out of one deck can be pasted into another and found there."""
+
+    def test_it_is_pasted_into_the_other_deck_and_found_there(self, monkeypatch):
+        from ppt_mac import gvml_paste
+        from ppt_mac import slides as mac_slides
+
+        src, dst = object(), object()
+        ids = {src: [256, 257], dst: [256]}
+        scripts = []
+
+        def run(script, *args, **kwargs):
+            scripts.append(script)
+            if "paste object" in script:
+                ids[dst].append(300)
+            return ""
+
+        class FakeClipboard:
+            warnings = ()
+
+            @classmethod
+            def take(cls):
+                return cls()
+
+            def claim(self):
+                pass
+
+            def restore(self):
+                pass
+
+        monkeypatch.setattr(mac_slides, "osascript", run)
+        monkeypatch.setattr(mac_slides, "_slide_ids", lambda pres: list(ids[pres]))
+        monkeypatch.setattr(mac_slides, "_presentation_index",
+                            lambda app, pres: 1 if pres is src else 2)
+        monkeypatch.setattr(gvml_paste, "Clipboard", FakeClipboard)
+
+        assert mac_slides._duplicate_once(None, src, 2, into=dst) == 300
+        assert scripts == [
+            'tell application "Microsoft PowerPoint" to copy object slide 2 of presentation 1',
+            'tell application "Microsoft PowerPoint" to paste object presentation 2',
+        ]
+        assert ids[src] == [256, 257], "the source deck was not touched"
+
+
+@macos_only
 class TestShrinkToFitOnTheMac:
     def test_it_is_refused_by_name_before_anything_is_written(self, monkeypatch):
         # Live, PowerPoint 16.114: both names for it answer -1708, and
