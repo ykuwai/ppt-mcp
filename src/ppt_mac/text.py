@@ -778,7 +778,20 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text,
         _check_format_spec, _for_powerpoint, _resolve_span, run_offsets,
     )
 
-    shape, tr = _text_frame_of(slide_index, shape_name_or_index)
+    try:
+        shape, tr = _text_frame_of(slide_index, shape_name_or_index)
+    except ValueError:
+        # A group's member is reached through the group's clipboard package
+        # (#220), for whole text: a span, a search or runs need the live text
+        # range, which a member does not have here.
+        if (isinstance(shape_name_or_index, str) and runs is None and start is None
+                and search_text is None):
+            from ppt_mac.groups import set_member_text
+
+            member = set_member_text(slide_index, shape_name_or_index, text)
+            if member is not None:
+                return member
+        raise
     name = shape.name()
 
     if runs is not None:
