@@ -137,7 +137,10 @@ def test_ppt_run_steps_with_a_failing_step_is_an_error_and_stops_there(srv, flag
     assert is_error
     summary = json.loads(text)
     assert summary["ran"] == 2 and summary["of"] == 3
-    assert summary["steps"][1]["result"] == FAILURE, "the tool's answer as it was"
+    # Reported as #279 reports it: the error, and the rest of the answer.
+    step = summary["steps"][1]
+    assert step["error"] == FAILURE["error"]
+    assert step["details"] == {k: v for k, v in FAILURE.items() if k != "error"}
     assert summary["error"] == f"Step 2 (ppt_refuse) failed: {FAILURE['error']}"
 
 
