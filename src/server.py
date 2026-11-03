@@ -370,7 +370,7 @@ On Windows, a presentation opened from a server (SharePoint, OneDrive) can be ed
 
 Before placing any shapes, take a moment to plan:
 - **Slide structure**: decide the narrative arc and number of slides upfront
-- **Color system**: use accent colors from `ppt_get_presentation_info` instead of hardcoding RGB values. Pick one accent and use it consistently for icons, headings, and highlights.
+- **Color system**: use the deck's accent colors instead of hardcoding RGB values: pass the name, such as `"accent1"`, where a fill, line, text or icon color is taken, and the shape follows the theme if it changes. Pick one accent and use it consistently for icons, headings, and highlights.
 - **Icons**: whenever content has distinct points, steps, or features, add an icon for each — use `ppt_search_icons` + `ppt_add_svg_icon`
 - **One message per slide**: decide what this slide communicates, then place only what supports that message
 

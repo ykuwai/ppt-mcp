@@ -17,7 +17,7 @@ from utils.offload import run_offloaded
 from backend import ppt
 from utils.navigation import goto_slide
 from utils.redraw import FrozenRedraw
-from utils.color import hex_to_int, int_to_hex, int_to_rgb, get_theme_color_index
+from utils.color import COLOR_OR_THEME, check_color, get_theme_color_index, hex_to_int, int_to_hex, int_to_rgb, set_com_color
 from utils.validation import font_size_warning
 from ppt_com.layout_check import report_layout, report_layouts, touched_names
 from ppt_com.constants import (
@@ -144,12 +144,17 @@ class TextFormatSpec(BaseModel):
     bold: Optional[bool] = Field(default=None, description="Bold on/off")
     italic: Optional[bool] = Field(default=None, description="Italic on/off")
     underline: Optional[bool] = Field(default=None, description="Underline on/off")
-    color: Optional[str] = Field(default=None, description="Color as '#RRGGBB' hex string")
+    color: Optional[str] = Field(default=None, description="Text color: " + COLOR_OR_THEME + ".")
     font_color_theme: Optional[str] = Field(default=None, description="Theme color name (e.g. 'accent1', 'dark1')")
     highlight_color: Optional[str] = Field(
         default=None,
         description="Text highlight (marker) color as '#RRGGBB' hex string, or 'clear' to remove highlight. Requires Office 2019+.",
     )
+
+    @field_validator("color")
+    @classmethod
+    def validate_colours(cls, value):
+        return check_color(value)
 
     @field_validator("highlight_color")
     @classmethod
@@ -334,7 +339,7 @@ class FormatTextInput(BaseModel):
     bold: Optional[bool] = Field(default=None, description="Bold on/off")
     italic: Optional[bool] = Field(default=None, description="Italic on/off")
     underline: Optional[bool] = Field(default=None, description="Underline on/off")
-    color: Optional[str] = Field(default=None, description="Color as '#RRGGBB' hex string")
+    color: Optional[str] = Field(default=None, description="Text color: " + COLOR_OR_THEME + ".")
     font_color_theme: Optional[str] = Field(
         default=None,
         description="Theme color name (e.g. 'accent1', 'dark1')"
@@ -343,6 +348,11 @@ class FormatTextInput(BaseModel):
         default=None,
         description="Text highlight (marker) color as '#RRGGBB' hex string, or 'clear' to remove highlight. Requires Office 2019+.",
     )
+
+    @field_validator("color")
+    @classmethod
+    def validate_colours(cls, value):
+        return check_color(value)
 
     @field_validator("highlight_color")
     @classmethod
@@ -379,7 +389,7 @@ class FormatTextRangeInput(BaseModel):
     bold: Optional[bool] = Field(default=None, description="Bold on/off")
     italic: Optional[bool] = Field(default=None, description="Italic on/off")
     underline: Optional[bool] = Field(default=None, description="Underline on/off")
-    color: Optional[str] = Field(default=None, description="Color as '#RRGGBB' hex string")
+    color: Optional[str] = Field(default=None, description="Text color: " + COLOR_OR_THEME + ".")
     font_color_theme: Optional[str] = Field(
         default=None,
         description="Theme color name (e.g. 'accent1', 'dark1')"
@@ -407,6 +417,11 @@ class FormatTextRangeInput(BaseModel):
             "and the shape is never seen half styled."
         ),
     )
+
+    @field_validator("color")
+    @classmethod
+    def validate_colours(cls, value):
+        return check_color(value)
 
     @field_validator("highlight_color")
     @classmethod
@@ -1751,7 +1766,7 @@ def _apply_font_props(font, font_name, font_name_fareast, font_size, bold, itali
     if underline is not None:
         font.Underline = msoTrue if underline else msoFalse
     if color is not None:
-        font.Color.RGB = hex_to_int(color)
+        set_com_color(font.Color, color)
     if font_color_theme is not None:
         font.Color.ObjectThemeColor = get_theme_color_index(font_color_theme)
 
@@ -1818,7 +1833,7 @@ def _check_format_spec(spec):
     checked here before the first one is written.
     """
     if spec.get("color") is not None:
-        hex_to_int(spec["color"])
+        check_color(spec["color"])
     if spec.get("font_color_theme") is not None:
         get_theme_color_index(spec["font_color_theme"])
 

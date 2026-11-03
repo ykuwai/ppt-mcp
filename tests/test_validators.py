@@ -3656,9 +3656,9 @@ class TestAThemeNameWhereAHexBelongs:
     """`Invalid hex color: #accent1` sent nobody anywhere.
 
     The server's own instructions tell callers to use the deck's accent
-    colours rather than hardcoded RGB, and only two arguments take one by
-    name. An agent building a deck wrote the same hex twenty-five times for
-    want of knowing where the number lived.
+    colours rather than hardcoded RGB. An agent building a deck wrote the
+    same hex twenty-five times for want of knowing where the number lived.
+    The arguments that still take only hex say which tools take a name.
     """
 
     def test_a_theme_name_is_told_where_its_hex_lives(self):
@@ -3669,7 +3669,7 @@ class TestAThemeNameWhereAHexBelongs:
         said = str(caught.value)
         assert "theme colour name" in said
         assert "ppt_get_presentation_info" in said
-        assert "font_color_theme" in said
+        assert "ppt_add_shape" in said
 
     def test_a_real_hex_is_untouched(self):
         from utils.color import hex_to_rgb
@@ -3705,9 +3705,10 @@ class TestColoursCheckedBeforeAShapeIsMade:
         with pytest.raises(ValidationError, match="fill_type='none'"):
             AddShapeInput(**self.BOX, fill_color="transparent")
 
-    def test_a_theme_name_still_says_where_its_hex_lives(self):
-        with pytest.raises(ValidationError, match="ppt_get_presentation_info"):
-            AddShapeInput(**self.BOX, fill_color="accent1")
+    def test_a_theme_name_is_taken(self):
+        # Set as the theme colour itself, so the shape follows the theme.
+        inp = AddShapeInput(**self.BOX, fill_color="Accent 1", line_color="dark2")
+        assert (inp.fill_color, inp.line_color) == ("accent1", "dark2")
 
     def test_nonsense_names_the_argument(self):
         with pytest.raises(ValidationError, match="Invalid hex color"):

@@ -42,6 +42,8 @@ and have never been matched against the dictionary.
 
 from appscript import k
 
+from utils.color import THEME_COLOR_MAP, hex_to_rgb_list, theme_color_name
+
 
 def to_keyword(table, value, what):
     """Translate a Windows constant, or say plainly that macOS has no word for it.
@@ -57,6 +59,21 @@ def to_keyword(table, value, what):
             "PowerPoint for Mac has no %s matching the Windows constant %r"
             % (what, value)
         ) from None
+
+
+def set_mac_color(obj, prop: str, value) -> None:
+    """Set a colour property to a hex value, or to a theme colour by name.
+
+    Every colour PowerPoint for Mac scripts (a fill's `fore color`, a font's
+    `font color`, a glow's `color`) has a `<name> theme index` beside it, so
+    `prop` names the colour and the theme index is found next to it.
+    """
+    name = theme_color_name(value)
+    if name:
+        getattr(obj, f"{prop}_theme_index").set(
+            to_keyword(MsoThemeColorIndex, THEME_COLOR_MAP[name], "theme color"))
+    else:
+        getattr(obj, prop).set(hex_to_rgb_list(value))
 
 
 MsoAnimAfterEffect: dict = {

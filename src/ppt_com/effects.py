@@ -7,12 +7,12 @@ import json
 import logging
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from utils.offload import run_offloaded
 from backend import ppt
 from utils.navigation import goto_slide
-from utils.color import hex_to_int
+from utils.color import COLOR_OR_THEME, check_color, set_com_color
 from ppt_com.shape_lookup import resolve_shape as _get_shape
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class SetGlowInput(BaseModel):
         ..., ge=0, description="Glow radius in points (0 to remove glow)"
     )
     color: Optional[str] = Field(
-        default=None, description="Glow color as '#RRGGBB' hex"
+        default=None, description="Glow color: " + COLOR_OR_THEME + "."
     )
     transparency: Optional[float] = Field(
         default=None, ge=0, le=1,
@@ -102,6 +102,11 @@ class SetGlowInput(BaseModel):
     target: Literal["shape", "text"] = Field(
         default="shape", description=TARGET_FIELD_DESCRIPTION
     )
+
+    @field_validator("color")
+    @classmethod
+    def validate_colours(cls, value):
+        return check_color(value)
 
 
 class SetReflectionInput(BaseModel):
@@ -163,7 +168,7 @@ def _set_glow_impl(slide_index, shape_name_or_index, radius,
     glow.Radius = radius
 
     if color is not None:
-        glow.Color.RGB = hex_to_int(color)
+        set_com_color(glow.Color, color)
 
     if transparency is not None:
         glow.Transparency = transparency

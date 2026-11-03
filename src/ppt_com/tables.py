@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator, model_valida
 from utils.offload import run_offloaded
 from backend import ppt
 from ppt_com.layout_check import report_layout, touched_names
-from utils.color import hex_to_int, int_to_hex
+from utils.color import COLOR_OR_THEME, check_color, hex_to_int, int_to_hex, set_com_color
 from utils.navigation import goto_slide
 from utils.validation import font_size_warning
 from ppt_com.shape_lookup import resolve_shape
@@ -109,14 +109,19 @@ class SetTableCellInput(BaseModel):
     font_size: Optional[float] = Field(default=None, description="Font size in points")
     bold: Optional[bool] = Field(default=None, description="Bold on/off")
     italic: Optional[bool] = Field(default=None, description="Italic on/off")
-    color: Optional[str] = Field(default=None, description="Font color as '#RRGGBB'")
-    fill_color: Optional[str] = Field(default=None, description="Cell background color as '#RRGGBB'")
+    color: Optional[str] = Field(default=None, description="Font color: " + COLOR_OR_THEME + ".")
+    fill_color: Optional[str] = Field(default=None, description="Cell background color: " + COLOR_OR_THEME + ".")
     alignment: Optional[str] = Field(
         default=None, description="Text alignment: 'left', 'center', 'right', or 'justify'"
     )
     vertical_alignment: Optional[str] = Field(
         default=None, description="Vertical text alignment: 'top', 'middle', or 'bottom'"
     )
+
+    @field_validator("color", "fill_color")
+    @classmethod
+    def validate_colours(cls, value):
+        return check_color(value)
 
 
 class SetTableDataInput(BaseModel):
@@ -462,7 +467,7 @@ def _set_table_cell_impl(
     if italic is not None:
         font.Italic = msoTrue if italic else msoFalse
     if color is not None:
-        font.Color.RGB = hex_to_int(color)
+        set_com_color(font.Color, color)
 
     if alignment is not None:
         align_key = alignment.strip().lower()
@@ -475,7 +480,7 @@ def _set_table_cell_impl(
     # Cell fill
     if fill_color is not None:
         cell.Shape.Fill.Visible = msoTrue
-        cell.Shape.Fill.ForeColor.RGB = hex_to_int(fill_color)
+        set_com_color(cell.Shape.Fill.ForeColor, fill_color)
 
     if vertical_alignment is not None:
         va_key = vertical_alignment.strip().lower()

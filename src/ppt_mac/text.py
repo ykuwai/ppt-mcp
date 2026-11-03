@@ -45,6 +45,7 @@ from backend.mac_ae import (
     windows_constant as _windows_constant,
 )
 from backend.mac_enums import (
+    set_mac_color,
     MsoShapeType,
     MsoTextOrientation,
     MsoThemeColorIndex,
@@ -303,7 +304,7 @@ def _apply_font_props(font, font_name, font_name_fareast, font_size, bold,
     if underline is not None:
         font.underline.set(bool(underline))
     if color is not None:
-        font.font_color.set(hex_to_rgb_list(color))
+        set_mac_color(font, "font_color", color)
     if font_color_theme is not None:
         font.font_color_theme_index.set(
             to_keyword(

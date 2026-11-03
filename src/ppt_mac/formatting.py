@@ -14,7 +14,7 @@ from appscript import k
 from appscript.reference import CommandError
 
 from backend.mac_ae import is_missing, ppt, raw
-from backend.mac_enums import MsoGradientStyle, to_keyword
+from backend.mac_enums import MsoGradientStyle, to_keyword, set_mac_color
 from ppt_com.constants import dash_style_value, msoGradientHorizontal
 from ppt_mac.shapes import (
     _DASH_STYLE,
@@ -24,7 +24,7 @@ from ppt_mac.shapes import (
     _get_shape,
     _slide,
 )
-from utils.color import hex_to_rgb_list, rgb_list_to_hex
+from utils.color import rgb_list_to_hex
 from utils.navigation import goto_slide
 
 # ``GRADIENT_STYLE_MAP`` lives in ``ppt_com.formatting``, which imports this
@@ -140,7 +140,7 @@ def _set_fill_impl(slide_index, shape_name_or_index, fill_type,
         fill.visible.set(True)
         fill.solid()
         if color is not None:
-            fill.fore_color.set(hex_to_rgb_list(color))
+            set_mac_color(fill, "fore_color", color)
     else:  # gradient
         fill.visible.set(True)
         style_val = GRADIENT_STYLE_MAP.get(gradient_style, msoGradientHorizontal)
@@ -149,9 +149,9 @@ def _set_fill_impl(slide_index, shape_name_or_index, fill_type,
             variant=1,
         )
         if gradient_color1 is not None:
-            fill.fore_color.set(hex_to_rgb_list(gradient_color1))
+            set_mac_color(fill, "fore_color", gradient_color1)
         if gradient_color2 is not None:
-            fill.back_color.set(hex_to_rgb_list(gradient_color2))
+            set_mac_color(fill, "back_color", gradient_color2)
 
     if transparency is not None and fill_type != "none":
         fill.transparency.set(transparency)
@@ -238,7 +238,7 @@ def _set_line_impl(slide_index, shape_name_or_index,
         warnings.append(visibility_failed)
 
     if color is not None:
-        line.fore_color.set(hex_to_rgb_list(color))
+        set_mac_color(line, "fore_color", color)
 
     if weight is not None:
         line.line_weight.set(weight)
@@ -313,7 +313,7 @@ def _set_shadow_impl(slide_index, shape_name_or_index,
         if offset_y is not None:
             shadow.offset_Y.set(offset_y)
         if color is not None:
-            shadow.fore_color.set(hex_to_rgb_list(color))
+            set_mac_color(shadow, "fore_color", color)
         if transparency is not None:
             shadow.transparency.set(transparency)
 
