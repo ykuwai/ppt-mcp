@@ -617,11 +617,20 @@ class TestChartTypeIsSwappedUnderTheData:
         flat = charts.set_type(three_d, 51)
         assert "view3D" not in _children(ET.fromstring(flat).find(f"{C}chart"))
 
+    def test_the_legend_font_size(self):
+        out = charts.format_chart(chart_bytes(), has_legend=True, legend_font_size=12)
+        assert charts.chart_summary(out)["legend_font_size"] == 12.0
+        legend = ET.fromstring(out).find(f"{C}chart/{C}legend")
+        assert _in_order(_children(legend), charts._LEGEND_ORDER), _children(legend)
+        with pytest.raises(ValueError, match="Cannot set legend font size when chart has no legend"):
+            charts.format_chart(chart_bytes(), has_legend=False, legend_font_size=12)
+
     def test_the_legend_and_title_survive_a_change_of_kind(self):
         titled = charts.format_chart(chart_bytes(), title="Hello", legend_position="top")
         out = charts.set_type(titled, 4)
         assert charts.chart_summary(out) == {
             "has_title": True, "title": "Hello", "has_legend": True, "legend_position": "t",
+            "legend_font_size": None,
         }
 
     def test_a_kind_without_a_template_is_named(self):
@@ -737,20 +746,32 @@ class TestChartAxes:
             chart_bytes(), "value", title="円", min_scale=0, max_scale=200,
             major_unit=50, minor_unit=10, major_tick_mark="cross",
             minor_tick_mark="inside", reverse_order=True, log_scale=True,
-            log_base=2, number_format="#,##0",
+            log_base=2, number_format="#,##0", tick_label_font_size=9,
         )
         assert applied == [
             "title", "min_scale", "max_scale", "major_unit", "minor_unit",
             "major_tick_mark", "minor_tick_mark", "reverse_order", "log_scale",
-            "log_base", "number_format",
+            "log_base", "number_format", "tick_label_font_size",
         ]
         assert charts.read_axis(out, "value") == {
             "title": "円", "min_scale": 0.0, "max_scale": 200.0, "major_unit": 50.0,
             "minor_unit": 10.0, "tick_label_spacing": None, "tick_mark_spacing": None,
             "major_tick_mark": "cross", "minor_tick_mark": "inside",
             "reverse_order": True, "log_scale": True, "log_base": 2.0,
-            "number_format": "#,##0",
+            "number_format": "#,##0", "tick_label_font_size": 9.0,
         }
+
+    def test_a_tick_label_size_goes_into_the_axis_text_properties(self):
+        out, _ = charts.format_axis(chart_bytes(), "category", tick_label_font_size=10.5)
+        axis = ET.fromstring(out).find(f"{C}chart/{C}plotArea/{C}catAx")
+        assert _in_order(_children(axis), charts._AXIS_ORDER), _children(axis)
+        defrpr = axis.find(f"{C}txPr/{A}p/{A}pPr/{A}defRPr")
+        assert defrpr.get("sz") == "1050"
+        # A second size replaces the first rather than adding a block.
+        again, _ = charts.format_axis(out, "category", tick_label_font_size=14)
+        axis = ET.fromstring(again).find(f"{C}chart/{C}plotArea/{C}catAx")
+        assert len(axis.findall(f"{C}txPr")) == 1
+        assert charts.read_axis(again, "category")["tick_label_font_size"] == 14.0
 
     def test_the_axis_and_its_scaling_stay_in_schema_order(self):
         out, _ = charts.format_axis(

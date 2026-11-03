@@ -851,10 +851,12 @@ def format_chart(
     title: Optional[str] = None,
     has_legend: Optional[bool] = None,
     legend_position: Optional[str] = None,
+    legend_font_size: Optional[float] = None,
 ) -> bytes:
-    """Title and legend, the way ``Chart.HasTitle``, ``HasLegend`` and
-    ``Legend.Position`` set them. Raises ``ValueError`` with the Windows text
-    for a legend position on a chart with no legend."""
+    """Title and legend, the way ``Chart.HasTitle``, ``HasLegend``,
+    ``Legend.Position`` and ``Legend.Font.Size`` set them. Raises
+    ``ValueError`` with the Windows text for a legend position or font size
+    on a chart with no legend."""
     root = load(chart_xml_bytes)
     chart = root.find(f"{_C}chart")
     if chart is None:
@@ -891,7 +893,55 @@ def format_chart(
         # A legend that was dragged by hand keeps a manual layout, which
         # overrides the preset; PowerPoint drops it too when a preset is chosen.
         _remove(legend, "layout")
+
+    if legend_font_size is not None:
+        legend = chart.find(f"{_C}legend")
+        if legend is None:
+            raise ValueError(
+                "Cannot set legend font size when chart has no legend. "
+                "Set has_legend=true first."
+            )
+        _set_text_size(legend, legend_font_size, _LEGEND_ORDER)
     return dump(root)
+
+
+def _set_text_size(parent: ET.Element, size_pt: float, order: List[str]) -> None:
+    """Set the default run size of an element's ``c:txPr`` (a legend's, an
+    axis's tick labels'), as ``Font.Size`` does on Windows: every paragraph's
+    ``a:defRPr`` gets ``sz``, and a missing ``c:txPr`` is made the way
+    PowerPoint writes one."""
+    a = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    sz = str(int(round(size_pt * 100)))
+    txpr = parent.find(f"{_C}txPr")
+    if txpr is None:
+        txpr = _el("txPr")
+        ET.SubElement(txpr, f"{a}bodyPr")
+        ET.SubElement(txpr, f"{a}lstStyle")
+        para = ET.SubElement(txpr, f"{a}p")
+        ET.SubElement(ET.SubElement(para, f"{a}pPr"), f"{a}defRPr")
+        ET.SubElement(para, f"{a}endParaRPr", lang="en-US")
+        _insert_ordered(parent, txpr, order)
+    paragraphs = txpr.findall(f"{a}p") or [ET.SubElement(txpr, f"{a}p")]
+    for para in paragraphs:
+        ppr = para.find(f"{a}pPr")
+        if ppr is None:
+            ppr = ET.Element(f"{a}pPr")
+            para.insert(0, ppr)
+        defrpr = ppr.find(f"{a}defRPr")
+        if defrpr is None:
+            defrpr = ET.SubElement(ppr, f"{a}defRPr")
+        defrpr.set("sz", sz)
+
+
+def _text_size(parent: Optional[ET.Element]) -> Optional[float]:
+    """The size ``_set_text_size`` wrote, in points, or None."""
+    if parent is None:
+        return None
+    a = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    defrpr = parent.find(f"{_C}txPr/{a}p/{a}pPr/{a}defRPr")
+    if defrpr is None or defrpr.get("sz") is None:
+        return None
+    return int(defrpr.get("sz")) / 100
 
 
 def chart_summary(chart_xml_bytes: bytes) -> dict:
@@ -909,6 +959,7 @@ def chart_summary(chart_xml_bytes: bytes) -> dict:
         "title": _title_text(title),
         "has_legend": legend is not None,
         "legend_position": pos.get("val") if pos is not None else None,
+        "legend_font_size": _text_size(legend),
     }
 
 
@@ -969,6 +1020,7 @@ def format_axis(
     log_scale: Optional[bool] = None,
     log_base: Optional[float] = None,
     number_format: Optional[str] = None,
+    tick_label_font_size: Optional[float] = None,
 ):
     """One axis, the fields ``ppt_format_chart_axis`` maps onto the XML.
 
@@ -1032,6 +1084,9 @@ def format_axis(
         fmt = _el("numFmt", formatCode=number_format, sourceLinked="0")
         _insert_ordered(axis, fmt, _AXIS_ORDER)
         applied.append("number_format")
+    if tick_label_font_size is not None:
+        _set_text_size(axis, tick_label_font_size, _AXIS_ORDER)
+        applied.append("tick_label_font_size")
     return dump(root), applied
 
 
@@ -1068,6 +1123,7 @@ def read_axis(chart_xml_bytes: bytes, axis_key: str) -> Optional[dict]:
         "log_scale": val(scaling, "logBase") is not None,
         "log_base": num(scaling, "logBase"),
         "number_format": None if fmt is None else fmt.get("formatCode"),
+        "tick_label_font_size": _text_size(axis),
     }
 
 

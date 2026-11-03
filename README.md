@@ -468,7 +468,7 @@ Smaller differences:
   position and z order are kept; animations on the shape are not, and the
   result says how many were lost. A few formatting arguments that depend on
   the chart's rendered size (`chart_style`, legend and title coordinates,
-  the 8-direction legend presets, `tick_label_font_size`) are refused by name.
+  the 8-direction legend presets) are refused by name.
 - **Text inside a group is edited the same way.** `ppt_set_text` (the whole
   text, or a span inside one line) and `ppt_format_text` reach a group's
   member by its name, or by its path (`"Group 4/TextBox 3"`); the group is
