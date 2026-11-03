@@ -96,6 +96,8 @@ class TestTheToolsSayWhenItWasLeftOpen:
 
         data = ChartData(workbook)
         chart = SimpleNamespace(ChartData=data, _oleobj_=SimpleNamespace(InvokeTypes=lambda *a: None))
+        shown = SimpleNamespace(Name="S", Values=(1.0,), XValues=("Q1",))
+        chart.SeriesCollection = lambda *i: shown if i else SimpleNamespace(Count=1)
         shape = SimpleNamespace(Name="Chart 1", ZOrderPosition=1, Chart=chart, HasChart=True)
         cells = SimpleNamespace(Clear=lambda: None)
         sheet = SimpleNamespace(Cells=lambda *a: SimpleNamespace(Value=None) if a else cells,
@@ -134,3 +136,79 @@ def test_a_workbook_that_never_closes_is_reported(caplog):
         assert _close_chart_workbook(chart, workbook, attempts=3, wait=0) is False
     assert not workbook.closed
     assert "Excel is busy" in caplog.text
+
+
+class TestTheDataIsReadBack:
+    """set_chart_data reads the chart back and fails when the data did not land (#315)."""
+
+    def compare(self, categories, series, read_categories, read_series):
+        from ppt_com.charts import _compare_chart_data
+
+        return _compare_chart_data(categories, series, read_categories, read_series)
+
+    def test_what_was_written_is_fine(self):
+        assert self.compare(["Q1", "Q2"], [{"name": "S", "values": [1, 2.5]}],
+                            ["Q1", "Q2"], [{"name": "S", "values": [1.0, 2.5]}]) == (None, None)
+
+    def test_an_empty_chart_is_a_problem(self):
+        problem, _ = self.compare(["Q1", "Q2"], [{"name": "S", "values": [1, 2]}],
+                                  [], [{"name": "系列1", "values": []}])
+        assert problem == "it has 0 categories, not 2"
+
+    def test_a_missing_series_is_a_problem(self):
+        problem, _ = self.compare(["Q1"], [{"name": "A", "values": [1]}, {"name": "B", "values": [2]}],
+                                  ["Q1"], [{"name": "A", "values": [1.0]}])
+        assert problem == "it has 1 series, not 2"
+
+    def test_a_different_value_is_a_problem(self):
+        problem, _ = self.compare(["Q1", "Q2"], [{"name": "S", "values": [1, 2]}],
+                                  ["Q1", "Q2"], [{"name": "S", "values": [1.0, 3.0]}])
+        assert problem == "series 1 value 2 reads 3.0, not 2"
+
+    def test_short_values_show_as_empty_points(self):
+        assert self.compare(["Q1", "Q2"], [{"name": "S", "values": [1]}],
+                            ["Q1", "Q2"], [{"name": "S", "values": [1.0, None]}]) == (None, None)
+
+    def test_a_number_label_read_as_a_number_is_fine(self):
+        assert self.compare(["2024", "2025"], [{"name": "2", "values": [1, 2]}],
+                            ["2024.0", "2025.0"], [{"name": 2.0, "values": [1.0, 2.0]}]) == (None, None)
+
+    def test_a_label_excel_turned_into_a_date_is_a_warning(self):
+        problem, renamed = self.compare(["1/2"], [{"name": "S", "values": [1]}],
+                                        ["1月2日"], [{"name": "S", "values": [1.0]}])
+        assert problem is None
+        assert "category 1 reads '1月2日'" in renamed
+
+
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="drives the COM impls, which macOS replaces with its own")
+class TestSetChartDataFailsWhenTheChartStaysEmpty:
+
+    def deck(self, monkeypatch, workbook):
+        return TestTheToolsSayWhenItWasLeftOpen().deck(monkeypatch, workbook)
+
+    def test_an_empty_chart_fails(self, monkeypatch):
+        from types import SimpleNamespace
+
+        charts = self.deck(monkeypatch, Workbook(failures=0))
+        empty = SimpleNamespace(Name="系列1", Values=(), XValues=())
+        chart = charts._get_chart_shape(None, "Chart 1").Chart
+        chart.SeriesCollection = lambda *i: empty if i else SimpleNamespace(Count=1)
+        with pytest.raises(RuntimeError, match="did not take the data: it has 0 categories, not 1"):
+            charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
+
+    def test_data_that_lands_late_is_waited_for(self, monkeypatch):
+        from types import SimpleNamespace
+
+        charts = self.deck(monkeypatch, Workbook(failures=0))
+        reads = iter([((), ()), (("Q1",), (1.0,))])
+
+        def series(*i):
+            if not i:
+                return SimpleNamespace(Count=1)
+            categories, values = next(reads)
+            return SimpleNamespace(Name="S", Values=values, XValues=categories)
+
+        charts._get_chart_shape(None, "Chart 1").Chart.SeriesCollection = series
+        result = charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
+        assert result["success"] and "warning" not in result
