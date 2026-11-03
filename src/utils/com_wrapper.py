@@ -312,6 +312,48 @@ def bind_call_presentation(local: threading.local, wanted: str,
     return bound
 
 
+class UndoEntry:
+    """One tool call's undo step: started once, before its first COM call.
+
+    PowerPoint puts every change made through COM since the last
+    ``Application.StartNewUndoEntry`` into one undo entry, and nothing started
+    one, so a single Undo took back everything the tools had done to the deck,
+    slides added included (#298). server.py sets one of these in
+    ``call_undo_entry`` for each tool call that changes the deck, and
+    ``execute`` starts the entry before the first operation of that call.
+    """
+
+    __slots__ = ("started",)
+
+    def __init__(self):
+        self.started = False
+
+
+call_undo_entry: ContextVar = ContextVar("call_undo_entry", default=None)
+
+
+def bind_undo_entry(wrapper, entry: UndoEntry, func: Callable) -> Callable:
+    """Wrap func so that, run first in its tool call, it starts an undo entry.
+
+    Only the first operation of the call starts one, so the call is one undo
+    step however many operations it takes. A PowerPoint that is not running
+    has nothing to undo, and is not started for this. Starting the entry is
+    a courtesy: when it fails, the operation runs all the same.
+    """
+    @functools.wraps(func)
+    def bound(*args, **kwargs):
+        if not entry.started:
+            entry.started = True
+            try:
+                if wrapper._app is not None:
+                    wrapper._get_app_impl().StartNewUndoEntry()
+            except Exception:  # noqa: BLE001 - never fail the tool for it
+                logger.debug("Could not start an undo entry", exc_info=True)
+        return func(*args, **kwargs)
+
+    return bound
+
+
 def full_name_key(full_name: str) -> str:
     """Return the form in which a full name is compared.
 
@@ -900,6 +942,11 @@ class PowerPointCOMWrapper:
         wanted = call_presentation.get()
         if wanted is not None:
             func = bind_call_presentation(self._call_local, wanted, func)
+        # Outermost, so the entry is started before anything the call does,
+        # its co-authoring check included.
+        undo_entry = call_undo_entry.get()
+        if undo_entry is not None and not undo_entry.started:
+            func = bind_undo_entry(self, undo_entry, func)
 
         future: Future = Future()
         dequeued = threading.Event()
