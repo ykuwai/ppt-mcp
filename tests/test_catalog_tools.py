@@ -484,6 +484,17 @@ class TestHelpers:
         with pytest.raises(Exception, match="it broke"):
             _server()._content_of(Result())
 
+    def test_content_from_a_tool_that_answered_its_failure_is_its_blocks(self):
+        # Marked failed by call_tool (#249), and passed on so that ppt_run
+        # answers the same JSON rather than a prefixed ToolError.
+        class Block:
+            type, text = "text", '{"error": "slide 9 does not exist"}'
+
+        class Result:
+            content, isError = [Block()], True
+
+        assert _server()._content_of(Result())[0].text == Block.text
+
     def test_content_from_a_result_that_worked_is_its_blocks(self):
         class Block:
             type, text = "text", "fine"
