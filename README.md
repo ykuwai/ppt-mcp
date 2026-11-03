@@ -432,12 +432,12 @@ something the tool says so rather than doing something unexpected.
 
 Not available on macOS:
 
-- **SmartArt, beyond its text.** The dictionary has no class and no command
-  for it, so a graphic cannot be created, and nodes cannot be added, removed
-  or restyled, from a script. A node's text can be set
-  (`ppt_modify_smartart action='set_text'`), through the graphic's clipboard
-  package, and an existing graphic is an ordinary shape that can be moved,
-  resized, read and deleted.
+- **SmartArt, beyond its nodes.** The dictionary has no class and no command
+  for it, so a graphic cannot be created, nor its layout, colours or style
+  changed, from a script. Its nodes can be written, added and deleted
+  (`ppt_modify_smartart` with `set_text`, `add_node`, `delete_node`), through
+  the graphic's clipboard package, and an existing graphic is an ordinary
+  shape that can be moved, resized, read and deleted.
 - **A freeform node's editing type.** Corner, smooth and symmetric are not
   stored anywhere a script can reach; move the node's handles instead.
 - **Removing one animation.** Clearing a slide's animations works.

@@ -1,8 +1,8 @@
 """SmartArt tools, on Apple Events.
 
-Mirrors ``ppt_com/smartart.py``. ``ppt_modify_smartart`` writes a node's
-text (``set_text``) through the graphic's clipboard package; everything else
-here refuses.
+Mirrors ``ppt_com/smartart.py``. ``ppt_modify_smartart`` writes, adds and
+deletes nodes (``set_text``, ``add_node``, ``delete_node``) through the
+graphic's clipboard package; everything else here refuses.
 
 **There is no smart art in this dictionary, and the gap is a strange shape.**
 Parsing ``PowerPoint.sdef`` into the tables appscript builds gives a reference
@@ -43,12 +43,14 @@ implementation for why serving from it would be worse than refusing.
 SmartArt graphic writes the whole diagram to the clipboard package: its data
 model, layout, style, colours and the drawing PowerPoint laid out. Pasting the
 package back makes a SmartArt graphic again, and a node's text rewritten in it
-shows (PowerPoint 16.114). So ``set_text`` copies the graphic, writes the
-node's text in the data model and the drawing (``gvml.smartart``), and pastes
-it back over the original with ``replace_shape``, which reads the paste back
-and checks the text before it deletes anything. The other seven actions add,
-remove or restyle nodes, which means laying the diagram out again, and that
-is PowerPoint's to do; they still refuse.
+shows (PowerPoint 16.114). So the three node actions copy the graphic,
+change its data model (``gvml.smartart``), and paste it back over the
+original with ``replace_shape``, which reads the paste back and checks every
+node's text before it deletes anything. A node added or deleted only in the
+data model is laid out again by PowerPoint on the paste, the drawing it
+carried notwithstanding. A layout, colour scheme, style or node format would
+have to come from another graphic's package, and none ships here, so those
+five actions still refuse.
 
 A refused call edits nothing, so it does not call ``goto_slide``, and leaves
 the user's view where it was.
@@ -171,23 +173,36 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
             "'format_node', 'format_all_nodes'"
         )
 
+    from gvml import smartart as gvml_smartart
+
     if action == "set_text":
         if node_index is None:
             raise ValueError("node_index is required for 'set_text' action")
         if text is None:
             raise ValueError("text is required for 'set_text' action")
-        return _set_node_text(pres, slide, slide_index, shape, node_index, text)
+        return _edit_nodes(pres, slide, slide_index, shape, action,
+                           lambda data, drawing: gvml_smartart.set_node_text(
+                               data, drawing, node_index, text))
+    if action == "add_node":
+        return _edit_nodes(pres, slide, slide_index, shape, action,
+                           lambda data, drawing: gvml_smartart.add_node(data, node_index, text))
+    if action == "delete_node":
+        if node_index is None:
+            raise ValueError("node_index is required for 'delete_node' action")
+        return _edit_nodes(pres, slide, slide_index, shape, action,
+                           lambda data, drawing: gvml_smartart.delete_node(data, node_index))
 
     return _refusal(
         "ppt_modify_smartart",
         f"'{shape.name()}' on slide {slide_index} is a SmartArt graphic and "
-        f"the action '{action}' cannot be carried out on it. A node's text "
-        "can be written (action='set_text'), through the graphic's clipboard "
-        "package; adding, removing or restyling nodes means laying the "
-        "diagram out again, which only PowerPoint does, and it has no "
-        f"command for it here. {_NO_SMART_ART}",
+        f"the action '{action}' cannot be carried out on it. Nodes can be "
+        "written, added and deleted (action='set_text', 'add_node', "
+        "'delete_node'), through the graphic's clipboard package; a layout, "
+        "colour scheme, style or node format would have to come from another "
+        "graphic's package, and none ships with the server. "
+        f"{_NO_SMART_ART}",
         [
-            "ppt_modify_smartart with action='set_text'",
+            "ppt_modify_smartart with action='set_text', 'add_node' or 'delete_node'",
             "Edit the SmartArt by hand in PowerPoint",
             "ppt_ungroup_shapes, which does work and turns a converted "
             "diagram into shapes the text and formatting tools can reach",
@@ -203,8 +218,17 @@ def _diagram_parts(package):
     return (data[0] if data else None), (drawing[0] if drawing else None)
 
 
-def _set_node_text(pres, slide, slide_index, shape, node_index, text) -> dict:
-    """Write one node's text through the graphic's clipboard package."""
+def _edit_nodes(pres, slide, slide_index, shape, action, edit) -> dict:
+    """Change the graphic's nodes through its clipboard package.
+
+    ``edit(data, drawing)`` changes the data model, and the drawing where it
+    keeps up (a node's text), in place; a ValueError from it is passed on
+    with nothing changed. The graphic is pasted back over the original with
+    ``replace_shape``, and every node's text is read back before the
+    original goes. Adding or deleting a node leaves the drawing as it was:
+    PowerPoint lays the diagram out again from the data model when it is
+    pasted (checked live on 16.114, a node added and one deleted).
+    """
     import xml.etree.ElementTree as ET
 
     from gvml.package import PackageError, register_prefixes
@@ -235,7 +259,7 @@ def _set_node_text(pres, slide, slide_index, shape, node_index, text) -> dict:
                 register_prefixes(package.parts[part])
         data = ET.fromstring(package.parts[data_part])
         drawing = ET.fromstring(package.parts[drawing_part]) if drawing_part else None
-        gvml_smartart.set_node_text(data, drawing, node_index, text)
+        edit(data, drawing)
         wanted = gvml_smartart.node_texts(data)
         package.parts[data_part] = (XML_DECL + ET.tostring(data, encoding="unicode")).encode("utf-8")
         if drawing is not None:
@@ -268,7 +292,7 @@ def _set_node_text(pres, slide, slide_index, shape, node_index, text) -> dict:
 
     return with_warnings({
         "success": True,
-        "action": "set_text",
+        "action": action,
         "total_nodes": len(wanted),
         "shape_name": replaced.name,
     }, clip, replaced.warnings)
