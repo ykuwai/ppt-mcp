@@ -12,6 +12,7 @@ Excel processes.
 import json
 import logging
 import sys
+import time
 from typing import Literal, Optional, Union
 
 # pythoncom does not exist on macOS, and this module has to stay importable
@@ -357,6 +358,43 @@ def _get_chart_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 # COM implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
+WORKBOOK_LEFT_OPEN = (
+    "The chart's data workbook could not be closed, so Excel's 'Chart in "
+    "Microsoft PowerPoint' window may still be open. Close it before adding or "
+    "editing another chart, or PowerPoint will refuse or wait for it."
+)
+
+
+def _close_chart_workbook(chart, workbook, attempts=5, wait=0.5) -> bool:
+    """Close a chart's data workbook, and say whether it closed.
+
+    A workbook left open keeps the chart in edit mode: the next chart PowerPoint
+    is asked to insert or edit answers with a dialog asking for Excel's dialogs
+    to be closed, or waits for it, and every call after that times out. Excel
+    still starting up can answer the first Close with an error, or hand back a
+    workbook its type information does not describe yet, so that ``Close`` is
+    not even found. The workbook is asked for again and closed again, a few
+    times, before giving up; giving up is logged and reported, never silent.
+
+    A workbook that can no longer be had from the chart is taken as closed.
+    """
+    last = None
+    for attempt in range(attempts):
+        if attempt:
+            time.sleep(wait)
+            try:
+                workbook = chart.ChartData.Workbook
+            except Exception:  # noqa: BLE001 - not open any more is what we want
+                return True
+        try:
+            workbook.Close(False)
+            return True
+        except Exception as e:  # noqa: BLE001 - retried, then reported
+            last = e
+    logger.warning("Could not close a chart's data workbook after %d tries: %s", attempts, last)
+    return False
+
+
 def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -371,19 +409,23 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     # prevent leaked Excel processes.
     try:
         chart.ChartData.Activate()
-        wb = chart.ChartData.Workbook
-        wb.Close(False)
+        workbook = chart.ChartData.Workbook
     except Exception:
-        pass  # Workbook may not always be open
+        logger.debug("The new chart's workbook is not open", exc_info=True)
+        workbook = None
+    closed = workbook is None or _close_chart_workbook(chart, workbook)
 
     type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
-    return {
+    result = {
         "success": True,
         "shape_name": chart_shape.Name,
         "shape_index": chart_shape.ZOrderPosition,
         "chart_type": type_name,
         "chart_type_int": type_int,
     }
+    if not closed:
+        result["warning"] = WORKBOOK_LEFT_OPEN
+    return result
 
 
 def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
@@ -425,14 +467,17 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
             addr, pythoncom.Empty,
         )
     finally:
-        wb.Close(False)
+        closed = _close_chart_workbook(chart, wb)
 
-    return {
+    result = {
         "success": True,
         "shape_name": shape.Name,
         "categories_count": len(categories),
         "series_count": len(series),
     }
+    if not closed:
+        result["warning"] = WORKBOOK_LEFT_OPEN
+    return result
 
 
 def _get_chart_data_impl(slide_index, shape_name_or_index):
