@@ -419,7 +419,6 @@ class TestTheDocumentedRefusalsMatchTheCode:
         assert documented == self._always_refusing()
 
     def test_the_headline_count_is_the_real_one(self):
-        import ast
         import pathlib
         import re
 
@@ -428,12 +427,14 @@ class TestTheDocumentedRefusalsMatchTheCode:
             r"\*\*(\d+) tools\. (\d+) do the job\. (\d+) always refuse\.\*\*", doc
         )
         assert stated, "the headline count is not in MACOS_PORT any more"
-        total = sum(
-            1
-            for path in pathlib.Path("src/ppt_mac").glob("*.py")
-            for node in ast.parse(path.read_text(encoding="utf-8")).body
-            if isinstance(node, ast.FunctionDef) and node.name.endswith("_impl")
-        )
+        # The tools the server registers, as the README counts them. Counting
+        # the Mac's _impl functions also counted the helpers the layout check
+        # and the batch tools call, which are no tools of their own.
+        files = [pathlib.Path("src/server.py"), *sorted(pathlib.Path("src/ppt_com").glob("*.py"))]
+        names = [n for f in files
+                 for n in re.findall(r'name="(ppt_\w+)"', f.read_text(encoding="utf-8"))]
+        catalog = {"ppt_describe", "ppt_run", "ppt_run_steps"}
+        total = len([n for n in names if n not in catalog])
         refusing = len(self._always_refusing())
         assert int(stated.group(1)) == total
         assert int(stated.group(3)) == refusing

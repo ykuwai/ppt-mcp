@@ -515,7 +515,7 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**155 tools. 143 do the job. 12 always refuse.**
+**157 tools. 145 do the job. 12 always refuse.**
 
 | Why | Tools |
 |---|---|
