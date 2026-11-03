@@ -75,7 +75,15 @@ class SetSlideTransitionInput(BaseModel):
     """Input for setting a slide transition effect."""
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    slide_index: Optional[int] = Field(
+        default=None, ge=1,
+        description="1-based slide index. Required if slide_indices is not provided.",
+    )
+    slide_indices: Optional[list[int]] = Field(
+        default=None,
+        description="List of 1-based slide indices to give the same transition. "
+        "Overrides slide_index when provided.",
+    )
     effect: Union[int, str] = Field(
         default="fade",
         description=(
@@ -96,6 +104,18 @@ class SetSlideTransitionInput(BaseModel):
     advance_time: Optional[float] = Field(
         default=None, description="Auto-advance time in seconds"
     )
+
+    @model_validator(mode="after")
+    def validate_slide_target(self):
+        """At least one slide, and every index 1 or more, as ppt_set_slide_background."""
+        if self.slide_indices is not None and len(self.slide_indices) == 0:
+            raise ValueError("slide_indices must not be empty")
+        if self.slide_index is None and not self.slide_indices:
+            raise ValueError("Either slide_index or slide_indices must be provided")
+        for idx in self.slide_indices or ():
+            if idx < 1:
+                raise ValueError(f"All slide indices must be >= 1, got {idx}")
+        return self
 
 
 class AddAnimationInput(BaseModel):
@@ -428,30 +448,33 @@ class UpdateAnimationInput(BaseModel):
 # ---------------------------------------------------------------------------
 def _set_slide_transition_impl(
     slide_index, effect, duration, advance_on_click, advance_on_time, advance_time,
+    slide_indices=None,
 ):
+    targets = slide_indices or [slide_index]
     app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
+    goto_slide(app, targets[0])
     pres = ppt._get_pres_impl()
-    slide = pres.Slides(slide_index)
+    # Every slide is found before the first is changed, so an index past the
+    # end changes none of them.
+    slides = [pres.Slides(idx) for idx in targets]
 
-    transition = slide.SlideShowTransition
     effect_int = TRANSITION_EFFECT_MAP.get(effect, effect) if isinstance(effect, str) else effect
-    transition.EntryEffect = effect_int
+    for slide in slides:
+        transition = slide.SlideShowTransition
+        transition.EntryEffect = effect_int
 
-    if duration is not None:
-        transition.Duration = duration
-    if advance_on_click is not None:
-        transition.AdvanceOnClick = msoTrue if advance_on_click else msoFalse
-    if advance_on_time is not None:
-        transition.AdvanceOnTime = msoTrue if advance_on_time else msoFalse
-    if advance_time is not None:
-        transition.AdvanceTime = advance_time
+        if duration is not None:
+            transition.Duration = duration
+        if advance_on_click is not None:
+            transition.AdvanceOnClick = msoTrue if advance_on_click else msoFalse
+        if advance_on_time is not None:
+            transition.AdvanceOnTime = msoTrue if advance_on_time else msoFalse
+        if advance_time is not None:
+            transition.AdvanceTime = advance_time
 
-    return {
-        "success": True,
-        "slide_index": slide_index,
-        "effect": effect_int,
-    }
+    if slide_indices is None:
+        return {"success": True, "slide_index": slide_index, "effect": effect_int}
+    return {"success": True, "slide_indices": list(targets), "effect": effect_int}
 
 
 def _add_animation_impl(
@@ -996,6 +1019,7 @@ def set_slide_transition(params: SetSlideTransitionInput) -> str:
             _set_slide_transition_impl,
             params.slide_index, params.effect, params.duration,
             params.advance_on_click, params.advance_on_time, params.advance_time,
+            params.slide_indices,
         )
         return json.dumps(result)
     except Exception as e:
