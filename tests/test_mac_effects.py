@@ -163,7 +163,7 @@ class TestReflection:
         assert deck.shape("Title").reflection_format.reflection_type() == (
             k.reflection_type3
         )
-        assert result == {"status": "success", "shape_name": "Title"}
+        assert result == {"status": "success", "shape_name": "Title", "target": "shape"}
 
     def test_zero_turns_the_reflection_off(self):
         from appscript import k

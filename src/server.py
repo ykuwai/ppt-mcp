@@ -40,6 +40,7 @@ from pydantic import ValidationError
 
 from utils.arguments import describe_unknown_top_level, describe_validation_error
 from utils.com_wrapper import call_presentation
+from utils.coauthoring import CallCoauthoring, call_coauthoring
 
 # Configure logging to stderr (stdout is used for MCP protocol)
 logging.basicConfig(
@@ -130,6 +131,20 @@ take works. Drop the named argument and call again.
 # substitutes one, so a deck built from the Windows recommendation on a Mac
 # comes out in something nobody chose. The advice therefore has to be right
 # the first time it is read, rather than corrected further down (#194).
+from ppt_com.layout_check import CHECK_EACH_WRITE
+
+# Step 7 of the instructions, which PPT_LAYOUT_CHECKS changes.
+_WRITE_CHECKS = (
+    "The tools that add, copy, move, resize or retext a shape, or fill a placeholder, "
+    "check what they touched and report any problem in their result under "
+    "`layout_issues`, each with a `fix` naming the call and its values: act on them "
+    "before moving on."
+    if CHECK_EACH_WRITE else
+    "This server's write tools do not check what they touched (PPT_LAYOUT_CHECKS=off), "
+    "so run `ppt_check_layout` on a slide after each few changes to it, and act on "
+    "each issue's `fix` before moving on."
+)
+
 _PREFERRED_FONTS = (
     "Preferred fonts: Hiragino Sans (Japanese, ヒラギノ角ゴシック in the font "
     "menu) with Hiragino Sans W6 for headings, and Helvetica Neue or Arial "
@@ -199,6 +214,7 @@ class _PowerPointServer(MCPServer):
         if tool is not None and isinstance(arguments, dict):
             _refuse_unknown_arguments(name, tool, arguments)
         token = call_presentation.set(wanted)
+        coauthoring_token = call_coauthoring.set(_coauthoring_call(name, tool, arguments))
         try:
             return await super().call_tool(name, arguments, *args, **kwargs)
         except ToolError as exc:
@@ -207,7 +223,18 @@ class _PowerPointServer(MCPServer):
                 raise
             raise ToolError(readable) from exc.__cause__
         finally:
+            call_coauthoring.reset(coauthoring_token)
             call_presentation.reset(token)
+
+    async def list_tools(self, *args, **kwargs):
+        tools = await super().list_tools(*args, **kwargs)
+        # Catalog mode (PPT_TOOL_MODE=catalog) lists the three tools that reach
+        # the rest; every tool stays registered, so ppt_run dispatches through
+        # call_tool above. Full mode, the default, lists every tool but those
+        # three.
+        if CATALOG_MODE:
+            return [t for t in tools if t.name in _CATALOG_TOOLS]
+        return [t for t in tools if t.name not in _CATALOG_TOOLS]
 
     def _registered_tool(self, name):
         """The SDK's Tool for `name`, or None.
@@ -219,6 +246,43 @@ class _PowerPointServer(MCPServer):
             return self._tool_manager.get_tool(name)
         except Exception:
             return None
+
+
+# Presentation-bound tools that handle co-authoring themselves (save) or have
+# no deck left to look at afterwards (save as under a new name, close).
+_TOOLS_WITHOUT_COAUTHORING = frozenset({
+    "ppt_save_presentation", "ppt_save_presentation_as", "ppt_close_presentation",
+})
+
+
+def _coauthoring_call(name, tool, arguments):
+    """What utils/coauthoring.py needs to know about this call, or None.
+
+    Only presentation-bound tools take part. A tool writes unless its
+    readOnlyHint says otherwise; its own target fields (the destination of
+    ppt_copy_slide first) name the deck it works on.
+    """
+    if name in _TOOLS_WITHOUT_PRESENTATION_ARG or name in _TOOLS_WITHOUT_COAUTHORING:
+        return None
+    annotations = getattr(tool, "annotations", None)
+    read_only = getattr(annotations, "readOnlyHint", None)
+    if read_only is None:
+        read_only = getattr(annotations, "read_only_hint", None)
+    params = arguments.get("params") if isinstance(arguments, dict) else None
+    if isinstance(params, str):
+        try:
+            params = json.loads(params)
+        except ValueError:
+            params = None
+    if not isinstance(params, dict):
+        params = {}
+    for prefix in ("to_", ""):
+        index = params.get(prefix + "presentation_index")
+        name_ = params.get(prefix + "presentation_name")
+        if index is not None or name_ is not None:
+            return CallCoauthoring(writes=not read_only, presentation_name=name_,
+                                   presentation_index=index)
+    return CallCoauthoring(writes=not read_only)
 
 
 def _arg_model(tool):
@@ -287,6 +351,12 @@ mcp = _PowerPointServer(
 4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale systems, the slide master default is often 游ゴシック, which renders thin and illegible when projected. """ + _PREFERRED_FONTS + """
 5. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
 6. Use `ppt_get_slide_preview` to visually inspect slides as you work.
+7. """ + _WRITE_CHECKS + """ When a slide is finished, run `ppt_check_layout` on it, and before calling the deck done, run it once more with no `slide_index`, which also compares the titles across slides. A slide is done when it reports no issues, or only ones you mean to keep: if the same finding comes back after two attempts to fix it, treat it as intended (a photo behind white text, an overlap you designed, something the template draws) and move on. The write tools check only the shapes they touched, and a slide copied into another open deck is not checked, so run `ppt_check_layout` there after copying. The check measures rather than looks, so it works with or without image input.
+8. Build a slide at a time, not the whole deck at once. Before the first shape, fix the grid (margins, column positions, a type scale and a palette) and keep every shape on it: most alignment issues are coordinates a few points apart. Decide on photos up front, since adding them later changes the layout. Finish each slide, with its issues acted on, `ppt_check_layout` clean, or its remaining findings intended, and a preview checked if you can see images, before starting the next. Fix problems in place with the call each `fix` names. Deleting and rebuilding a slide or the deck to move something a few points costs many calls and finds the same problems again.
+
+## Shared files
+
+On Windows, a presentation opened from a server (SharePoint, OneDrive) can be edited by other people at the same time. PowerPoint takes in their saved changes only when the file is saved: tools do that before they run whenever nothing here is unsaved, and `ppt_save_presentation` always does. Results for such a file carry `coauthoring`: `pending_updates` = changes of others are waiting, `merged_updates` = they were just merged (re-read before relying on slide indices; a writing call whose slides or shapes the merge moved is refused without changes). A `conflict` means both sides changed the same object; unless it was resolved (`overwritten` then lists this copy's version), PowerPoint asks the user in a dialog. Save after each finished step so that conflicts stay small.
 
 ## Key tools
 
@@ -581,6 +651,13 @@ try:
 except ImportError:
     logger.debug("layout module not yet available")
 
+# Layout check (measured problems on a slide or across the deck)
+try:
+    from ppt_com.layout_check import register_tools as register_layout_check_tools
+    register_layout_check_tools(mcp)
+except ImportError:
+    logger.debug("layout_check module not yet available")
+
 # Visual effects tools (glow, reflection, soft edge)
 try:
     from ppt_com.effects import register_tools as register_effects_tools
@@ -765,6 +842,59 @@ except Exception:
     _inlined_tool_count = 0
 
 
+def _slim(node):
+    """A JSON schema without what Pydantic adds and no model reads.
+
+    Every field gets a ``title`` that repeats its name, and every optional one
+    is ``anyOf: [X, {"type": "null"}]`` with ``default: null``. Clients send
+    these schemas with every request, and the two made up about a sixth of
+    the 112k tokens the tools cost. A field left out still takes its default,
+    so saying only X loses nothing; one whose null means something other than
+    leaving it out, a default that is not null, keeps its anyOf.
+    """
+    if isinstance(node, list):
+        return [_slim(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    slim = {}
+    for key, value in node.items():
+        if key == "title" and isinstance(value, str):
+            continue
+        if key in ("properties", "$defs") and isinstance(value, dict):
+            # Names here are the caller's: a parameter may be called "title".
+            slim[key] = {name: _slim(field) for name, field in value.items()}
+        else:
+            slim[key] = _slim(value)
+    branches = slim.get("anyOf")
+    if (isinstance(branches, list) and "default" in slim and slim["default"] is None
+            and {"type": "null"} in branches):
+        rest = [b for b in branches if b != {"type": "null"}]
+        if len(rest) == 1 and isinstance(rest[0], dict) and not set(rest[0]) & set(slim):
+            slim.pop("anyOf")
+            slim = {**rest[0], **slim}
+    return slim
+
+
+def _slim_tool_schemas(server) -> int:
+    """Run every tool's input schema through _slim. Returns how many changed."""
+    changed = 0
+    for tool in server._tool_manager.list_tools():
+        slim = _slim(tool.parameters)
+        if slim != tool.parameters:
+            tool.parameters = slim
+            changed += 1
+    return changed
+
+
+try:
+    _slimmed_tool_count = _slim_tool_schemas(mcp)
+except Exception:
+    # The same SDK internals as _inline_schema_defs. The full schemas are
+    # still correct, only larger, so degrade instead of failing to start.
+    logger.warning("Could not slim the tool schemas; they keep their full form", exc_info=True)
+    _slimmed_tool_count = 0
+
+
 def _add_presentation_arg(server) -> int:
     """Declare the per-call `presentation` argument in the input schemas.
 
@@ -799,6 +929,214 @@ except Exception:
         exc_info=True,
     )
     _presentation_arg_count = 0
+
+
+# ---------------------------------------------------------------------------
+# Catalog mode, opted into with PPT_TOOL_MODE=catalog
+# ---------------------------------------------------------------------------
+# A client sends every listed tool's schema with every request, and the 157
+# come to about 112k tokens. In catalog mode the server lists three tools: one
+# that answers the list of tools, a line each, and full schemas on request,
+# one that runs any tool, and one that runs a list of calls. The tools
+# themselves are unchanged and run through the same call_tool, so their
+# validation, their checks and their layout findings are all as before. The
+# three are registered either way; full mode leaves them off the list.
+#
+# Full mode is the default: catalog mode lists other names than the tools'
+# own, so a client's rules that approve or block a tool by name would match
+# nothing once a release turned it on unasked.
+
+def _tool_mode(value):
+    """'catalog' or 'full', from PPT_TOOL_MODE."""
+    value = value.strip().lower()
+    if value == "catalog":
+        return "catalog"
+    if value in ("full", "all", ""):
+        return "full"
+    # Read at import, so a typo must not stop the server from starting.
+    logger.warning(
+        "PPT_TOOL_MODE=%r is not a setting; use 'full' (the default) to list every "
+        "tool, or 'catalog' to list three. Using 'full'.", value)
+    return "full"
+
+
+CATALOG_MODE = _tool_mode(os.getenv("PPT_TOOL_MODE", "full")) == "catalog"
+_CATALOG_TOOLS = frozenset({"ppt_describe", "ppt_run", "ppt_run_steps"})
+
+
+def _summary(description):
+    """The first sentence of a tool's description, for its catalog line."""
+    text = " ".join((description or "").split())
+    for end in (". ", "! ", "? "):
+        if end in text:
+            text = text.split(end, 1)[0] + end.strip()
+            break
+    return text[:120]
+
+
+def _catalog_lines():
+    return "\n".join(
+        f"{tool.name}: {_summary(tool.description)}"
+        for tool in mcp._tool_manager.list_tools()
+        if tool.name not in _CATALOG_TOOLS
+    )
+
+
+def _content_of(result):
+    """What call_tool answered, as a list of content blocks under either SDK major."""
+    if hasattr(result, "content") and not isinstance(result, (list, tuple, dict)):
+        # mcp 2.x answers a CallToolResult, and an error in it is not raised.
+        if getattr(result, "isError", False) or getattr(result, "is_error", False):
+            raise ToolError(_text_of(result.content) or "The tool failed.")
+        result = result.content
+    if isinstance(result, tuple):  # mcp 1.x: (unstructured, structured)
+        result = result[0]
+    if isinstance(result, dict):
+        return [json.dumps(result, ensure_ascii=False)]
+    return list(result or [])
+
+
+def _text_of(blocks):
+    return "".join(getattr(b, "text", "") or "" for b in blocks if getattr(b, "type", "") == "text")
+
+
+async def _run(tool, params, presentation):
+    if not isinstance(tool, str) or not tool:
+        raise ToolError("A step needs a 'tool': the name of the tool to run, "
+                        "such as \"ppt_add_textbox\".")
+    target = mcp._registered_tool(tool)
+    if target is None or tool in _CATALOG_TOOLS:
+        import difflib
+        names = [t.name for t in mcp._tool_manager.list_tools() if t.name not in _CATALOG_TOOLS]
+        close = difflib.get_close_matches(tool, names, n=3)
+        hint = f" Did you mean {', '.join(close)}?" if close else ""
+        raise ToolError(f"No tool called '{tool}'.{hint} The list is in ppt_describe's description.")
+    arguments = {}
+    declared = (target.parameters or {}).get("properties") or {}
+    if "params" in declared:
+        arguments["params"] = params or {}
+    elif params:
+        raise ToolError(f"{tool} takes no params.")
+    if presentation is not None:
+        arguments[PRESENTATION_ARG] = presentation
+    return _content_of(await mcp.call_tool(tool, arguments))
+
+
+def _resolve_refs(value, results):
+    """Replace "$prev.key" and "$N.key" (N counts steps from 1) with what that
+    step answered, read from its JSON result."""
+    if isinstance(value, dict):
+        return {k: _resolve_refs(v, results) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_refs(v, results) for v in value]
+    if not (isinstance(value, str) and value.startswith("$") and "." in value):
+        return value
+    which, key = value[1:].split(".", 1)
+    if which == "prev":
+        index = len(results) - 1
+    elif which.isdigit():
+        index = int(which) - 1
+    else:
+        return value
+    if not 0 <= index < len(results) or results[index] is None:
+        raise ToolError(f"'{value}' refers to a step that has no result.")
+    node = results[index]
+    for part in key.split("."):
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+        else:
+            raise ToolError(f"'{value}': the step's result has no '{key}'.")
+    return node
+
+
+@mcp.tool(name="ppt_describe")
+async def ppt_describe(names: list[str] | None = None) -> str:
+    """The PowerPoint tools: call with no names first for the list of all
+    of them, one line each; then with the names you are about to use, once
+    each, for their full description and argument schema.
+
+    Every PowerPoint tool is run through ppt_run (one call) or
+    ppt_run_steps (several), not called directly, with exactly the
+    arguments its schema gives. Start a task with ppt_describe().
+    """
+    # The list is an answer, not part of this description: clients cut
+    # long descriptions short (Claude Code kept 54 of 157 lines), while a
+    # tool's answer reaches the model whole.
+    if not names:
+        return _catalog_lines()
+    found, missing = {}, []
+    for name in names:
+        tool = mcp._registered_tool(name)
+        if tool is None or name in _CATALOG_TOOLS:
+            missing.append(name)
+            continue
+        schema = dict(tool.parameters or {})
+        schema.get("properties", {}).pop(PRESENTATION_ARG, None)
+        params = (schema.get("properties") or {}).get("params")
+        found[name] = {"description": tool.description, "params": params}
+    result = {"tools": found}
+    if missing:
+        result["unknown"] = missing
+    return json.dumps(result, ensure_ascii=False)
+
+@mcp.tool(name="ppt_run")
+async def ppt_run(tool: str, params: dict | None = None, presentation: str | None = None):
+    """Run one PowerPoint tool: `tool` is its name, `params` its arguments
+    as ppt_describe gives them, `presentation` the deck it works on
+    (optional, as on every tool). Answers exactly what the tool answers."""
+    return await _run(tool, params, presentation)
+
+@mcp.tool(name="ppt_run_steps")
+async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
+                        stop_on_error: bool = True):
+    """Run several PowerPoint tools in order, in one call.
+
+    Each step is {"tool": name, "params": {...}}. A value "$prev.key" is
+    the previous step's result field, and "$2.shape_name" the second
+    step's, so a step can use the shape the one before it made. The answer
+    lists each step's result; images (slide previews) follow it. With
+    stop_on_error, the first failing step ends the run and says why.
+    """
+    report, results, images = [], [], []
+    for number, step in enumerate(steps, start=1):
+        step = step if isinstance(step, dict) else {}
+        tool = step.get("tool")
+        try:
+            params = _resolve_refs(step.get("params") or {}, results)
+            blocks = await _run(tool, params, step.get("presentation", presentation))
+        except Exception as exc:  # noqa: BLE001 - reported per step
+            report.append({"step": number, "tool": tool, "error": str(exc)})
+            results.append(None)
+            if stop_on_error:
+                break
+            continue
+        text = _text_of(blocks)
+        try:
+            data = json.loads(text) if text else {}
+        except ValueError:
+            data = {"text": text}
+        results.append(data)
+        report.append({"step": number, "tool": tool, "result": data})
+        images += [b for b in blocks if getattr(b, "type", "") == "image"]
+    summary = json.dumps({"steps": report, "ran": len(report), "of": len(steps)},
+                         ensure_ascii=False)
+    return [summary, *images] if images else summary
+
+if CATALOG_MODE:
+    try:
+        # MCPServer.instructions is read-only under both majors; the low-level
+        # server it reads from is _mcp_server under 1.x, _lowlevel_server under 2.x.
+        lowlevel = getattr(mcp, "_lowlevel_server", None) or mcp._mcp_server
+        lowlevel.instructions = (
+            "Catalog mode: call ppt_describe() for the list of PowerPoint tools, "
+            "ppt_describe(names) for their arguments, and run them with ppt_run or "
+            "ppt_run_steps. Wherever the instructions say to call a tool, do it that way.\n\n"
+            + (mcp.instructions or "")
+        )
+    except Exception:
+        logger.warning("Could not add the catalog note to the instructions", exc_info=True)
 
 
 def main():

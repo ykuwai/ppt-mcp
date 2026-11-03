@@ -30,6 +30,13 @@ from ppt_com.connectors import FormatConnectorInput
 from ppt_com.formatting import SetLineInput
 from ppt_com.tables import SetTableBordersInput
 
+# Drives the COM implementation through fakes. On macOS the Apple Event one of
+# the same name takes its place, so the fakes are never reached.
+windows_only = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="on macOS the Apple Event impl takes the place of the COM one",
+)
+
 SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 
 ALL_TWELVE = {
@@ -159,6 +166,7 @@ def _line():
 
 
 class TestSetLineReachesCom:
+    @windows_only
     @pytest.mark.parametrize("name,number", list(ALL_TWELVE.items()))
     def test_each_name_is_written_as_its_number(self, name, number):
         from ppt_com import formatting
@@ -183,6 +191,7 @@ class TestSetLineReachesCom:
 
 
 class TestFormatConnectorTransparency:
+    @windows_only
     def test_transparency_reaches_line_transparency(self):
         from ppt_com import connectors
 
@@ -222,6 +231,7 @@ class TestFormatConnectorTransparency:
             )
 
 
+@windows_only
 class TestTableBordersReachCom:
     @pytest.mark.parametrize("name,number", [("dot", 3), ("round_dot", 3),
                                              ("square_dot", 2), ("sys_dot", 11)])
@@ -272,6 +282,7 @@ def _shape_info(dash_style, transparency=0.45):
         return shapes._get_shape_info_impl(1, "Straight Connector 1", None)
 
 
+@windows_only
 class TestShapeInfoLine:
     def test_dash_style_is_the_name_and_transparency_is_there(self):
         line = _shape_info(10)["line"]

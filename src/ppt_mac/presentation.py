@@ -22,15 +22,18 @@ slide master and cannot be set at all.
 """
 
 import glob as glob_mod
+import json
 import logging
 import os
 import shutil
 from typing import Optional
 
 from appscript import k, mactypes
+from appscript.reference import CommandError
 
 from backend.mac_ae import (
     EXPORT_STAGING_DIR,
+    staging_dir,
     count,
     elements,
     full_names as _full_names,
@@ -38,6 +41,7 @@ from backend.mac_ae import (
     ppt,
     resolve_presentation as _resolve_presentation,
 )
+from backend import quit_if_ours
 from backend.mac_enums import PpSaveAsFileType, to_keyword
 from ppt_com.constants import (
     ppSaveAsDefault,
@@ -93,6 +97,23 @@ _TEMPLATE_DIR_CANDIDATES = (
 # ---------------------------------------------------------------------------
 # Small helpers over the object model and the filesystem
 # ---------------------------------------------------------------------------
+def _bring_window_forward(app, pres, full_name: str) -> None:
+    """Make the deck's window PowerPoint's active one, if it is not already.
+
+    Activating a window brings PowerPoint in front of whatever the user is
+    working in. A deck PowerPoint has just created or opened is already its
+    active window, so there is nothing to do and the front is left alone; it
+    is taken only when another deck's window is in the way.
+    """
+    try:
+        if app.active_window.presentation.full_name() == full_name:
+            return
+    except CommandError:
+        # No window yet, or the start gallery is in front: activate to be sure.
+        pass
+    pres.document_windows[1].activate()
+
+
 def _index_of(app, full_name: str) -> Optional[int]:
     """The 1-based position of a presentation among the open ones."""
     names = _full_names(app)
@@ -152,7 +173,7 @@ def _stage_template_copy(template_path: str) -> str:
     directory it is always allowed to read and write, and an unsandboxed
     Python process can reach it freely.
     """
-    os.makedirs(EXPORT_STAGING_DIR, exist_ok=True)
+    staging_dir(EXPORT_STAGING_DIR)
     stem, ext = os.path.splitext(os.path.basename(template_path))
     dest = os.path.join(EXPORT_STAGING_DIR, stem + ext)
     serial = 2
@@ -292,7 +313,7 @@ def _create_presentation_impl(
 
     if activate:
         try:
-            pres.document_windows[1].activate()
+            _bring_window_forward(app, pres, full_name)
         except Exception as exc:  # noqa: BLE001 - the deck still exists
             logger.warning("Could not activate new presentation window: %s", exc)
         ppt._target_pres_full_name = full_name
@@ -351,7 +372,7 @@ def _open_presentation_impl(
     if activate:
         if with_window:
             try:
-                pres.document_windows[1].activate()
+                _bring_window_forward(app, pres, full_name)
             except Exception as exc:  # noqa: BLE001 - the deck is still open
                 logger.warning(
                     "Could not activate opened presentation window: %s", exc
@@ -431,7 +452,56 @@ def _save_presentation_impl(
 # the advice to save at every break watched their own file fall further behind
 # without being told. Keyed by the container path, which is what the open deck
 # answers for itself.
+#
+# Kept in a file beside the staged decks as well. A client that restarts its
+# MCP server, or reconnects, starts a new process with an empty dict, and a
+# save from there refreshed nothing and said nothing, so a deck saved as
+# ~/Documents/report.pptx before the restart kept its old contents there.
 _EXTERNAL_COPIES: dict = {}
+_COPIES_FILE = os.path.join(EXPORT_STAGING_DIR, ".ppt-mcp-copies.json")
+
+
+def _saved_copies() -> dict:
+    """The copies recorded in the file, or none when it cannot be read."""
+    try:
+        with open(_COPIES_FILE, encoding="utf-8") as f:
+            copies = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return copies if isinstance(copies, dict) else {}
+
+
+def _write_copies(copies: dict) -> None:
+    try:
+        with open(_COPIES_FILE, "w", encoding="utf-8") as f:
+            json.dump(copies, f)
+    except OSError:
+        logger.debug("Could not record the copies in %s", _COPIES_FILE)
+
+
+def _remember_copy(staged: str, target: str) -> None:
+    _EXTERNAL_COPIES[staged] = target
+    copies = _saved_copies()
+    copies[staged] = target
+    _write_copies(copies)
+
+
+def _forget_copy(staged: str) -> None:
+    _EXTERNAL_COPIES.pop(staged, None)
+    copies = _saved_copies()
+    if copies.pop(staged, None) is not None:
+        _write_copies(copies)
+
+
+def _copy_of(staged: str) -> Optional[str]:
+    """Where the deck staged at ``staged`` has its copy, from this process or
+    from the file an earlier one left."""
+    target = _EXTERNAL_COPIES.get(staged)
+    if target is None:
+        target = _saved_copies().get(staged)
+        if target is not None:
+            _EXTERNAL_COPIES[staged] = target
+    return target
 
 
 def _free_staged_path(app, target: str) -> str:
@@ -457,7 +527,7 @@ def _free_staged_path(app, target: str) -> str:
         name = base if attempt == 1 else f"{stem}-{attempt}{ext}"
         candidate = os.path.join(EXPORT_STAGING_DIR, name)
         key = os.path.abspath(candidate)
-        registered = _EXTERNAL_COPIES.get(key)
+        registered = _copy_of(key)
         if registered is not None and registered != wanted:
             # Held by a different deck that still wants its own copy refreshed.
             continue
@@ -481,7 +551,7 @@ def _refresh_external_copy(local: Optional[str]) -> Optional[str]:
     """
     if not local:
         return None
-    target = _EXTERNAL_COPIES.get(os.path.abspath(local))
+    target = _copy_of(os.path.abspath(local))
     if not target:
         return None
     try:
@@ -589,7 +659,7 @@ def _save_presentation_as_impl(
     #
     # A POSIX path, always. An HFS colon path is taken as a literal filename
     # and produces a file called "Macintosh HD:Users:..." in the container root.
-    os.makedirs(EXPORT_STAGING_DIR, exist_ok=True)
+    staging_dir(EXPORT_STAGING_DIR)
     staged = _free_staged_path(app, target)
     if "as_" not in kwargs:
         kwargs["as_"] = to_keyword(
@@ -636,7 +706,7 @@ def _save_presentation_as_impl(
         if not saved_in_place:
             # Remember it, so an ordinary save from here on refreshes this copy
             # too rather than leaving it behind in the container.
-            _EXTERNAL_COPIES[os.path.abspath(staged)] = os.path.abspath(target)
+            _remember_copy(os.path.abspath(staged), os.path.abspath(target))
         if saved_in_place:
             warnings.append(
                 f"The deck was saved to {target}, which is inside PowerPoint's "
@@ -673,6 +743,7 @@ def _close_presentation_impl(
     save_changes: bool,
     presentation_index: Optional[int],
     presentation_name: Optional[str],
+    keep_powerpoint_open: bool = False,
 ) -> dict:
     app = ppt._get_app_impl()
     pres = _resolve_presentation(
@@ -715,11 +786,13 @@ def _close_presentation_impl(
         )
 
     if local:
-        _EXTERNAL_COPIES.pop(os.path.abspath(local), None)
+        _forget_copy(os.path.abspath(local))
 
     result = {"success": True, "closed": name}
     if closed_copy:
         result["also_copied_to"] = closed_copy
+    if not keep_powerpoint_open and not _full_names(app):
+        result.update(quit_if_ours(lambda: app.quit()))
     return result
 
 

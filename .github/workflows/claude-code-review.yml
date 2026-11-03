@@ -9,14 +9,20 @@ on:
     #   - "src/**/*.tsx"
     #   - "src/**/*.js"
     #   - "src/**/*.jsx"
+  # A pull request from a fork gets neither the secrets nor an OIDC token on
+  # pull_request, so the review of one runs here instead, as this repository,
+  # in the claude-review-fork job below.
+  pull_request_target:
+    types: [opened, synchronize, ready_for_review, reopened]
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    # Branches of this repository. A fork's pull request is reviewed by
+    # claude-review-fork; here it could only fail ("Could not fetch an OIDC
+    # token").
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
 
     runs-on: ubuntu-latest
     permissions:
@@ -43,7 +49,47 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
 
+  claude-review-fork:
+    # A pull request from a fork, by someone who has had one merged here
+    # before; a first-time contributor's waits for a maintainer to mention
+    # @claude. This runs with the repository's secrets, so it follows the
+    # action's guidance for pull_request_target (docs/security.md there):
+    # the workspace is the base branch, the action itself pins the pull
+    # request's head, nothing from the fork is run, and Claude may only read
+    # the pull request and comment on it.
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      contains(fromJSON('["CONTRIBUTOR", "COLLABORATOR", "MEMBER", "OWNER"]'),
+               github.event.pull_request.author_association)
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The author has no write access, which the action requires unless
+          # it is told otherwise; the job's condition above is the gate. With
+          # this the action needs the workflow's own short-lived token.
+          allowed_non_write_users: '*'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
+          # The tools the review command itself asks for, and no others.
+          claude_args: >-
+            --allowedTools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),mcp__github_inline_comment__create_inline_comment"

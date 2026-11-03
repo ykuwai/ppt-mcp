@@ -1,0 +1,2767 @@
+{
+ "slide_width": 960.0,
+ "slide_height": 540.0,
+ "slides": [
+  {
+   "slide_index": 1,
+   "layout": "title slide",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "Title 3",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 160.0,
+     "width": 640.0,
+     "height": 100.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 3,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 18,
+      "content": "Q3 Business Review",
+      "left": 47.2,
+      "top": 186.0,
+      "width": 420.5,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 40.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Subtitle 4",
+     "z": 2,
+     "type": 14,
+     "left": 40.0,
+     "top": 268.0,
+     "width": 640.0,
+     "height": 40.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 4,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 25,
+      "content": "Operations · October 2026",
+      "left": 47.2,
+      "top": 271.6,
+      "width": 218.0,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8D99AE",
+        "size": 18.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 2,
+   "layout": "text slide",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "Title 3",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 28.0,
+     "width": 880.0,
+     "height": 56.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 6,
+      "content": "Agenda",
+      "left": 47.2,
+      "top": 39.2,
+      "width": 115.13,
+      "height": 33.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 28.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Text Placeholder 4",
+     "z": 2,
+     "type": 14,
+     "left": 40.0,
+     "top": 104.0,
+     "width": 880.0,
+     "height": 370.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 2,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 70,
+      "content": "Results for the quarter\rWhere the costs went\rService levels\rNext steps",
+      "left": 74.2,
+      "top": 107.6,
+      "width": 203.0,
+      "height": 110.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 20.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 3,
+   "layout": "section header",
+   "background_hex": "#0B2545",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "Title 3",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 190.0,
+     "width": 700.0,
+     "height": 90.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 11,
+      "content": "Performance",
+      "left": 47.2,
+      "top": 193.6,
+      "width": 352.88,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 40.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Text Placeholder 4",
+     "z": 2,
+     "type": 14,
+     "left": 40.0,
+     "top": 290.0,
+     "width": 700.0,
+     "height": 40.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 2,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 26,
+      "content": "Revenue, costs and service",
+      "left": 47.2,
+      "top": 304.8,
+      "width": 226.0,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#EEF2F6",
+        "size": 18.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "bottom"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 4,
+   "layout": "title only",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "Title 2",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 28.0,
+     "width": 880.0,
+     "height": 56.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 17,
+      "content": "Revenue by region",
+      "left": 47.2,
+      "top": 39.2,
+      "width": 273.5,
+      "height": 33.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 28.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Chart 3",
+     "z": 2,
+     "type": 3,
+     "left": 40.0,
+     "top": 100.0,
+     "width": 880.0,
+     "height": 394.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": false,
+      "color_hex": "#000000",
+      "transparency": -2147483648.0
+     },
+     "line_visible": null,
+     "text": null
+    }
+   ]
+  },
+  {
+   "slide_index": 5,
+   "layout": "title only",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "Title 2",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 28.0,
+     "width": 880.0,
+     "height": 56.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 11,
+      "content": "Key numbers",
+      "left": 47.2,
+      "top": 39.2,
+      "width": 198.75,
+      "height": 33.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 28.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_3",
+     "z": 2,
+     "type": 1,
+     "left": 40.0,
+     "top": 150.0,
+     "width": 270.0,
+     "height": 200.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#EEF2F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 3,
+     "type": 17,
+     "left": 60.0,
+     "top": 180.0,
+     "width": 230.0,
+     "height": 55.74,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "€41M",
+      "left": 67.2,
+      "top": 183.6,
+      "width": 111.25,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 40.0,
+        "bold": true,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 4,
+     "type": 17,
+     "left": 60.0,
+     "top": 260.0,
+     "width": 230.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Revenue",
+      "left": 67.2,
+      "top": 263.6,
+      "width": 68.38,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 16.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_4",
+     "z": 5,
+     "type": 1,
+     "left": 345.0,
+     "top": 150.0,
+     "width": 270.0,
+     "height": 200.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#EEF2F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 6,
+     "type": 17,
+     "left": 365.0,
+     "top": 180.0,
+     "width": 230.0,
+     "height": 55.74,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 3,
+      "content": "12%",
+      "left": 372.2,
+      "top": 183.6,
+      "width": 91.25,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 40.0,
+        "bold": true,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 7,
+     "type": 17,
+     "left": 365.0,
+     "top": 260.0,
+     "width": 230.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Operating margin",
+      "left": 372.2,
+      "top": 263.6,
+      "width": 128.13,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 16.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_5",
+     "z": 8,
+     "type": 1,
+     "left": 650.0,
+     "top": 150.0,
+     "width": 270.0,
+     "height": 200.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#EEF2F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 9,
+     "type": 17,
+     "left": 670.0,
+     "top": 180.0,
+     "width": 230.0,
+     "height": 55.74,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 3,
+      "content": "96%",
+      "left": 677.2,
+      "top": 183.6,
+      "width": 91.25,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 40.0,
+        "bold": true,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 11",
+     "z": 10,
+     "type": 17,
+     "left": 670.0,
+     "top": 260.0,
+     "width": 230.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 17,
+      "content": "On-time delivery*",
+      "left": 677.2,
+      "top": 263.6,
+      "width": 127.25,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 16.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 11,
+     "type": 17,
+     "left": 40.0,
+     "top": 485.0,
+     "width": 400.0,
+     "height": 19.39,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 47,
+      "content": "* Excluding the two weeks of the warehouse move",
+      "left": 47.2,
+      "top": 488.6,
+      "width": 224.25,
+      "height": 12.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 10.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 6,
+   "layout": "comparison",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "Title 6",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 28.0,
+     "width": 880.0,
+     "height": 56.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Before and after",
+      "left": 47.2,
+      "top": 39.2,
+      "width": 241.75,
+      "height": 33.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 28.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Text Placeholder 7",
+     "z": 2,
+     "type": 14,
+     "left": 48.0,
+     "top": 120.88,
+     "width": 424.17,
+     "height": 50.37,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 2,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 6,
+      "content": "Before",
+      "left": 55.2,
+      "top": 138.85,
+      "width": 82.75,
+      "height": 28.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 24.0,
+        "bold": true,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "bottom"
+     }
+    },
+    {
+     "name": "Content Placeholder 8",
+     "z": 3,
+     "type": 14,
+     "left": 48.0,
+     "top": 171.25,
+     "width": 424.17,
+     "height": 311.13,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 7,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 55,
+      "content": "Three warehouses\rManual routing\rNext-day in two regions",
+      "left": 82.2,
+      "top": 174.85,
+      "width": 257.63,
+      "height": 97.92,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 24.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Text Placeholder 9",
+     "z": 4,
+     "type": 14,
+     "left": 487.67,
+     "top": 120.88,
+     "width": 424.33,
+     "height": 50.37,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 2,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 5,
+      "content": "After",
+      "left": 494.87,
+      "top": 138.85,
+      "width": 62.75,
+      "height": 28.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 24.0,
+        "bold": true,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "bottom"
+     }
+    },
+    {
+     "name": "Content Placeholder 10",
+     "z": 5,
+     "type": 14,
+     "left": 487.67,
+     "top": 171.25,
+     "width": 424.33,
+     "height": 311.13,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 7,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 47,
+      "content": "One hub\rRouting by software\rNext-day everywhere",
+      "left": 521.87,
+      "top": 174.85,
+      "width": 233.63,
+      "height": 97.92,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 24.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 7,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 35.6,
+     "width": 880.0,
+     "height": 41.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 17,
+      "content": "Customer feedback",
+      "left": 47.2,
+      "top": 39.2,
+      "width": 284.5,
+      "height": 33.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 28.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 40.0,
+     "top": 110.0,
+     "width": 880.0,
+     "height": 79.97,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 120,
+      "content": "Satisfaction rose from 78 to 86.\rLate deliveries were the top complaint.\rBoth large retail clients rated us 9 out of 10.",
+      "left": 47.2,
+      "top": 113.6,
+      "width": 390.63,
+      "height": 72.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 20.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 8,
+   "layout": "content with caption",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "Title 4",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 28.0,
+     "width": 880.0,
+     "height": 56.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 11,
+      "content": "Our new hub",
+      "left": 47.2,
+      "top": 56.4,
+      "width": 138.0,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "bottom"
+     }
+    },
+    {
+     "name": "Content Placeholder 5",
+     "z": 2,
+     "type": 14,
+     "left": 375.33,
+     "top": 21.5,
+     "width": 536.67,
+     "height": 460.88,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 7,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 47,
+      "content": "Opened in August\r42,000 square metres\r120 staff",
+      "left": 409.53,
+      "top": 25.1,
+      "width": 319.5,
+      "height": 130.56,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 32.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Text Placeholder 6",
+     "z": 3,
+     "type": 14,
+     "left": 48.0,
+     "top": 113.0,
+     "width": 315.83,
+     "height": 369.38,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 2,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 40,
+      "content": "The hub replaced three older warehouses.",
+      "left": 55.2,
+      "top": 116.6,
+      "width": 265.88,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 14.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 9,
+   "layout": "title only",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "Title 2",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 28.0,
+     "width": 880.0,
+     "height": 56.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 10,
+      "content": "Next steps",
+      "left": 47.2,
+      "top": 39.2,
+      "width": 155.63,
+      "height": 33.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#0B2545",
+        "size": 28.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 2,
+     "type": 17,
+     "left": 40.0,
+     "top": 110.0,
+     "width": 880.0,
+     "height": 79.97,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 100,
+      "content": "Fill the hub to 90% by December.\rOrder twenty more electric vans.\rFind space in the south before Q2.",
+      "left": 47.2,
+      "top": 113.6,
+      "width": 311.88,
+      "height": 72.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 20.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 3,
+     "type": 17,
+     "left": 740.0,
+     "top": 476.0,
+     "width": 190.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 27,
+      "content": "Questions: ops@acme.example",
+      "left": 747.2,
+      "top": 479.6,
+      "width": 173.13,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 12.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 10,
+   "layout": "section header",
+   "background_hex": "#0B2545",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Acme top bar",
+     "z": -10000,
+     "type": 17,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 960.0,
+     "height": 6.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#0B2545",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme logo",
+     "z": -9999,
+     "type": 1,
+     "left": 858.0,
+     "top": 500.0,
+     "width": 72.0,
+     "height": 24.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#13A89E",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "ACME",
+      "left": 877.75,
+      "top": 505.4,
+      "width": 35.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Acme confidential",
+     "z": -9998,
+     "type": 17,
+     "left": 40.0,
+     "top": 503.0,
+     "width": 220.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 24,
+      "content": "Acme Corp · Confidential",
+      "left": 40.0,
+      "top": 506.6,
+      "width": 103.0,
+      "height": 10.8,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    }
+   ],
+   "shapes": [
+    {
+     "name": "Title 3",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 190.0,
+     "width": 700.0,
+     "height": 90.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 9,
+      "content": "Thank you",
+      "left": 47.2,
+      "top": 193.6,
+      "width": 276.13,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 40.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Text Placeholder 4",
+     "z": 2,
+     "type": 14,
+     "left": 40.0,
+     "top": 290.0,
+     "width": 700.0,
+     "height": 40.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 2,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 15,
+      "content": "Acme Operations",
+      "left": 47.2,
+      "top": 304.8,
+      "width": 144.0,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#EEF2F6",
+        "size": 18.0,
+        "bold": false,
+        "font": "Arial",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "bottom"
+     }
+    }
+   ]
+  }
+ ]
+}

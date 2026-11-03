@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
 from backend import ppt
+from ppt_com.layout_check import report_layout, touched_names
 from utils.navigation import goto_slide
 from utils.color import int_to_hex
 from ppt_com.constants import (
@@ -424,6 +425,7 @@ def set_placeholder_text(params: SetPlaceholderTextInput) -> str:
             params.slide_index, params.placeholder_index,
             params.placeholder_type, params.text,
         )
+        report_layout(result, params.slide_index, touched_names(result))
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})

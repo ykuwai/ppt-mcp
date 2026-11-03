@@ -27,6 +27,13 @@ if _src_dir not in sys.path:
 
 from utils.com_wrapper import PowerPointCOMWrapper, bind_call_presentation  # noqa: E402
 
+# Drives the COM implementation through fakes. On macOS the Apple Event one of
+# the same name takes its place, so the fakes are never reached.
+windows_only = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="on macOS the Apple Event impl takes the place of the COM one",
+)
+
 
 def _make_app(*full_names, active=0, activatable=True):
     """Mock Application with one window per deck; Activate() moves
@@ -127,6 +134,7 @@ def test_nothing_is_returned_without_a_target():
 # ---------------------------------------------------------------------------
 # The tools
 # ---------------------------------------------------------------------------
+@windows_only
 @pytest.mark.parametrize("impl, args, command", [
     ("_undo_impl", (1,), "Undo"),
     ("_redo_impl", (1,), "Redo"),
@@ -150,6 +158,7 @@ def test_commandbars_run_in_the_target_window(impl, args, command):
     assert window_at_command == [(command, a.Windows(1))]
 
 
+@windows_only
 @pytest.mark.parametrize("impl", ["_undo_impl", "_redo_impl"])
 def test_undo_and_redo_hand_the_front_back(impl):
     import ppt_com.edit_ops as edit_ops
@@ -165,6 +174,7 @@ def test_undo_and_redo_hand_the_front_back(impl):
     assert app.ActiveWindow is b.Windows(1)
 
 
+@windows_only
 def test_the_front_is_handed_back_when_the_command_fails():
     import ppt_com.edit_ops as edit_ops
 
@@ -179,6 +189,7 @@ def test_the_front_is_handed_back_when_the_command_fails():
     assert app.ActiveWindow is b.Windows(1)
 
 
+@windows_only
 def test_undo_moves_nothing_when_the_target_was_already_in_front():
     import ppt_com.edit_ops as edit_ops
 
@@ -194,6 +205,7 @@ def test_undo_moves_nothing_when_the_target_was_already_in_front():
     b.Windows(1).Activate.assert_not_called()
 
 
+@windows_only
 def test_execute_mso_leaves_the_target_in_front():
     # A ribbon command can open a pane or a dialog on the target's window,
     # or start its slide show, so the front is not handed back there.
@@ -209,6 +221,7 @@ def test_execute_mso_leaves_the_target_in_front():
     assert app.ActiveWindow is a.Windows(1)
 
 
+@windows_only
 def test_commandbars_are_not_run_when_the_target_cannot_be_reached():
     import ppt_com.edit_ops as edit_ops
 
@@ -222,6 +235,7 @@ def test_commandbars_are_not_run_when_the_target_cannot_be_reached():
     app.CommandBars.ExecuteMso.assert_not_called()
 
 
+@windows_only
 def test_the_selection_is_read_from_the_target_window():
     import ppt_com.advanced_ops as advanced_ops
 

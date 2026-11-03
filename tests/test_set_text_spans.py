@@ -14,6 +14,13 @@ from pydantic import ValidationError
 
 from ppt_com.text import RunSpec, SetTextInput, _set_text_impl, run_offsets
 
+# Drives the COM implementation through fakes. On macOS the Apple Event one of
+# the same name takes its place, so the fakes are never reached.
+windows_only = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="on macOS the Apple Event impl takes the place of the COM one",
+)
+
 CR = chr(13)
 LF = chr(10)
 VT = chr(11)
@@ -128,6 +135,7 @@ def run(text=None, existing="", **kwargs):
 SENTENCE = "吹奏楽部で爆笑してしまいました"
 
 
+@windows_only
 class TestReplacingTheWholeFrame:
     def test_it_still_does_what_it_always_did(self):
         result, tr, _ = run("あたらしい文", existing=SENTENCE)
@@ -143,6 +151,7 @@ class TestReplacingTheWholeFrame:
         assert tr.Text == "上" + VT + "下"
 
 
+@windows_only
 class TestReplacingASpan:
     def test_search_text_replaces_just_the_match(self):
         result, tr, _ = run("大笑い", existing=SENTENCE, search_text="爆笑")
@@ -181,20 +190,24 @@ class TestWritingRuns:
         {"text": "に聞こえた", "font_size": 36},
     ]
 
+    @windows_only
     def test_the_text_is_written_once(self):
         _, tr, _ = run(None, runs=self.RUNS)
         assert [kind for kind, *_ in tr.writes] == ["whole"]
         assert tr.Text == "吹奏楽部で「べろだして」に聞こえた"
 
+    @windows_only
     def test_each_run_is_formatted_over_its_own_span(self):
         _, _, formatted = run(None, runs=self.RUNS)
         assert formatted == [(1, 5, 36), (6, 7, 54), (13, 5, 36)]
 
+    @windows_only
     def test_the_spans_are_reported_back(self):
         result, _, _ = run(None, runs=self.RUNS)
         assert [r["start"] for r in result["runs"]] == [1, 6, 13]
         assert result["runs"][1]["text"] == "「べろだして」"
 
+    @windows_only
     def test_a_paragraph_break_inside_a_run_does_not_shift_the_next_one(self):
         _, _, formatted = run(None, runs=[
             {"text": "上" + LF + "下", "font_size": 36},

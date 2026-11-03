@@ -1,0 +1,5167 @@
+{
+ "slide_width": 960.0,
+ "slide_height": 540.0,
+ "slides": [
+  {
+   "slide_index": 1,
+   "layout": "title slide",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "Title 3",
+     "z": 1,
+     "type": 14,
+     "left": 120.0,
+     "top": 88.38,
+     "width": 720.0,
+     "height": 188.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 3,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 19,
+      "content": "Northwind Logistics",
+      "left": 243.14,
+      "top": 207.98,
+      "width": 487.35,
+      "height": 64.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 60.0,
+        "bold": false,
+        "font": "Calibri Light"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "bottom"
+     }
+    },
+    {
+     "name": "Subtitle 4",
+     "z": 2,
+     "type": 14,
+     "left": 120.0,
+     "top": 283.63,
+     "width": 720.0,
+     "height": 130.37,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 4,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 18,
+      "content": "Annual review 2026",
+      "left": 383.33,
+      "top": 287.23,
+      "width": 198.7,
+      "height": 25.92,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 24.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_217",
+     "z": 3,
+     "type": 1,
+     "left": 840.0,
+     "top": 468.0,
+     "width": 80.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 2,
+      "content": "NW",
+      "left": 869.0,
+      "top": 475.6,
+      "width": 25.12,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 14.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 2,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 30.0,
+     "width": 880.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 6,
+      "content": "Agenda",
+      "left": 47.2,
+      "top": 33.6,
+      "width": 107.53,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_218",
+     "z": 2,
+     "type": 1,
+     "left": 60.0,
+     "top": 130.0,
+     "width": 44.0,
+     "height": 44.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "1",
+      "left": 77.44,
+      "top": 141.2,
+      "width": 13.25,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 124.0,
+     "top": 134.0,
+     "width": 600.0,
+     "height": 33.93,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 12,
+      "content": "Where we are",
+      "left": 131.2,
+      "top": 137.76,
+      "width": 130.85,
+      "height": 26.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 22.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_219",
+     "z": 4,
+     "type": 1,
+     "left": 60.0,
+     "top": 210.0,
+     "width": 44.0,
+     "height": 44.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "2",
+      "left": 77.44,
+      "top": 221.2,
+      "width": 13.25,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 124.0,
+     "top": 214.0,
+     "width": 600.0,
+     "height": 33.93,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 22,
+      "content": "What changed this year",
+      "left": 131.2,
+      "top": 217.76,
+      "width": 215.59,
+      "height": 26.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 22.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_220",
+     "z": 6,
+     "type": 1,
+     "left": 60.0,
+     "top": 290.0,
+     "width": 44.0,
+     "height": 44.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "3",
+      "left": 77.44,
+      "top": 301.2,
+      "width": 13.25,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 124.0,
+     "top": 295.03,
+     "width": 600.0,
+     "height": 33.93,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 18,
+      "content": "Plan for next year",
+      "left": 131.2,
+      "top": 298.79,
+      "width": 161.88,
+      "height": 26.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 22.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_221",
+     "z": 8,
+     "type": 1,
+     "left": 60.0,
+     "top": 370.0,
+     "width": 44.0,
+     "height": 44.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "4",
+      "left": 77.44,
+      "top": 381.2,
+      "width": 13.25,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 124.0,
+     "top": 374.0,
+     "width": 600.0,
+     "height": 33.93,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 9,
+      "content": "Questions",
+      "left": 131.2,
+      "top": 377.76,
+      "width": 94.76,
+      "height": 26.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 22.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 3,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 30.0,
+     "width": 880.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 14,
+      "content": "Q3 at a glance",
+      "left": 47.2,
+      "top": 33.6,
+      "width": 194.96,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_222",
+     "z": 2,
+     "type": 1,
+     "left": 40.0,
+     "top": 130.0,
+     "width": 200.0,
+     "height": 147.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 56.0,
+     "top": 146.0,
+     "width": 168.0,
+     "height": 50.89,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 6,
+      "content": "$48.2M",
+      "left": 63.2,
+      "top": 149.6,
+      "width": 122.25,
+      "height": 43.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#111827",
+        "size": 36.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 4,
+     "type": 17,
+     "left": 56.0,
+     "top": 200.0,
+     "width": 168.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Revenue",
+      "left": 63.2,
+      "top": 203.6,
+      "width": 52.43,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_223",
+     "z": 5,
+     "type": 1,
+     "left": 266.67,
+     "top": 130.0,
+     "width": 200.0,
+     "height": 147.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 282.67,
+     "top": 146.0,
+     "width": 168.0,
+     "height": 50.89,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 3,
+      "content": "41%",
+      "left": 289.87,
+      "top": 149.6,
+      "width": 70.88,
+      "height": 43.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#111827",
+        "size": 36.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 282.67,
+     "top": 200.0,
+     "width": 168.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 12,
+      "content": "Gross margin",
+      "left": 289.87,
+      "top": 203.6,
+      "width": 77.96,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_224",
+     "z": 8,
+     "type": 1,
+     "left": 493.33,
+     "top": 130.0,
+     "width": 200.0,
+     "height": 147.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 509.33,
+     "top": 146.0,
+     "width": 168.0,
+     "height": 50.89,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 5,
+      "content": "1,204",
+      "left": 516.53,
+      "top": 149.6,
+      "width": 90.38,
+      "height": 43.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#111827",
+        "size": 36.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 10,
+     "type": 17,
+     "left": 509.33,
+     "top": 200.0,
+     "width": 168.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 13,
+      "content": "New customers",
+      "left": 516.53,
+      "top": 203.6,
+      "width": 91.03,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_225",
+     "z": 11,
+     "type": 1,
+     "left": 720.0,
+     "top": 130.0,
+     "width": 200.0,
+     "height": 147.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 12,
+     "type": 17,
+     "left": 736.0,
+     "top": 146.0,
+     "width": 168.0,
+     "height": 50.89,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 2,
+      "content": "72",
+      "left": 743.2,
+      "top": 149.6,
+      "width": 44.63,
+      "height": 43.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#111827",
+        "size": 36.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 13",
+     "z": 13,
+     "type": 17,
+     "left": 736.0,
+     "top": 200.0,
+     "width": 168.0,
+     "height": 58.16,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 70,
+      "content": "Customer satisfaction score across all regions, trailing twelve months",
+      "left": 743.2,
+      "top": 203.6,
+      "width": 137.04,
+      "height": 50.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 4,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 30.0,
+     "width": 880.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 13,
+      "content": "What we offer",
+      "left": 47.2,
+      "top": 33.6,
+      "width": 198.64,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_226",
+     "z": 2,
+     "type": 1,
+     "left": 40.0,
+     "top": 120.0,
+     "width": 280.0,
+     "height": 160.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_227",
+     "z": 3,
+     "type": 1,
+     "left": 56.0,
+     "top": 136.0,
+     "width": 32.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#DBEAFE",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 4,
+     "type": 17,
+     "left": 100.0,
+     "top": 136.0,
+     "width": 204.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Freight",
+      "left": 107.2,
+      "top": 139.6,
+      "width": 56.14,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 56.0,
+     "top": 180.0,
+     "width": 248.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 32,
+      "content": "Road and rail across the region.",
+      "left": 63.2,
+      "top": 183.6,
+      "width": 181.52,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_228",
+     "z": 6,
+     "type": 1,
+     "left": 340.0,
+     "top": 120.0,
+     "width": 280.0,
+     "height": 160.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_229",
+     "z": 7,
+     "type": 1,
+     "left": 356.0,
+     "top": 136.0,
+     "width": 32.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#DBEAFE",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 8,
+     "type": 17,
+     "left": 400.0,
+     "top": 136.0,
+     "width": 204.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Storage",
+      "left": 407.2,
+      "top": 139.6,
+      "width": 60.49,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 356.0,
+     "top": 180.0,
+     "width": 248.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 27,
+      "content": "Bonded and cold warehouses.",
+      "left": 363.2,
+      "top": 183.6,
+      "width": 173.8,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_230",
+     "z": 10,
+     "type": 1,
+     "left": 640.0,
+     "top": 120.0,
+     "width": 280.0,
+     "height": 160.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_231",
+     "z": 11,
+     "type": 1,
+     "left": 656.0,
+     "top": 136.0,
+     "width": 32.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#DBEAFE",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 12,
+     "type": 17,
+     "left": 700.0,
+     "top": 136.0,
+     "width": 204.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Customs",
+      "left": 707.2,
+      "top": 139.6,
+      "width": 67.63,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 13",
+     "z": 13,
+     "type": 17,
+     "left": 656.0,
+     "top": 180.0,
+     "width": 248.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 29,
+      "content": "Clearance in hours, not days.",
+      "left": 663.2,
+      "top": 183.6,
+      "width": 166.71,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_232",
+     "z": 14,
+     "type": 1,
+     "left": 40.0,
+     "top": 300.0,
+     "width": 280.0,
+     "height": 160.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_233",
+     "z": 15,
+     "type": 1,
+     "left": 56.0,
+     "top": 316.0,
+     "width": 32.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#DBEAFE",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 16",
+     "z": 16,
+     "type": 17,
+     "left": 100.0,
+     "top": 316.0,
+     "width": 204.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Tracking",
+      "left": 107.2,
+      "top": 319.6,
+      "width": 65.56,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 17",
+     "z": 17,
+     "type": 17,
+     "left": 56.0,
+     "top": 360.0,
+     "width": 248.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 19,
+      "content": "Every pallet, live.",
+      "left": 63.2,
+      "top": 363.6,
+      "width": 99.52,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_234",
+     "z": 18,
+     "type": 1,
+     "left": 340.0,
+     "top": 300.0,
+     "width": 280.0,
+     "height": 160.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_235",
+     "z": 19,
+     "type": 1,
+     "left": 356.0,
+     "top": 316.0,
+     "width": 32.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#DBEAFE",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 20",
+     "z": 20,
+     "type": 17,
+     "left": 400.0,
+     "top": 316.0,
+     "width": 204.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Returns",
+      "left": 407.2,
+      "top": 319.6,
+      "width": 61.86,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 21",
+     "z": 21,
+     "type": 17,
+     "left": 356.0,
+     "top": 360.0,
+     "width": 248.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 29,
+      "content": "Collected and resold for you.",
+      "left": 363.2,
+      "top": 363.6,
+      "width": 166.21,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_236",
+     "z": 22,
+     "type": 1,
+     "left": 640.0,
+     "top": 300.0,
+     "width": 280.0,
+     "height": 160.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_237",
+     "z": 23,
+     "type": 1,
+     "left": 656.0,
+     "top": 316.0,
+     "width": 32.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#DBEAFE",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 24",
+     "z": 24,
+     "type": 17,
+     "left": 700.0,
+     "top": 316.0,
+     "width": 204.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Support",
+      "left": 707.2,
+      "top": 319.6,
+      "width": 63.75,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 25",
+     "z": 25,
+     "type": 17,
+     "left": 656.0,
+     "top": 360.0,
+     "width": 248.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 31,
+      "content": "A person answers, day or night.",
+      "left": 663.2,
+      "top": 363.6,
+      "width": 181.44,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 5,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 30.0,
+     "width": 880.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 20,
+      "content": "Five years of growth",
+      "left": 47.2,
+      "top": 33.6,
+      "width": 275.85,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Straight Connector 2",
+     "z": 2,
+     "type": 9,
+     "left": 80.0,
+     "top": 280.0,
+     "width": 800.0,
+     "height": 0.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": true,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#000000",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": null
+    },
+    {
+     "name": "Shape_238",
+     "z": 3,
+     "type": 1,
+     "left": 70.0,
+     "top": 270.0,
+     "width": 20.0,
+     "height": 20.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 4,
+     "type": 17,
+     "left": 20.0,
+     "top": 230.0,
+     "width": 120.0,
+     "height": 30.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "2022",
+      "left": 61.75,
+      "top": 233.6,
+      "width": 40.63,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 0.0,
+     "top": 300.0,
+     "width": 160.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Founded in Leeds",
+      "left": 33.47,
+      "top": 303.6,
+      "width": 96.07,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 13.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_239",
+     "z": 6,
+     "type": 1,
+     "left": 270.0,
+     "top": 270.0,
+     "width": 20.0,
+     "height": 20.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 220.0,
+     "top": 230.0,
+     "width": 120.0,
+     "height": 30.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "2023",
+      "left": 261.75,
+      "top": 233.6,
+      "width": 40.63,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 8,
+     "type": 17,
+     "left": 200.0,
+     "top": 300.0,
+     "width": 160.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "First cold store",
+      "left": 241.15,
+      "top": 303.6,
+      "width": 80.71,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 13.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_240",
+     "z": 9,
+     "type": 1,
+     "left": 470.0,
+     "top": 270.0,
+     "width": 20.0,
+     "height": 20.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 10,
+     "type": 17,
+     "left": 420.0,
+     "top": 230.0,
+     "width": 120.0,
+     "height": 30.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "2024",
+      "left": 461.75,
+      "top": 233.6,
+      "width": 40.63,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 11",
+     "z": 11,
+     "type": 17,
+     "left": 400.0,
+     "top": 300.0,
+     "width": 160.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 15,
+      "content": "Customs licence",
+      "left": 437.39,
+      "top": 303.6,
+      "width": 88.23,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 13.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_241",
+     "z": 12,
+     "type": 1,
+     "left": 670.0,
+     "top": 270.0,
+     "width": 20.0,
+     "height": 20.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 13",
+     "z": 13,
+     "type": 17,
+     "left": 620.0,
+     "top": 230.0,
+     "width": 120.0,
+     "height": 30.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "2025",
+      "left": 661.75,
+      "top": 233.6,
+      "width": 40.63,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 14",
+     "z": 14,
+     "type": 17,
+     "left": 600.0,
+     "top": 300.0,
+     "width": 160.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 13,
+      "content": "Live tracking",
+      "left": 647.01,
+      "top": 303.6,
+      "width": 68.98,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 13.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_242",
+     "z": 15,
+     "type": 1,
+     "left": 870.0,
+     "top": 270.0,
+     "width": 20.0,
+     "height": 20.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 16",
+     "z": 16,
+     "type": 17,
+     "left": 820.0,
+     "top": 230.0,
+     "width": 120.0,
+     "height": 30.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "2026",
+      "left": 861.75,
+      "top": 233.6,
+      "width": 40.63,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 17",
+     "z": 17,
+     "type": 17,
+     "left": 780.0,
+     "top": 300.0,
+     "width": 200.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Twelve countries",
+      "left": 835.45,
+      "top": 303.6,
+      "width": 92.11,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 13.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 6,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "Shape_243",
+     "z": 1,
+     "type": 1,
+     "left": 0.0,
+     "top": 190.0,
+     "width": 960.0,
+     "height": 160.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#1F3A5F",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 225.0,
+     "width": 840.0,
+     "height": 55.74,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Part 2: The plan",
+      "left": 67.2,
+      "top": 228.6,
+      "width": 269.6,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 40.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 60.0,
+     "top": 290.0,
+     "width": 840.0,
+     "height": 30.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 21,
+      "content": "Where we go from here",
+      "left": 67.2,
+      "top": 293.6,
+      "width": 178.58,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBD5E1",
+        "size": 18.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 7,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 30.0,
+     "width": 880.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 12,
+      "content": "Build or buy",
+      "left": 47.2,
+      "top": 33.6,
+      "width": 167.75,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_244",
+     "z": 2,
+     "type": 1,
+     "left": 40.0,
+     "top": 120.0,
+     "width": 420.0,
+     "height": 300.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 60.0,
+     "top": 136.0,
+     "width": 380.0,
+     "height": 33.93,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 5,
+      "content": "Build",
+      "left": 67.2,
+      "top": 139.6,
+      "width": 51.63,
+      "height": 26.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 22.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 4,
+     "type": 17,
+     "left": 60.0,
+     "top": 180.0,
+     "width": 380.0,
+     "height": 72.7,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 77,
+      "content": "• Full control of the roadmap\r• Higher upfront cost\r• Twelve months to launch",
+      "left": 67.2,
+      "top": 183.6,
+      "width": 217.23,
+      "height": 64.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 18.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_245",
+     "z": 5,
+     "type": 1,
+     "left": 500.0,
+     "top": 120.0,
+     "width": 420.0,
+     "height": 300.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#F3F4F6",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 520.0,
+     "top": 136.0,
+     "width": 380.0,
+     "height": 33.93,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 3,
+      "content": "Buy",
+      "left": 527.2,
+      "top": 139.6,
+      "width": 39.5,
+      "height": 26.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 22.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 520.0,
+     "top": 180.0,
+     "width": 380.0,
+     "height": 159.95,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 188,
+      "content": "• Live in six weeks\r• Licence fee per seat\r• Limited customisation\r• Vendor owns the data model\r• Integration work still needed\r• Exit costs if we switch\r• Support depends on their roadmap",
+      "left": 527.2,
+      "top": 183.6,
+      "width": 275.21,
+      "height": 151.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 18.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 8,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 30.0,
+     "width": 880.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Regional results",
+      "left": 47.2,
+      "top": 33.6,
+      "width": 217.92,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Table 2",
+     "z": 2,
+     "type": 19,
+     "left": 40.0,
+     "top": 110.0,
+     "width": 880.0,
+     "height": 250.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#000000",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": null
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 40.0,
+     "top": 362.4,
+     "width": 880.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 31,
+      "content": "Source: finance team, unaudited",
+      "left": 47.2,
+      "top": 366.0,
+      "width": 161.07,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 12.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 9,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 30.0,
+     "width": 880.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 18,
+      "content": "Revenue by quarter",
+      "left": 47.2,
+      "top": 33.6,
+      "width": 268.27,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Chart 2",
+     "z": 2,
+     "type": 3,
+     "left": 40.0,
+     "top": 110.0,
+     "width": 560.0,
+     "height": 380.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": false,
+      "color_hex": "#000000",
+      "transparency": -2147483648.0
+     },
+     "line_visible": null,
+     "text": null
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 630.0,
+     "top": 130.0,
+     "width": 290.0,
+     "height": 72.7,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 76,
+      "content": "• Q3 was our best quarter\r• Growth came from the north\r• Margins held steady",
+      "left": 637.2,
+      "top": 133.6,
+      "width": 228.99,
+      "height": 64.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 10,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 30.0,
+     "width": 880.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "The team",
+      "left": 47.2,
+      "top": 33.6,
+      "width": 132.24,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_246",
+     "z": 2,
+     "type": 1,
+     "left": 80.0,
+     "top": 120.0,
+     "width": 110.0,
+     "height": 110.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#CBD5E1",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 55.0,
+     "top": 245.0,
+     "width": 160.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Ana Ruiz",
+      "left": 102.62,
+      "top": 248.6,
+      "width": 68.87,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 4,
+     "type": 17,
+     "left": 55.0,
+     "top": 275.0,
+     "width": 160.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 10,
+      "content": "Operations",
+      "left": 103.46,
+      "top": 278.6,
+      "width": 66.21,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_247",
+     "z": 5,
+     "type": 1,
+     "left": 310.0,
+     "top": 120.0,
+     "width": 110.0,
+     "height": 110.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#CBD5E1",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 285.0,
+     "top": 245.0,
+     "width": 160.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 10,
+      "content": "Ben Okafor",
+      "left": 323.17,
+      "top": 248.6,
+      "width": 87.79,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 285.0,
+     "top": 275.0,
+     "width": 160.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Finance",
+      "left": 343.0,
+      "top": 278.6,
+      "width": 47.13,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_248",
+     "z": 8,
+     "type": 1,
+     "left": 540.0,
+     "top": 120.0,
+     "width": 110.0,
+     "height": 110.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#CBD5E1",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 515.0,
+     "top": 245.0,
+     "width": 160.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Chen Wei",
+      "left": 559.51,
+      "top": 248.6,
+      "width": 75.11,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 10,
+     "type": 17,
+     "left": 515.0,
+     "top": 275.0,
+     "width": 160.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 5,
+      "content": "Sales",
+      "left": 580.56,
+      "top": 278.6,
+      "width": 32.0,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_249",
+     "z": 11,
+     "type": 1,
+     "left": 770.0,
+     "top": 120.0,
+     "width": 110.0,
+     "height": 110.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#CBD5E1",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 12,
+     "type": 17,
+     "left": 745.0,
+     "top": 245.0,
+     "width": 160.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 9,
+      "content": "Dana Levi",
+      "left": 788.86,
+      "top": 248.6,
+      "width": 76.41,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 18.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 13",
+     "z": 13,
+     "type": 17,
+     "left": 745.0,
+     "top": 275.0,
+     "width": 160.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Product",
+      "left": 802.67,
+      "top": 278.6,
+      "width": 47.77,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 14.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 11,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 160.0,
+     "top": 150.0,
+     "width": 640.0,
+     "height": 75.13,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 67,
+      "content": "“They moved our whole cold chain in a weekend, and nothing thawed.”",
+      "left": 179.43,
+      "top": 153.6,
+      "width": 607.52,
+      "height": 67.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 28.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 160.0,
+     "top": 320.0,
+     "width": 640.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 26,
+      "content": "Head of supply, Fresh & Co",
+      "left": 618.8,
+      "top": 323.6,
+      "width": 177.53,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 16.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_250",
+     "z": 3,
+     "type": 1,
+     "left": 840.0,
+     "top": 468.0,
+     "width": 80.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 2,
+      "content": "NW",
+      "left": 869.0,
+      "top": 475.6,
+      "width": 25.12,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 14.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 12,
+   "layout": "blank",
+   "background_hex": "#0F172A",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 40.0,
+     "top": 30.0,
+     "width": 880.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 21,
+      "content": "Risks we are watching",
+      "left": 47.2,
+      "top": 33.6,
+      "width": 298.44,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F8FAFC",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_251",
+     "z": 2,
+     "type": 1,
+     "left": 40.0,
+     "top": 130.0,
+     "width": 280.0,
+     "height": 200.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#1E293B",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 60.0,
+     "top": 150.0,
+     "width": 240.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 11,
+      "content": "Fuel prices",
+      "left": 67.2,
+      "top": 153.6,
+      "width": 93.13,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F8FAFC",
+        "size": 20.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 4,
+     "type": 17,
+     "left": 60.0,
+     "top": 196.0,
+     "width": 240.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 41,
+      "content": "A 10% rise costs us 1.2 points of margin.",
+      "left": 67.2,
+      "top": 199.6,
+      "width": 210.91,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBD5E1",
+        "size": 16.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_252",
+     "z": 5,
+     "type": 1,
+     "left": 340.0,
+     "top": 130.0,
+     "width": 280.0,
+     "height": 200.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#1E293B",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 360.0,
+     "top": 150.0,
+     "width": 240.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 13,
+      "content": "Driver hiring",
+      "left": 367.2,
+      "top": 153.6,
+      "width": 108.07,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F8FAFC",
+        "size": 20.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 360.0,
+     "top": 196.0,
+     "width": 240.0,
+     "height": 46.05,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 37,
+      "content": "Two regions are 15% short of drivers.",
+      "left": 367.2,
+      "top": 199.6,
+      "width": 192.64,
+      "height": 38.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBD5E1",
+        "size": 16.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_253",
+     "z": 8,
+     "type": 1,
+     "left": 640.0,
+     "top": 130.0,
+     "width": 280.0,
+     "height": 200.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#1E293B",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 660.0,
+     "top": 150.0,
+     "width": 240.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "One big customer",
+      "left": 667.2,
+      "top": 153.6,
+      "width": 150.83,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F8FAFC",
+        "size": 20.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 10,
+     "type": 17,
+     "left": 660.0,
+     "top": 196.0,
+     "width": 240.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 29,
+      "content": "Fresh & Co is 18% of revenue.",
+      "left": 667.2,
+      "top": 199.6,
+      "width": 196.85,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBD5E1",
+        "size": 16.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 13,
+   "layout": "text slide",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "Title 3",
+     "z": 1,
+     "type": 14,
+     "left": 40.0,
+     "top": 28.75,
+     "width": 828.0,
+     "height": 104.38,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 10,
+      "content": "Next steps",
+      "left": 47.2,
+      "top": 32.35,
+      "width": 146.1,
+      "height": 34.56,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 32.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Text Placeholder 4",
+     "z": 2,
+     "type": 14,
+     "left": 40.0,
+     "top": 143.75,
+     "width": 828.0,
+     "height": 342.63,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 2,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 200,
+      "content": "Open the Rotterdam hub in March\rHire 40 drivers before the summer peak\rRenegotiate the fuel contract\rMove tracking to the new platform\rCut the Fresh & Co share below 15%\rReport back to the board in Q2",
+      "left": 65.2,
+      "top": 147.35,
+      "width": 458.8,
+      "height": 231.44,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 28.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 14,
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 80.0,
+     "top": 200.0,
+     "width": 800.0,
+     "height": 72.7,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 9,
+      "content": "Thank you",
+      "left": 363.73,
+      "top": 203.6,
+      "width": 244.79,
+      "height": 64.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1F2937",
+        "size": 54.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 80.0,
+     "top": 290.0,
+     "width": 800.0,
+     "height": 30.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 26,
+      "content": "ana.ruiz@northwind.example",
+      "left": 371.36,
+      "top": 293.6,
+      "width": 221.41,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#4B5563",
+        "size": 18.0,
+        "bold": false,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_254",
+     "z": 3,
+     "type": 1,
+     "left": 840.0,
+     "top": 468.0,
+     "width": 80.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#2563EB",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 2,
+      "content": "NW",
+      "left": 869.0,
+      "top": 475.6,
+      "width": 25.12,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 14.0,
+        "bold": true,
+        "font": "Calibri"
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    }
+   ]
+  }
+ ]
+}

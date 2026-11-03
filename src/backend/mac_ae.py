@@ -23,10 +23,13 @@ an STA apartment, but PowerPoint wedges under concurrent access, and keeping the
 same shape means the tool modules see one lifecycle surface on both platforms.
 """
 
+import errno
 import logging
 import os
+import pwd
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from concurrent.futures import Future
@@ -183,6 +186,79 @@ def shapes_of(container) -> list:
     return positional(container.shapes)
 
 
+class StagingBlocked(PermissionError):
+    """PowerPoint's container cannot be used: macOS keeps this process out,
+    its permissions do, or PowerPoint has never made it."""
+
+
+def staging_dir(folder: Optional[str] = None) -> str:
+    """PowerPoint's container, checked to be writable, for a file to pass through.
+
+    Since macOS 14 one app's container is closed to every other app unless the
+    user consents, and the consent is asked of the app that started this
+    server: Terminal, an editor, Claude. Launched from a terminal, macOS may
+    refuse without ever asking, and every picture, icon, template, theme,
+    preview and export then fails with a bare "Operation not permitted". A
+    probe file proves the way in, so the failure says what to do instead.
+
+    ``folder`` is the caller's own name for the container, EXPORT_STAGING_DIR.
+    """
+    folder = folder or EXPORT_STAGING_DIR
+    try:
+        os.makedirs(folder, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=folder, prefix=".ppt_mcp_probe_"):
+            pass
+    except PermissionError as e:
+        raise StagingBlocked(f"{_staging_problem(folder, e)} (The error was: {e})") from e
+    return folder
+
+
+_WHY_THE_FOLDER = (
+    "PowerPoint for Mac is sandboxed, so every file it reads or writes for this "
+    "server (a picture, an icon, a template or theme, a preview, an export, a saved "
+    "copy) passes through that folder. Shapes, text, tables and charts work without it."
+)
+
+
+def _staging_problem(folder: str, error: PermissionError) -> str:
+    """What keeps ppt-mcp out of PowerPoint's folder, and what to do about it.
+
+    Three causes give a PermissionError here, and only one is fixed with Full
+    Disk Access. PowerPoint never started on this account has no container,
+    and creating one in ~/Library/Containers is refused. A folder whose owner
+    or permissions shut this user out answers EACCES, "Permission denied".
+    macOS's privacy protection answers EPERM, "Operation not permitted".
+    """
+    parts = folder.split(os.sep)
+    if "Containers" in parts and len(parts) > parts.index("Containers") + 1:
+        root = os.sep.join(parts[:parts.index("Containers") + 2])
+        if not os.path.isdir(root):
+            return (f"PowerPoint for Mac's own folder, {root}, does not exist: PowerPoint "
+                    "is not installed, or has never been started on this account. Start it "
+                    f"once, then try again. {_WHY_THE_FOLDER}")
+    if error.errno == errno.EACCES:
+        where = folder
+        while where and not os.path.exists(where):
+            where = os.path.dirname(where)
+        try:
+            owner = os.stat(where).st_uid
+            whose = pwd.getpwuid(owner).pw_name
+        except (OSError, KeyError):
+            owner, whose = None, "another user"
+        if owner is not None and owner != os.getuid():
+            cause = f"{where} belongs to {whose}, not to this user"
+        else:
+            cause = f"the permissions of {where} do not let this user write to it"
+        return (f"ppt-mcp may not write to PowerPoint's own folder, {folder}: {cause}. "
+                f"Give it back to this user (chown -R \"$(whoami)\" \"{where}\", and "
+                f"chmod u+rwx), then try again. {_WHY_THE_FOLDER}")
+    return (f"macOS is keeping ppt-mcp out of PowerPoint's own folder, {folder}. "
+            f"{_WHY_THE_FOLDER} Since macOS 14 another app may only enter it with the "
+            "user's consent. Give the app that started this server, such as Terminal, "
+            "iTerm, VS Code or Claude, Full Disk Access in System Settings > Privacy & "
+            "Security > Full Disk Access, then try again.")
+
+
 def stage_into_container(path: str) -> str:
     """Copy a file into PowerPoint's container and return the copy's path.
 
@@ -196,8 +272,7 @@ def stage_into_container(path: str) -> str:
     The caller is responsible for removing the copy once PowerPoint has read
     it, where the thing being read is embedded rather than linked.
     """
-    os.makedirs(EXPORT_STAGING_DIR, exist_ok=True)
-    staged = os.path.join(EXPORT_STAGING_DIR, os.path.basename(path))
+    staged = os.path.join(staging_dir(), os.path.basename(path))
     if os.path.abspath(staged) != os.path.abspath(path):
         shutil.copy2(path, staged)
     return staged
@@ -361,6 +436,19 @@ class _Job:
         return self.drop()
 
 
+def _powerpoint_pid() -> Optional[int]:
+    """The process id of the running PowerPoint, or None when there is none
+    or it cannot be told."""
+    try:
+        found = subprocess.run(
+            ["pgrep", "-x", "Microsoft PowerPoint"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.split()
+        return int(found[0]) if found else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
 class PowerPointAppleEventWrapper:
     """Manages the connection to PowerPoint over Apple Events.
 
@@ -380,6 +468,12 @@ class PowerPointAppleEventWrapper:
         # Windows: `active presentation` raises -1728 whenever PowerPoint's
         # start gallery is the frontmost window, which users hit every day.
         self._target_pres_full_name: Optional[str] = None
+        # Whether this server started PowerPoint, rather than finding it
+        # running. Only then is it quit when its last presentation closes.
+        self._launched_by_us = False
+        # The process it was, so a PowerPoint that took its place is not
+        # mistaken for it. See `_still_ours`.
+        self._launched_pid: Optional[int] = None
         # The per-call target of the job the worker is running, if its tool
         # call named one. See `call_presentation` in utils.com_wrapper.
         self._call_local = threading.local()
@@ -575,6 +669,20 @@ class PowerPointAppleEventWrapper:
 
     # -- connection --------------------------------------------------------
 
+    def _still_ours(self) -> bool:
+        """Whether the PowerPoint that is running is the one this server started.
+
+        The user can quit that one and start another by hand. appscript
+        follows an application by its bundle id and reconnects to the new
+        process without raising, so the connection looks the same and the
+        flag would still say it is ours.
+        """
+        return (
+            self._launched_by_us
+            and self._launched_pid is not None
+            and _powerpoint_pid() == self._launched_pid
+        )
+
     def connect(self, visible: Optional[bool] = None, allow_launch: bool = True) -> Any:
         """Connect to PowerPoint, launching it when allowed.
 
@@ -611,7 +719,10 @@ class PowerPointAppleEventWrapper:
                     "PowerPoint is not running. Call ppt_connect, "
                     "ppt_create_presentation, or ppt_open_presentation first."
                 )
-            candidate.activate()
+            # In the background. PowerPoint's windows arrive on screen by
+            # themselves; activating it took the front from whatever the
+            # user was typing in, every time a tool call started it.
+            candidate.launch()
             # Launching is not instant, and the first event against a starting
             # application fails rather than waiting.
             deadline = time.time() + 20
@@ -625,7 +736,12 @@ class PowerPointAppleEventWrapper:
                 raise ConnectionError(
                     "PowerPoint did not finish starting. Is it installed?"
                 )
-        elif visible:
+            self._launched_by_us = True
+            self._launched_pid = _powerpoint_pid()
+        else:
+            self._launched_by_us = False
+            self._launched_pid = None
+        if visible:
             candidate.activate()
 
         self._app = candidate

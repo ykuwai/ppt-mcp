@@ -55,6 +55,7 @@ from appscript.reference import CommandError
 
 from backend.mac_ae import (
     EXPORT_STAGING_DIR,
+    staging_dir,
     count,
     count_of,
     is_missing,
@@ -88,6 +89,7 @@ from ppt_mac.shapes import (
     _win_constant,
 )
 from utils.color import hex_to_rgb_list, rgb_list_to_hex
+from utils.download import open_url
 from utils.navigation import goto_slide
 
 from ppt_mac.shapes import place_in_zorder
@@ -181,7 +183,7 @@ def _staged_file(suffix: str) -> str:
     allowed, so a temp file in the system temp directory is not good enough.
     POSIX paths only; an HFS colon path is read as a literal filename.
     """
-    os.makedirs(EXPORT_STAGING_DIR, exist_ok=True)
+    staging_dir(EXPORT_STAGING_DIR)
     handle, path = tempfile.mkstemp(
         prefix="ppt_mcp_media_", suffix=suffix, dir=EXPORT_STAGING_DIR
     )
@@ -608,11 +610,9 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
             auto_shape_int = int(crop_shape)
 
     if crop_fit is not None:
-        fit_key = crop_fit.strip().lower()
-        if fit_key not in ("square", "1:1"):
-            raise ValueError(
-                f"Unknown crop_fit '{crop_fit}'. Supported values: 'square', '1:1'"
-            )
+        from ppt_com.advanced_ops import _fit_aspect
+
+        _fit_aspect(crop_fit, 1.0, 1.0)
 
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -626,6 +626,12 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
     if crop_fit is not None:
         anchor = crop_anchor if crop_anchor is not None else 0.5
 
+        # The box it is drawn in, before an earlier crop is undone and the
+        # picture grows back to the whole image.
+        cur_w = shape.width()
+        cur_h = shape.height()
+        cur_left, cur_top = shape.left_position(), shape.top()
+
         pic_fmt.crop_left.set(0)
         pic_fmt.crop_right.set(0)
         pic_fmt.crop_top.set(0)
@@ -633,9 +639,6 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
 
         old_lock = shape.lock_aspect_ratio()
         shape.lock_aspect_ratio.set(False)
-
-        cur_w = shape.width()
-        cur_h = shape.height()
 
         # `scale width` and `scale height` take the same three arguments as
         # Windows's ScaleWidth and ScaleHeight, and a factor of 1 measured
@@ -657,18 +660,21 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
         shape.width.set(cur_w)
         shape.height.set(cur_h)
 
-        if orig_w > orig_h:
-            excess = orig_w - orig_h
-            pic_fmt.crop_left.set(excess * anchor)
-            pic_fmt.crop_right.set(excess * (1.0 - anchor))
-        elif orig_h > orig_w:
-            excess = orig_h - orig_w
-            pic_fmt.crop_top.set(excess * anchor)
-            pic_fmt.crop_bottom.set(excess * (1.0 - anchor))
+        from ppt_com.advanced_ops import _fit_aspect, _fit_crops, _fit_size
 
-        min_dim = min(cur_w, cur_h)
-        shape.width.set(min_dim)
-        shape.height.set(min_dim)
+        aspect = _fit_aspect(crop_fit, cur_w, cur_h)
+        crops = _fit_crops(orig_w, orig_h, aspect, anchor)
+        pic_fmt.crop_left.set(crops["left"])
+        pic_fmt.crop_right.set(crops["right"])
+        pic_fmt.crop_top.set(crops["top"])
+        pic_fmt.crop_bottom.set(crops["bottom"])
+
+        width, height = _fit_size(cur_w, cur_h, aspect, crop_fit)
+        shape.width.set(width)
+        shape.height.set(height)
+        # Cropping a side moves that edge; the picture stays where it was put.
+        shape.left_position.set(cur_left)
+        shape.top.set(cur_top)
 
         shape.lock_aspect_ratio.set(bool(old_lock))
     else:
@@ -1143,7 +1149,7 @@ def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_c
     pres = ppt._get_pres_impl()
     slide = _slide(pres, slide_index)
 
-    resp = urllib.request.urlopen(url)
+    resp = open_url(url, "download the picture")
     content_type = resp.headers.get("Content-Type", "")
     is_svg = url.lower().endswith(".svg") or "svg" in content_type
 
@@ -1277,7 +1283,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
     svg_url = f"{base}/{style}/{file_name}.svg"
 
     try:
-        resp = urllib.request.urlopen(svg_url)
+        resp = open_url(svg_url, "download the icon", "PPT_ICON_BASE_URL")
     except urllib.error.HTTPError as e:
         if e.code == 404:
             raise ValueError(

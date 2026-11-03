@@ -1,0 +1,805 @@
+{
+ "slide_width": 960.0,
+ "slide_height": 540.0,
+ "slides": [
+  {
+   "slide_index": 1,
+   "design": "Office Theme",
+   "layout": "Title Only",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [],
+   "template_area": [],
+   "shapes": [
+    {
+     "name": "Title 1",
+     "z": 1,
+     "type": 14,
+     "left": 66.0,
+     "top": 28.75,
+     "width": 828.0,
+     "height": 104.38,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 14,
+      "content": "Where we stand",
+      "left": 73.2,
+      "top": 57.18,
+      "width": 298.5,
+      "height": 47.52,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 44.0,
+        "bold": false,
+        "font": "Calibri Light",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shrink_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 66.0,
+     "top": 170.0,
+     "width": 828.0,
+     "height": 65.43,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 24,
+      "content": "First point\rSecond point",
+      "left": 73.2,
+      "top": 173.6,
+      "width": 132.7,
+      "height": 57.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#595959",
+        "size": 24.0,
+        "bold": false,
+        "font": "Calibri",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 2,
+   "design": "Office Theme",
+   "layout": "Title Only",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [],
+   "template_area": [],
+   "shapes": [
+    {
+     "name": "Title 1",
+     "z": 1,
+     "type": 14,
+     "left": 66.0,
+     "top": 28.75,
+     "width": 828.0,
+     "height": 104.38,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 22,
+      "content": "What moved the numbers",
+      "left": 73.2,
+      "top": 57.18,
+      "width": 473.07,
+      "height": 47.52,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 44.0,
+        "bold": false,
+        "font": "Calibri Light",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shrink_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 66.0,
+     "top": 170.0,
+     "width": 828.0,
+     "height": 65.43,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 24,
+      "content": "First point\rSecond point",
+      "left": 73.2,
+      "top": 173.6,
+      "width": 132.7,
+      "height": 57.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#595959",
+        "size": 24.0,
+        "bold": false,
+        "font": "Calibri",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 3,
+   "design": "Office Theme",
+   "layout": "Title Only",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [],
+   "template_area": [],
+   "shapes": [
+    {
+     "name": "Title 1",
+     "z": 1,
+     "type": 14,
+     "left": 66.0,
+     "top": 28.75,
+     "width": 828.0,
+     "height": 104.38,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 14,
+      "content": "Service levels",
+      "left": 73.2,
+      "top": 57.18,
+      "width": 245.54,
+      "height": 47.52,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 44.0,
+        "bold": false,
+        "font": "Calibri Light",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shrink_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 66.0,
+     "top": 170.0,
+     "width": 828.0,
+     "height": 65.43,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 24,
+      "content": "First point\rSecond point",
+      "left": 73.2,
+      "top": 173.6,
+      "width": 132.7,
+      "height": 57.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#595959",
+        "size": 24.0,
+        "bold": false,
+        "font": "Calibri",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 4,
+   "design": "Retrospect",
+   "layout": "Title Only",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Rectangle 6",
+     "z": -10000,
+     "type": 1,
+     "left": 0.0,
+     "top": 504.0,
+     "width": 960.0,
+     "height": 36.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#BD582C",
+      "transparency": 0.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Rectangle 8",
+     "z": -9999,
+     "type": 1,
+     "left": 0.0,
+     "top": 498.77,
+     "width": 960.0,
+     "height": 5.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#E48312",
+      "transparency": 0.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Straight Connector 9",
+     "z": -9998,
+     "type": 9,
+     "left": 93.98,
+     "top": 136.84,
+     "width": 784.8,
+     "height": 0.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": true,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#000000",
+      "transparency": 1.0
+     },
+     "line_visible": true,
+     "text": null,
+     "source": "master"
+    }
+   ],
+   "template_area": [
+    [
+     86.4,
+     22.57,
+     878.4,
+     136.8
+    ],
+    [
+     86.4,
+     145.33,
+     878.4,
+     462.13
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "Title 1",
+     "z": 1,
+     "type": 14,
+     "left": 86.4,
+     "top": 22.57,
+     "width": 792.0,
+     "height": 114.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 11,
+      "content": "The new hub",
+      "left": 93.6,
+      "top": 83.81,
+      "width": 255.64,
+      "height": 49.39,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#404040",
+        "size": 48.0,
+        "bold": false,
+        "font": "Calibri Light",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shrink_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "bottom"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 95.0,
+     "top": 170.0,
+     "width": 780.0,
+     "height": 65.43,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 24,
+      "content": "First point\rSecond point",
+      "left": 102.2,
+      "top": 173.6,
+      "width": 132.7,
+      "height": 57.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#595959",
+        "size": 24.0,
+        "bold": false,
+        "font": "Calibri",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 5,
+   "design": "Retrospect",
+   "layout": "Title Only",
+   "background_hex": "#FFFFFF",
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Rectangle 6",
+     "z": -10000,
+     "type": 1,
+     "left": 0.0,
+     "top": 504.0,
+     "width": 960.0,
+     "height": 36.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#BD582C",
+      "transparency": 0.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Rectangle 8",
+     "z": -9999,
+     "type": 1,
+     "left": 0.0,
+     "top": 498.77,
+     "width": 960.0,
+     "height": 5.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#E48312",
+      "transparency": 0.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": null,
+      "word_wrap": null,
+      "autofit": null,
+      "orientation": null,
+      "vertical_anchor": null
+     },
+     "source": "master"
+    },
+    {
+     "name": "Straight Connector 9",
+     "z": -9998,
+     "type": 9,
+     "left": 93.98,
+     "top": 136.84,
+     "width": 784.8,
+     "height": 0.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": true,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#000000",
+      "transparency": 1.0
+     },
+     "line_visible": true,
+     "text": null,
+     "source": "master"
+    }
+   ],
+   "template_area": [
+    [
+     86.4,
+     22.57,
+     878.4,
+     136.8
+    ],
+    [
+     86.4,
+     145.33,
+     878.4,
+     462.13
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "Title 1",
+     "z": 1,
+     "type": 14,
+     "left": 86.4,
+     "top": 22.57,
+     "width": 792.0,
+     "height": 114.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 10,
+      "content": "Next steps",
+      "left": 93.6,
+      "top": 83.81,
+      "width": 206.49,
+      "height": 49.39,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#404040",
+        "size": 48.0,
+        "bold": false,
+        "font": "Calibri Light",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shrink_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "bottom"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 95.0,
+     "top": 170.0,
+     "width": 780.0,
+     "height": 65.43,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 24,
+      "content": "First point\rSecond point",
+      "left": 102.2,
+      "top": 173.6,
+      "width": 132.7,
+      "height": 57.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#595959",
+        "size": 24.0,
+        "bold": false,
+        "font": "Calibri",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 95.0,
+     "top": 474.77,
+     "width": 400.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 25,
+      "content": "Source: survey, Sept 2026",
+      "left": 102.2,
+      "top": 478.37,
+      "width": 127.59,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#595959",
+        "size": 12.0,
+        "bold": false,
+        "font": "Calibri",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  }
+ ]
+}

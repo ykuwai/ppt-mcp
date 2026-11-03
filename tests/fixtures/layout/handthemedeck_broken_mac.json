@@ -1,0 +1,85 @@
+{
+ "slide_width": 960.0,
+ "slide_height": 540.0,
+ "slides": [
+  {
+   "slide_index": 1,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "title only",
+   "background_hex": "#111827",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#111827",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": true,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "Title 2",
+     "z": 1,
+     "type": 14,
+     "left": 66.0,
+     "top": 28.75,
+     "width": 828.0,
+     "height": 104.38,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": 1,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 14,
+      "content": "Where we stand",
+      "left": 73.2,
+      "top": 57.18,
+      "width": 298.5,
+      "height": 47.52,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 44.0,
+        "bold": false,
+        "font": "Calibri Light",
+        "theme": true
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": null,
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    }
+   ]
+  }
+ ]
+}

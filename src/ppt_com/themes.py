@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
 from backend import ppt
+from ppt_com.layout_check import deck_snapshot, report_deck_change
 from utils.color import int_to_hex, hex_to_int, THEME_COLOR_MAP
 from ppt_com.constants import (
     msoTrue, msoFalse,
@@ -492,10 +493,12 @@ def apply_theme(params: ApplyThemeInput) -> str:
         JSON confirming the theme was applied.
     """
     try:
+        before = deck_snapshot()
         result = ppt.execute(
             _apply_theme_impl,
             params.theme_path,
         )
+        report_deck_change(result, before)
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to apply theme: {str(e)}"})
@@ -563,7 +566,11 @@ def set_theme_colors(params: SetThemeColorsInput) -> str:
         for name, hex_val in merged.items():
             color_map[THEME_COLOR_MAP[name]] = hex_to_int(hex_val)
 
+        # The colours are the caller's now, not the template's: placeholder
+        # text in them is judged like any other.
+        before = deck_snapshot(trust_template=False)
         result = ppt.execute(_set_theme_colors_impl, color_map)
+        report_deck_change(result, before, trust_template=False)
         if preset_name:
             result["preset"] = preset_name
         if params.primary is not None:

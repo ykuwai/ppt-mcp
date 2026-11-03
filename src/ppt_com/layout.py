@@ -22,6 +22,7 @@ from ppt_com.constants import (
     VIEW_TYPE_NAMES,
 )
 from ppt_com.shape_lookup import require_top_level, resolve_shape as _get_shape
+from ppt_com.layout_check import deck_snapshot, report_contrast, report_deck_change, report_layout
 
 logger = logging.getLogger(__name__)
 
@@ -508,6 +509,7 @@ def align_shapes(params: AlignShapesInput) -> str:
             params.slide_index, params.shape_names,
             params.align_to, params.relative_to_slide,
         )
+        report_layout(result, params.slide_index, params.shape_names)
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to align shapes: {str(e)}"})
@@ -528,6 +530,7 @@ def distribute_shapes(params: DistributeShapesInput) -> str:
             params.slide_index, params.shape_names,
             params.direction, params.relative_to_slide,
         )
+        report_layout(result, params.slide_index, params.shape_names)
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to distribute shapes: {str(e)}"})
@@ -559,11 +562,13 @@ def set_slide_size(params: SetSlideSizeInput) -> str:
         JSON with the resulting slide dimensions.
     """
     try:
+        before = deck_snapshot()
         result = ppt.execute(
             _set_slide_size_impl,
             params.width, params.height,
             params.preset, params.orientation,
         )
+        report_deck_change(result, before)
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set slide size: {str(e)}"})
@@ -587,6 +592,8 @@ def set_slide_background(params: SetSlideBackgroundInput) -> str:
             params.image_path, params.transparency,
             params.slide_indices,
         )
+        if isinstance(result, dict):
+            report_contrast(result, result.get("slide_indices") or [])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set slide background: {str(e)}"})

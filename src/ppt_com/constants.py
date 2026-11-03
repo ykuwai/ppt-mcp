@@ -4,6 +4,8 @@ Central repository of all enumeration constants used across the MCP server.
 All constants are defined as module-level integers grouped by enumeration type.
 """
 
+import os
+
 # ==============================================================================
 # MsoTriState
 # ==============================================================================
@@ -207,6 +209,13 @@ ppAlignCenter = 2
 ppAlignRight = 3
 ppAlignJustify = 4
 ppAlignDistribute = 5
+
+# ==============================================================================
+# PpDirection (ParagraphFormat.TextDirection)
+# ==============================================================================
+ppDirectionLeftToRight = 1
+ppDirectionRightToLeft = 2
+ppDirectionMixed = -2
 
 # ==============================================================================
 # MsoTextOrientation
@@ -929,5 +938,15 @@ TEXT_UNIT_EFFECT_NAMES = {v: k for k, v in TEXT_UNIT_EFFECT_MAP.items()}
 
 # The icon set ppt_add_svg_icon downloads from, and the set ppt_search_icons
 # checks its matches against. Pinned, so a name that searched clean stays
-# insertable.
-ICON_PACKAGE_BASE = "https://cdn.jsdelivr.net/npm/@material-symbols/svg-400@0.31.3"
+# insertable. PPT_ICON_BASE_URL points it at a mirror with the same layout,
+# such as unpkg, or at a local copy of the package as a file:// address.
+ICON_PACKAGE_BASE = os.getenv(
+    "PPT_ICON_BASE_URL", "https://cdn.jsdelivr.net/npm/@material-symbols/svg-400@0.31.3"
+).rstrip("/")
+
+# The names and keywords ppt_search_icons searches. PPT_ICON_METADATA_URL
+# points it at a saved copy, as a file:// address, for a network that blocks
+# Google Fonts.
+ICON_METADATA_URL = os.getenv(
+    "PPT_ICON_METADATA_URL", "https://fonts.google.com/metadata/icons"
+)

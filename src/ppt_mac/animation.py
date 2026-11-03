@@ -210,8 +210,18 @@ def _apply_effect_options(
     """
     warnings: list[str] = []
 
-    if exit_flag is not None:
-        eff.exit_animation.set(bool(exit_flag))
+    # Written only when it changes: an emphasis or a motion path has no exit
+    # form, and PowerPoint refuses even to be told so (-1708), after the
+    # effect is already in the sequence.
+    if exit_flag is not None and bool(_read(eff.exit_animation)) != bool(exit_flag):
+        try:
+            eff.exit_animation.set(bool(exit_flag))
+        except CommandError:
+            warnings.append(
+                "exit was not applied: this effect has no exit form, as an "
+                "emphasis or a motion path has none. Use an entrance effect "
+                "with exit=true to make the shape leave."
+            )
 
     _apply_timing(
         eff, duration, repeat_count, auto_reverse, rewind, smooth_start, smooth_end,
@@ -468,7 +478,7 @@ def _add_animation_impl(
         "success": True,
         "shape_name": shape_name,
         "effect": effect_int,
-        "exit": bool(exit_flag),
+        "exit": bool(_read(eff.exit_animation)),
         "animation_index": animation_index,
     }
 

@@ -3681,3 +3681,79 @@ class TestAThemeNameWhereAHexBelongs:
 
         with pytest.raises(ValueError, match="Invalid hex color"):
             hex_to_rgb("nonsense")
+
+
+class TestColoursCheckedBeforeAShapeIsMade:
+    """`line_color='none'` left a plain shape on the slide.
+
+    ppt_add_shape, ppt_add_textbox and ppt_add_smartart make the shape, then
+    style it, so a colour found wrong while styling answered an error and
+    left the unstyled shape behind; a caller that retried got a second one.
+    The colours are checked with the arguments now, before anything is made.
+    """
+
+    BOX = dict(slide_index=1, shape_type="rectangle", left=0, top=0, width=100, height=50)
+
+    @pytest.mark.parametrize("field", ["line_color", "fill_color", "fill_color2", "font_color"])
+    def test_a_word_where_a_colour_belongs_is_refused(self, field):
+        with pytest.raises(ValidationError, match="'none' is not a colour"):
+            AddShapeInput(**self.BOX, **{field: "none"})
+
+    def test_no_colour_says_what_to_pass_instead(self):
+        with pytest.raises(ValidationError, match="line_visible=false"):
+            AddShapeInput(**self.BOX, line_color="none")
+        with pytest.raises(ValidationError, match="fill_type='none'"):
+            AddShapeInput(**self.BOX, fill_color="transparent")
+
+    def test_a_theme_name_still_says_where_its_hex_lives(self):
+        with pytest.raises(ValidationError, match="ppt_get_presentation_info"):
+            AddShapeInput(**self.BOX, fill_color="accent1")
+
+    def test_nonsense_names_the_argument(self):
+        with pytest.raises(ValidationError, match="Invalid hex color"):
+            AddShapeInput(**self.BOX, line_color="#12345")
+
+    def test_real_colours_pass_untouched(self):
+        inp = AddShapeInput(**self.BOX, line_color="#1F2937", fill_color="FFF",
+                            fill_color2="#abcdef", font_color=None)
+        assert (inp.line_color, inp.fill_color, inp.fill_color2, inp.font_color) == (
+            "#1F2937", "FFF", "#abcdef", None)
+
+    def test_a_text_box_checks_its_colour_too(self):
+        from ppt_com.shapes import AddTextboxInput
+
+        with pytest.raises(ValidationError, match="'none' is not a colour"):
+            AddTextboxInput(slide_index=1, text="x", left=0, top=0, width=100,
+                            height=50, font_color="none")
+
+    @pytest.mark.parametrize("field, value", [
+        ("align", "middle"), ("fill_type", "pattern"), ("fill_gradient_style", "radial")])
+    def test_a_choice_that_is_not_one_is_refused_too(self, field, value):
+        # The #256 follow-up: these were checked only once the shape existed,
+        # and an unknown gradient direction quietly became horizontal.
+        with pytest.raises(ValidationError, match="Input should be"):
+            AddShapeInput(**self.BOX, **{field: value})
+
+    def test_a_choice_in_any_case_is_taken(self):
+        inp = AddShapeInput(**self.BOX, align="Center", fill_type="GRADIENT",
+                            fill_gradient_style="From_Corner")
+        assert (inp.align, inp.fill_type, inp.fill_gradient_style) == (
+            "center", "gradient", "from_corner")
+
+    def test_smartart_checks_its_colour_too(self):
+        from ppt_com.smartart import AddSmartArtInput
+
+        with pytest.raises(ValidationError, match="Invalid hex color"):
+            AddSmartArtInput(slide_index=1, layout="basic_block_list", left=0, top=0,
+                             width=400, height=300, font_color="white")
+
+    def test_the_call_is_refused_before_powerpoint_is_reached(self):
+        import anyio
+        import server
+        from backend import ppt
+
+        with patch.object(type(ppt), "execute") as execute, \
+                pytest.raises(server.ToolError, match="line_visible=false"):
+            anyio.run(server.mcp.call_tool, "ppt_add_shape",
+                      {"params": {**self.BOX, "line_color": "none"}})
+        execute.assert_not_called()

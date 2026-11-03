@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator, model_valida
 
 from utils.offload import run_offloaded
 from backend import ppt
+from ppt_com.layout_check import report_layout, touched_names
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from utils.validation import font_size_warning
@@ -800,6 +801,7 @@ def add_table(params: AddTableInput) -> str:
             params.left, params.top, params.width, params.height,
             params.row_heights, params.col_widths,
         )
+        report_layout(result, params.slide_index, touched_names(result))
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add table: {str(e)}"})
@@ -847,6 +849,8 @@ def set_table_cell(params: SetTableCellInput) -> str:
         warn = font_size_warning(params.font_size)
         if warn:
             result["warning"] = warn
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set table cell: {str(e)}"})
@@ -868,6 +872,8 @@ def set_table_data(params: SetTableDataInput) -> str:
             params.data, params.start_row, params.start_col,
             params.bold_first_row,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set table data: {str(e)}"})
@@ -889,6 +895,8 @@ def merge_table_cells(params: MergeTableCellsInput) -> str:
             params.start_row, params.start_col,
             params.end_row, params.end_col,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to merge cells: {str(e)}"})
@@ -909,6 +917,8 @@ def add_table_row(params: TableRowInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.position, params.height,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add table row: {str(e)}"})
@@ -929,6 +939,8 @@ def delete_table_row(params: TableRowInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.position,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to delete table row: {str(e)}"})
@@ -949,6 +961,8 @@ def add_table_column(params: TableColumnInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.position, params.width,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add table column: {str(e)}"})
@@ -969,6 +983,8 @@ def delete_table_column(params: TableColumnInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.position,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to delete table column: {str(e)}"})
@@ -1012,6 +1028,8 @@ def set_table_layout(params: SetTableLayoutInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.row_heights, params.col_widths,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set table layout: {str(e)}"})
@@ -1033,6 +1051,8 @@ def split_table_cells(params: SplitTableCellsInput) -> str:
             params.row, params.col,
             params.num_rows, params.num_cols,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to split table cells: {str(e)}"})

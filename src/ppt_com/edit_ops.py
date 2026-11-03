@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
 from backend import ppt
+from ppt_com.layout_check import report_layout, touched_names
 from ppt_com.constants import msoTrue, msoFalse
 from ppt_com.shape_lookup import resolve_shape as _get_shape
 
@@ -228,6 +229,7 @@ def copy_shape_to_slide(params: CopyShapeToSlideInput) -> str:
             params.src_slide_index, params.shape_name_or_index,
             params.dst_slide_index,
         )
+        report_layout(result, params.dst_slide_index, touched_names(result))
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to copy shape to slide: {str(e)}"})

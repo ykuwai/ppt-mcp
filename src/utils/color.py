@@ -65,6 +65,25 @@ def hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
     return (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
 
 
+def check_hex(value, otherwise: str = ""):
+    """A colour argument, refused before anything is drawn when it is not one.
+
+    The tools that make a shape style it once it is on the slide, so a colour
+    found wrong there left an unstyled shape behind and answered an error for
+    it; a retry then made a second one. Checked with the arguments, a wrong
+    colour costs nothing. ``otherwise`` says what to pass instead for the
+    words a caller tries when it wants no colour at all.
+    """
+    if value is None:
+        return value
+    if value.strip().lower() in ("none", "transparent", "no", "off", "false"):
+        raise ValueError(
+            f"'{value}' is not a colour; pass one like '#1F2937'. {otherwise}".strip()
+        )
+    hex_to_rgb(value)
+    return value
+
+
 def hex_to_int(hex_str: str) -> int:
     """Convert a hex color string directly to PowerPoint's BGR integer."""
     r, g, b = hex_to_rgb(hex_str)

@@ -22,6 +22,8 @@ from queue import Empty, Queue
 from typing import Any, Callable, Optional
 from urllib.parse import unquote
 
+from utils import coauthoring
+
 logger = logging.getLogger(__name__)
 
 # pywin32 only installs on Windows, and this module has to stay importable
@@ -295,6 +297,12 @@ class PowerPointCOMWrapper:
         self._queue: Queue = Queue()
         self._running = False
         self._target_pres_full_name: Optional[str] = None  # session-level target (FullName for uniqueness)
+        # Whether this server started PowerPoint, rather than finding it
+        # running. Only then is it quit when its last presentation closes.
+        self._launched_by_us = False
+        # The process it was, when it could be read, so a PowerPoint that took
+        # its place is not mistaken for it. See `_still_ours`.
+        self._launched_pid: Optional[int] = None
         # The per-call target of the operation a worker is running, if its
         # tool call named one (see call_presentation).  Thread-local, because
         # an abandoned worker and its replacement can overlap.
@@ -690,6 +698,11 @@ class PowerPointCOMWrapper:
                 "Restart the MCP server to reconnect to PowerPoint."
             )
 
+        # Co-authoring first, so that it runs inside the per-call target
+        # binding below and finds the same deck as the operation.
+        coauthoring_call = coauthoring.call_coauthoring.get()
+        if coauthoring_call is not None:
+            func = coauthoring.bind_call_coauthoring(self, coauthoring_call, func)
         wanted = call_presentation.get()
         if wanted is not None:
             func = bind_call_presentation(self._call_local, wanted, func)
@@ -772,6 +785,54 @@ class PowerPointCOMWrapper:
                 )
             ) from None
 
+    def _app_pid(self) -> Optional[int]:
+        """The process id of the PowerPoint this wrapper holds, or None when
+        it cannot be read."""
+        try:
+            import win32process
+        except ImportError:
+            return None
+        # Application has no usable HWND (late binding answers with a bound
+        # method), so ask a document window first. A just-started PowerPoint
+        # has none, so fall back on its main frame, which exists from the
+        # moment Dispatch returns, hidden or not.
+        for handle in (
+            lambda: self._app.ActiveWindow.HWND,
+            lambda: self._app.Windows(1).HWND,
+        ):
+            try:
+                hwnd = handle()
+                if hwnd:
+                    return win32process.GetWindowThreadProcessId(hwnd)[1]
+            except Exception:  # noqa: BLE001 - try the next way of asking
+                logger.debug("Could not read a window handle", exc_info=True)
+        try:
+            import win32gui
+            pids = set()
+
+            def _frame(hwnd, _):
+                if win32gui.GetClassName(hwnd) == "PPTFrameClass":
+                    pids.add(win32process.GetWindowThreadProcessId(hwnd)[1])
+
+            win32gui.EnumWindows(_frame, None)
+        except Exception:  # noqa: BLE001 - no id is better than a wrong one
+            logger.debug("Could not enumerate PowerPoint frames", exc_info=True)
+            return None
+        # Two PowerPoints running makes the frame ambiguous.
+        return next(iter(pids)) if len(pids) == 1 else None
+
+    def _still_ours(self) -> bool:
+        """Whether the PowerPoint held now is the one this server started.
+
+        When the process id could not be read at launch, the flag alone
+        decides, as it did before the id was kept.
+        """
+        if not self._launched_by_us:
+            return False
+        if self._launched_pid is None:
+            return True
+        return self._app_pid() == self._launched_pid
+
     def _connect_impl(self, visible: Optional[bool] = None, allow_launch: bool = True) -> Any:
         """Internal: connect to PowerPoint on the COM thread.
 
@@ -798,6 +859,8 @@ class PowerPointCOMWrapper:
         try:
             self._app = win32com.client.GetActiveObject("PowerPoint.Application")
             logger.info("Attached to existing PowerPoint instance")
+            self._launched_by_us = False
+            self._launched_pid = None
         except pywintypes.com_error as e:
             if e.hresult in _BUSY_HRESULTS:
                 # PowerPoint is running but busy (modal dialog). Re-raise as
@@ -812,6 +875,8 @@ class PowerPointCOMWrapper:
                 self._app = win32com.client.Dispatch("PowerPoint.Application")
                 logger.info("Launched new PowerPoint instance via Dispatch")
                 launched_new = True
+                self._launched_by_us = True
+                self._launched_pid = self._app_pid()
             except pywintypes.com_error as e2:
                 if e2.hresult in _BUSY_HRESULTS:
                     raise  # PowerPoint busy — _run_item decides whether to retry
@@ -825,6 +890,10 @@ class PowerPointCOMWrapper:
             # Only force visibility when we ourselves started PowerPoint.
             # Don't yank a user-hidden running instance to the foreground.
             self._app.Visible = True
+
+        if self._launched_by_us and self._launched_pid is None:
+            # PowerPoint has no window to ask about until it is visible.
+            self._launched_pid = self._app_pid()
 
         return self._app
 
@@ -1043,12 +1112,16 @@ class PowerPointCOMWrapper:
             if app.Presentations(i).FullName == pres.FullName:
                 index = i
                 break
-        return {
+        result = {
             "success": True,
             "name": pres.Name,
             "full_name": pres.FullName,
             "index": index,
         }
+        state = coauthoring.status(pres, with_count=True)
+        if state is not None:
+            result[coauthoring.FIELD] = state
+        return result
 
     def _ensure_presentation_impl(self) -> Any:
         """Internal: ensure presentation on COM thread."""

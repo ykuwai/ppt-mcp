@@ -144,3 +144,8 @@ class TestWhatOnlyMakesSenseForOneShape:
         params = UpdateShapeInput(
             slide_index=1, shape_name="A", name="B", adjustments={1: 0.5})
         assert params.name == "B"
+
+    def test_alt_text_for_several_shapes_is_refused(self):
+        # Each picture says something of its own.
+        assert "alt_text applies to one shape" in rejected(
+            shape_names=["A", "B"], alt_text="A chart of sales")

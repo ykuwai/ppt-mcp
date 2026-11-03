@@ -49,6 +49,10 @@ jobs:
       # containing non-ASCII text.
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: "1"
+      # Unpinned, uv takes the newest Python, and pywin32 has no wheel for it
+      # until it catches up: the locked leg then fails to install. Move this
+      # up when pywin32 ships wheels for the next one.
+      UV_PYTHON: "3.12"
 
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +65,7 @@ jobs:
           cache-suffix: ${{ matrix.key }}
 
       - name: Set up Python
-        run: uv python install
+        run: uv python install 3.12
 
       - name: Run tests
         run: ${{ matrix.run }}

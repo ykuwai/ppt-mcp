@@ -13,9 +13,10 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
 from utils.color import int_to_hex
-from backend import ppt
+from backend import ppt, quit_if_ours
 from utils.onedrive import resolve_local_path
 from utils.com_wrapper import pywintypes
+from utils import coauthoring
 from ppt_com.constants import (
     msoTrue,
     msoFalse,
@@ -203,6 +204,15 @@ class ClosePresentationInput(BaseModel):
         description=(
             "Name of the presentation (e.g. 'MySlides.pptx'). "
             "Alternative to presentation_index. If omitted, uses the active presentation."
+        ),
+    )
+    keep_powerpoint_open: bool = Field(
+        default=False,
+        description=(
+            "When this closes the last presentation of a PowerPoint this server "
+            "started, PowerPoint is quit, so no empty window is left behind. "
+            "Set true to keep it running, e.g. to open another deck straight "
+            "away. A PowerPoint the user started is never quit."
         ),
     )
 
@@ -465,7 +475,17 @@ def _open_presentation_impl(
         "slides_count": pres.Slides.Count,
         "read_only": int(pres.ReadOnly) == -1,  # msoTrue=-1; bool() misidentifies msoCTrue(1)
         "activated": activate,
+        **_coauthoring_field(pres),
     }
+
+
+def _coauthoring_field(pres) -> dict:
+    """{"coauthoring": state} for a deck on a server, {} otherwise."""
+    try:
+        state = coauthoring.status(pres, with_count=True)
+    except Exception:
+        return {}
+    return {coauthoring.FIELD: state} if state is not None else {}
 
 
 def _save_presentation_impl(
@@ -476,12 +496,18 @@ def _save_presentation_impl(
     pres = _resolve_presentation(
         app, presentation_index=presentation_index, presentation_name=presentation_name
     )
+    # Saving is how PowerPoint takes in what co-authors have saved; see
+    # utils/coauthoring.py for what a save then reports.
+    pending = coauthoring.on_server(pres) and bool(pres.Coauthoring.PendingUpdates)
     pres.Save()
-    return {
+    result = {
         "success": True,
         "name": pres.Name,
         "saved": bool(pres.Saved),
     }
+    if coauthoring.on_server(pres):
+        result[coauthoring.FIELD] = coauthoring.after_save(pres, pending)
+    return result
 
 
 def _save_presentation_as_impl(
@@ -516,6 +542,7 @@ def _close_presentation_impl(
     save_changes: bool,
     presentation_index: Optional[int],
     presentation_name: Optional[str],
+    keep_powerpoint_open: bool = False,
 ) -> dict:
     app = ppt._get_app_impl()
     pres = _resolve_presentation(
@@ -523,14 +550,55 @@ def _close_presentation_impl(
     )
     name = pres.Name
 
-    if save_changes:
-        pres.Save()
+    window = _protected_view_window(app, pres)
+    if window is not None:
+        # Read-only: it takes neither a save nor being marked as saved, and
+        # it is closed through its window.
+        if save_changes:
+            raise ValueError(
+                f"'{name}' is open in Protected View, which is read-only, so it "
+                "cannot be saved. Close it with save_changes=false, or choose "
+                "Enable Editing in PowerPoint first."
+            )
+        window.Close()
     else:
-        # Suppress "save changes?" dialog
-        pres.Saved = True
+        if save_changes:
+            pres.Save()
+        else:
+            # Suppress "save changes?" dialog
+            pres.Saved = True
+        pres.Close()
+    result = {"success": True, "closed": name}
+    if not keep_powerpoint_open and _nothing_is_open(app):
+        result.update(quit_if_ours(lambda: app.Quit()))
+    return result
 
-    pres.Close()
-    return {"success": True, "closed": name}
+
+def _protected_view_window(app, pres):
+    """The Protected View window ``pres`` is shown in, or None."""
+    try:
+        path = pres.FullName
+        for i in range(1, app.ProtectedViewWindows.Count + 1):
+            window = app.ProtectedViewWindows(i)
+            if window.Presentation.FullName == path:
+                return window
+    except Exception:  # noqa: BLE001 - no such window to be found: close as usual
+        return None
+    return None
+
+
+def _nothing_is_open(app) -> bool:
+    """No presentation and no Protected View window is open.
+
+    A file the user is reading in Protected View is not in ``Presentations``,
+    and quitting PowerPoint would close it.
+    """
+    if app.Presentations.Count != 0:
+        return False
+    try:
+        return app.ProtectedViewWindows.Count == 0
+    except Exception:  # noqa: BLE001 - cannot tell, so leave PowerPoint running
+        return False
 
 
 def _get_presentation_info_impl(
@@ -616,6 +684,7 @@ def _get_presentation_info_impl(
         "template_name": template_name,
         "fonts": fonts,
         "accent_colors": accent_colors,
+        **_coauthoring_field(pres),
     }
 
 
@@ -796,6 +865,7 @@ def close_presentation(params: ClosePresentationInput) -> str:
             params.save_changes,
             params.presentation_index,
             params.presentation_name,
+            params.keep_powerpoint_open,
         )
         return json.dumps(result)
     except Exception as e:
@@ -909,6 +979,9 @@ def register_tools(mcp):
 
         This overwrites the existing file. Use ppt_save_presentation_as to
         save to a new location or format.
+
+        For a file on a server that others edit, saving also merges the
+        changes they have saved (result field coauthoring).
         """
         return await run_offloaded(save_presentation, params)
 
@@ -950,6 +1023,9 @@ def register_tools(mcp):
         Set save_changes=true to save before closing.
         If save_changes=false (default), unsaved changes are discarded without
         prompting the user.
+
+        Closing the last presentation of a PowerPoint this server started
+        quits PowerPoint too; keep_powerpoint_open=true keeps it running.
         """
         return await run_offloaded(close_presentation, params)
 

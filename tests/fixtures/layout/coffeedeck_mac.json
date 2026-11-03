@@ -1,0 +1,8809 @@
+{
+ "slide_width": 960.0,
+ "slide_height": 540.0,
+ "slides": [
+  {
+   "slide_index": 1,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#1E1410",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "Picture 2",
+     "z": 1,
+     "type": 13,
+     "left": 480.0,
+     "top": 0.0,
+     "width": 480.0,
+     "height": 540.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": null
+    },
+    {
+     "name": "TextBox 3",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 150.0,
+     "width": 380.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 18,
+      "content": "FROM CHERRY TO CUP",
+      "left": 67.2,
+      "top": 153.6,
+      "width": 161.54,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#C67C3A",
+        "size": 14.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 3,
+     "type": 17,
+     "left": 60.0,
+     "top": 176.0,
+     "width": 380.0,
+     "height": 123.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 6,
+      "content": "Coffee",
+      "left": 67.2,
+      "top": 179.6,
+      "width": 339.25,
+      "height": 115.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 96.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_258",
+     "z": 4,
+     "type": 1,
+     "left": 67.0,
+     "top": 304.0,
+     "width": 120.0,
+     "height": 3.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 5,
+     "type": 17,
+     "left": 60.0,
+     "top": 322.0,
+     "width": 380.0,
+     "height": 55.74,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 50,
+      "content": "The bean, the brew and the world's favourite habit",
+      "left": 67.2,
+      "top": 325.6,
+      "width": 326.56,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 20.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 6,
+     "type": 17,
+     "left": 60.0,
+     "top": 466.0,
+     "width": 380.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 52,
+      "content": "Origins  ·  The plant  ·  Roast and brew  ·  Numbers",
+      "left": 67.2,
+      "top": 469.6,
+      "width": 297.57,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#A38F7C",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 2,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#F7F1E8",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 60.0,
+     "top": 38.0,
+     "width": 600.0,
+     "height": 48.47,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 14,
+      "content": "What's brewing",
+      "left": 67.2,
+      "top": 41.6,
+      "width": 282.5,
+      "height": 40.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 34.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_259",
+     "z": 2,
+     "type": 1,
+     "left": 67.0,
+     "top": 98.0,
+     "width": 60.0,
+     "height": 4.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_260",
+     "z": 3,
+     "type": 1,
+     "left": 67.0,
+     "top": 140.0,
+     "width": 44.0,
+     "height": 44.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "1",
+      "left": 84.38,
+      "top": 150.6,
+      "width": 14.12,
+      "height": 22.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 19.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 4,
+     "type": 17,
+     "left": 133.0,
+     "top": 140.0,
+     "width": 440.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Origins",
+      "left": 140.2,
+      "top": 143.6,
+      "width": 81.63,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 133.0,
+     "top": 166.0,
+     "width": 460.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 49,
+      "content": "From Yemeni monasteries to the London coffeehouse",
+      "left": 140.2,
+      "top": 169.6,
+      "width": 343.32,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 14.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_261",
+     "z": 6,
+     "type": 1,
+     "left": 67.0,
+     "top": 206.0,
+     "width": 44.0,
+     "height": 44.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "2",
+      "left": 83.06,
+      "top": 216.6,
+      "width": 16.75,
+      "height": 22.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 19.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 133.0,
+     "top": 206.0,
+     "width": 440.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 9,
+      "content": "The plant",
+      "left": 140.2,
+      "top": 209.6,
+      "width": 102.5,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 8,
+     "type": 17,
+     "left": 133.0,
+     "top": 232.0,
+     "width": 460.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 45,
+      "content": "Arabica and robusta, two very different beans",
+      "left": 140.2,
+      "top": 235.6,
+      "width": 292.41,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 14.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_262",
+     "z": 9,
+     "type": 1,
+     "left": 67.0,
+     "top": 272.0,
+     "width": 44.0,
+     "height": 44.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "3",
+      "left": 83.06,
+      "top": 282.6,
+      "width": 16.75,
+      "height": 22.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 19.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 10,
+     "type": 17,
+     "left": 133.0,
+     "top": 272.0,
+     "width": 440.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 18,
+      "content": "From cherry to cup",
+      "left": 140.2,
+      "top": 275.6,
+      "width": 203.0,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 11",
+     "z": 11,
+     "type": 17,
+     "left": 133.0,
+     "top": 298.0,
+     "width": 460.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 41,
+      "content": "Six steps between the tree and your table",
+      "left": 140.2,
+      "top": 301.6,
+      "width": 267.25,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 14.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_263",
+     "z": 12,
+     "type": 1,
+     "left": 67.0,
+     "top": 338.0,
+     "width": 44.0,
+     "height": 44.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "4",
+      "left": 82.81,
+      "top": 348.6,
+      "width": 17.25,
+      "height": 22.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 19.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 13",
+     "z": 13,
+     "type": 17,
+     "left": 133.0,
+     "top": 338.0,
+     "width": 440.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 14,
+      "content": "Roast and brew",
+      "left": 140.2,
+      "top": 341.6,
+      "width": 165.0,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 14",
+     "z": 14,
+     "type": 17,
+     "left": 133.0,
+     "top": 364.0,
+     "width": 460.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 35,
+      "content": "How heat and water decide the taste",
+      "left": 140.2,
+      "top": 367.6,
+      "width": 237.25,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 14.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_264",
+     "z": 15,
+     "type": 1,
+     "left": 67.0,
+     "top": 404.0,
+     "width": 44.0,
+     "height": 44.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "5",
+      "left": 83.31,
+      "top": 414.6,
+      "width": 16.25,
+      "height": 22.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 19.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 16",
+     "z": 16,
+     "type": 17,
+     "left": 133.0,
+     "top": 404.0,
+     "width": 440.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 14,
+      "content": "By the numbers",
+      "left": 140.2,
+      "top": 407.6,
+      "width": 167.25,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 17",
+     "z": 17,
+     "type": 17,
+     "left": 133.0,
+     "top": 430.0,
+     "width": 460.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 26,
+      "content": "Who grows it, and how much",
+      "left": 140.2,
+      "top": 433.6,
+      "width": 188.58,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 14.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Picture 19",
+     "z": 18,
+     "type": 13,
+     "left": 660.0,
+     "top": 175.0,
+     "width": 240.0,
+     "height": 240.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": null
+    }
+   ]
+  },
+  {
+   "slide_index": 3,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#F7F1E8",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 60.0,
+     "top": 38.0,
+     "width": 840.0,
+     "height": 48.47,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 23,
+      "content": "Five centuries in a cup",
+      "left": 67.2,
+      "top": 41.6,
+      "width": 400.13,
+      "height": 40.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 34.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 92.0,
+     "width": 840.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 41,
+      "content": "How a monastery drink conquered the world",
+      "left": 67.2,
+      "top": 95.6,
+      "width": 329.09,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Straight Connector 3",
+     "z": 3,
+     "type": 9,
+     "left": 80.0,
+     "top": 300.0,
+     "width": 800.0,
+     "height": 0.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": true,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#000000",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": null
+    },
+    {
+     "name": "Shape_265",
+     "z": 4,
+     "type": 1,
+     "left": 121.0,
+     "top": 291.0,
+     "width": 18.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 60.0,
+     "top": 192.0,
+     "width": 140.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "c. 1450",
+      "left": 97.94,
+      "top": 195.6,
+      "width": 68.75,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 18.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 60.0,
+     "top": 222.0,
+     "width": 140.0,
+     "height": 50.89,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 63,
+      "content": "Sufi monasteries in Yemen drink coffee to stay awake for prayer",
+      "left": 70.15,
+      "top": 225.6,
+      "width": 122.7,
+      "height": 43.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 12.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_266",
+     "z": 7,
+     "type": 1,
+     "left": 261.0,
+     "top": 291.0,
+     "width": 18.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 8,
+     "type": 17,
+     "left": 200.0,
+     "top": 318.0,
+     "width": 140.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "1554",
+      "left": 248.94,
+      "top": 321.6,
+      "width": 46.75,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 18.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 200.0,
+     "top": 348.0,
+     "width": 140.0,
+     "height": 36.35,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 34,
+      "content": "Istanbul's first coffeehouses open",
+      "left": 217.61,
+      "top": 351.6,
+      "width": 107.78,
+      "height": 28.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 12.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_267",
+     "z": 10,
+     "type": 1,
+     "left": 401.0,
+     "top": 291.0,
+     "width": 18.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 11",
+     "z": 11,
+     "type": 17,
+     "left": 340.0,
+     "top": 192.0,
+     "width": 140.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "1652",
+      "left": 388.75,
+      "top": 195.6,
+      "width": 47.13,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 18.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 12,
+     "type": 17,
+     "left": 340.0,
+     "top": 222.0,
+     "width": 140.0,
+     "height": 50.89,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 53,
+      "content": "London's first coffeehouse opens, run by Pasqua Rosée",
+      "left": 353.24,
+      "top": 225.6,
+      "width": 116.51,
+      "height": 43.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 12.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_268",
+     "z": 13,
+     "type": 1,
+     "left": 541.0,
+     "top": 291.0,
+     "width": 18.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 14",
+     "z": 14,
+     "type": 17,
+     "left": 480.0,
+     "top": 318.0,
+     "width": 140.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 5,
+      "content": "1720s",
+      "left": 524.0,
+      "top": 321.6,
+      "width": 56.63,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 18.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 15",
+     "z": 15,
+     "type": 17,
+     "left": 480.0,
+     "top": 348.0,
+     "width": 140.0,
+     "height": 50.89,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 53,
+      "content": "A French officer carries a coffee plant to Martinique",
+      "left": 487.39,
+      "top": 351.6,
+      "width": 128.22,
+      "height": 43.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 12.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_269",
+     "z": 16,
+     "type": 1,
+     "left": 681.0,
+     "top": 291.0,
+     "width": 18.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 17",
+     "z": 17,
+     "type": 17,
+     "left": 620.0,
+     "top": 192.0,
+     "width": 140.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "1884",
+      "left": 667.56,
+      "top": 195.6,
+      "width": 49.5,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 18.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 18",
+     "z": 18,
+     "type": 17,
+     "left": 620.0,
+     "top": 222.0,
+     "width": 140.0,
+     "height": 50.89,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 52,
+      "content": "Angelo Moriondo patents an espresso machine in Turin",
+      "left": 635.42,
+      "top": 225.6,
+      "width": 112.16,
+      "height": 43.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 12.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_270",
+     "z": 19,
+     "type": 1,
+     "left": 821.0,
+     "top": 291.0,
+     "width": 18.0,
+     "height": 18.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 20",
+     "z": 20,
+     "type": 17,
+     "left": 760.0,
+     "top": 318.0,
+     "width": 140.0,
+     "height": 29.08,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "1938",
+      "left": 808.06,
+      "top": 321.6,
+      "width": 48.5,
+      "height": 21.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 18.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 21",
+     "z": 21,
+     "type": 17,
+     "left": 760.0,
+     "top": 348.0,
+     "width": 140.0,
+     "height": 65.43,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 59,
+      "content": "Nestlé launches Nescafé, and instant coffee goes mainstream",
+      "left": 774.93,
+      "top": 351.6,
+      "width": 113.14,
+      "height": 57.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 12.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 4,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#F7F1E8",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 60.0,
+     "top": 38.0,
+     "width": 840.0,
+     "height": 48.47,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 21,
+      "content": "Two species, two cups",
+      "left": 67.2,
+      "top": 41.6,
+      "width": 391.5,
+      "height": 40.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 34.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 92.0,
+     "width": 840.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 73,
+      "content": "Almost all coffee is Coffea arabica or Coffea canephora, known as robusta",
+      "left": 67.2,
+      "top": 95.6,
+      "width": 538.36,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_271",
+     "z": 3,
+     "type": 1,
+     "left": 60.0,
+     "top": 140.0,
+     "width": 410.0,
+     "height": 310.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#FFFFFF",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_272",
+     "z": 4,
+     "type": 1,
+     "left": 60.0,
+     "top": 140.0,
+     "width": 410.0,
+     "height": 56.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#8B4A2B",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "ARABICA",
+      "left": 210.25,
+      "top": 154.8,
+      "width": 115.13,
+      "height": 26.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 22.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 84.0,
+     "top": 219.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "GROWS AT",
+      "left": 91.2,
+      "top": 222.6,
+      "width": 62.75,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 200.0,
+     "top": 216.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 29,
+      "content": "1,000–2,000 m, cool highlands",
+      "left": 207.2,
+      "top": 219.6,
+      "width": 212.3,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 84.0,
+     "top": 265.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "CAFFEINE",
+      "left": 91.2,
+      "top": 268.6,
+      "width": 56.63,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 8,
+     "type": 17,
+     "left": 200.0,
+     "top": 262.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 14,
+      "content": "About 1.2–1.5%",
+      "left": 207.2,
+      "top": 265.6,
+      "width": 111.38,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 84.0,
+     "top": 311.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 5,
+      "content": "TASTE",
+      "left": 91.2,
+      "top": 314.6,
+      "width": 36.63,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 10,
+     "type": 17,
+     "left": 200.0,
+     "top": 308.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 21,
+      "content": "Sweet, fruity, bright",
+      "left": 207.2,
+      "top": 311.6,
+      "width": 135.31,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 11",
+     "z": 11,
+     "type": 17,
+     "left": 84.0,
+     "top": 357.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "BEAN",
+      "left": 91.2,
+      "top": 360.6,
+      "width": 33.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 12,
+     "type": 17,
+     "left": 200.0,
+     "top": 354.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 26,
+      "content": "Oval, with a curved crease",
+      "left": 207.2,
+      "top": 357.6,
+      "width": 182.16,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 13",
+     "z": 13,
+     "type": 17,
+     "left": 84.0,
+     "top": 403.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "GROWN IN",
+      "left": 91.2,
+      "top": 406.6,
+      "width": 62.88,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 14",
+     "z": 14,
+     "type": 17,
+     "left": 200.0,
+     "top": 400.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 26,
+      "content": "Brazil, Colombia, Ethiopia",
+      "left": 207.2,
+      "top": 403.6,
+      "width": 178.67,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_273",
+     "z": 15,
+     "type": 1,
+     "left": 490.0,
+     "top": 140.0,
+     "width": 410.0,
+     "height": 310.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#FFFFFF",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_274",
+     "z": 16,
+     "type": 1,
+     "left": 490.0,
+     "top": 140.0,
+     "width": 410.0,
+     "height": 56.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "ROBUSTA",
+      "left": 636.81,
+      "top": 154.8,
+      "width": 122.0,
+      "height": 26.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 22.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 17",
+     "z": 17,
+     "type": 17,
+     "left": 514.0,
+     "top": 219.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "GROWS AT",
+      "left": 521.2,
+      "top": 222.6,
+      "width": 62.75,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 18",
+     "z": 18,
+     "type": 17,
+     "left": 630.0,
+     "top": 216.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 25,
+      "content": "Up to 800 m, hot lowlands",
+      "left": 637.2,
+      "top": 219.6,
+      "width": 182.8,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 19",
+     "z": 19,
+     "type": 17,
+     "left": 514.0,
+     "top": 265.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "CAFFEINE",
+      "left": 521.2,
+      "top": 268.6,
+      "width": 56.63,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 20",
+     "z": 20,
+     "type": 17,
+     "left": 630.0,
+     "top": 262.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 29,
+      "content": "About 2.2–2.7%, nearly double",
+      "left": 637.2,
+      "top": 265.6,
+      "width": 213.43,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 21",
+     "z": 21,
+     "type": 17,
+     "left": 514.0,
+     "top": 311.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 5,
+      "content": "TASTE",
+      "left": 521.2,
+      "top": 314.6,
+      "width": 36.63,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 22",
+     "z": 22,
+     "type": 17,
+     "left": 630.0,
+     "top": 308.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 27,
+      "content": "Bitter, earthy, full-bodied",
+      "left": 637.2,
+      "top": 311.6,
+      "width": 171.48,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 23",
+     "z": 23,
+     "type": 17,
+     "left": 514.0,
+     "top": 357.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "BEAN",
+      "left": 521.2,
+      "top": 360.6,
+      "width": 33.5,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 24",
+     "z": 24,
+     "type": 17,
+     "left": 630.0,
+     "top": 354.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 31,
+      "content": "Rounder, with a straight crease",
+      "left": 637.2,
+      "top": 357.6,
+      "width": 212.7,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 25",
+     "z": 25,
+     "type": 17,
+     "left": 514.0,
+     "top": 403.0,
+     "width": 110.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "GROWN IN",
+      "left": 521.2,
+      "top": 406.6,
+      "width": 62.88,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 26",
+     "z": 26,
+     "type": 17,
+     "left": 630.0,
+     "top": 400.0,
+     "width": 250.0,
+     "height": 25.45,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 26,
+      "content": "Vietnam, Brazil, Indonesia",
+      "left": 637.2,
+      "top": 403.6,
+      "width": 178.15,
+      "height": 18.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 15.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 5,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#1E1410",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "Picture 2",
+     "z": 1,
+     "type": 13,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 330.0,
+     "height": 540.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": null
+    },
+    {
+     "name": "TextBox 3",
+     "z": 2,
+     "type": 17,
+     "left": 380.0,
+     "top": 38.0,
+     "width": 520.0,
+     "height": 48.47,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 18,
+      "content": "From cherry to cup",
+      "left": 387.2,
+      "top": 41.6,
+      "width": 344.88,
+      "height": 40.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 34.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 3,
+     "type": 17,
+     "left": 380.0,
+     "top": 92.0,
+     "width": 520.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 40,
+      "content": "A coffee bean is the seed of a red fruit",
+      "left": 387.2,
+      "top": 95.6,
+      "width": 280.77,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_275",
+     "z": 4,
+     "type": 1,
+     "left": 387.0,
+     "top": 140.0,
+     "width": 38.0,
+     "height": 38.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "1",
+      "left": 402.06,
+      "top": 149.4,
+      "width": 12.0,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 5,
+     "type": 17,
+     "left": 441.0,
+     "top": 140.0,
+     "width": 200.0,
+     "height": 27.87,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Picking",
+      "left": 448.2,
+      "top": 143.6,
+      "width": 69.5,
+      "height": 20.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 17.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 6,
+     "type": 17,
+     "left": 441.0,
+     "top": 162.0,
+     "width": 459.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 43,
+      "content": "Ripe red cherries are picked, often by hand",
+      "left": 448.2,
+      "top": 165.6,
+      "width": 257.25,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_276",
+     "z": 7,
+     "type": 1,
+     "left": 387.0,
+     "top": 194.0,
+     "width": 38.0,
+     "height": 38.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "2",
+      "left": 401.0,
+      "top": 203.4,
+      "width": 14.12,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 8,
+     "type": 17,
+     "left": 441.0,
+     "top": 194.0,
+     "width": 200.0,
+     "height": 27.87,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 10,
+      "content": "Processing",
+      "left": 448.2,
+      "top": 197.6,
+      "width": 99.63,
+      "height": 20.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 17.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 9,
+     "type": 17,
+     "left": 441.0,
+     "top": 216.0,
+     "width": 459.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 51,
+      "content": "The fruit is washed off, or left to dry on the bean",
+      "left": 448.2,
+      "top": 219.6,
+      "width": 284.99,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_277",
+     "z": 10,
+     "type": 1,
+     "left": 387.0,
+     "top": 248.0,
+     "width": 38.0,
+     "height": 38.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "3",
+      "left": 401.0,
+      "top": 257.4,
+      "width": 14.12,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 11,
+     "type": 17,
+     "left": 441.0,
+     "top": 248.0,
+     "width": 200.0,
+     "height": 27.87,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 6,
+      "content": "Drying",
+      "left": 448.2,
+      "top": 251.6,
+      "width": 64.38,
+      "height": 20.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 17.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 13",
+     "z": 12,
+     "type": 17,
+     "left": 441.0,
+     "top": 270.0,
+     "width": 459.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 41,
+      "content": "The green beans dry to about 11% moisture",
+      "left": 448.2,
+      "top": 273.6,
+      "width": 262.92,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_278",
+     "z": 13,
+     "type": 1,
+     "left": 387.0,
+     "top": 302.0,
+     "width": 38.0,
+     "height": 38.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "4",
+      "left": 400.81,
+      "top": 311.4,
+      "width": 14.5,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 15",
+     "z": 14,
+     "type": 17,
+     "left": 441.0,
+     "top": 302.0,
+     "width": 200.0,
+     "height": 27.87,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Roasting",
+      "left": 448.2,
+      "top": 305.6,
+      "width": 81.75,
+      "height": 20.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 17.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 16",
+     "z": 15,
+     "type": 17,
+     "left": 441.0,
+     "top": 324.0,
+     "width": 459.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 51,
+      "content": "Around 200 °C for 10 to 15 minutes turns them brown",
+      "left": 448.2,
+      "top": 327.6,
+      "width": 321.28,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_279",
+     "z": 16,
+     "type": 1,
+     "left": 387.0,
+     "top": 356.0,
+     "width": 38.0,
+     "height": 38.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "5",
+      "left": 401.19,
+      "top": 365.4,
+      "width": 13.75,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 18",
+     "z": 17,
+     "type": 17,
+     "left": 441.0,
+     "top": 356.0,
+     "width": 200.0,
+     "height": 27.87,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Grinding",
+      "left": 448.2,
+      "top": 359.6,
+      "width": 83.5,
+      "height": 20.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 17.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 19",
+     "z": 18,
+     "type": 17,
+     "left": 441.0,
+     "top": 378.0,
+     "width": 459.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 57,
+      "content": "Best just before brewing, to a size that suits the method",
+      "left": 448.2,
+      "top": 381.6,
+      "width": 329.39,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_280",
+     "z": 19,
+     "type": 1,
+     "left": 387.0,
+     "top": 410.0,
+     "width": 38.0,
+     "height": 38.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 1,
+      "content": "6",
+      "left": 400.81,
+      "top": 419.4,
+      "width": 14.5,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#1E1410",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 21",
+     "z": 20,
+     "type": 17,
+     "left": 441.0,
+     "top": 410.0,
+     "width": 200.0,
+     "height": 27.87,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Brewing",
+      "left": 448.2,
+      "top": 413.6,
+      "width": 78.0,
+      "height": 20.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 17.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 22",
+     "z": 21,
+     "type": 17,
+     "left": 441.0,
+     "top": 432.0,
+     "width": 459.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 39,
+      "content": "Water at 90–96 °C draws out the flavour",
+      "left": 448.2,
+      "top": 435.6,
+      "width": 236.88,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 6,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#1E1410",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 60.0,
+     "top": 38.0,
+     "width": 840.0,
+     "height": 48.47,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 23,
+      "content": "How dark is your roast?",
+      "left": 67.2,
+      "top": 41.6,
+      "width": 426.75,
+      "height": 40.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 34.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 92.0,
+     "width": 840.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 45,
+      "content": "The same bean tastes different at every stage",
+      "left": 67.2,
+      "top": 95.6,
+      "width": 332.13,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_281",
+     "z": 3,
+     "type": 1,
+     "left": 60.0,
+     "top": 140.0,
+     "width": 195.0,
+     "height": 140.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#B07A4A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 4,
+     "type": 17,
+     "left": 60.0,
+     "top": 296.0,
+     "width": 195.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 5,
+      "content": "Light",
+      "left": 67.2,
+      "top": 299.6,
+      "width": 59.13,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 60.0,
+     "top": 326.0,
+     "width": 195.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Ends near 200 °C",
+      "left": 67.2,
+      "top": 329.6,
+      "width": 111.25,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#C67C3A",
+        "size": 13.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 60.0,
+     "top": 352.0,
+     "width": 195.0,
+     "height": 54.53,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 64,
+      "content": "Bright and fruity, with more acidity: it tastes of where it grew",
+      "left": 67.2,
+      "top": 355.6,
+      "width": 163.41,
+      "height": 46.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_282",
+     "z": 7,
+     "type": 1,
+     "left": 275.0,
+     "top": 140.0,
+     "width": 195.0,
+     "height": 140.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#8A5530",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 8,
+     "type": 17,
+     "left": 275.0,
+     "top": 296.0,
+     "width": 195.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 6,
+      "content": "Medium",
+      "left": 282.2,
+      "top": 299.6,
+      "width": 91.25,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 275.0,
+     "top": 326.0,
+     "width": 195.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Ends near 215 °C",
+      "left": 282.2,
+      "top": 329.6,
+      "width": 111.25,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#C67C3A",
+        "size": 13.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 10,
+     "type": 17,
+     "left": 275.0,
+     "top": 352.0,
+     "width": 195.0,
+     "height": 38.78,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 32,
+      "content": "Balanced, with caramel sweetness",
+      "left": 282.2,
+      "top": 355.6,
+      "width": 139.71,
+      "height": 31.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_283",
+     "z": 11,
+     "type": 1,
+     "left": 490.0,
+     "top": 140.0,
+     "width": 195.0,
+     "height": 140.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#5E3820",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 12,
+     "type": 17,
+     "left": 490.0,
+     "top": 296.0,
+     "width": 195.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 11,
+      "content": "Medium-dark",
+      "left": 497.2,
+      "top": 299.6,
+      "width": 147.0,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 13",
+     "z": 13,
+     "type": 17,
+     "left": 490.0,
+     "top": 326.0,
+     "width": 195.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Ends near 225 °C",
+      "left": 497.2,
+      "top": 329.6,
+      "width": 111.25,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#C67C3A",
+        "size": 13.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 14",
+     "z": 14,
+     "type": 17,
+     "left": 490.0,
+     "top": 352.0,
+     "width": 195.0,
+     "height": 38.78,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 42,
+      "content": "Fuller body, chocolate notes, a little oil",
+      "left": 497.2,
+      "top": 355.6,
+      "width": 183.46,
+      "height": 31.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_284",
+     "z": 15,
+     "type": 1,
+     "left": 705.0,
+     "top": 140.0,
+     "width": 195.0,
+     "height": 140.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#331E13",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 16",
+     "z": 16,
+     "type": 17,
+     "left": 705.0,
+     "top": 296.0,
+     "width": 195.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "Dark",
+      "left": 712.2,
+      "top": 299.6,
+      "width": 56.63,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 17",
+     "z": 17,
+     "type": 17,
+     "left": 705.0,
+     "top": 326.0,
+     "width": 195.0,
+     "height": 23.02,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 13,
+      "content": "240 °C and up",
+      "left": 712.2,
+      "top": 329.6,
+      "width": 92.88,
+      "height": 15.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#C67C3A",
+        "size": 13.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 18",
+     "z": 18,
+     "type": 17,
+     "left": 705.0,
+     "top": 352.0,
+     "width": 195.0,
+     "height": 38.78,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 38,
+      "content": "Smoky and bitter, with an oily surface",
+      "left": 712.2,
+      "top": 355.6,
+      "width": 176.05,
+      "height": 31.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 19",
+     "z": 19,
+     "type": 17,
+     "left": 60.0,
+     "top": 466.0,
+     "width": 840.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 75,
+      "content": "Roast temperatures are bean temperatures, and vary from roaster to roaster.",
+      "left": 67.2,
+      "top": 469.6,
+      "width": 417.47,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#A38F7C",
+        "size": 12.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 7,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#F7F1E8",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 60.0,
+     "top": 38.0,
+     "width": 840.0,
+     "height": 48.47,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Six ways to brew",
+      "left": 67.2,
+      "top": 41.6,
+      "width": 298.38,
+      "height": 40.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 34.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 92.0,
+     "width": 840.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 49,
+      "content": "Pressure, time and grind size make the difference",
+      "left": 67.2,
+      "top": 95.6,
+      "width": 360.68,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_285",
+     "z": 3,
+     "type": 1,
+     "left": 60.0,
+     "top": 140.0,
+     "width": 270.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#FFFFFF",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_286",
+     "z": 4,
+     "type": 1,
+     "left": 60.0,
+     "top": 140.0,
+     "width": 6.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 84.0,
+     "top": 156.0,
+     "width": 230.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Espresso",
+      "left": 91.2,
+      "top": 159.6,
+      "width": 97.88,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 84.0,
+     "top": 188.0,
+     "width": 230.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 21,
+      "content": "9 bar · about 25–30 s",
+      "left": 91.2,
+      "top": 191.6,
+      "width": 124.25,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 12.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 84.0,
+     "top": 214.0,
+     "width": 230.0,
+     "height": 54.53,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 69,
+      "content": "Hot water forced through fine coffee: a small, strong shot with crema",
+      "left": 91.2,
+      "top": 217.6,
+      "width": 189.14,
+      "height": 46.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_287",
+     "z": 8,
+     "type": 1,
+     "left": 345.0,
+     "top": 140.0,
+     "width": 270.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#FFFFFF",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_288",
+     "z": 9,
+     "type": 1,
+     "left": 345.0,
+     "top": 140.0,
+     "width": 6.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 10,
+     "type": 17,
+     "left": 369.0,
+     "top": 156.0,
+     "width": 230.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 9,
+      "content": "Pour-over",
+      "left": 376.2,
+      "top": 159.6,
+      "width": 109.25,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 11",
+     "z": 11,
+     "type": 17,
+     "left": 369.0,
+     "top": 188.0,
+     "width": 230.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 22,
+      "content": "Paper filter · 3–4 min",
+      "left": 376.2,
+      "top": 191.6,
+      "width": 122.31,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 12.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 12,
+     "type": 17,
+     "left": 369.0,
+     "top": 214.0,
+     "width": 230.0,
+     "height": 38.78,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 61,
+      "content": "Water poured slowly over medium-fine coffee: clean and bright",
+      "left": 376.2,
+      "top": 217.6,
+      "width": 208.3,
+      "height": 31.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_289",
+     "z": 13,
+     "type": 1,
+     "left": 630.0,
+     "top": 140.0,
+     "width": 270.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#FFFFFF",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_290",
+     "z": 14,
+     "type": 1,
+     "left": 630.0,
+     "top": 140.0,
+     "width": 6.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 15",
+     "z": 15,
+     "type": 17,
+     "left": 654.0,
+     "top": 156.0,
+     "width": 230.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 12,
+      "content": "French press",
+      "left": 661.2,
+      "top": 159.6,
+      "width": 138.75,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 16",
+     "z": 16,
+     "type": 17,
+     "left": 654.0,
+     "top": 188.0,
+     "width": 230.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 15,
+      "content": "Steeped · 4 min",
+      "left": 661.2,
+      "top": 191.6,
+      "width": 94.13,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 12.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 17",
+     "z": 17,
+     "type": 17,
+     "left": 654.0,
+     "top": 214.0,
+     "width": 230.0,
+     "height": 38.78,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 64,
+      "content": "Coarse coffee steeps, then a mesh plunger holds back the grounds",
+      "left": 661.2,
+      "top": 217.6,
+      "width": 205.88,
+      "height": 31.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_291",
+     "z": 18,
+     "type": 1,
+     "left": 60.0,
+     "top": 305.0,
+     "width": 270.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#FFFFFF",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_292",
+     "z": 19,
+     "type": 1,
+     "left": 60.0,
+     "top": 305.0,
+     "width": 6.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 20",
+     "z": 20,
+     "type": 17,
+     "left": 84.0,
+     "top": 321.0,
+     "width": 230.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Moka pot",
+      "left": 91.2,
+      "top": 324.6,
+      "width": 101.88,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 21",
+     "z": 21,
+     "type": 17,
+     "left": 84.0,
+     "top": 353.0,
+     "width": 230.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 22,
+      "content": "Stovetop · about 5 min",
+      "left": 91.2,
+      "top": 356.6,
+      "width": 135.63,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 12.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 22",
+     "z": 22,
+     "type": 17,
+     "left": 84.0,
+     "top": 379.0,
+     "width": 230.0,
+     "height": 38.78,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 66,
+      "content": "Steam pressure pushes water up through the coffee: strong and rich",
+      "left": 91.2,
+      "top": 382.6,
+      "width": 209.55,
+      "height": 31.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_293",
+     "z": 23,
+     "type": 1,
+     "left": 345.0,
+     "top": 305.0,
+     "width": 270.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#FFFFFF",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_294",
+     "z": 24,
+     "type": 1,
+     "left": 345.0,
+     "top": 305.0,
+     "width": 6.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 25",
+     "z": 25,
+     "type": 17,
+     "left": 369.0,
+     "top": 321.0,
+     "width": 230.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 9,
+      "content": "Cold brew",
+      "left": 376.2,
+      "top": 324.6,
+      "width": 109.25,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 26",
+     "z": 26,
+     "type": 17,
+     "left": 369.0,
+     "top": 353.0,
+     "width": 230.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 20,
+      "content": "Cold water · 12–24 h",
+      "left": 376.2,
+      "top": 356.6,
+      "width": 122.88,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 12.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 27",
+     "z": 27,
+     "type": 17,
+     "left": 369.0,
+     "top": 379.0,
+     "width": 230.0,
+     "height": 38.78,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 51,
+      "content": "Steeped cold for hours: smooth, with little acidity",
+      "left": 376.2,
+      "top": 382.6,
+      "width": 194.24,
+      "height": 31.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_295",
+     "z": 28,
+     "type": 1,
+     "left": 630.0,
+     "top": 305.0,
+     "width": 270.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#FFFFFF",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "Shape_296",
+     "z": 29,
+     "type": 1,
+     "left": 630.0,
+     "top": 305.0,
+     "width": 6.0,
+     "height": 145.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 30",
+     "z": 30,
+     "type": 17,
+     "left": 654.0,
+     "top": 321.0,
+     "width": 230.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Turkish",
+      "left": 661.2,
+      "top": 324.6,
+      "width": 86.25,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 20.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 31",
+     "z": 31,
+     "type": 17,
+     "left": 654.0,
+     "top": 353.0,
+     "width": 230.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 21,
+      "content": "Simmered · unfiltered",
+      "left": 661.2,
+      "top": 356.6,
+      "width": 129.57,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 12.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 32",
+     "z": 32,
+     "type": 17,
+     "left": 654.0,
+     "top": 379.0,
+     "width": 230.0,
+     "height": 38.78,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 64,
+      "content": "Very fine coffee simmered in a cezve and served with its grounds",
+      "left": 661.2,
+      "top": 382.6,
+      "width": 217.99,
+      "height": 31.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 13.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 8,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#1E1410",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "Picture 2",
+     "z": 1,
+     "type": 13,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 400.0,
+     "height": 540.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": null
+    },
+    {
+     "name": "TextBox 3",
+     "z": 2,
+     "type": 17,
+     "left": 450.0,
+     "top": 38.0,
+     "width": 450.0,
+     "height": 48.47,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 21,
+      "content": "Coffee by the numbers",
+      "left": 457.2,
+      "top": 41.6,
+      "width": 401.0,
+      "height": 40.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 34.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 3,
+     "type": 17,
+     "left": 450.0,
+     "top": 92.0,
+     "width": 450.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 32,
+      "content": "The 2026/27 harvest, as forecast",
+      "left": 457.2,
+      "top": 95.6,
+      "width": 238.57,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 4,
+     "type": 17,
+     "left": 450.0,
+     "top": 146.0,
+     "width": 450.0,
+     "height": 55.74,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 13,
+      "content": "189.7 million",
+      "left": 457.2,
+      "top": 149.6,
+      "width": 277.38,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#C67C3A",
+        "size": 40.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 5,
+     "type": 17,
+     "left": 450.0,
+     "top": 198.0,
+     "width": 450.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 34,
+      "content": "60-kilo bags to be grown, a record",
+      "left": 457.2,
+      "top": 201.6,
+      "width": 254.4,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 6,
+     "type": 17,
+     "left": 450.0,
+     "top": 246.0,
+     "width": 450.0,
+     "height": 55.74,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 10,
+      "content": "Nearly 40%",
+      "left": 457.2,
+      "top": 249.6,
+      "width": 246.75,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#C67C3A",
+        "size": 40.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 7,
+     "type": 17,
+     "left": 450.0,
+     "top": 298.0,
+     "width": 450.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 39,
+      "content": "of the world's coffee comes from Brazil",
+      "left": 457.2,
+      "top": 301.6,
+      "width": 286.12,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 8,
+     "type": 17,
+     "left": 450.0,
+     "top": 346.0,
+     "width": 450.0,
+     "height": 55.74,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 13,
+      "content": "179.7 million",
+      "left": 457.2,
+      "top": 349.6,
+      "width": 272.5,
+      "height": 48.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#C67C3A",
+        "size": 40.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 9,
+     "type": 17,
+     "left": 450.0,
+     "top": 398.0,
+     "width": 450.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 35,
+      "content": "bags the world is expected to drink",
+      "left": 457.2,
+      "top": 401.6,
+      "width": 261.25,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 11",
+     "z": 10,
+     "type": 17,
+     "left": 450.0,
+     "top": 462.0,
+     "width": 450.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 60,
+      "content": "Source: USDA FAS, Coffee: World Markets and Trade, July 2026",
+      "left": 457.2,
+      "top": 465.6,
+      "width": 323.88,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#A38F7C",
+        "size": 11.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 9,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#F7F1E8",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 60.0,
+     "top": 38.0,
+     "width": 840.0,
+     "height": 48.47,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 19,
+      "content": "Who grows the most?",
+      "left": 67.2,
+      "top": 41.6,
+      "width": 384.88,
+      "height": 40.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 34.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 92.0,
+     "width": 840.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 57,
+      "content": "Forecast harvest for 2026/27, in millions of 60-kilo bags",
+      "left": 67.2,
+      "top": 95.6,
+      "width": 405.22,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 60.0,
+     "top": 152.0,
+     "width": 170.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 6,
+      "content": "Brazil",
+      "left": 183.39,
+      "top": 155.6,
+      "width": 43.31,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_297",
+     "z": 4,
+     "type": 1,
+     "left": 246.0,
+     "top": 150.0,
+     "width": 517.68,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#8B4A2B",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 773.68,
+     "top": 152.0,
+     "width": 90.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "71.9",
+      "left": 780.88,
+      "top": 155.6,
+      "width": 36.5,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 60.0,
+     "top": 210.0,
+     "width": 170.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Vietnam",
+      "left": 162.87,
+      "top": 213.6,
+      "width": 63.83,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_298",
+     "z": 7,
+     "type": 1,
+     "left": 246.0,
+     "top": 208.0,
+     "width": 234.0,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 8,
+     "type": 17,
+     "left": 490.0,
+     "top": 210.0,
+     "width": 90.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "32.5",
+      "left": 497.2,
+      "top": 213.6,
+      "width": 39.0,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 60.0,
+     "top": 268.0,
+     "width": 170.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Colombia",
+      "left": 150.83,
+      "top": 271.6,
+      "width": 75.87,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_299",
+     "z": 10,
+     "type": 1,
+     "left": 246.0,
+     "top": 266.0,
+     "width": 96.48,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 11",
+     "z": 11,
+     "type": 17,
+     "left": 352.48,
+     "top": 268.0,
+     "width": 90.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "13.4",
+      "left": 359.68,
+      "top": 271.6,
+      "width": 37.63,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 12",
+     "z": 12,
+     "type": 17,
+     "left": 60.0,
+     "top": 326.0,
+     "width": 170.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Ethiopia",
+      "left": 162.33,
+      "top": 329.6,
+      "width": 64.37,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_300",
+     "z": 13,
+     "type": 1,
+     "left": 246.0,
+     "top": 324.0,
+     "width": 87.12,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 14",
+     "z": 14,
+     "type": 17,
+     "left": 343.12,
+     "top": 326.0,
+     "width": 90.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "12.1",
+      "left": 350.32,
+      "top": 329.6,
+      "width": 35.13,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 15",
+     "z": 15,
+     "type": 17,
+     "left": 60.0,
+     "top": 384.0,
+     "width": 170.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 9,
+      "content": "Indonesia",
+      "left": 151.33,
+      "top": 387.6,
+      "width": 75.37,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_301",
+     "z": 16,
+     "type": 1,
+     "left": 246.0,
+     "top": 382.0,
+     "width": 82.08,
+     "height": 32.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 17",
+     "z": 17,
+     "type": 17,
+     "left": 338.08,
+     "top": 384.0,
+     "width": 90.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 4,
+      "content": "11.4",
+      "left": 345.28,
+      "top": 387.6,
+      "width": 35.5,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 16.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 18",
+     "z": 18,
+     "type": 17,
+     "left": 60.0,
+     "top": 470.0,
+     "width": 840.0,
+     "height": 20.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 60,
+      "content": "Source: USDA FAS, Coffee: World Markets and Trade, July 2026",
+      "left": 67.2,
+      "top": 473.6,
+      "width": 323.88,
+      "height": 13.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 11.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 10,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#1E1410",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "Picture 2",
+     "z": 1,
+     "type": 13,
+     "left": 0.0,
+     "top": 0.0,
+     "width": 480.0,
+     "height": 540.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": null
+    },
+    {
+     "name": "TextBox 3",
+     "z": 2,
+     "type": 17,
+     "left": 530.0,
+     "top": 180.0,
+     "width": 370.0,
+     "height": 123.6,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 19,
+      "content": "Enjoy your next cup",
+      "left": 537.2,
+      "top": 183.6,
+      "width": 281.38,
+      "height": 115.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#F3E9DC",
+        "size": 48.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "Shape_302",
+     "z": 3,
+     "type": 1,
+     "left": 537.0,
+     "top": 318.0,
+     "width": 120.0,
+     "height": 3.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": true,
+      "color_hex": "#C67C3A",
+      "transparency": 0.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 4,
+     "type": 17,
+     "left": 530.0,
+     "top": 336.0,
+     "width": 370.0,
+     "height": 50.89,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 61,
+      "content": "Five centuries on, still the world's favourite way to wake up",
+      "left": 537.2,
+      "top": 339.6,
+      "width": 351.01,
+      "height": 43.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#CBB8A3",
+        "size": 18.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 11,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#F7F1E8",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 60.0,
+     "top": 38.0,
+     "width": 840.0,
+     "height": 48.47,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 13,
+      "content": "Photo credits",
+      "left": 67.2,
+      "top": 41.6,
+      "width": 241.63,
+      "height": 40.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 34.0,
+        "bold": true,
+        "font": "Georgia",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 92.0,
+     "width": 840.0,
+     "height": 26.66,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 26,
+      "content": "All from Wikimedia Commons",
+      "left": 67.2,
+      "top": 95.6,
+      "width": 222.4,
+      "height": 19.2,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#6E5B4E",
+        "size": 16.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 60.0,
+     "top": 150.0,
+     "width": 120.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 5,
+      "content": "Title",
+      "left": 67.2,
+      "top": 153.6,
+      "width": 33.5,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 14.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 4",
+     "z": 4,
+     "type": 17,
+     "left": 190.0,
+     "top": 150.0,
+     "width": 710.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 46,
+      "content": "Roasted coffee beans, MarkSweep, public domain",
+      "left": 197.2,
+      "top": 153.6,
+      "width": 321.32,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 14.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 5",
+     "z": 5,
+     "type": 17,
+     "left": 60.0,
+     "top": 190.0,
+     "width": 120.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 8,
+      "content": "Cherries",
+      "left": 67.2,
+      "top": 193.6,
+      "width": 60.38,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 14.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 6",
+     "z": 6,
+     "type": 17,
+     "left": 190.0,
+     "top": 190.0,
+     "width": 710.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 51,
+      "content": "Coffea arabica, fruit, Burkhard Mücke, CC BY-SA 4.0",
+      "left": 197.2,
+      "top": 193.6,
+      "width": 330.44,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 14.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 7",
+     "z": 7,
+     "type": 17,
+     "left": 60.0,
+     "top": 230.0,
+     "width": 120.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Harvest",
+      "left": 67.2,
+      "top": 233.6,
+      "width": 55.88,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 14.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 8",
+     "z": 8,
+     "type": 17,
+     "left": 190.0,
+     "top": 230.0,
+     "width": 710.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 48,
+      "content": "Coffee Harvest Laos, Thomas Schoch, CC BY-SA 3.0",
+      "left": 197.2,
+      "top": 233.6,
+      "width": 329.32,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 14.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 9",
+     "z": 9,
+     "type": 17,
+     "left": 60.0,
+     "top": 270.0,
+     "width": 120.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 7,
+      "content": "Closing",
+      "left": 67.2,
+      "top": 273.6,
+      "width": 54.88,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#8B4A2B",
+        "size": 14.0,
+        "bold": true,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 10",
+     "z": 10,
+     "type": 17,
+     "left": 190.0,
+     "top": 270.0,
+     "width": 710.0,
+     "height": 24.23,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 66,
+      "content": "Cup of coffee in Café Butter, Prenzlauer Berg, Berlin, Edward, CC0",
+      "left": 197.2,
+      "top": 273.6,
+      "width": 421.52,
+      "height": 16.8,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#2A1E17",
+        "size": 14.0,
+        "bold": false,
+        "font": "Avenir Next",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -270,7 +270,11 @@ def _get_placeholder_impl(slide_index, placeholder_index, placeholder_type) -> d
         tr = tf.text_range
         has_text = bool(tf.has_text())
         info["text"] = _text_or_none(tf) if has_text else None
-        info["paragraph_count"] = count(tr.paragraphs)
+        from appscript import k
+
+        from ppt_mac.text import _parts
+
+        info["paragraph_count"] = len(_parts(tr, k.paragraph))
         if has_text:
             # Font formatting has to be reached through `font of text range`.
             # Any other route answers -10006.

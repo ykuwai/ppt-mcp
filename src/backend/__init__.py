@@ -14,7 +14,10 @@ that lives in the per-platform ``_impl`` functions of each tool module.
 See MACOS_PORT.md for the measurements behind this design.
 """
 
+import logging
 import sys
+
+logger = logging.getLogger(__name__)
 
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
@@ -66,9 +69,47 @@ def use_mac_impls(namespace, module) -> None:
         if name.startswith("_") and name.endswith("_impl"):
             namespace[name] = getattr(module, name)
 
+
+def quit_if_ours(quit_app) -> dict:
+    """Quit PowerPoint when this server started it, once no deck is open.
+
+    Closing the last deck leaves PowerPoint running with an empty window, or
+    its start screen on macOS, that nobody asked for and that stays until
+    someone quits it by hand. A PowerPoint the user started is theirs and is
+    left alone, and so is one that took the place of the PowerPoint this
+    server started: the user can quit that one and start another, and the
+    connection follows without saying so. ``quit_app`` is the platform's own
+    call, ``app.Quit`` or ``app.quit``, looked up only when it is called; the
+    close tools call this once their last deck is gone.
+    """
+    if not ppt._launched_by_us:
+        return {}
+    if not ppt._still_ours():
+        ppt._launched_by_us = False
+        return {}
+    try:
+        quit_app()
+    except Exception as exc:  # noqa: BLE001 - the deck is closed all the same
+        logger.warning("Could not quit the PowerPoint this server started: %s", exc)
+        return {}
+    ppt._app = None
+    ppt._launched_by_us = False
+    ppt._target_pres_full_name = None
+    return {
+        "powerpoint_quit": True,
+        "note": (
+            "PowerPoint was quit: this server started it and its last "
+            "presentation is closed. ppt_create_presentation or "
+            "ppt_open_presentation starts it again. Until then, tools that "
+            "need PowerPoint answer that it is not running."
+        ),
+    }
+
+
 __all__ = [
     "ppt",
     "use_mac_impls",
+    "quit_if_ours",
     "handle_com_error",
     "AUTO_DISMISS_DIALOG",
     "unsupported",

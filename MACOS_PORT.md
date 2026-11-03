@@ -174,7 +174,7 @@ them in one place.
 | `ref.count()` raises -1708 | PowerPoint's dictionary declares no Standard Suite commands at all, only the `window` class | `len(ref.get())` |
 | `ref.get()` raises -1728 on an empty collection | PowerPoint errors instead of returning an empty list | catch and return 0 |
 | `PP.open(...)` returns `None` and opens nothing | same missing Standard Suite | shell out to `osascript` with `open POSIX file "…"`, which does work, verified |
-| `ref.duplicate()` raises `unpack requires a buffer of 4 bytes` | appscript falls back to a code PowerPoint does not answer | same osascript fallback |
+| `ref.duplicate()` raises `unpack requires a buffer of 4 bytes` | appscript falls back to a code PowerPoint does not answer | `copy object` the slide and `paste object` it into its own presentation, the clipboard saved and put back; the osascript `duplicate slide` used before answers "Parameter error" (-50) on PowerPoint 16.114 |
 | `shape.rotation` raises `AttributeError` | the dictionary defines both an enumerator and a property named `rotation`, and appscript resolves the collision toward the enumerator | reach the property by raw code. Verified working, set 33 and read 33.0 back |
 | `line_format.dash_style` raises `AttributeError` | same collision class, the `line dash style …` enumerators take the name | raw code `b'LFds'` |
 | PowerPoint stops answering | a modal sheet, or an operation that wedged it | every call carries `timeout=`, which appscript supports on every command |
@@ -527,7 +527,7 @@ checked against the code by a test, so it cannot quietly go stale.
 | No table style, only the text direction | `ppt_set_table_style` |
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
 
-A further **18 tools work and refuse one argument**, with `error` naming
+A further **19 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
@@ -537,7 +537,9 @@ numeric arguments, `ppt_add_video` and `ppt_add_audio` cannot take
 fade, `ppt_format_chart` cannot take `chart_style`, `legend_font_size`, the
 legend and title coordinates or an 8-direction `legend_position` (they are
 computed from the chart's rendered size, which the XML does not carry),
-`ppt_format_chart_axis` cannot take `tick_label_font_size`. `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
+`ppt_format_chart_axis` cannot take `tick_label_font_size`, `ppt_set_textframe`
+cannot take `auto_size='shrink_to_fit'` (PowerPoint for Mac refuses to set it
+from a script, under either of its names). `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
 checks that report a write which did not land rather than a capability that
 is missing.
 

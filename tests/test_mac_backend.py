@@ -418,6 +418,43 @@ class TestAnimationAdding:
         assert deck.effects[0].timing.repeat_count() == 2
         assert deck.effects[0].exit_animation() is True
 
+    def test_a_motion_path_is_added_without_being_told_it_is_no_exit(self, monkeypatch):
+        # Live: PowerPoint refused exit=False on a motion path (-1708) after
+        # adding it, so the tool reported a failure and a retry added another.
+        from appscript.reference import CommandError
+
+        from ppt_mac.animation import _add_animation_impl
+
+        def refuses(_value):
+            raise CommandError(None, None, RuntimeError("-1708"), None)
+
+        def add_path(sequence, **kwargs):
+            sequence._deck.added.append(kwargs)
+            path = _FakeEffect(kwargs["for_"])
+            path.exit_animation = _FakeProperty(refuses, None)
+            sequence._deck.effects.append(path)
+
+        monkeypatch.setattr(_FakeSequence, "add_effect", add_path)
+        with _fake_deck([], shape_names=["Ball"]) as deck:
+            result = _add_animation_impl(
+                1, "Ball", "path_left", "on_click", None, None, False,
+                None, None, None, None, None, None,
+                None, None, None,
+                None, None, None, None,
+            )
+            assert result["success"] is True
+            assert "warnings" not in result
+            assert len(deck.effects) == 1
+
+            result = _add_animation_impl(
+                1, "Ball", "path_left", "on_click", None, None, True,
+                None, None, None, None, None, None,
+                None, None, None,
+                None, None, None, None,
+            )
+            assert result["success"] is True
+            assert any("no exit form" in w for w in result["warnings"])
+
     def test_the_trigger_goes_in_at_the_add_because_nothing_else_takes_one(self):
         from appscript import k
 
@@ -1112,3 +1149,223 @@ class TestWorkGoesAwayWithTheCallerThatQueuedIt:
         release.set()
         assert took, "the caller never returned"
         assert took[0] < 2.0, f"freed only after {took[0]:.1f}s, budget was 30s"
+
+
+@macos_only
+class TestTheSuiteStaysOffTheRealPowerPoint:
+    """A test that reaches PowerPoint is stopped by conftest, not obeyed.
+
+    The COM tests of ppt_undo once sent a real Undo to the decks open on the
+    machine running the suite, because on macOS the Apple Event impl takes
+    the COM one's place and talks to the application itself.
+    """
+
+    def test_connecting_is_refused_and_says_why(self):
+        from backend.mac_ae import PowerPointAppleEventWrapper
+
+        with pytest.raises(RuntimeError, match="reached for the real PowerPoint"):
+            PowerPointAppleEventWrapper()._connect_impl(allow_launch=False)
+
+    def test_the_undo_tool_cannot_reach_it_either(self):
+        import ppt_com.edit_ops as edit_ops
+        from backend.mac_ae import PowerPointAppleEventWrapper
+
+        wrapper = PowerPointAppleEventWrapper()
+        wrapper.start()
+        try:
+            with pytest.raises(RuntimeError, match="reached for the real PowerPoint"):
+                wrapper.execute(edit_ops._undo_impl, 1)
+        finally:
+            wrapper.stop()
+
+
+@macos_only
+class TestStagingThroughPowerPointsContainer:
+    """Every file PowerPoint for Mac reads or writes for the server passes
+    through its container, which macOS may keep other apps out of."""
+
+    def refused(self, tmp_path, monkeypatch):
+        """macOS's privacy protection: the folder is this user's, and still shut."""
+        import errno
+
+        from backend import mac_ae
+
+        folder = tmp_path / "Documents"
+        monkeypatch.setattr(mac_ae, "EXPORT_STAGING_DIR", str(folder))
+
+        def shut(*args, **kwargs):
+            raise PermissionError(errno.EPERM, "Operation not permitted")
+
+        monkeypatch.setattr(mac_ae.tempfile, "NamedTemporaryFile", shut)
+        return mac_ae, folder
+
+    def test_a_refusal_says_why_and_what_to_do(self, tmp_path, monkeypatch):
+        mac_ae, folder = self.refused(tmp_path, monkeypatch)
+        with pytest.raises(mac_ae.StagingBlocked) as caught:
+            mac_ae.staging_dir()
+        message = str(caught.value)
+        assert str(folder) in message
+        assert "Full Disk Access" in message and "Privacy & Security" in message
+        assert "Shapes, text, tables and charts work without it." in message
+
+    def test_staging_a_picture_fails_the_same_way(self, tmp_path, monkeypatch):
+        mac_ae, _ = self.refused(tmp_path, monkeypatch)
+        picture = tmp_path / "logo.png"
+        picture.write_bytes(b"png")
+        with pytest.raises(PermissionError, match="Full Disk Access"):
+            mac_ae.stage_into_container(str(picture))
+
+    def test_a_folder_shut_by_its_permissions_is_not_full_disk_access(self, tmp_path, monkeypatch):
+        # #264: every PermissionError was put down to Full Disk Access.
+        from backend import mac_ae
+
+        folder = tmp_path / "Documents"
+        folder.mkdir()
+        folder.chmod(0o500)
+        monkeypatch.setattr(mac_ae, "EXPORT_STAGING_DIR", str(folder))
+        try:
+            with pytest.raises(mac_ae.StagingBlocked) as caught:
+                mac_ae.staging_dir()
+        finally:
+            folder.chmod(0o700)
+        message = str(caught.value)
+        assert "do not let this user write to it" in message and "chmod u+rwx" in message
+        assert "Full Disk Access" not in message
+
+    def test_powerpoint_never_started_has_no_folder(self, tmp_path, monkeypatch):
+        from backend import mac_ae
+
+        containers = tmp_path / "Containers"
+        containers.mkdir()
+        containers.chmod(0o500)
+        folder = containers / "com.microsoft.Powerpoint" / "Data" / "Documents"
+        monkeypatch.setattr(mac_ae, "EXPORT_STAGING_DIR", str(folder))
+        try:
+            with pytest.raises(mac_ae.StagingBlocked) as caught:
+                mac_ae.staging_dir()
+        finally:
+            containers.chmod(0o700)
+        message = str(caught.value)
+        assert "not installed, or has never been started" in message
+        assert "Full Disk Access" not in message
+
+    def test_an_open_folder_is_used_and_left_clean(self, tmp_path, monkeypatch):
+        from backend import mac_ae
+
+        monkeypatch.setattr(mac_ae, "EXPORT_STAGING_DIR", str(tmp_path / "Documents"))
+        assert mac_ae.staging_dir() == str(tmp_path / "Documents")
+        assert list((tmp_path / "Documents").iterdir()) == []
+
+
+@macos_only
+class TestDuplicatingASlide:
+    """PowerPoint 16.114 answers -50 to `duplicate slide`, so a slide is copied
+    and pasted into its own presentation, and the clipboard put back."""
+
+    def test_it_is_copied_and_pasted_into_its_own_deck(self, monkeypatch):
+        from ppt_mac import gvml_paste
+        from ppt_mac import slides as mac_slides
+
+        ids, scripts, events = [256, 257], [], []
+
+        def run(script, *args, **kwargs):
+            scripts.append(script)
+            if "paste object" in script:
+                ids.append(258)
+            return ""
+
+        class FakeClipboard:
+            warnings = ()
+
+            @classmethod
+            def take(cls):
+                events.append("take")
+                return cls()
+
+            def claim(self):
+                events.append("claim")
+
+            def restore(self):
+                events.append("restore")
+
+        monkeypatch.setattr(mac_slides, "osascript", run)
+        monkeypatch.setattr(mac_slides, "_slide_ids", lambda pres: list(ids))
+        monkeypatch.setattr(mac_slides, "_presentation_index", lambda app, pres: 2)
+        monkeypatch.setattr(gvml_paste, "Clipboard", FakeClipboard)
+
+        assert mac_slides._duplicate_once(None, None, 1) == 258
+        assert scripts == [
+            'tell application "Microsoft PowerPoint" to copy object slide 1 of presentation 2',
+            'tell application "Microsoft PowerPoint" to paste object presentation 2',
+        ]
+        assert events == ["take", "claim", "restore"]
+
+
+@macos_only
+class TestShrinkToFitOnTheMac:
+    def test_it_is_refused_by_name_before_anything_is_written(self, monkeypatch):
+        # Live, PowerPoint 16.114: both names for it answer -1708, and
+        # AppleScript "Can't set auto size".
+        from backend.mac_ae import ppt
+        from ppt_mac.text import _set_textframe_impl
+
+        def untouched(*args, **kwargs):
+            raise AssertionError("PowerPoint was reached")
+
+        monkeypatch.setattr(ppt, "_get_app_impl", untouched)
+        result = _set_textframe_impl(1, "Body", "shrink_to_fit", None, 5, None, None, None,
+                                     None, None)
+        assert result["error"] == "ppt_set_textframe cannot take auto_size='shrink_to_fit' on macOS"
+        assert any("shape_to_fit" in a for a in result["alternatives"])
+
+
+@macos_only
+class TestParagraphsAndLines:
+    """Asked for all its paragraphs, a text range answers with the
+    collection's own reference, which was read as one paragraph."""
+
+    class Range:
+        def __init__(self, paragraphs):
+            self.texts = paragraphs
+            self.paragraphs = self.Collection(paragraphs)
+            self.lines = self.Collection(paragraphs)
+
+        class Collection:
+            def __init__(self, texts):
+                self.texts = texts
+
+            def get(self):
+                return self  # what PowerPoint answers: not a list
+
+            def __getitem__(self, i):
+                return f"part {i}: {self.texts[i - 1]}"
+
+        def count(self, each=None):
+            return len(self.texts)
+
+    def test_every_paragraph_is_found(self):
+        from appscript import k
+
+        from ppt_mac.text import _parts, _target_range
+
+        text = self.Range(["First paragraph\r", "Second paragraph"])
+        assert _parts(text, k.paragraph) == ["part 1: First paragraph\r", "part 2: Second paragraph"]
+        assert _target_range(text, 2) == "part 2: Second paragraph"
+        assert len(_parts(text, k.line)) == 2
+
+    def test_a_paragraph_past_the_last_is_still_refused(self):
+        from ppt_mac.text import _target_range
+
+        with pytest.raises(ValueError, match=r"out of range \(1-2\)"):
+            _target_range(self.Range(["a\r", "b"]), 3)
+
+
+@macos_only
+class TestAltTextOnTheMac:
+    def test_it_is_refused_before_anything_is_written(self):
+        # PowerPoint for Mac's scripting dictionary has no alt text property.
+        from ppt_mac.shapes import _update_shape_impl
+
+        with pytest.raises(ValueError, match="View Alt Text"):
+            _update_shape_impl(1, "Photo", None, 10, None, None, None, None, None, None,
+                               alt_text="Our team")

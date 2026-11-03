@@ -592,3 +592,13 @@ class TestBothReadmesCountTheSame:
         said = re.search(r"\*\*macOS で断るツールは (\d+) です", text)
         assert said, "README_ja.md no longer says how many refuse"
         assert int(said.group(1)) == refusing
+
+    def test_the_hebrew_readme_agrees(self):
+        import pathlib
+        import re
+
+        refusing = self._documented_refusals()
+        text = pathlib.Path("README_he.md").read_text(encoding="utf-8")
+        said = re.search(r"\*\*(\d+) כלים מסרבים ב־macOS", text)
+        assert said, "README_he.md no longer says how many refuse"
+        assert int(said.group(1)) == refusing

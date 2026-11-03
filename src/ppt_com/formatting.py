@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from utils.offload import run_offloaded
 from backend import ppt
+from ppt_com.layout_check import report_layout, touched_names
 from utils.navigation import goto_slide
 from utils.color import hex_to_int
 from ppt_com.constants import (
@@ -245,6 +246,8 @@ def set_fill(params: SetFillInput) -> str:
             params.color, params.gradient_color1, params.gradient_color2,
             params.gradient_style, params.transparency,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})

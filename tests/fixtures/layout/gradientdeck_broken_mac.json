@@ -1,0 +1,281 @@
+{
+ "slide_width": 960.0,
+ "slide_height": 540.0,
+ "slides": [
+  {
+   "slide_index": 1,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": null,
+   "background_gradient": {
+    "angle": null,
+    "stops": [
+     [
+      0.0,
+      "#0B1F3A",
+      0.0
+     ],
+     [
+      1.0,
+      "#1E3A5F",
+      0.0
+     ]
+    ]
+   },
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": false,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 60.0,
+     "top": 60.0,
+     "width": 600.0,
+     "height": 41.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Quarterly review",
+      "left": 67.2,
+      "top": 63.6,
+      "width": 197.06,
+      "height": 33.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#333333",
+        "size": 28.0,
+        "bold": false,
+        "font": "Calibri",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 200.0,
+     "width": 600.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 16,
+      "content": "Revenue grew 12%",
+      "left": 67.2,
+      "top": 203.6,
+      "width": 158.49,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 20.0,
+        "bold": false,
+        "font": "Calibri",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 2,
+   "design": "master 66,28.75,894,133.13 66,143.75,894,486.38",
+   "layout": "blank",
+   "background_hex": "#FFFFFF",
+   "background_gradient": null,
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#44546A",
+    "light2": "#E7E6E6"
+   },
+   "follows_background": true,
+   "template": [],
+   "template_area": [
+    [
+     66.0,
+     28.75,
+     894.0,
+     133.13
+    ],
+    [
+     66.0,
+     143.75,
+     894.0,
+     486.38
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "Shape_0",
+     "z": 1,
+     "type": 1,
+     "left": 100.0,
+     "top": 120.0,
+     "width": 600.0,
+     "height": 200.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": false,
+      "color_hex": "#E5E7EB",
+      "transparency": 0.0,
+      "gradient": {
+       "angle": null,
+       "stops": [
+        [
+         0.0,
+         "#E5E7EB",
+         0.0
+        ],
+        [
+         1.0,
+         "#F9FAFB",
+         0.0
+        ]
+       ]
+      }
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 120.0,
+     "top": 150.0,
+     "width": 400.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": null,
+     "text": {
+      "chars": 14,
+      "content": "Light on light",
+      "left": 127.2,
+      "top": 153.6,
+      "width": 109.63,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 20.0,
+        "bold": false,
+        "font": "Calibri",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  }
+ ]
+}

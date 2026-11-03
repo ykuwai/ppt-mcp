@@ -102,7 +102,10 @@ class TestToolCountMatchesReadme:
     """The total tool count in source must match the count in README.md."""
 
     def test_tool_count_matches_readme(self):
-        source_count = len(_all_tool_names())
+        # Catalog mode's three tools reach the others rather than adding to
+        # what the server can do, and exist only with PPT_TOOL_MODE=catalog.
+        catalog = {"ppt_describe", "ppt_run", "ppt_run_steps"}
+        source_count = len([n for n in _all_tool_names() if n not in catalog])
 
         readme_text = README_MD.read_text(encoding="utf-8")
         # README contains a summary row like: | | **146** | |

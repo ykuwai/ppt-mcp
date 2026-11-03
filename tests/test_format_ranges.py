@@ -19,6 +19,13 @@ from ppt_com.text import (
     _resolve_span,
 )
 
+# Drives the COM implementation through fakes. On macOS the Apple Event one of
+# the same name takes its place, so the fakes are never reached.
+windows_only = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="on macOS the Apple Event impl takes the place of the COM one",
+)
+
 SENTENCE = "吹奏楽部で「べろだして」に聞こえて爆笑してしまいました"
 
 
@@ -93,6 +100,7 @@ def run(ranges, base=None, text=SENTENCE):
     return result, written, highlight
 
 
+@windows_only
 class TestFormattingSeveralSpans:
     def test_every_span_is_reported_with_the_text_it_landed_on(self):
         result, _, _ = run([
@@ -174,6 +182,7 @@ class TestWhenAColourIsWrong:
             run([{"search_text": "吹奏楽部", "font_color_theme": "accent99"}])
 
 
+@windows_only
 class TestWhenOneSpanCannotBeFound:
     """Every span is resolved before anything is written, so the shape is
     left alone rather than half restyled.

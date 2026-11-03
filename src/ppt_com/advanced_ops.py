@@ -6,6 +6,7 @@ picture insertion from URL, aspect ratio locking, and icon search.
 """
 
 import json
+import re
 import logging
 import os
 import tempfile
@@ -22,7 +23,9 @@ from utils.offload import run_offloaded
 from backend import ppt
 from utils.navigation import goto_slide
 from utils.color import hex_to_int, int_to_hex
+from utils.download import open_url
 from ppt_com.constants import (
+    ICON_METADATA_URL,
     ICON_PACKAGE_BASE,
     msoTrue, msoFalse,
     msoShapeRectangle,
@@ -34,6 +37,7 @@ from ppt_com.constants import (
 )
 from ppt_com.shapes import SHAPE_NAME_MAP
 from ppt_com.shape_lookup import resolve_shape as _get_shape
+from ppt_com.layout_check import deck_snapshot, report_deck_change, report_layout, touched_names
 
 from ppt_com.shapes import ZORDER_FIELD_DESCRIPTION, place_in_zorder
 
@@ -48,8 +52,6 @@ _ICON_CACHE_TTL = 86400   # 24 hours
 # Handlers run on worker threads now (#198), so two first-time searches can
 # reach the fetch at once.  The lock keeps that to a single network call.
 _icon_cache_lock = threading.Lock()
-
-_ICON_METADATA_URL = "https://fonts.google.com/metadata/icons"
 
 
 def _fetch_icon_metadata():
@@ -71,17 +73,18 @@ def _fetch_icon_metadata():
         if _icon_cache is not None and (now - _icon_cache_time) < _ICON_CACHE_TTL:
             return _icon_cache
 
-        resp = urllib.request.urlopen(_ICON_METADATA_URL)
+        resp = open_url(ICON_METADATA_URL, "download the icon list", "PPT_ICON_METADATA_URL")
         raw = resp.read().decode("utf-8")
 
-        # Strip XSS protection prefix  )]}'
-        first_nl = raw.index("\n")
-        json_str = raw[first_nl + 1:]
-        data = json.loads(json_str)
+        # Google Fonts puts an XSS guard line, )]}', before the JSON. A copy
+        # from a mirror, or saved without it, starts with the JSON itself.
+        if raw.startswith(")]}'"):
+            raw = raw[raw.index("\n") + 1:]
+        data = json.loads(raw)
 
         _icon_cache = data.get("icons", [])
         _icon_cache_time = now
-        logger.info("Fetched %d icons from Google Fonts metadata", len(_icon_cache))
+        logger.info("Read %d icons from %s", len(_icon_cache), ICON_METADATA_URL)
         return _icon_cache
 
 
@@ -181,9 +184,8 @@ def _icon_is_on_cdn(name: str) -> bool:
         return cached
 
     url = f"{ICON_PACKAGE_BASE}/outlined/{name}.svg"
-    request = urllib.request.Request(url, method="HEAD")
     try:
-        with urllib.request.urlopen(request, timeout=5):
+        with open_url(url, "check an icon", method="HEAD", timeout=5):
             available = True
     except urllib.error.HTTPError as exc:
         if exc.code != 404:
@@ -313,7 +315,10 @@ class CropPictureInput(BaseModel):
         description=(
             "Auto-adjust the crop frame to a target aspect ratio before applying "
             "crop_shape. Resets any existing crop values and resizes the shape. "
-            "Supported values: 'square' or '1:1'. "
+            "Supported values: 'square' or '1:1', a ratio such as '16:9', or "
+            "'shape', which crops the image to the proportions the picture is "
+            "drawn at, keeping its size: a stretched picture then fills its box "
+            "undistorted. "
             "Example: crop_fit='square' + crop_shape='oval' = perfect circle. "
             "Cannot be combined with crop_left/right/top/bottom."
         ),
@@ -515,6 +520,7 @@ class AddSvgIconInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     icon_name: str = Field(
         ...,
+        pattern=r"^[a-z0-9_]+$",
         description=(
             "Material Symbols icon name (e.g. 'bolt', 'description', 'extension', "
             "'settings', 'home', 'search', 'favorite'). "
@@ -533,7 +539,7 @@ class AddSvgIconInput(BaseModel):
             "Default: 'accent1' (the presentation's main accent color)."
         ),
     )
-    style: str = Field(
+    style: Literal["outlined", "rounded", "sharp"] = Field(
         default="outlined",
         description="Icon style: 'outlined', 'rounded', or 'sharp'",
     )
@@ -762,6 +768,51 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
 # ---------------------------------------------------------------------------
 # Picture Crop
 # ---------------------------------------------------------------------------
+def _fit_aspect(crop_fit, width=None, height=None):
+    """The width over height crop_fit asks for, or a ValueError.
+
+    'square' or '1:1'; a ratio such as '16:9'; or 'shape', the proportions
+    the picture is drawn at now, which crops a stretched picture to fill its
+    own box instead of squeezing the image into it.
+    """
+    key = crop_fit.strip().lower()
+    if key in ("square", "1:1"):
+        return 1.0
+    if key == "shape":
+        if not width or not height:
+            raise ValueError("crop_fit='shape' needs a picture with a size")
+        return width / height
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)", key)
+    if match and float(match.group(1)) > 0 and float(match.group(2)) > 0:
+        return float(match.group(1)) / float(match.group(2))
+    raise ValueError(
+        f"Unknown crop_fit '{crop_fit}'. Supported values: 'square', '1:1', a ratio "
+        "such as '16:9', or 'shape' for the proportions the picture is drawn at"
+    )
+
+
+def _fit_crops(orig_w, orig_h, aspect, anchor):
+    """The crops, in original image points, that leave ``aspect`` showing."""
+    crops = {"left": 0.0, "right": 0.0, "top": 0.0, "bottom": 0.0}
+    if orig_w / orig_h > aspect:
+        excess = orig_w - orig_h * aspect
+        crops["left"], crops["right"] = excess * anchor, excess * (1.0 - anchor)
+    elif orig_w / orig_h < aspect:
+        excess = orig_h - orig_w / aspect
+        crops["top"], crops["bottom"] = excess * anchor, excess * (1.0 - anchor)
+    return crops
+
+
+def _fit_size(cur_w, cur_h, aspect, crop_fit):
+    """The size the cropped picture takes: its own for 'shape', otherwise the
+    largest of ``aspect`` that fits in the box it had."""
+    if crop_fit.strip().lower() == "shape":
+        return cur_w, cur_h
+    if cur_w / cur_h > aspect:
+        return cur_h * aspect, cur_h
+    return cur_w, cur_w / aspect
+
+
 def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
                        crop_top, crop_bottom, crop_shape, crop_fit, crop_anchor,
                        corner_radius_pt):
@@ -798,11 +849,7 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
 
     # Validate crop_fit
     if crop_fit is not None:
-        fit_key = crop_fit.strip().lower()
-        if fit_key not in ("square", "1:1"):
-            raise ValueError(
-                f"Unknown crop_fit '{crop_fit}'. Supported values: 'square', '1:1'"
-            )
+        _fit_aspect(crop_fit, shape.Width, shape.Height)
 
     pic_fmt = shape.PictureFormat
 
@@ -811,6 +858,12 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
         # Stage 1: Get original image dimensions and calculate crop values.
         # Stage 2: Resize the shape to square.
         anchor = crop_anchor if crop_anchor is not None else 0.5
+
+        # The box it is drawn in, before an earlier crop is undone and the
+        # picture grows back to the whole image.
+        cur_w = shape.Width
+        cur_h = shape.Height
+        cur_left, cur_top = shape.Left, shape.Top
 
         # Reset existing crops so we work from the full image.
         pic_fmt.CropLeft = 0
@@ -821,9 +874,6 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
         # Get original image dimensions via ScaleWidth/ScaleHeight reset.
         old_lock = shape.LockAspectRatio
         shape.LockAspectRatio = msoFalse
-
-        cur_w = shape.Width
-        cur_h = shape.Height
 
         # ScaleWidth(1.0, msoTrue) resets to 100% of original image size.
         shape.ScaleWidth(1.0, msoTrue)
@@ -836,23 +886,18 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
         shape.Height = cur_h
 
         # Calculate crop values in original-image coordinates.
-        if orig_w > orig_h:
-            # Landscape: crop left and right to make content square.
-            excess = orig_w - orig_h
-            pic_fmt.CropLeft = excess * anchor
-            pic_fmt.CropRight = excess * (1.0 - anchor)
-        elif orig_h > orig_w:
-            # Portrait: crop top and bottom to make content square.
-            excess = orig_h - orig_w
-            pic_fmt.CropTop = excess * anchor
-            pic_fmt.CropBottom = excess * (1.0 - anchor)
-        # else: already square — no crop needed.
+        aspect = _fit_aspect(crop_fit, cur_w, cur_h)
+        crops = _fit_crops(orig_w, orig_h, aspect, anchor)
+        pic_fmt.CropLeft = crops["left"]
+        pic_fmt.CropRight = crops["right"]
+        pic_fmt.CropTop = crops["top"]
+        pic_fmt.CropBottom = crops["bottom"]
 
-        # Resize the shape to square (use the smaller dimension).
-        min_dim = min(cur_w, cur_h)
-        shape.Width = min_dim
-        shape.Height = min_dim
-
+        width, height = _fit_size(cur_w, cur_h, aspect, crop_fit)
+        shape.Width = width
+        shape.Height = height
+        # Cropping a side moves that edge; the picture stays where it was put.
+        shape.Left, shape.Top = cur_left, cur_top
         shape.LockAspectRatio = old_lock
     else:
         # Manual crop values (existing behavior).
@@ -1101,7 +1146,7 @@ def _add_picture_from_url_impl(slide_index, url, left, top, width, height, svg_c
     slide = pres.Slides(slide_index)
 
     # Download the image
-    resp = urllib.request.urlopen(url)
+    resp = open_url(url, "download the picture")
     content_type = resp.headers.get("Content-Type", "")
     is_svg = url.lower().endswith(".svg") or "svg" in content_type
 
@@ -1352,7 +1397,7 @@ def _add_svg_icon_impl(slide_index, icon_name, left, top, width, height, color, 
 
     # Download SVG
     try:
-        resp = urllib.request.urlopen(svg_url)
+        resp = open_url(svg_url, "download the icon", "PPT_ICON_BASE_URL")
     except urllib.error.HTTPError as e:
         if e.code == 404:
             raise ValueError(
@@ -1479,10 +1524,12 @@ def replace_font(params: ReplaceFontInput) -> str:
         JSON confirming the font replacement.
     """
     try:
+        before = deck_snapshot()
         result = ppt.execute(
             _replace_font_impl,
             params.original_font, params.replacement_font,
         )
+        report_deck_change(result, before)
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to replace font: {str(e)}"})
@@ -1512,10 +1559,13 @@ def set_default_fonts(params: SetDefaultFontsInput) -> str:
         JSON with theme update status and number of shapes updated.
     """
     try:
+        # Only a change that reaches the text already on the slides can break them.
+        before = deck_snapshot() if params.apply_to_existing else None
         result = ppt.execute(
             _set_default_fonts_impl,
             params.latin, params.east_asian, params.apply_to_existing,
         )
+        report_deck_change(result, before)
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set default fonts: {str(e)}"})
@@ -1548,6 +1598,8 @@ def crop_picture(params: CropPictureInput) -> str:
             params.crop_shape, params.crop_fit, params.crop_anchor,
             params.corner_radius_pt,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to crop picture: {str(e)}"})
@@ -1618,6 +1670,8 @@ def set_picture_format(params: SetPictureFormatInput) -> str:
             params.brightness, params.contrast, params.color_type,
             params.transparent_color, params.transparent_background,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to set picture format: {str(e)}"})
@@ -1764,6 +1818,7 @@ def add_picture_from_url(params: AddPictureFromUrlInput) -> str:
             params.left, params.top, params.width, params.height,
             params.svg_color, params.fit, params.zorder,
         )
+        report_layout(result, params.slide_index, touched_names(result))
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add picture from URL: {str(e)}"})
@@ -1786,6 +1841,7 @@ def add_svg_icon(params: AddSvgIconInput) -> str:
             params.left, params.top, params.width, params.height,
             params.color, params.style, params.filled, params.zorder,
         )
+        report_layout(result, params.slide_index, touched_names(result))
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add SVG icon: {str(e)}"})

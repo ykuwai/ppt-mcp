@@ -1,0 +1,427 @@
+{
+ "slide_width": 960.0,
+ "slide_height": 540.0,
+ "slides": [
+  {
+   "slide_index": 1,
+   "design": "Slice",
+   "layout": "Blank",
+   "background_hex": null,
+   "background_gradient": {
+    "angle": 102.0,
+    "stops": [
+     [
+      0.1,
+      "#64D4EF",
+      0.0
+     ],
+     [
+      1.0,
+      "#06588E",
+      0.0
+     ]
+    ]
+   },
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#146194",
+    "light2": "#76DBF4"
+   },
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Group 6",
+     "z": -10000,
+     "type": 6,
+     "left": 724.96,
+     "top": 233.33,
+     "width": 234.79,
+     "height": 252.67,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": null,
+     "line_visible": null,
+     "text": null,
+     "source": "master"
+    }
+   ],
+   "template_area": [
+    [
+     53.87,
+     353.33,
+     725.87,
+     472.0
+    ],
+    [
+     53.87,
+     54.0,
+     725.87,
+     338.67
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "TextBox 1",
+     "z": 1,
+     "type": 17,
+     "left": 740.0,
+     "top": 485.0,
+     "width": 200.0,
+     "height": 21.81,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 25,
+      "content": "Source: survey, Sept 2026",
+      "left": 747.2,
+      "top": 488.6,
+      "width": 149.25,
+      "height": 14.4,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 12.0,
+        "bold": false,
+        "font": "Century Gothic",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 60.0,
+     "top": 440.0,
+     "width": 500.0,
+     "height": 41.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 14,
+      "content": "SERVICE LEVELS",
+      "left": 67.2,
+      "top": 443.6,
+      "width": 214.63,
+      "height": 33.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 28.0,
+        "bold": false,
+        "font": "Century Gothic",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 60.0,
+     "top": 30.0,
+     "width": 500.0,
+     "height": 41.2,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 28,
+      "content": "On-time delivery rose to 96%",
+      "left": 67.2,
+      "top": 33.6,
+      "width": 391.38,
+      "height": 33.6,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#000000",
+        "size": 28.0,
+        "bold": false,
+        "font": "Century Gothic",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  },
+  {
+   "slide_index": 2,
+   "design": "Slice",
+   "layout": "Blank",
+   "background_hex": null,
+   "background_gradient": {
+    "angle": 102.0,
+    "stops": [
+     [
+      0.1,
+      "#64D4EF",
+      0.0
+     ],
+     [
+      1.0,
+      "#06588E",
+      0.0
+     ]
+    ]
+   },
+   "theme_colors": {
+    "dark1": "#000000",
+    "light1": "#FFFFFF",
+    "dark2": "#146194",
+    "light2": "#76DBF4"
+   },
+   "follows_background": true,
+   "template": [
+    {
+     "name": "Group 6",
+     "z": -10000,
+     "type": 6,
+     "left": 724.96,
+     "top": 233.33,
+     "width": 234.79,
+     "height": 252.67,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": null,
+     "line_visible": null,
+     "text": null,
+     "source": "master"
+    }
+   ],
+   "template_area": [
+    [
+     53.87,
+     353.33,
+     725.87,
+     472.0
+    ],
+    [
+     53.87,
+     54.0,
+     725.87,
+     338.67
+    ]
+   ],
+   "shapes": [
+    {
+     "name": "Rounded Rectangle 1",
+     "z": 1,
+     "type": 1,
+     "left": 100.0,
+     "top": 120.0,
+     "width": 600.0,
+     "height": 200.0,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": true,
+      "solid": false,
+      "color_hex": "#000000",
+      "transparency": 0.0,
+      "gradient": {
+       "angle": 0.0,
+       "stops": [
+        [
+         0.0,
+         "#000000",
+         0.0
+        ],
+        [
+         1.0,
+         "#FFFFFF",
+         0.0
+        ]
+       ]
+      }
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 0,
+      "content": "",
+      "left": null,
+      "top": null,
+      "width": null,
+      "height": null,
+      "alignment": null,
+      "runs": [],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "none",
+      "orientation": "horizontal",
+      "vertical_anchor": "middle"
+     }
+    },
+    {
+     "name": "TextBox 2",
+     "z": 2,
+     "type": 17,
+     "left": 110.0,
+     "top": 150.0,
+     "width": 180.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 8,
+      "content": "Dark end",
+      "left": 117.2,
+      "top": 153.6,
+      "width": 94.5,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#FFFFFF",
+        "size": 20.0,
+        "bold": false,
+        "font": "Century Gothic",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    },
+    {
+     "name": "TextBox 3",
+     "z": 3,
+     "type": 17,
+     "left": 500.0,
+     "top": 150.0,
+     "width": 180.0,
+     "height": 31.5,
+     "rotation": 0.0,
+     "visible": true,
+     "connector": false,
+     "placeholder_type": null,
+     "fill": {
+      "visible": false,
+      "solid": false,
+      "color_hex": "#FFFFFF",
+      "transparency": 1.0
+     },
+     "line_visible": false,
+     "text": {
+      "chars": 9,
+      "content": "Light end",
+      "left": 507.2,
+      "top": 153.6,
+      "width": 95.75,
+      "height": 24.0,
+      "alignment": null,
+      "runs": [
+       {
+        "color_hex": "#333333",
+        "size": 20.0,
+        "bold": false,
+        "font": "Century Gothic",
+        "theme": false
+       }
+      ],
+      "margins": {
+       "left": 7.2,
+       "right": 7.2,
+       "top": 3.6,
+       "bottom": 3.6
+      },
+      "word_wrap": true,
+      "autofit": "shape_to_fit",
+      "orientation": "horizontal",
+      "vertical_anchor": "top"
+     }
+    }
+   ]
+  }
+ ]
+}
