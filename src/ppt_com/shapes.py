@@ -1036,7 +1036,7 @@ def _glows(shape):
     return glows
 
 
-def _text_frame_state(shape):
+def _text_frame_state(shape, frame=None, frame2=None):
     """Report the text frame settings that decide how text is drawn.
 
     ppt_get_text answers with the size a run was set to, and when the frame is
@@ -1051,16 +1051,23 @@ def _text_frame_state(shape):
     natural height and putting it back.
 
     Returns None for a shape with no text frame at all.
+
+    ``frame`` is the shape's TextFrame and ``frame2`` its TextFrame2 when the
+    caller already holds them. A caller that passes ``frame`` has read it, so
+    the shape has a frame and HasTextFrame is not asked again. Each one is a
+    COM call saved per shape, which a layout check of a long deck pays a
+    thousand times over.
     """
     from ppt_com.text import (
         AUTO_SIZE_NAMES, ORIENTATION_NAMES, VERTICAL_ANCHOR_NAMES,
     )
 
-    try:
-        if not shape.HasTextFrame:
+    if frame is None:
+        try:
+            if not shape.HasTextFrame:
+                return None
+        except Exception:
             return None
-    except Exception:
-        return None
 
     state = {
         "autofit": None,
@@ -1073,12 +1080,13 @@ def _text_frame_state(shape):
     # AutoSize lives on TextFrame2. TextFrame's own AutoSize cannot say
     # shrink_to_fit, which is the one state worth reading.
     try:
-        state["autofit"] = AUTO_SIZE_NAMES.get(shape.TextFrame2.AutoSize)
+        tf2 = frame2 if frame2 is not None else shape.TextFrame2
+        state["autofit"] = AUTO_SIZE_NAMES.get(tf2.AutoSize)
     except Exception:
         pass
 
     try:
-        tf = shape.TextFrame
+        tf = frame if frame is not None else shape.TextFrame
     except Exception:
         return state
 

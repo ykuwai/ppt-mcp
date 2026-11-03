@@ -4402,3 +4402,32 @@ class TestChartOverlaps:
 
     def test_a_chart_whose_parts_are_unknown_is_not_judged(self):
         assert check(shape("Chart 1", 100, 100, 600, 400, type=layout_check.msoChart)) == []
+
+
+class TestAShapeThatCannotBeRead:
+    """read_shapes leaves out a shape PowerPoint will not describe; what is
+    inside the slide's groups is still read, by each shape's place on it."""
+
+    def test_the_groups_after_it_are_still_read(self):
+        from types import SimpleNamespace
+
+        class Unreadable:
+            @property
+            def Name(self):
+                raise RuntimeError("PowerPoint will not say")
+
+        class Items:
+            Count = 1
+
+            def __call__(self, i):
+                return child
+
+        child = SimpleNamespace(Name="Rectangle 1", Type=1, Left=10, Top=10, Width=50, Height=20)
+        smartart = SimpleNamespace(Name="Diagram 2", Type=24, Left=0, Top=0, Width=200,
+                                   Height=100, GroupItems=Items())
+        refs = [Unreadable(), smartart]
+        shapes = layout_check.read_shapes(refs, layout_check._geometry_facts,
+                                          layout_check._read_appearance, None)
+        assert [s["name"] for s in shapes] == ["Diagram 2"]
+        inner = layout_check._inner_facts(shapes, refs)
+        assert [s["name"] for s in inner] == ["Diagram 2/Rectangle 1"]
