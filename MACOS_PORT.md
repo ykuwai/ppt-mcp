@@ -534,7 +534,7 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**157 tools. 142 do the job. 15 always refuse.**
+**157 tools. 143 do the job. 14 always refuse.**
 
 | Why | Tools |
 |---|---|
@@ -547,7 +547,6 @@ checked against the code by a test, so it cannot quietly go stale.
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
 | No application window state, only each deck's window position and size | `ppt_set_window_state` |
 | No Boolean merge verbs (union, combine, intersect, subtract, fragment), and no shape range to merge | `ppt_merge_shapes` |
-| Built on the Win32 clipboard API (DIB and HDROP); an NSPasteboard version is #247 | `ppt_copy_to_clipboard` |
 
 A further **19 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
