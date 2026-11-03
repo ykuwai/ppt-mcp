@@ -1249,6 +1249,41 @@ class TestStagingThroughPowerPointsContainer:
         assert "not installed, or has never been started" in message
         assert "Full Disk Access" not in message
 
+    def test_a_question_on_screen_is_waited_on_once_and_briefly(self, tmp_path, monkeypatch):
+        # Without consent macOS asks on screen, and the look into the folder
+        # waits for the answer: every write whose layout check read a picture
+        # stalled 69 seconds.
+        import threading
+        import time
+
+        from backend import mac_ae
+
+        folder = tmp_path / "Documents"
+        monkeypatch.setattr(mac_ae, "EXPORT_STAGING_DIR", str(folder))
+        monkeypatch.setattr(mac_ae, "STAGING_PROBE_TIMEOUT", 0.2)
+        monkeypatch.setattr(mac_ae, "_waiting_probes", {})
+        answered, probes = threading.Event(), []
+        real = mac_ae._probe
+
+        def asking(where):
+            probes.append(where)
+            answered.wait(10)
+            real(where)
+
+        monkeypatch.setattr(mac_ae, "_probe", asking)
+        started = time.monotonic()
+        with pytest.raises(mac_ae.StagingBlocked, match="asking on screen") as caught:
+            mac_ae.staging_dir()
+        assert time.monotonic() - started < 2
+        assert "Answer Allow" in str(caught.value) and str(folder) in str(caught.value)
+        with pytest.raises(mac_ae.StagingBlocked, match="asking on screen"):
+            mac_ae.staging_dir()
+        assert len(probes) == 1, "a second question was asked"
+
+        answered.set()
+        mac_ae._waiting_probes[str(folder)].result(timeout=5)
+        assert mac_ae.staging_dir() == str(folder)
+
     def test_an_open_folder_is_used_and_left_clean(self, tmp_path, monkeypatch):
         from backend import mac_ae
 
