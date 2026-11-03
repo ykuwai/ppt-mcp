@@ -251,6 +251,14 @@ ppt_add_textbox(params={...}, presentation="report.pptx")
 # Lands in report.pptx whatever another conversation has activated
 ```
 
+### 👥 Files Others Edit at the Same Time (Windows)
+
+A presentation opened from SharePoint or OneDrive can be edited by other people while the server works on it. Without AutoSave, PowerPoint takes in what they have saved only when the file is saved, and shows "Updates available" until then; the server would read and write the older state. The server handles that for such a file:
+
+- **Before a tool call** it merges the others' changes, as long as nothing in this copy is unsaved, so a read sees the current state. A writing call whose slides or shapes the merge moved is refused without changes, because its indices came from the older state.
+- **Results** carry `coauthoring`: `pending_updates` (changes wait; `ppt_save_presentation` takes them in), `merged_updates` (they were just merged), `conflict`. `ppt_open_presentation`, `ppt_activate_presentation` and `ppt_get_presentation_info` always report it, with `coauthor_count`; `ppt_list_presentations` gives `pending_updates` per file.
+- **A conflict** (both sides changed the same object) opens PowerPoint's "Resolve conflict" dialog, which the object model cannot answer, so it stays with the user. An integration can answer it instead: `utils.coauthoring.set_conflict_resolver(fn)` registers a function that gets the Presentation on the COM thread and returns `True` once the dialog is answered; the result then lists in `overwritten` each slide that now differs from this copy's version, with the text it had here.
+
 ### 📁 Template Support
 
 Auto-detects your personal PowerPoint templates folder (registry, OneDrive, or default paths). Use `ppt_list_templates` to discover available templates, then `ppt_create_presentation(template_path=...)` to create a new presentation from any template.
