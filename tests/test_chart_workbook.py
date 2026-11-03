@@ -10,6 +10,8 @@ import sys
 
 sys.path.insert(0, "src")
 
+import pytest  # noqa: E402
+
 from ppt_com.charts import _close_chart_workbook  # noqa: E402
 
 
@@ -82,6 +84,8 @@ def test_a_workbook_that_cannot_be_had_at_all_is_reported():
     assert _close_chart_workbook(chart, attempts=3, wait=0) is False
 
 
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="drives the COM impls, which macOS replaces with its own")
 class TestTheToolsSayWhenItWasLeftOpen:
     """add_chart and set_chart_data carry a warning when the workbook stayed open."""
 
