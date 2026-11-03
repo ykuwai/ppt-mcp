@@ -1980,9 +1980,11 @@ def register_tools(mcp):
         },
     )
     async def tool_list_fonts() -> str:
-        """List all fonts used in the active presentation.
+        """List the fonts the active presentation uses, not those installed.
 
-        Returns the names of all fonts embedded or referenced in the presentation.
+        Returns the names of the fonts its theme and its text refer to. It does
+        not list the fonts on this computer: a font the deck asks for that is
+        not installed is reported by ppt_check_layout as font_missing.
         """
         return await run_offloaded(list_fonts)
 
