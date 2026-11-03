@@ -237,3 +237,112 @@ def delete_node(data: ET.Element, node_index: int) -> int:
               and int(cxn.get("srcOrd", "0")) > order):
             cxn.set("srcOrd", str(int(cxn.get("srcOrd")) - 1))
     return len(subtree)
+
+
+# CT_ShapeProperties' children in schema order, for a node's dgm:spPr.
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+_SPPR_ORDER = ["xfrm", "custGeom", "prstGeom", "noFill", "solidFill", "gradFill",
+               "blipFill", "pattFill", "grpFill", "ln", "effectLst", "effectDag",
+               "scene3d", "sp3d", "extLst"]
+_FILLS = {"noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"}
+
+
+def _solid(color: str) -> ET.Element:
+    fill = ET.Element(f"{_A}solidFill")
+    ET.SubElement(fill, f"{_A}srgbClr", {"val": color.lstrip("#").upper()})
+    return fill
+
+
+def _place(parent: ET.Element, element: ET.Element) -> None:
+    """Put ``element`` into a ``spPr`` where the schema has it, replacing one
+    of its kind (any fill, for a fill)."""
+    local = element.tag[len(_A):]
+    same = _FILLS if local in _FILLS else {local}
+    for child in list(parent):
+        if child.tag[len(_A):] in same:
+            parent.remove(child)
+    rank = _SPPR_ORDER.index(local)
+    index = len(parent)
+    for i, child in enumerate(parent):
+        name = child.tag[len(_A):]
+        if name in _SPPR_ORDER and _SPPR_ORDER.index(name) > rank:
+            index = i
+            break
+    parent.insert(index, element)
+
+
+def format_nodes(data: ET.Element, node_index: Optional[int], *, fill_color=None,
+                 line_color=None, line_width=None, font_name=None, font_size=None,
+                 bold=None, font_color=None) -> int:
+    """Format node ``node_index``, or every node when it is None, where
+    PowerPoint for Windows keeps a node's own format (``format_node`` there,
+    saved and read back): fill and outline in the node's ``dgm:spPr``, the
+    font on its text runs, and ``custT`` on its ``dgm:prSet`` once the size
+    is set, so the layout keeps it. Colours are hex. Answers the nodes
+    formatted."""
+    from gvml.text import format_body_runs
+
+    ids = node_ids(data)
+    if node_index is not None and not 1 <= node_index <= len(ids):
+        raise ValueError(f"node_index {node_index} out of range (1-{len(ids)})")
+    points = _points(data)
+    chosen = ids if node_index is None else [ids[node_index - 1]]
+    for node_id in chosen:
+        pt = points[node_id]
+        if fill_color is not None or line_color is not None or line_width is not None:
+            sppr = pt.find(f"{_D}spPr")
+            if sppr is None:
+                sppr = ET.Element(f"{_D}spPr")
+                pt.insert(1 if pt.find(f"{_D}prSet") is not None else 0, sppr)
+            if fill_color is not None:
+                _place(sppr, _solid(fill_color))
+            if line_color is not None or line_width is not None:
+                ln = sppr.find(f"{_A}ln")
+                if ln is None:
+                    ln = ET.Element(f"{_A}ln")
+                    _place(sppr, ln)
+                if line_width is not None:
+                    ln.set("w", str(int(round(line_width * 12700))))
+                if line_color is not None:
+                    for child in list(ln):
+                        if child.tag[len(_A):] in _FILLS:
+                            ln.remove(child)
+                    ln.insert(0, _solid(line_color))
+        if any(v is not None for v in (font_name, font_size, bold, font_color)):
+            t = pt.find(f"{_D}t")
+            if t is not None:
+                format_body_runs(t, font_name=font_name, font_size=font_size, bold=bold,
+                                 color=None if font_color is None else font_color)
+            if font_size is not None:
+                pr = pt.find(f"{_D}prSet")
+                if pr is None:
+                    pr = ET.Element(f"{_D}prSet")
+                    pt.insert(0, pr)
+                pr.set("custT", "1")
+    return len(chosen)
+
+
+def node_formats(data: ET.Element) -> List[dict]:
+    """Each node's fill, outline colour and width, and its first run's size,
+    bold, colour and typeface, as read back. For checking a paste."""
+    points = _points(data)
+    out = []
+    for node_id in node_ids(data):
+        pt = points[node_id]
+        sppr = pt.find(f"{_D}spPr")
+        fill = sppr.find(f"{_A}solidFill/{_A}srgbClr") if sppr is not None else None
+        ln = sppr.find(f"{_A}ln") if sppr is not None else None
+        line = ln.find(f"{_A}solidFill/{_A}srgbClr") if ln is not None else None
+        rpr = pt.find(f"{_D}t/{_A}p/{_A}r/{_A}rPr")
+        rpr = rpr if rpr is not None else ET.Element(f"{_A}rPr")
+        run_fill = rpr.find(f"{_A}solidFill/{_A}srgbClr")
+        latin = rpr.find(f"{_A}latin")
+        out.append({
+            "fill": fill.get("val") if fill is not None else None,
+            "line": line.get("val") if line is not None else None,
+            "line_w": ln.get("w") if ln is not None else None,
+            "sz": rpr.get("sz"), "b": rpr.get("b"),
+            "font_color": run_fill.get("val") if run_fill is not None else None,
+            "latin": latin.get("typeface") if latin is not None else None,
+        })
+    return out

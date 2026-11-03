@@ -1,8 +1,9 @@
 """SmartArt tools, on Apple Events.
 
-Mirrors ``ppt_com/smartart.py``. ``ppt_modify_smartart`` writes, adds and
-deletes nodes (``set_text``, ``add_node``, ``delete_node``) through the
-graphic's clipboard package; everything else here refuses.
+Mirrors ``ppt_com/smartart.py``. ``ppt_modify_smartart`` writes, adds,
+deletes and formats nodes (``set_text``, ``add_node``, ``delete_node``,
+``format_node``, ``format_all_nodes``) through the graphic's clipboard
+package; everything else here refuses.
 
 **There is no smart art in this dictionary, and the gap is a strange shape.**
 Parsing ``PowerPoint.sdef`` into the tables appscript builds gives a reference
@@ -48,9 +49,10 @@ change its data model (``gvml.smartart``), and paste it back over the
 original with ``replace_shape``, which reads the paste back and checks every
 node's text before it deletes anything. A node added or deleted only in the
 data model is laid out again by PowerPoint on the paste, the drawing it
-carried notwithstanding. A layout, colour scheme, style or node format would
-have to come from another graphic's package, and none ships here, so those
-five actions still refuse.
+carried notwithstanding. A node's own fill, outline and font are written
+where PowerPoint for Windows keeps them, on the node's point. A layout,
+colour scheme or style would have to come from another graphic's package,
+and none ships here, so those three actions still refuse.
 
 A refused call edits nothing, so it does not call ``goto_slide``, and leaves
 the user's view where it was.
@@ -191,18 +193,33 @@ def _modify_smartart_impl(slide_index, shape_name_or_index, action,
             raise ValueError("node_index is required for 'delete_node' action")
         return _edit_nodes(pres, slide, slide_index, shape, action,
                            lambda data, drawing: gvml_smartart.delete_node(data, node_index))
+    if action in ("format_node", "format_all_nodes"):
+        if action == "format_node" and node_index is None:
+            raise ValueError("node_index is required for 'format_node' action")
+        from utils.color import hex_to_rgb
+
+        for colour in (fill_color, line_color, font_color):
+            if colour is not None:
+                hex_to_rgb(colour)  # the same refusal Windows gives, before any copy
+        which = node_index if action == "format_node" else None
+        return _edit_nodes(pres, slide, slide_index, shape, action,
+                           lambda data, drawing: gvml_smartart.format_nodes(
+                               data, which, fill_color=fill_color, line_color=line_color,
+                               line_width=line_width, font_name=font_name,
+                               font_size=font_size, bold=bold, font_color=font_color))
 
     return _refusal(
         "ppt_modify_smartart",
         f"'{shape.name()}' on slide {slide_index} is a SmartArt graphic and "
         f"the action '{action}' cannot be carried out on it. Nodes can be "
-        "written, added and deleted (action='set_text', 'add_node', "
-        "'delete_node'), through the graphic's clipboard package; a layout, "
-        "colour scheme, style or node format would have to come from another "
-        "graphic's package, and none ships with the server. "
-        f"{_NO_SMART_ART}",
+        "written, added, deleted and formatted (action='set_text', "
+        "'add_node', 'delete_node', 'format_node', 'format_all_nodes'), "
+        "through the graphic's clipboard package; a layout, colour scheme or "
+        "style would have to come from another graphic's package, and none "
+        f"ships with the server. {_NO_SMART_ART}",
         [
-            "ppt_modify_smartart with action='set_text', 'add_node' or 'delete_node'",
+            "ppt_modify_smartart with action='set_text', 'add_node', "
+            "'delete_node', 'format_node' or 'format_all_nodes'",
             "Edit the SmartArt by hand in PowerPoint",
             "ppt_ungroup_shapes, which does work and turns a converted "
             "diagram into shapes the text and formatting tools can reach",
@@ -261,6 +278,7 @@ def _edit_nodes(pres, slide, slide_index, shape, action, edit) -> dict:
         drawing = ET.fromstring(package.parts[drawing_part]) if drawing_part else None
         edit(data, drawing)
         wanted = gvml_smartart.node_texts(data)
+        wanted_formats = gvml_smartart.node_formats(data)
         package.parts[data_part] = (XML_DECL + ET.tostring(data, encoding="unicode")).encode("utf-8")
         if drawing is not None:
             package.parts[drawing_part] = (
@@ -276,6 +294,9 @@ def _edit_nodes(pres, slide, slide_index, shape, action, edit) -> dict:
                 return f"its data model could not be read ({exc})"
             if got != wanted:
                 return f"its nodes read back as {got!r}, not {wanted!r}"
+            formats = gvml_smartart.node_formats(ET.fromstring(readback.parts[back]))
+            if formats != wanted_formats:
+                return "its nodes' formatting did not read back as written"
             return None
 
         try:

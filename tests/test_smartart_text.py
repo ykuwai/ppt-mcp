@@ -260,3 +260,75 @@ class TestTheNodeActionsOnTheMac:
         result = wired["edit"]("delete_node", lambda d, w: sa.delete_node(d, 2))
         assert (result["action"], result["total_nodes"]) == ("delete_node", 4)
         assert wired["problem"] is None
+
+
+class TestFormattingNodes:
+    WINDOWS = dict(fill_color="#C00000", line_color="#FFC000", line_width=4,
+                   font_name="Georgia", font_size=20, bold=True, font_color="#FFFF00")
+
+    def test_one_node_as_powerpoint_for_windows_keeps_it(self):
+        # What format_node with these values left in a deck PowerPoint for
+        # Windows saved: fill and outline in the node's spPr, the font on its
+        # runs, custT on its prSet.
+        data, _ = _parts(_package())
+        assert sa.format_nodes(data, 1, **self.WINDOWS) == 1
+        first, second = sa.node_formats(data)[:2]
+        assert first == {"fill": "C00000", "line": "FFC000", "line_w": "50800", "sz": "2000",
+                         "b": "1", "font_color": "FFFF00", "latin": "Georgia"}
+        assert second["fill"] is None and second["sz"] is None
+        node = data.find(f"{sa._D}ptLst/{sa._D}pt[@modelId='{sa.node_ids(data)[0]}']")
+        assert node.find(f"{sa._D}prSet").get("custT") == "1"
+        assert [c.tag.split("}")[1] for c in node.find(f"{sa._D}spPr")] == ["solidFill", "ln"]
+
+    def test_every_node(self):
+        data, _ = _parts(_package())
+        assert sa.format_nodes(data, None, fill_color="#2563EB") == 5
+        assert {f["fill"] for f in sa.node_formats(data)} == {"2563EB"}
+
+    def test_a_second_fill_replaces_the_first(self):
+        data, _ = _parts(_package())
+        sa.format_nodes(data, 2, fill_color="#111111")
+        sa.format_nodes(data, 2, fill_color="#222222", line_width=1)
+        node = data.find(f"{sa._D}ptLst/{sa._D}pt[@modelId='{sa.node_ids(data)[1]}']")
+        assert [c.tag.split("}")[1] for c in node.find(f"{sa._D}spPr")] == ["solidFill", "ln"]
+        assert sa.node_formats(data)[1]["fill"] == "222222"
+        assert sa.node_formats(data)[1]["line_w"] == "12700"
+
+    def test_custom_size_only_when_a_size_is_set(self):
+        data, _ = _parts(_package())
+        sa.format_nodes(data, 3, bold=True)
+        node = data.find(f"{sa._D}ptLst/{sa._D}pt[@modelId='{sa.node_ids(data)[2]}']")
+        assert "custT" not in node.find(f"{sa._D}prSet").attrib
+
+    def test_an_index_out_of_range(self):
+        data, _ = _parts(_package())
+        with pytest.raises(ValueError, match=r"out of range \(1-5\)"):
+            sa.format_nodes(data, 7, bold=True)
+
+
+@macos_only
+class TestFormattingOnTheMac:
+    def test_format_node_is_pasted_and_checked(self, wired):
+        result = wired["edit"]("format_node", lambda d, w: sa.format_nodes(
+            d, 1, fill_color="#C00000", font_size=20))
+        assert result["action"] == "format_node" and wired["problem"] is None
+        data, _ = _parts(Package.from_bytes(wired["raw"]))
+        assert sa.node_formats(data)[0]["fill"] == "C00000"
+
+    def test_a_theme_name_is_refused_before_anything_is_copied(self, monkeypatch):
+        from ppt_mac import smartart as mac_smartart
+
+        monkeypatch.setattr(mac_smartart.ppt, "_get_pres_impl", lambda *a, **kw: object())
+        monkeypatch.setattr(mac_smartart, "_slide", lambda pres, index: object())
+        monkeypatch.setattr(mac_smartart, "_get_shape", lambda slide, name: object())
+        monkeypatch.setattr(mac_smartart, "_require_smartart", lambda shape: None)
+        monkeypatch.setattr(mac_smartart, "_edit_nodes",
+                            lambda *a: pytest.fail("the graphic was copied"))
+        with pytest.raises(ValueError, match="theme colour name"):
+            mac_smartart._modify_smartart_impl(
+                1, "Diagram 1", "format_all_nodes", None, None, None, None, None, None,
+                None, None, None, None, "accent1", None, None)
+        with pytest.raises(ValueError, match="node_index is required"):
+            mac_smartart._modify_smartart_impl(
+                1, "Diagram 1", "format_node", None, None, None, None, None, None,
+                None, None, True, None, None, None, None)

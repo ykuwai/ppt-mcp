@@ -560,7 +560,7 @@ legend and title coordinates or an 8-direction `legend_position` (they are
 computed from the chart's rendered size, which the XML does not carry),
 `ppt_format_chart_axis` cannot take `tick_label_font_size`, `ppt_set_textframe`
 cannot take `auto_size='shrink_to_fit'` (PowerPoint for Mac refuses to set it
-from a script, under either of its names), `ppt_modify_smartart` takes `action='set_text'`, `'add_node'` and `'delete_node'`, through the graphic's clipboard package (PowerPoint lays the diagram out again when it is pasted), and not the five that would need another graphic's layout, colours, style or node format. `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
+from a script, under either of its names), `ppt_modify_smartart` takes `action='set_text'`, `'add_node'`, `'delete_node'`, `'format_node'` and `'format_all_nodes'`, through the graphic's clipboard package (PowerPoint lays the diagram out again when it is pasted), and not the three that would need another graphic's layout, colours or style. `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
 checks that report a write which did not land rather than a capability that
 is missing.
 

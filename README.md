@@ -434,9 +434,10 @@ Not available on macOS:
 
 - **SmartArt, beyond its nodes.** The dictionary has no class and no command
   for it, so a graphic cannot be created, nor its layout, colours or style
-  changed, from a script. Its nodes can be written, added and deleted
-  (`ppt_modify_smartart` with `set_text`, `add_node`, `delete_node`), through
-  the graphic's clipboard package, and an existing graphic is an ordinary
+  changed, from a script. Its nodes can be written, added, deleted and
+  formatted (`ppt_modify_smartart` with `set_text`, `add_node`, `delete_node`,
+  `format_node`, `format_all_nodes`), through the graphic's clipboard
+  package, and an existing graphic is an ordinary
   shape that can be moved, resized, read and deleted.
 - **A freeform node's editing type.** Corner, smooth and symmetric are not
   stored anywhere a script can reach; move the node's handles instead.

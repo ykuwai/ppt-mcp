@@ -436,8 +436,8 @@ class TestSmartArt:
         assert "success" not in result
 
     def test_modifying_refuses_and_names_the_shape_and_the_action(self):
-        # The three node actions work, through the graphic's clipboard
-        # package; the other five need another graphic's parts and refuse.
+        # The five node actions work, through the graphic's clipboard
+        # package; the other three need another graphic's parts and refuse.
         from ppt_mac.smartart import _modify_smartart_impl
 
         with _fake_deck(["Process"]) as deck:
@@ -496,7 +496,8 @@ class TestSmartArt:
         with _fake_deck(["Process"]) as deck:
             deck.set_type("Process", "smartart")
             for action in _ACTIONS:
-                if action in ("set_text", "add_node", "delete_node"):
+                if action in ("set_text", "add_node", "delete_node",
+                              "format_node", "format_all_nodes"):
                     continue  # done, not refused: see tests/test_smartart_text.py
                 result = _modify_smartart_impl(
                     1, "Process", action, 1, "x",

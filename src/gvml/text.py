@@ -255,6 +255,15 @@ def format_runs(shape: ET.Element, *, font_name=None, font_name_fareast=None,
     body = _body(shape)
     if body is None:
         raise PackageError("the shape has no text body")
+    return format_body_runs(body, font_name=font_name, font_name_fareast=font_name_fareast,
+                            font_size=font_size, bold=bold, italic=italic,
+                            underline=underline, color=color)
+
+
+def format_body_runs(body: ET.Element, *, font_name=None, font_name_fareast=None,
+                     font_size=None, bold=None, italic=None, underline=None,
+                     color=None) -> int:
+    """``format_runs`` for any element holding ``a:p`` paragraphs (see ``body_text``)."""
     runs = list(body.iter(f"{_A}r"))
     targets = []
     for run in runs:
