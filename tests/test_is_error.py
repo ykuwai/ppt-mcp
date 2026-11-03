@@ -66,6 +66,13 @@ def srv(monkeypatch):
     return srv
 
 
+@pytest.fixture
+def flagged():
+    """Skip where the SDK cannot send the flagged result (before mcp 1.19)."""
+    if not _server()._SDK_PASSES_CALL_TOOL_RESULT:
+        pytest.skip("this mcp release cannot send a CallToolResult from call_tool")
+
+
 def call(srv, name, arguments):
     """What a client connected to `srv` receives: (isError, text, structured)."""
     async def go():
@@ -74,7 +81,8 @@ def call(srv, name, arguments):
         except ImportError:
             from mcp.shared.memory import create_connected_server_and_client_session
 
-            async with create_connected_server_and_client_session(srv) as session:
+            # The low-level server, which older 1.x releases require here.
+            async with create_connected_server_and_client_session(srv._mcp_server) as session:
                 return await session.call_tool(name, arguments)
         async with Client(srv) as client:
             return await client.call_tool(name, arguments)
@@ -88,7 +96,7 @@ def call(srv, name, arguments):
     return bool(is_error), text, structured
 
 
-def test_a_failure_is_an_error_with_its_json_unchanged(srv):
+def test_a_failure_is_an_error_with_its_json_unchanged(srv, flagged):
     is_error, text, structured = call(srv, "ppt_refuse", {"params": {}})
     assert is_error
     assert text == json.dumps(FAILURE), "no prefix, nothing added"
@@ -108,7 +116,7 @@ def test_only_a_top_level_error_in_a_json_object_counts(srv, tool):
     assert not is_error
 
 
-def test_ppt_run_of_a_failing_tool_is_an_error_with_the_same_json(srv):
+def test_ppt_run_of_a_failing_tool_is_an_error_with_the_same_json(srv, flagged):
     is_error, text, _ = call(srv, "ppt_run", {"tool": "ppt_refuse", "params": {}})
     assert is_error
     assert text == json.dumps(FAILURE)
@@ -120,7 +128,7 @@ def test_ppt_run_of_a_working_tool_is_not_an_error(srv):
     assert json.loads(text)["success"] is True
 
 
-def test_ppt_run_steps_with_a_failing_step_is_an_error_and_stops_there(srv):
+def test_ppt_run_steps_with_a_failing_step_is_an_error_and_stops_there(srv, flagged):
     is_error, text, _ = call(srv, "ppt_run_steps", {"steps": [
         {"tool": "ppt_work", "params": {}},
         {"tool": "ppt_refuse", "params": {}},
@@ -133,7 +141,7 @@ def test_ppt_run_steps_with_a_failing_step_is_an_error_and_stops_there(srv):
     assert summary["error"] == f"Step 2 (ppt_refuse) failed: {FAILURE['error']}"
 
 
-def test_ppt_run_steps_without_stopping_runs_on_and_counts_the_failures(srv):
+def test_ppt_run_steps_without_stopping_runs_on_and_counts_the_failures(srv, flagged):
     is_error, text, _ = call(srv, "ppt_run_steps", {"stop_on_error": False, "steps": [
         {"tool": "ppt_refuse", "params": {}},
         {"tool": "ppt_nope"},

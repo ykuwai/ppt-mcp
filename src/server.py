@@ -263,6 +263,25 @@ def _failure_payload(text):
     return payload if isinstance(payload, dict) and "error" in payload else None
 
 
+def _sdk_passes_call_tool_result():
+    """Whether the SDK sends a CallToolResult from call_tool as it is.
+
+    mcp 1.19 was the first to. Before it, the low-level handler checks the
+    result against the tool's output schema and answers "Output validation
+    error" instead of the tool's text, so failures there stay as they were.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        major, minor = (int(part) for part in version("mcp").split(".")[:2])
+    except (PackageNotFoundError, ValueError):
+        return True
+    return (major, minor) >= (1, 19)
+
+
+_SDK_PASSES_CALL_TOOL_RESULT = _sdk_passes_call_tool_result()
+
+
 def _flag_failure(result):
     """`result` as a tool error (isError true) if the tool answered a failure.
 
@@ -282,7 +301,8 @@ def _flag_failure(result):
     # which is every tool returning str, and the blocks alone for the others.
     # A dict is structured content only, and no tool here answers one.
     blocks = result[0] if isinstance(result, tuple) else result
-    if isinstance(result, dict) or _failure_payload(_text_of(blocks or [])) is None:
+    if (not _SDK_PASSES_CALL_TOOL_RESULT or isinstance(result, dict)
+            or _failure_payload(_text_of(blocks or [])) is None):
         return result
     from mcp.types import CallToolResult
 
