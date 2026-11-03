@@ -193,6 +193,10 @@ class _PowerPointServer(MCPServer):
     `params` is rewritten from pydantic's report into one sentence naming the
     tool, the argument, the likely intended name and the valid ones. Both
     still answer as a tool error (isError true).
+
+    A tool that answers a failure, a JSON object with a top-level "error", is
+    marked isError true here too (#249), with its text left exactly as the
+    tool wrote it; see _flag_failure.
     """
 
     async def call_tool(self, name, arguments, *args, **kwargs):
@@ -216,7 +220,7 @@ class _PowerPointServer(MCPServer):
         token = call_presentation.set(wanted)
         coauthoring_token = call_coauthoring.set(_coauthoring_call(name, tool, arguments))
         try:
-            return await super().call_tool(name, arguments, *args, **kwargs)
+            return _flag_failure(await super().call_tool(name, arguments, *args, **kwargs))
         except ToolError as exc:
             readable = _readable_validation_error(name, tool, exc)
             if readable is None:
@@ -246,6 +250,43 @@ class _PowerPointServer(MCPServer):
             return self._tool_manager.get_tool(name)
         except Exception:
             return None
+
+
+def _failure_payload(text):
+    """The JSON object `text` holds if it is a failure (a top-level "error"), else None."""
+    if not text or not text.lstrip().startswith("{"):
+        return None
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return None
+    return payload if isinstance(payload, dict) and "error" in payload else None
+
+
+def _flag_failure(result):
+    """`result` as a tool error (isError true) if the tool answered a failure.
+
+    Every tool answers a failure as json.dumps({"error": ...}), which the SDK
+    sends as a success. Raising ToolError instead would mark it, but the SDK
+    puts "Error executing tool <name>: " in front of the text, and the JSON no
+    longer parses. A CallToolResult with isError set keeps the text as it is.
+    It carries no structured content, the shape #249 measured: a client does
+    not check an error result against the tool's output schema.
+    """
+    if hasattr(result, "content") and not isinstance(result, (list, tuple, dict)):
+        # mcp 2.x answers a CallToolResult already.
+        if getattr(result, "is_error", False) or _failure_payload(_text_of(result.content)) is None:
+            return result
+        return result.model_copy(update={"is_error": True, "structured_content": None})
+    # mcp 1.x answers (blocks, structured) for a tool with an output schema,
+    # which is every tool returning str, and the blocks alone for the others.
+    # A dict is structured content only, and no tool here answers one.
+    blocks = result[0] if isinstance(result, tuple) else result
+    if isinstance(result, dict) or _failure_payload(_text_of(blocks or [])) is None:
+        return result
+    from mcp.types import CallToolResult
+
+    return CallToolResult(content=list(blocks), isError=True)
 
 
 # Presentation-bound tools that handle co-authoring themselves (save) or have
@@ -986,8 +1027,13 @@ def _content_of(result):
     """What call_tool answered, as a list of content blocks under either SDK major."""
     if hasattr(result, "content") and not isinstance(result, (list, tuple, dict)):
         # mcp 2.x answers a CallToolResult, and an error in it is not raised.
+        # A tool's own failure (see _flag_failure) is passed on as its blocks,
+        # so ppt_run answers the same JSON and is marked failed in turn; a
+        # ToolError raised here would reach the caller with the SDK's prefix.
         if getattr(result, "isError", False) or getattr(result, "is_error", False):
-            raise ToolError(_text_of(result.content) or "The tool failed.")
+            text = _text_of(result.content)
+            if _failure_payload(text) is None:
+                raise ToolError(text or "The tool failed.")
         result = result.content
     if isinstance(result, tuple):  # mcp 1.x: (unstructured, structured)
         result = result[0]
@@ -1100,7 +1146,7 @@ async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
     fails when its tool raises or answers {"error": ...}; with
     stop_on_error, the first failing step ends the run and says why.
     """
-    report, results, images = [], [], []
+    report, results, images, failed = [], [], [], []
     for number, step in enumerate(steps, start=1):
         step = step if isinstance(step, dict) else {}
         tool = step.get("tool")
@@ -1110,6 +1156,7 @@ async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
         except Exception as exc:  # noqa: BLE001 - reported per step
             report.append({"step": number, "tool": tool, "error": str(exc)})
             results.append(None)
+            failed.append((number, tool, str(exc)))
             if stop_on_error:
                 break
             continue
@@ -1122,20 +1169,27 @@ async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
             # Most tools answer a failure with {"error": ...} rather than
             # raising it (#249), so that answer fails the step too: it stops
             # the run, and a reference to it says the step has no result.
-            failed = {"step": number, "tool": tool, "error": data["error"]}
+            entry = {"step": number, "tool": tool, "error": data["error"]}
             details = {k: v for k, v in data.items() if k != "error"}
             if details:
-                failed["details"] = details
-            report.append(failed)
+                entry["details"] = details
+            report.append(entry)
             results.append(None)
+            failed.append((number, tool, str(data["error"])))
             if stop_on_error:
                 break
             continue
-        results.append(data)
         report.append({"step": number, "tool": tool, "result": data})
         images += [b for b in blocks if getattr(b, "type", "") == "image"]
-    summary = json.dumps({"steps": report, "ran": len(report), "of": len(steps)},
-                         ensure_ascii=False)
+        results.append(data)
+    summary = {"steps": report, "ran": len(report), "of": len(steps)}
+    if failed:
+        # A top-level "error", so the run is marked failed (isError true) by
+        # the same rule as any tool's own answer; see _flag_failure.
+        number, tool, message = failed[0]
+        more = f" ({len(failed)} steps failed)" if len(failed) > 1 else ""
+        summary["error"] = f"Step {number} ({tool}) failed: {message}{more}"
+    summary = json.dumps(summary, ensure_ascii=False)
     return [summary, *images] if images else summary
 
 if CATALOG_MODE:
