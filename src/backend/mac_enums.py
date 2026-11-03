@@ -12,8 +12,9 @@ only sometimes agree on the number. ``ppSaveAsPNG`` is 18 on Windows while
 
 Windows constants this table does not carry, so that asking for one raises
 rather than quietly resolving to something close. Most genuinely have no macOS
-word. The four slide transitions have the opposite problem, each exists as four
-directional variants and in no plain form, and picking one would be a guess:
+word. The slide transitions carry PowerPoint's own numbers, the same on both
+platforms (fade is 3849, push 3852 to 3855); 3844 to 3848, which the server
+used to send, are no transitions on macOS and the wrong ones on Windows:
 
     MsoAnimAfterEffect: msoAnimAfterEffectNone
     MsoAnimTriggerType: msoAnimTriggerNone
@@ -24,7 +25,6 @@ directional variants and in no plain form, and picking one would be a guess:
     MsoTriState: msoTriStateMixed
     MsoVerticalAnchor: msoVerticalAnchorMixed
     PpDateTimeFormat: ppDateTimeddddMMMMddyyyy, ppDateTimedMMMMyyyy, ppDateTimedMMMyy, ppDateTimeMddyy, ppDateTimehmmAMPM, ppDateTimehmmssAMPM
-    PpEntryEffect: ppEffectPush, ppEffectWipe, ppEffectSplit, ppEffectReveal
     PpMediaType: ppMediaTypeMixed
     PpNumberedBulletStyle: ppBulletArabicDBPeriod
     PpPlaceholderType: ppPlaceholderMixed
@@ -447,7 +447,26 @@ PpEntryEffect: dict = {
     769: k.entry_effect_blinds_horizontal,  # ppEffectBlindsHorizontal
     770: k.entry_effect_blinds_vertical,  # ppEffectBlindsVertical
     1537: k.entry_effect_dissolve,  # ppEffectDissolve
-    3844: k.entry_effect_fade,  # ppEffectFade
+    1793: k.entry_effect_fade_black,  # ppEffectFade
+    2817: k.entry_effect_wipe_left,  # ppEffectWipeLeft
+    2818: k.entry_effect_wipe_up,  # ppEffectWipeUp
+    2819: k.entry_effect_wipe_right,  # ppEffectWipeRight
+    2820: k.entry_effect_wipe_down,  # ppEffectWipeDown
+    3585: k.entry_effect_split_horizontal_out,  # ppEffectSplitHorizontalOut
+    3586: k.entry_effect_split_horizontal_in,  # ppEffectSplitHorizontalIn
+    3587: k.entry_effect_split_vertical_out,  # ppEffectSplitVerticalOut
+    3588: k.entry_effect_split_vertical_in,  # ppEffectSplitVerticalIn
+    # `fade` and `fade smoothly` share one code, and PowerPoint answers with
+    # `fade`; the tool reads the transition back and compares, so it sets `fade`.
+    3849: k.entry_effect_fade,  # ppEffectFadeSmoothly
+    3852: k.entry_effect_push_down,  # ppEffectPushDown
+    3853: k.entry_effect_push_left,  # ppEffectPushLeft
+    3854: k.entry_effect_push_right,  # ppEffectPushRight
+    3855: k.entry_effect_push_up,  # ppEffectPushUp
+    3894: k.entry_effect_reveal_smooth_left,  # ppEffectRevealSmoothLeft
+    3895: k.entry_effect_reveal_smooth_right,  # ppEffectRevealSmoothRight
+    3896: k.entry_effect_reveal_black_left,  # ppEffectRevealBlackLeft
+    3897: k.entry_effect_reveal_black_right,  # ppEffectRevealBlackRight
 }
 
 

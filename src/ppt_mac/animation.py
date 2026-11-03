@@ -103,9 +103,8 @@ _WHAT_EFFECT = (
     "so a number this rejects is not one of them)"
 )
 _WHAT_TRANSITION = (
-    "slide transition effect (push, wipe, split and reveal each exist here as "
-    "four directional variants and in no plain form, so there is nothing to "
-    "choose without being told the direction; the other seven all work)"
+    "slide transition effect (every name ppt_set_slide_transition lists is "
+    "available here, so a number this rejects is not one of them)"
 )
 _WHAT_DIRECTION = "animation direction"
 _WHAT_TRIGGER = "animation trigger"
