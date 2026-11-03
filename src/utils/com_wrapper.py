@@ -49,7 +49,7 @@ else:  # pragma: no cover - non-Windows
     pywintypes = _NotWindows()
 
 
-def share_type_information(dynamic, com_error, null_iid, funcdesc_kind, invoke_func) -> None:
+def share_type_information(dynamic, com_error, null_iid, funcdesc_kind, invoke_func) -> dict:
     """Bind each COM name once per interface, not once per object.
 
     pywin32's late binding gives every object PowerPoint hands back a fresh
@@ -70,6 +70,8 @@ def share_type_information(dynamic, com_error, null_iid, funcdesc_kind, invoke_f
 
     Only what the type library says is shared. What pywin32 guesses from one
     object's answer stays with that object; see ``keep_guesses_per_object``.
+
+    Returns the shared olereprs by interface, for ``wrap_known_interfaces``.
     """
     original = dynamic.MakeOleRepr
     shared = {}
@@ -92,6 +94,7 @@ def share_type_information(dynamic, com_error, null_iid, funcdesc_kind, invoke_f
 
     dynamic.MakeOleRepr = make_ole_repr
     keep_guesses_per_object(dynamic, shared_ids, funcdesc_kind, invoke_func)
+    return shared
 
 
 def is_guess(entry, funcdesc_kind, invoke_func) -> bool:
@@ -164,11 +167,76 @@ def keep_guesses_per_object(dynamic, shared_ids, funcdesc_kind, invoke_func) -> 
     cdispatch.__setattr__ = __setattr__
 
 
+class _TypeCompWhenAsked:
+    """A wrapper's ``_lazydata_``: its type information, and the ITypeComp
+    pywin32 binds names through, asked for only when a name has to be bound.
+
+    pywin32 unpacks ``_lazydata_`` as ``typeinfo, typecomp`` in
+    ``CDispatch._LazyAddAttr_`` and nowhere else. With the olerepr shared, a
+    name is bound once per interface, so most wrappers never need the
+    ITypeComp at all, and asking PowerPoint for it was a round trip per object.
+    """
+
+    __slots__ = ("typeinfo", "com_error")
+
+    def __init__(self, typeinfo, com_error):
+        self.typeinfo, self.com_error = typeinfo, com_error
+
+    def __iter__(self):
+        yield self.typeinfo
+        try:
+            yield self.typeinfo.GetTypeComp()
+        except self.com_error:
+            # pywin32 then finds nothing to bind and asks the object by name.
+            yield None
+
+
+def wrap_known_interfaces(client, shared, gencache, com_error, null_iid) -> None:
+    """Wrap an object of an interface already seen in two round trips, not four.
+
+    Every COM object PowerPoint returns is wrapped by
+    ``win32com.client.CDispatch._wrap_dispatch_``, which asks the object for
+    its type information and that for its attributes (to look for a makepy
+    class, which there is none of), then for an ITypeComp, and then
+    ``share_type_information`` asks for the attributes again. Each is a call
+    into PowerPoint's process, and a layout check of a long deck wraps tens of
+    thousands of objects (#264).
+
+    For an interface whose olerepr ``shared`` already holds, the wrapper is
+    built here: one GetTypeInfo and one GetTypeAttr, the olerepr shared, the
+    ITypeComp left until a name needs binding. The first object of an
+    interface, an object with no type information, one that says IID_NULL and
+    one makepy has a class for all take pywin32's own path, unchanged.
+    """
+    cdispatch = client.CDispatch
+    original = cdispatch._wrap_dispatch_
+
+    def _wrap_dispatch_(self, ob, userName=None, returnCLSID=None):
+        try:
+            typeinfo = ob.GetTypeInfo()
+            interface = typeinfo.GetTypeAttr()[0] if typeinfo is not None else None
+        except (com_error, AttributeError):
+            return original(self, ob, userName, returnCLSID)
+        olerepr = shared.get(interface)
+        if (olerepr is None or interface == null_iid
+                or gencache.GetClassForCLSID(str(interface)) is not None):
+            return original(self, ob, userName, returnCLSID)
+        return cdispatch(ob, olerepr, userName, lazydata=_TypeCompWhenAsked(typeinfo, com_error))
+
+    cdispatch._wrap_dispatch_ = _wrap_dispatch_
+
+
 if sys.platform == "win32":
     import win32com.client.dynamic
 
-    share_type_information(win32com.client.dynamic, pythoncom.com_error, pythoncom.IID_NULL,
-                           pythoncom.DESCKIND_FUNCDESC, pythoncom.INVOKE_FUNC)
+    import win32com.client
+    import win32com.client.gencache
+
+    wrap_known_interfaces(
+        win32com.client,
+        share_type_information(win32com.client.dynamic, pythoncom.com_error, pythoncom.IID_NULL,
+                               pythoncom.DESCKIND_FUNCDESC, pythoncom.INVOKE_FUNC),
+        win32com.client.gencache, pythoncom.com_error, pythoncom.IID_NULL)
 
 
 class QueuedCalls:
