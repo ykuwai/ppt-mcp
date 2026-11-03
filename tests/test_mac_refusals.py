@@ -436,20 +436,23 @@ class TestSmartArt:
         assert "success" not in result
 
     def test_modifying_refuses_and_names_the_shape_and_the_action(self):
+        # set_text works, through the graphic's clipboard package; the other
+        # seven actions lay the diagram out again and still refuse.
         from ppt_mac.smartart import _modify_smartart_impl
 
         with _fake_deck(["Process"]) as deck:
             deck.set_type("Process", "smartart")
             result = _modify_smartart_impl(
-                1, "Process", "set_text", 2, "Step two",
+                1, "Process", "add_node", 2, "Step two",
                 None, None, None, None, None, None, None, None,
                 None, None, None,
             )
 
-        assert result["error"] == "ppt_modify_smartart is not available on macOS"
+        assert result["error"] == "ppt_modify_smartart cannot do 'add_node' on macOS"
         assert "'Process' on slide 1 is a SmartArt graphic" in result["reason"]
-        assert "the action 'set_text'" in result["reason"]
-        assert "ppt_ungroup_shapes" in result["alternatives"][1]
+        assert "the action 'add_node'" in result["reason"]
+        assert result["alternatives"][0] == "ppt_modify_smartart with action='set_text'"
+        assert any("ppt_ungroup_shapes" in a for a in result["alternatives"])
         assert "success" not in result
 
     def test_a_misspelled_action_is_still_heard(self):
@@ -493,6 +496,8 @@ class TestSmartArt:
         with _fake_deck(["Process"]) as deck:
             deck.set_type("Process", "smartart")
             for action in _ACTIONS:
+                if action == "set_text":
+                    continue  # written, not refused: see TestSmartArtNodeText
                 result = _modify_smartart_impl(
                     1, "Process", action, 1, "x",
                     None, None, None, None, None, None, None, None,

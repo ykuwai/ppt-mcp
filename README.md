@@ -423,7 +423,7 @@ What catalog mode gives up is per-tool control in the client: approving or block
 
 ## 🍎 macOS support
 
-**14 tools refuse on macOS. The rest work.** The 14 are listed by name in
+**13 tools refuse on macOS. The rest work.** The 13 are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what
@@ -432,9 +432,12 @@ something the tool says so rather than doing something unexpected.
 
 Not available on macOS:
 
-- **SmartArt.** The dictionary has no class and no command for it, so it
-  cannot be created or edited from a script. An existing graphic is still an
-  ordinary shape and can be moved, resized, read and deleted.
+- **SmartArt, beyond its text.** The dictionary has no class and no command
+  for it, so a graphic cannot be created, and nodes cannot be added, removed
+  or restyled, from a script. A node's text can be set
+  (`ppt_modify_smartart action='set_text'`), through the graphic's clipboard
+  package, and an existing graphic is an ordinary shape that can be moved,
+  resized, read and deleted.
 - **A freeform node's editing type.** Corner, smooth and symmetric are not
   stored anywhere a script can reach; move the node's handles instead.
 - **Removing one animation.** Clearing a slide's animations works.

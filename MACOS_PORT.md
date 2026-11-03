@@ -534,12 +534,12 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**157 tools. 143 do the job. 14 always refuse.**
+**157 tools. 144 do the job. 13 always refuse.**
 
 | Why | Tools |
 |---|---|
 | No `nodes`, and a node's editing type (corner, smooth, symmetric) is not stored in the XML the clipboard carries either; PowerPoint reads it off the handle geometry. Moving the handles with the node position tool is the way to change it | `ppt_set_node_editing_type` |
-| No `smart art` class | `ppt_add_smartart`, `ppt_modify_smartart`, `ppt_list_smartart_options` |
+| No `smart art` class | `ppt_add_smartart`, `ppt_list_smartart_options` |
 | No `select` command, so no shape range | `ppt_select_shapes` |
 | No tags anywhere in the dictionary | `ppt_set_tag`, `ppt_get_tags` |
 | Deleting one effect answers -50 and clearing its shape costs the slide | `ppt_remove_animation`, `ppt_copy_animation` |
@@ -548,7 +548,7 @@ checked against the code by a test, so it cannot quietly go stale.
 | No application window state, only each deck's window position and size | `ppt_set_window_state` |
 | No Boolean merge verbs (union, combine, intersect, subtract, fragment), and no shape range to merge | `ppt_merge_shapes` |
 
-A further **19 tools work and refuse one argument**, with `error` naming
+A further **20 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
@@ -560,7 +560,7 @@ legend and title coordinates or an 8-direction `legend_position` (they are
 computed from the chart's rendered size, which the XML does not carry),
 `ppt_format_chart_axis` cannot take `tick_label_font_size`, `ppt_set_textframe`
 cannot take `auto_size='shrink_to_fit'` (PowerPoint for Mac refuses to set it
-from a script, under either of its names). `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
+from a script, under either of its names), `ppt_modify_smartart` takes `action='set_text'` only (the other seven lay the diagram out again, which only PowerPoint does; the text goes through the graphic's clipboard package). `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
 checks that report a write which did not land rather than a capability that
 is missing.
 
