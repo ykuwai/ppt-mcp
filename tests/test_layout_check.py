@@ -195,6 +195,30 @@ class TestOffSlide:
     def test_half_a_point_is_rounding(self):
         assert check(card("c", 860.4, 100, 100, 50)) == []
 
+    def test_a_full_bleed_background_is_meant_to_hang_over(self):
+        # #264: left=-2, width=962 was an error, and its fix (left=0) left it
+        # 2 pt over the right edge, to be reported again.
+        assert check(card("bg", -2, 0, 962, 540, colour="#EEEEEE")) == []
+
+    def test_a_band_past_both_sides_is_a_bleed_too(self):
+        # Clear of the bottom edge, which #261 holds to a margin of its own.
+        assert check(*titled_row(), card("band", -10, 400, 980, 60, z=9)) == []
+
+    def test_but_words_off_the_slide_are_still_reported(self):
+        across = textbox("t", -20, 100, 1000, 50, text_width=990)
+        [finding] = check(across)
+        assert "wider than the slide" in finding["fix"]
+        assert "ppt_update_shape left=0 width=960" in finding["fix"]
+
+    def test_a_shape_wider_than_the_margins_allow_is_fitted_not_moved(self):
+        # Moved right by its overshoot and the margin, a 900 pt card between
+        # 40 pt margins would run past the right edge.
+        row = titled_row()
+        [finding] = check(*row, card("wide", -10, 470, 900, 50, z=9))
+        assert "wider than the 880 pt between the margins" in finding["fix"]
+        assert "ppt_update_shape left=40 width=880" in finding["fix"]
+        assert check(*row, card("wide", 40, 470, 880, 50, z=9)) == []
+
     def test_a_rotated_shape_is_measured_by_the_box_around_it(self):
         bar = card("bar", 380, 200, 200, 20) | {"rotation": 90.0}
         assert check(bar) == []
@@ -269,7 +293,7 @@ class TestOverlap:
         [finding] = [f for f in check(*titled_row(), spill()) if f["type"] == "overlap"]
         assert finding["past_edges"] == {"bottom": 25.6}
         assert "make 'card0' 39.2 pt taller" in finding["fix"].lower()
-        assert "shape_names=['card0', 'card1', 'card2'] height=219.2" in finding["fix"]
+        assert "shape_names=['card0', 'card1', 'card2'] dheight=39.2" in finding["fix"]
         assert "13.6 pt below, as it has above" in finding["fix"]
 
     def test_two_filled_shapes_crossing_are_left_alone(self):
@@ -287,6 +311,35 @@ class TestOverlap:
 # Contrast
 # ---------------------------------------------------------------------------
 WHITE_TEXT = [{"color_hex": "#FFFFFF", "size": 20.0, "bold": False}]
+
+
+def blocked_caption(card_height, kind=None):
+    """A caption over the top of a card, with a badge just above it, so the
+    caption cannot move up."""
+    caption = textbox("cap", 40, 92, 400, 40, z=3, text_width=380, text_height=30)
+    badge = card("badge", 40, 66, 300, 24, z=4)
+    under = card("pic", 40, 120, 600, card_height, z=2)
+    if kind is not None:
+        under["type"] = kind
+    return caption, badge, under
+
+
+class TestWhereTheOtherShapeLands:
+    """#264: the fix that moves the other shape did not check where it went."""
+
+    def test_it_moves_the_other_shape_when_there_is_room(self):
+        [finding] = check(*blocked_caption(300))
+        assert "Move 'pic' down by 11.6 pt" in finding["fix"]
+
+    def test_it_is_not_pushed_off_the_slide(self):
+        # Moved down 11.6 pt, the 410 pt card ran 1.6 pt off the bottom.
+        [finding] = check(*blocked_caption(410))
+        assert "Move 'pic'" not in finding["fix"]
+        assert "ppt_update_shape shape_name='pic' dtop=11.6 dheight=-11.6" in finding["fix"]
+
+    def test_and_a_picture_is_not_trimmed_out_of_its_proportions(self):
+        [finding] = check(*blocked_caption(410, kind=msoPicture))
+        assert finding["fix"].startswith("Make room between the text of 'cap' and 'pic'")
 
 
 class TestContrast:
@@ -401,6 +454,79 @@ class TestMisaligned:
         assert set(by_mover["four"]["shapes"][1:]) == {"one", "three"}
         assert "'two'" not in by_mover["four"]["message"]
 
+    # A shape beside a list of rows meets a line every few points, so the
+    # move that puts one edge on a line can leave another edge a few points
+    # off the next. Live on PowerPoint for Mac: a screenshot beside five
+    # labelled icons, moved 3.5 pt to centre it on one label, came to rest
+    # 2.7 pt off the bottom of another, and was reported again.
+    @staticmethod
+    def list_beside(*extra):
+        return (card("a", 60, 183, 250, 40, z=1),       # middle 203
+                card("b", 60, 265, 250, 40, z=2),       # bottom 305
+                card("c", 720, 94, 80, 40, z=3),        # top 94
+                *extra,
+                card("pic", 400, 100, 300, 200, z=9))   # middle 200
+
+    def test_a_move_that_lands_off_another_line_is_not_the_fix(self):
+        # 'd' is 4 pt above where 'a' would go, so neither the picture nor
+        # 'a' can simply move: the picture goes to the top of 'c'.
+        shapes = self.list_beside(card("d", 330, 176, 50, 10, z=4))
+        [finding] = [f for f in check(*shapes) if f["type"] == "misaligned"]
+        assert finding["message"].startswith("The middle of 'pic' is 3 pt above the middle of 'a'")
+        assert "Line up the top of 'pic' with the top of 'c' (ppt_update_shape top=94)" in finding["fix"]
+        moved = [card("pic", 400, 94, 300, 200, z=9) if s["name"] == "pic" else s for s in shapes]
+        assert "misaligned" not in kinds(check(*moved))
+
+    def test_the_plain_move_would_have_made_a_new_slip(self):
+        shapes = self.list_beside(card("d", 330, 176, 50, 10, z=4))
+        moved = [card("pic", 400, 103, 300, 200, z=9) if s["name"] == "pic" else s for s in shapes]
+        [finding] = [f for f in check(*moved) if f["type"] == "misaligned"]
+        assert set(finding["shapes"]) == {"pic", "b"} and finding["edge"] == "bottom"
+
+    def test_the_other_shape_moves_when_it_lands_clean(self):
+        [finding] = [f for f in check(*self.list_beside()) if f["type"] == "misaligned"]
+        assert "Line up the middle of 'a' with the middle of 'pic' (ppt_update_shape top=180)" in finding["fix"]
+        moved = [card("a", 60, 180, 250, 40, z=1) if s["name"] == "a" else s for s in self.list_beside()]
+        assert "misaligned" not in kinds(check(*moved))
+
+    def test_a_coincidence_beside_a_list_is_not_a_slip(self):
+        # Live: a photo whose top was lined up with the first item of a list
+        # beside it, its middle 3.8 pt off the middle of the second item.
+        # Moving it would take it off the line it is on, and the list cannot
+        # move without its gaps going uneven, so nothing is reported.
+        found = check(card("a", 60, 100, 250, 40, z=1),
+                      card("b", 60, 183, 250, 40, z=2),
+                      card("c", 60, 266, 250, 40, z=3),
+                      card("pic", 400, 100, 300, 200, z=4))
+        assert "misaligned" not in kinds(found)
+
+    def test_where_the_pieces_of_a_bar_meet_is_not_an_edge(self):
+        # Live: a title rule drawn as three 28 pt rectangles, black, red and
+        # gold, over a column of 52 pt icon squares. The squares end at 112,
+        # 4 pt from where red meets gold at 116: reported as a slip.
+        rule = [card(f"bar{i}", 60 + 28 * i, 92, 28, 4, z=1 + i) for i in range(3)]
+        icons = [card(f"icon{i}", 60, 120 + 86 * i, 52, 52, z=4 + i) for i in range(4)]
+        assert "misaligned" not in kinds(check(*rule, *icons))
+
+    def test_the_outer_edge_of_a_bar_still_counts(self):
+        rule = [card(f"bar{i}", 63 + 28 * i, 92, 28, 4, z=1 + i) for i in range(3)]
+        icons = [card(f"icon{i}", 60, 120 + 86 * i, 52, 52, z=4 + i) for i in range(4)]
+        [finding] = [f for f in check(*rule, *icons) if f["type"] == "misaligned"]
+        assert finding["shapes"][0] == "bar0" and finding["edge"] == "left"
+
+    def test_a_shape_in_an_evenly_spaced_column_is_not_the_one_moved(self):
+        # Live: three code boxes 28 pt apart beside a diagram added before
+        # them. Moving the last box 3 pt to meet the diagram's bottom made
+        # the gaps 28 and 31 pt, which was reported in turn.
+        diagram = card("diagram", 60, 166, 500, 195, z=1)   # bottom 361
+        codes = [card(f"code{i}", 590, 182 + i * 68, 310, 40, z=i + 2) for i in range(3)]
+        found = check(diagram, *codes)
+        [finding] = [f for f in found if f["type"] == "misaligned"]
+        assert finding["shapes"][0] == "diagram"
+        assert "top=163" in finding["fix"]
+        moved = check(card("diagram", 60, 163, 500, 195, z=1), *codes)
+        assert not {"misaligned", "uneven_spacing"} & set(kinds(moved))
+
 
 # ---------------------------------------------------------------------------
 # Spacing
@@ -492,8 +618,18 @@ class TestCrampedText:
         [finding] = [f for f in found if f["type"] == "cramped_text"]
         assert finding["shapes"] == ["words", "card0"]
         assert "0 pt from the bottom edge of 'card0', with 13.6 pt above" in finding["message"]
-        assert "shape_names=['card0', 'card1', 'card2'] height=219.2" in finding["fix"]
+        assert "shape_names=['card0', 'card1', 'card2'] dheight=13.6" in finding["fix"]
         assert "overlap" not in kinds(found)
+
+    def test_a_row_set_out_in_steps_keeps_its_steps(self):
+        # #264: one absolute top= and height= for the row flattened cards
+        # set at different heights. Each grows from where it is.
+        title = textbox("title", 40, 30, 880, 55.74, z=1, text_width=300, text_height=48)
+        row = [card(f"card{i}", left, 140 + 10 * i, 280, 205.6, z=2 + i)
+               for i, left in enumerate((40, 340, 640))]
+        [finding] = [f for f in check(title, *row, spill()) if f["type"] == "cramped_text"]
+        assert "dheight=13.6" in finding["fix"]
+        assert " top=" not in finding["fix"] and " height=" not in finding["fix"]
 
     def test_evenly_padded_text_is_fine(self):
         assert check(*titled_row(heights=(220, 220, 220)), spill()) == []
@@ -2551,22 +2687,29 @@ class TestAWritesUnreadGraphics:
 import ast  # noqa: E402
 
 REPORTING = {
-    "shapes.py": ["add_shape", "add_textbox", "add_picture", "update_shape", "duplicate_shape"],
+    "shapes.py": ["add_shape", "add_textbox", "add_picture", "update_shape", "duplicate_shape",
+                  "add_line"],
     "text.py": ["set_text", "format_text", "format_text_range", "set_textframe",
-                "find_replace_text", "set_paragraph_format"],
+                "find_replace_text", "set_paragraph_format", "set_bullet"],
     "advanced_ops.py": ["add_svg_icon", "add_picture_from_url", "replace_font",
-                        "set_default_fonts"],
+                        "set_default_fonts", "crop_picture", "set_picture_format"],
     "layout.py": ["align_shapes", "distribute_shapes", "set_slide_background", "set_slide_size"],
     "placeholders.py": ["set_placeholder_text"],
     "tables.py": ["add_table", "set_table_cell", "set_table_data", "add_table_row",
-                  "add_table_column", "merge_table_cells", "set_table_layout"],
-    "charts.py": ["add_chart"],
+                  "add_table_column", "merge_table_cells", "set_table_layout",
+                  "delete_table_row", "delete_table_column", "split_table_cells"],
+    "charts.py": ["add_chart", "set_chart_data"],
+    # #264: these could leave text overflowing or a shape off the slide too.
+    "groups.py": ["group_shapes"],
+    "smartart.py": ["add_smartart"],
+    "slides.py": ["copy_slide"],
     "edit_ops.py": ["copy_shape_to_slide"],
     "formatting.py": ["set_fill"],
     "batch_apply.py": ["batch_apply_formatting"],
     "themes.py": ["apply_theme", "set_theme_colors"],
 }
-REPORTERS = {"report_layout", "report_layouts", "report_contrast", "report_deck_change"}
+REPORTERS = {"report_layout", "report_layouts", "report_contrast", "report_deck_change",
+             "report_slides"}
 
 
 class TestWhichWritesReport:
@@ -2579,6 +2722,12 @@ class TestWhichWritesReport:
         called = {c.func.id for c in ast.walk(node)
                   if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
         assert called & REPORTERS
+
+    def test_copied_slides_are_checked_whole(self, monkeypatch):
+        stray = card("stray", 900, 100, 200, 50)
+        monkeypatch.setattr(layout_check, "ppt", FakeDeck([slide(stray, index=1), slide(stray, index=2)]))
+        result = layout_check.report_slides({"new_slide_indices": [2]}, [2])
+        assert [(f["slide_index"], f["type"]) for f in result["layout_issues"]] == [(2, "off_slide")]
 
     def test_a_copy_or_a_placeholder_is_named_by_its_own_key(self):
         assert touched_names({"new_shape_name": "Card copy"}) == ["Card copy"]

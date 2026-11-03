@@ -17,6 +17,7 @@ from utils.color import check_hex, hex_to_int
 from utils.navigation import goto_slide
 from utils.validation import font_size_warning
 from ppt_com.constants import msoSmartArt, SHAPE_TYPE_NAMES, msoTrue, msoFalse
+from ppt_com.layout_check import report_layout, touched_names
 from ppt_com.shape_lookup import resolve_shape as _get_shape
 
 logger = logging.getLogger(__name__)
@@ -650,6 +651,7 @@ def add_smartart(params: AddSmartArtInput) -> str:
         warn = font_size_warning(params.font_size)
         if warn:
             result["warning"] = warn
+        report_layout(result, params.slide_index, touched_names(result))
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add SmartArt: {str(e)}"})

@@ -14,6 +14,7 @@ from utils.color import hex_to_int
 from backend import ppt
 from utils.navigation import goto_slide as nav_goto_slide
 from ppt_com.constants import ppLayoutBlank, msoTrue, msoFalse
+from ppt_com.layout_check import report_slides
 
 logger = logging.getLogger(__name__)
 
@@ -1228,6 +1229,10 @@ def copy_slide(params: CopySlideInput) -> str:
             params.to_presentation_name,
             params.insert_at,
         )
+        if params.to_presentation_index is None and params.to_presentation_name is None:
+            # Into this deck: its new slides are checked as it is. Into
+            # another, the check would read this one instead.
+            report_slides(result, result.get("new_slide_indices") or [])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})

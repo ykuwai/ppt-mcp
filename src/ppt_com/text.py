@@ -2378,7 +2378,8 @@ def set_paragraph_format(params: SetParagraphFormatInput) -> str:
             params.space_after, params.indent_level, params.first_line_indent,
             params.direction,
         )
-        report_layout(result, params.slide_index, touched_names(result))
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
@@ -2394,6 +2395,8 @@ def set_bullet(params: SetBulletInput) -> str:
             params.indent_level, params.color, params.size, params.font_name,
             params.numbered_style, params.use_text_color, params.use_text_font,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})

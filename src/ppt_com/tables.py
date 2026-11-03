@@ -939,6 +939,8 @@ def delete_table_row(params: TableRowInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.position,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to delete table row: {str(e)}"})
@@ -981,6 +983,8 @@ def delete_table_column(params: TableColumnInput) -> str:
             params.slide_index, params.shape_name_or_index,
             params.position,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to delete table column: {str(e)}"})
@@ -1047,6 +1051,8 @@ def split_table_cells(params: SplitTableCellsInput) -> str:
             params.row, params.col,
             params.num_rows, params.num_cols,
         )
+        report_layout(result, params.slide_index,
+                      touched_names(result) or [params.shape_name_or_index])
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to split table cells: {str(e)}"})
