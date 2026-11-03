@@ -23,6 +23,7 @@ from ppt_com.constants import (
     ppPlaceholderSlideNumber, ppPlaceholderFooter, ppPlaceholderDate,
 )
 from ppt_com.layout_check import report_slides
+from ppt_com.text import _for_powerpoint, _from_powerpoint
 
 logger = logging.getLogger(__name__)
 
@@ -419,7 +420,9 @@ class SetSlideNotesInput(BaseModel):
     )
     notes_text: Optional[str] = Field(
         default=None,
-        description="The speaker notes text to set. If omitted, only formatting is applied to existing notes.",
+        description="The speaker notes text to set. If omitted, only formatting is applied to existing notes. "
+        "\\n = paragraph break (Enter), \\v = line break (Shift+Enter) within the same paragraph, "
+        "and ppt_get_slide_notes reads them back the same way.",
     )
     font_name: Optional[str] = Field(
         default=None,
@@ -1422,11 +1425,22 @@ def list_slides(params: ListSlidesInput) -> str:
         return json.dumps({"error": str(e)})
 
 
+def _notes_for_caller(result):
+    """Speaker notes in a result with \n between paragraphs, as they were sent.
+
+    PowerPoint keeps a paragraph break as \r, which a caller reading the
+    JSON does not take for a new line.
+    """
+    if isinstance(result, dict) and isinstance(result.get("notes_text"), str):
+        result["notes_text"] = _from_powerpoint(result["notes_text"])
+    return result
+
+
 def get_slide_info(params: GetSlideInfoInput) -> str:
     """Get detailed info about a specific slide."""
     try:
         result = ppt.execute(_get_slide_info_impl, params.slide_index)
-        return json.dumps(result)
+        return json.dumps(_notes_for_caller(result))
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -1437,7 +1451,10 @@ def set_slide_notes(params: SetSlideNotesInput) -> str:
         result = ppt.execute(
             _set_slide_notes_impl,
             params.slide_index,
-            params.notes_text,
+            # \n is a paragraph break to a caller and \r to PowerPoint, as in
+            # ppt_set_text. Sent as it was, notes written on several lines
+            # came back as one (#194).
+            None if params.notes_text is None else _for_powerpoint(params.notes_text),
             params.font_name,
             params.font_name_fareast,
             params.font_size,
@@ -1454,7 +1471,7 @@ def get_slide_notes(params: GetSlideNotesInput) -> str:
     """Get speaker notes for a slide."""
     try:
         result = ppt.execute(_get_slide_notes_impl, params.slide_index)
-        return json.dumps(result)
+        return json.dumps(_notes_for_caller(result))
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -1697,6 +1714,11 @@ def register_tools(mcp):
         font formatting (font_name, font_size, bold, italic, color).
         If notes_text is omitted, only formatting is applied to existing notes.
 
+        Line breaks work as in ppt_set_text. \\n is a paragraph break
+        (Enter) and starts a new paragraph, and \\v is a line break
+        (Shift+Enter) inside the same paragraph. ppt_get_slide_notes returns
+        them the same way.
+
         **Important**: Font formatting affects printed notes pages and PDF
         export only. The Notes pane and Presenter View ignore these settings
         (Presenter View has its own A+/A- zoom controls).
@@ -1717,6 +1739,8 @@ def register_tools(mcp):
         """Get the speaker notes text for a slide.
 
         Returns the notes text. If no notes exist, returns an empty string.
+        Paragraphs are separated by \\n and line breaks inside one are \\v,
+        as ppt_set_slide_notes takes them.
         """
         return await run_offloaded(get_slide_notes, params)
 

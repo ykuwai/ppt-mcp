@@ -5939,18 +5939,28 @@ def _installed_fonts_impl():
     # first. The files hold both.
     _FONTS["installed"] = FontNames(names, (
         os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"),
-        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts")))
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts")),
+        # The @ names are the same families set for vertical text, which no
+        # caller picks from a list.
+        listed=(n for n in names if not n.startswith("@")))
     return _FONTS["installed"]
 
 
 class FontNames(frozenset):
     """The installed fonts' names, lower case. One not among them is looked
-    for in the font files of ``folders``, read once and only then."""
+    for in the font files of ``folders``, read once and only then.
 
-    def __new__(cls, names, folders=()):
-        found = super().__new__(cls, (n.lower() for n in names if n))
+    ``listed`` keeps the names as they are written, for ppt_list_fonts to
+    show: ``names`` unless the reader gives a shorter list of families.
+    """
+
+    def __new__(cls, names, folders=(), listed=None):
+        names = [n for n in names if n]
+        found = super().__new__(cls, (n.lower() for n in names))
         found.folders = tuple(folders)
         found.other_names = None
+        found.listed = sorted({n for n in (names if listed is None else listed) if n},
+                              key=str.lower)
         return found
 
     def __contains__(self, name):

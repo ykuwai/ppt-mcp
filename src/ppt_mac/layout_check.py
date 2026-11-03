@@ -643,11 +643,12 @@ def _installed_fonts_impl():
     from utils.fonts import names_in_folder
 
     names = set()
+    styles = set()
     manager = NSFontManager.sharedFontManager()
     for family in manager.availableFontFamilies() or []:
         names.add(str(family))
         for member in manager.availableMembersOfFontFamily_(family) or []:
-            names.add(f"{family} {member[1]}")
+            styles.add(f"{family} {member[1]}")
     bundle = "/Applications/Microsoft PowerPoint.app/Contents/Resources/DFonts"
     names |= names_in_folder(bundle)
     cloud = os.path.expanduser(
@@ -659,8 +660,12 @@ def _installed_fonts_impl():
     # The system's list names a font once; the files hold the names a deck
     # made elsewhere asks for it by: "ヒラギノ角ゴシック W3" and "Hiragino Kaku
     # Gothic ProN W3" for what it lists as "Hiragino Sans".
+    # ppt_list_fonts shows the families without each one's styles, which on
+    # an ordinary Mac would multiply the list several times over.
     _FONTS["installed"] = FontNames(
-        names, ("/System/Library/Fonts", "/Library/Fonts", os.path.expanduser("~/Library/Fonts")))
+        names | styles,
+        ("/System/Library/Fonts", "/Library/Fonts", os.path.expanduser("~/Library/Fonts")),
+        listed=names)
     return _FONTS["installed"]
 
 

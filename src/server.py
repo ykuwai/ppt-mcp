@@ -411,7 +411,7 @@ mcp = _PowerPointServer(
 3. When adding slides, use `ppt_add_slide` with `count` to create multiple slides at once instead of calling it repeatedly.
 4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale systems, the slide master default is often 游ゴシック, which renders thin and illegible when projected. """ + _PREFERRED_FONTS + """
 5. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
-6. Use `ppt_get_slide_preview` to visually inspect slides as you work.
+6. Use `ppt_get_slide_preview` to visually inspect slides as you work. The image is usually larger than the slide is in points; its result gives `pixels_per_point` to convert.
 7. """ + _WRITE_CHECKS + """ When a slide is finished, run `ppt_check_layout` on it, and before calling the deck done, run it once more with no `slide_index`, which also compares the titles across slides. A slide is done when it reports no issues, or only ones you mean to keep: if the same finding comes back after two attempts to fix it, treat it as intended (a photo behind white text, an overlap you designed, something the template draws) and move on. The write tools check only the shapes they touched, and a slide copied into another open deck is not checked, so run `ppt_check_layout` there after copying. The check measures rather than looks, so it works with or without image input.
 8. Build a slide at a time, not the whole deck at once. Before the first shape, fix the grid (margins, column positions, a type scale and a palette) and keep every shape on it: most alignment issues are coordinates a few points apart. Decide on photos up front, since adding them later changes the layout. Finish each slide, with its issues acted on, `ppt_check_layout` clean, or its remaining findings intended, and a preview checked if you can see images, before starting the next. Fix problems in place with the call each `fix` names. Deleting and rebuilding a slide or the deck to move something a few points costs many calls and finds the same problems again.
 
@@ -776,8 +776,10 @@ class GetSlidePreviewInput(BaseModel):
         "openWorldHint": False,
     },
 )
-async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
-    """Get a visual preview of a PowerPoint slide as an image.
+# No return annotation: it answers an image and a text block, and the SDK
+# builds an output schema from `list[Image | str]` and fails on Image.
+async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput):
+    """Get a visual preview of a PowerPoint slide as an image, with its scale in pixels per point.
 
     This is the RECOMMENDED way to visually inspect slides for appearance, design,
     layout, colors, text readability, and overall quality. Much more efficient
@@ -787,12 +789,32 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
     can see which slide is being inspected.
 
     Returns:
-        Image: PNG image of the slide for visual inspection
+        Image: PNG image of the slide for visual inspection, followed by JSON
+        giving its scale: image_width_px and image_height_px, slide_width_pt
+        and slide_height_pt, and pixels_per_point. Multiply a position or size
+        in points by pixels_per_point to find it in the image; the image is
+        usually larger than the slide is in points.
     """
     from backend import IS_MACOS, ppt
     from utils.navigation import goto_slide
 
     def _export_slide_impl(slide_idx: int):
+        image_data = _export_slide_png(slide_idx)
+        return image_data, _slide_size_in_points()
+
+    def _slide_size_in_points():
+        # Looked up through the module, so macOS gets its own. A slide size
+        # that cannot be read costs the scale, not the preview.
+        from ppt_com import layout
+
+        try:
+            size = layout._get_slide_size_impl()
+            return size["width_points"], size["height_points"]
+        except Exception:
+            logger.debug("Cannot read the slide size for the preview", exc_info=True)
+            return None
+
+    def _export_slide_png(slide_idx: int):
         if IS_MACOS:
             # PowerPoint for Mac has no Slide.Export. The preview is rendered
             # from the deck's PDF export instead; see ppt_mac/export.py.
@@ -831,8 +853,38 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
 
-    image_data = await run_offloaded(ppt.execute, _export_slide_impl, params.slide_index)
-    return Image(data=image_data, format="png")
+    image_data, slide_size = await run_offloaded(
+        ppt.execute, _export_slide_impl, params.slide_index)
+    return [Image(data=image_data, format="png"),
+            json.dumps(preview_scale(params.slide_index, image_data, slide_size))]
+
+
+def preview_scale(slide_index, image_data, slide_size):
+    """What ppt_get_slide_preview says beside its image, to convert between
+    the image's pixels and the slide's points.
+
+    The image of a 960 pt slide is 1920 px across on Windows, and a caller
+    measuring a chart in it took the pixels for points twice and concluded
+    the chart was ignoring its width (#194).
+    """
+    said = {"slide_index": slide_index}
+    size = png_size(image_data)
+    if size:
+        said["image_width_px"], said["image_height_px"] = size
+    if slide_size:
+        said["slide_width_pt"], said["slide_height_pt"] = slide_size
+    if size and slide_size and slide_size[0]:
+        said["pixels_per_point"] = round(size[0] / slide_size[0], 4)
+    return said
+
+
+def png_size(data):
+    """(width, height) in pixels from a PNG's header, or None."""
+    import struct
+
+    if not data or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        return None
+    return struct.unpack(">II", data[16:24])
 
 
 # =============================================================================

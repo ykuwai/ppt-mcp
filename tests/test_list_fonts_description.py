@@ -19,7 +19,8 @@ def _description():
 def test_the_first_line_says_the_deck_and_not_the_computer():
     first = _description().strip().splitlines()[0]
     assert "presentation uses" in first
-    assert "not those installed" in first
+    # And the computer's only when asked (#285).
+    assert "installed=true" in first
 
 
 def test_it_says_where_a_missing_font_is_reported():
