@@ -205,12 +205,70 @@ def staging_dir(folder: Optional[str] = None) -> str:
     """
     folder = folder or EXPORT_STAGING_DIR
     try:
-        os.makedirs(folder, exist_ok=True)
-        with tempfile.NamedTemporaryFile(dir=folder, prefix=".ppt_mcp_probe_"):
-            pass
+        _probe_within(folder, STAGING_PROBE_TIMEOUT)
+    except StagingBlocked:
+        raise
     except PermissionError as e:
         raise StagingBlocked(f"{_staging_problem(folder, e)} (The error was: {e})") from e
     return folder
+
+
+# How long the probe may take before the folder is taken to be held by a
+# question macOS is asking on screen.
+STAGING_PROBE_TIMEOUT = 3.0
+
+# A probe still waiting on that question, by folder. It is left to finish
+# rather than started again, so one question is asked, not one per call.
+_waiting_probes: dict = {}
+_waiting_lock = threading.Lock()
+
+
+def _probe(folder: str) -> None:
+    os.makedirs(folder, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=folder, prefix=".ppt_mcp_probe_"):
+        pass
+
+
+def _probe_within(folder: str, timeout: float) -> None:
+    """Probe the folder, but give up after ``timeout`` seconds.
+
+    When the app that started this server has not been allowed into other
+    apps' data, macOS does not refuse the first look into PowerPoint's
+    container: it asks on screen whether to allow it, and the call that
+    looked waits until someone answers. Nobody may be there to answer, so
+    every write whose layout check reads a picture, and every export, stalled
+    until the call's own time ran out, 69 seconds each. A probe that has not
+    finished in time is left to wait for the answer in the background, and
+    the folder is refused until it has one.
+    """
+    with _waiting_lock:
+        waiting = _waiting_probes.get(folder)
+        if waiting is None or waiting.done():
+            waiting = Future()
+
+            def run(future=waiting):
+                try:
+                    _probe(folder)
+                except BaseException as e:  # noqa: BLE001 - handed to the caller
+                    future.set_exception(e)
+                else:
+                    future.set_result(None)
+
+            _waiting_probes[folder] = waiting
+            threading.Thread(target=run, name="ppt-mcp-staging-probe", daemon=True).start()
+    try:
+        waiting.result(timeout=timeout)
+    except FutureTimeout:
+        raise StagingBlocked(_STAGING_ASKED.format(folder=folder)) from None
+
+
+_STAGING_ASKED = (
+    "macOS is asking on screen whether the app that started this server, such as "
+    "Claude, Terminal or VS Code, may access data from other apps, and PowerPoint's "
+    "own folder, {folder}, stays closed until that question is answered. Answer Allow, "
+    "then try again. If no question is showing, give that app Full Disk Access in "
+    "System Settings > Privacy & Security > Full Disk Access."
+)
 
 
 _WHY_THE_FOLDER = (
