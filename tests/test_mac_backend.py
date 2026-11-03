@@ -1538,3 +1538,65 @@ class TestAltTextOnTheMac:
         with pytest.raises(ValueError, match="View Alt Text"):
             _update_shape_impl(1, "Photo", None, 10, None, None, None, None, None, None,
                                alt_text="Our team")
+
+
+@macos_only
+class TestCopyingSlideImagesToThePasteboard:
+    """#247: one slide goes on as PNG data, several as file URLs."""
+
+    def _deck(self, monkeypatch, rendered_dir):
+        import types
+
+        from ppt_mac import export
+
+        app = types.SimpleNamespace(presentations="decks")
+        pres = types.SimpleNamespace(slides="slides")
+        monkeypatch.setattr(export.ppt, "_get_app_impl", lambda: app)
+        monkeypatch.setattr(export.ppt, "_get_pres_impl", lambda: pres)
+        monkeypatch.setattr(export, "count", lambda ref: 1 if ref == "decks" else 3)
+        monkeypatch.setattr(export, "goto_slide", lambda app, index: None)
+        monkeypatch.setattr(export, "_staging_path", lambda suffix: str(rendered_dir / ("deck" + suffix)))
+        monkeypatch.setattr(export, "_save_pdf_of", lambda pres, path, numbers: list(numbers))
+
+        def render(pdf, pages, width=None, height=None, *rest):
+            out = []
+            for page in pages:
+                image = rendered_dir / f"render{page}.png"
+                image.write_bytes(b"\x89PNG" + bytes([page]))
+                out.append((page, str(image), 100, 50))
+            return out
+
+        monkeypatch.setattr(export, "_render_pdf_pages", render)
+        return export
+
+    def test_one_slide_goes_on_as_png(self, tmp_path, monkeypatch):
+        from backend import pasteboard
+
+        export = self._deck(monkeypatch, tmp_path)
+        written = []
+        monkeypatch.setattr(pasteboard, "write", lambda uti, data: written.append((uti, data)) or 1)
+        result = export._copy_to_clipboard_impl([2], None, None)
+        assert written == [("public.png", b"\x89PNG\x02")]
+        assert result["method"] == "public.png" and result["temp_dir"] is None
+        assert list(tmp_path.iterdir()) == [], "the rendered image was left behind"
+
+    def test_several_go_on_as_files_that_outlive_the_call(self, tmp_path, monkeypatch):
+        from backend import pasteboard
+
+        export = self._deck(monkeypatch, tmp_path)
+        written = []
+        monkeypatch.setattr(pasteboard, "write_files", lambda paths: written.append(paths) or 1)
+        monkeypatch.setattr(export.atexit, "register", lambda *args: None)
+        result = export._copy_to_clipboard_impl([1, 3], None, None)
+        [files] = written
+        assert [p.rsplit("/", 1)[-1] for p in files] == ["Slide1.png", "Slide3.png"]
+        assert all(open(p, "rb").read().startswith(b"\x89PNG") for p in files)
+        assert result["method"] == "file URLs" and result["temp_dir"]
+
+    def test_a_slide_past_the_end_is_refused_before_anything_is_written(self, tmp_path, monkeypatch):
+        from backend import pasteboard
+
+        export = self._deck(monkeypatch, tmp_path)
+        monkeypatch.setattr(pasteboard, "write", lambda *a: pytest.fail("written"))
+        with pytest.raises(ValueError, match="out of range"):
+            export._copy_to_clipboard_impl([4], None, None)
