@@ -12,6 +12,7 @@ Excel processes.
 import json
 import logging
 import sys
+import threading
 import time
 from typing import Literal, Optional, Union
 
@@ -394,9 +395,13 @@ EXCEL_TOO_SLOW = (
     "window before adding or editing another chart."
 )
 
-# Threads still letting go of a closed workbook's references, for the log.
-_letting_go = 0
-_letting_go_lock = __import__("threading").Lock()
+# The done events of workbook work not finished yet. A call that timed out
+# leaves its work running, so the next one waits for that first, and two threads
+# never drive a chart's data in Excel at once.
+_unfinished = []
+# Side threads not ended yet, working or letting go, for the log.
+_alive = 0
+_threads_lock = threading.Lock()
 
 
 def _without_its_frames(error):
@@ -414,6 +419,15 @@ def _without_its_frames(error):
         return RuntimeError(f"{type(error).__name__}: {error}")
     bare.__traceback__ = bare.__context__ = bare.__cause__ = None
     return bare
+
+
+def _wait_for(event, end) -> bool:
+    """Wait for ``event`` until the monotonic time ``end``, answering COM calls."""
+    while not event.wait(0.05):
+        pythoncom.PumpWaitingMessages()
+        if time.monotonic() > end:
+            return event.is_set()
+    return True
 
 
 def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
@@ -434,9 +448,11 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
 
     When the work has not finished within ``timeout``, ``TIMED_OUT`` is
     answered and the work is left to finish on its thread, so the worker never
-    waits on Excel for longer than that. Each thread still letting go lives
-    about a minute at most, blocked in one COM call; several at once are
-    harmless.
+    waits on Excel for longer than that. Work an earlier call left running is
+    waited for first, within the same ``timeout``, and ``TIMED_OUT`` is
+    answered without starting this one when it is still running. Each thread
+    still letting go lives about a minute at most, blocked in one COM call;
+    several at once are harmless.
 
     A chart that is not a COM object (a test's stand-in), or no COM at all,
     runs ``work`` right here.
@@ -444,19 +460,31 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
     oleobj = getattr(chart, "_oleobj_", None)
     if pythoncom is None or not isinstance(oleobj, pythoncom.TypeIIDs[pythoncom.IID_IDispatch]):
         return work(chart, [])
-    import threading
-
     import win32com.client
+
+    end = time.monotonic() + timeout
+    with _threads_lock:
+        _unfinished[:] = [e for e in _unfinished if not e.is_set()]
+        earlier = list(_unfinished)
+    for event in earlier:
+        if not _wait_for(event, end):
+            logger.warning("Excel is still busy with an earlier chart's data")
+            return TIMED_OUT
 
     stream = pythoncom.CoMarshalInterThreadInterfaceInStream(pythoncom.IID_IDispatch, oleobj)
     done = threading.Event()
     outcome = {}
 
     def run():
-        pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
+        global _alive
+        with _threads_lock:
+            _alive += 1
+        initialized = False
+        there, keep, failure = None, [], None
         try:
-            there, keep, failure = None, [], None
             try:
+                pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
+                initialized = True
                 there = win32com.client.Dispatch(pythoncom.CoGetInterfaceAndReleaseStream(
                     stream, pythoncom.IID_IDispatch))
                 outcome["value"] = work(there, keep)
@@ -467,27 +495,24 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
             finally:
                 done.set()
             # Excel's references go here, on this thread, however long it takes.
-            global _letting_go
-            with _letting_go_lock:
-                _letting_go += 1
             started = time.monotonic()
             there = failure = None
             keep.clear()
-            with _letting_go_lock:
-                _letting_go -= 1
-                left = _letting_go
-            logger.debug("Let go of a chart workbook in %.1f s (%d still letting go)",
-                         time.monotonic() - started, left)
+            logger.debug("Let go of a chart workbook in %.1f s", time.monotonic() - started)
         finally:
-            pythoncom.CoUninitialize()
+            if initialized:
+                pythoncom.CoUninitialize()
+            with _threads_lock:
+                _alive -= 1
+                left = _alive
+            logger.debug("%d chart workbook threads still running", left)
 
+    with _threads_lock:
+        _unfinished.append(done)
     threading.Thread(target=run, name="chart-workbook", daemon=True).start()
-    end = time.monotonic() + timeout
-    while not done.wait(0.05):
-        pythoncom.PumpWaitingMessages()
-        if time.monotonic() > end:
-            logger.warning("Excel did not finish with a chart's data within %.0f s", timeout)
-            return TIMED_OUT
+    if not _wait_for(done, end):
+        logger.warning("Excel did not finish with a chart's data within %.0f s", timeout)
+        return TIMED_OUT
     if "error" in outcome:
         raise outcome["error"]
     return outcome.get("value")
@@ -604,6 +629,7 @@ def _write_chart_data(chart, categories, series, keep=None) -> bool:
         chart._oleobj_.InvokeTypes(
             1413, 0, 1, (24, 0),
             ((8, 1), (12, 49)),
+            # None only for the stand-in tests, which run without pywin32.
             addr, pythoncom.Empty if pythoncom is not None else None,
         )
     finally:

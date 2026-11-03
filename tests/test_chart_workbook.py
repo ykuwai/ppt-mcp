@@ -172,6 +172,11 @@ class TestOnAThreadOfItsOwn:
         ready.wait(10)
         self._stream = held["stream"]
         yield
+        # Work a test left running would hold up the next test's call.
+        from ppt_com import charts
+
+        for event in list(charts._unfinished):
+            event.wait(10)
         finished.set()
         thread.join(10)
 
@@ -281,3 +286,44 @@ class TestOnAThreadOfItsOwn:
         from ppt_com.charts import _on_a_thread_of_its_own
 
         assert _on_a_thread_of_its_own(SimpleNamespace(), lambda c, keep: "inline") == "inline"
+
+    def test_a_failure_to_set_up_the_thread_is_raised_at_once(self, monkeypatch):
+        import time
+
+        import pythoncom
+
+        from ppt_com.charts import _on_a_thread_of_its_own
+
+        def refuse(*args):
+            raise pythoncom.com_error(-2147467259, "no apartment", None, None)
+
+        monkeypatch.setattr(pythoncom, "CoInitializeEx", refuse)
+        started = time.monotonic()
+        with pytest.raises(pythoncom.com_error, match="no apartment"):
+            _on_a_thread_of_its_own(self.dictionary(), lambda there, keep: "never")
+        assert time.monotonic() - started < 1.5
+
+    def test_work_left_running_is_waited_for_before_the_next_starts(self):
+        import threading
+        import time
+
+        from ppt_com.charts import TIMED_OUT, _on_a_thread_of_its_own
+
+        started, release = [], threading.Event()
+
+        def slow(there, keep):
+            started.append("slow")
+            release.wait(5)
+            return "slow done"
+
+        def quick(there, keep):
+            started.append("quick")
+            return "quick done"
+
+        d = self.dictionary()
+        assert _on_a_thread_of_its_own(d, slow, timeout=0.3) is TIMED_OUT
+        assert _on_a_thread_of_its_own(d, quick, timeout=0.3) is TIMED_OUT
+        assert started == ["slow"]
+        release.set()
+        assert _on_a_thread_of_its_own(d, quick, timeout=5) == "quick done"
+        assert started == ["slow", "quick"]
