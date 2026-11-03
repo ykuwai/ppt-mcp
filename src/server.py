@@ -1096,7 +1096,8 @@ async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
     Each step is {"tool": name, "params": {...}}. A value "$prev.key" is
     the previous step's result field, and "$2.shape_name" the second
     step's, so a step can use the shape the one before it made. The answer
-    lists each step's result; images (slide previews) follow it. With
+    lists each step's result; images (slide previews) follow it. A step
+    fails when its tool raises or answers {"error": ...}; with
     stop_on_error, the first failing step ends the run and says why.
     """
     report, results, images = [], [], []
@@ -1117,6 +1118,19 @@ async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
             data = json.loads(text) if text else {}
         except ValueError:
             data = {"text": text}
+        if isinstance(data, dict) and data.get("error"):
+            # Most tools answer a failure with {"error": ...} rather than
+            # raising it (#249), so that answer fails the step too: it stops
+            # the run, and a reference to it says the step has no result.
+            failed = {"step": number, "tool": tool, "error": data["error"]}
+            details = {k: v for k, v in data.items() if k != "error"}
+            if details:
+                failed["details"] = details
+            report.append(failed)
+            results.append(None)
+            if stop_on_error:
+                break
+            continue
         results.append(data)
         report.append({"step": number, "tool": tool, "result": data})
         images += [b for b in blocks if getattr(b, "type", "") == "image"]
