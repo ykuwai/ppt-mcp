@@ -324,6 +324,9 @@ def set_member_text(slide_index: int, member: str, text: str) -> Optional[dict]:
 
     clip = Clipboard.take()
     try:
+        # Every group is read before anything is written: a bare name held by
+        # members of two groups is refused rather than taken from the first.
+        found = []
         for index, group in groups:
             try:
                 package = copy_shape_package(group, clip, "ppt_set_text")
@@ -336,51 +339,70 @@ def set_member_text(slide_index: int, member: str, text: str) -> Optional[dict]:
             except PackageError:
                 continue
             target = _gvml_text.find_member(element, path)
-            if target is None:
-                continue
-            group_name = group.name()
-            if not _gvml_text.has_text_body(target):
-                return _refusal(
-                    "ppt_set_text",
-                    f"'{path[-1]}' in group '{group_name}' holds no text.",
-                    ["ppt_get_group_items"],
-                    error=f"'{path[-1]}' in group '{group_name}' has no text frame",
-                )
-            _gvml_text.set_text(target, text)
-            _gvml_shapes.strip_creation_ids(element)
-            package.parts[package.drawing_part()] = (
-                _canvas.serialize_drawing(root).encode("utf-8"))
-            x, y, _cx, _cy = _gvml_shapes.xfrm_of(element)
-            wanted = _gvml_text.text_of(target)
+            if target is not None:
+                found.append((index, group.name(), package, root, element, target))
+        if not found:
+            return None
+        if len(found) > 1:
+            holders = [name for _, name, *_ in found]
+            if len(set(holders)) < len(holders):
+                # A duplicated group keeps its name, so the path cannot tell
+                # them apart either.
+                how = (f"The groups share a name too, so rename one first "
+                       f"(ppt_update_shape shape_name='{holders[0]}' name=...) and "
+                       "name the member with its group.")
+            else:
+                how = f"Name it with its group, as '{holders[0]}/{path[-1]}'."
+            return _refusal(
+                "ppt_set_text",
+                f"Members named '{path[-1]}' are in more than one group "
+                f"({', '.join(holders)}), so the name does not say which. {how}",
+                ["ppt_get_group_items"],
+                error=f"'{path[-1]}' is a member of {len(found)} groups",
+            )
+        [(index, group_name, package, root, element, target)] = found
+        if not _gvml_text.has_text_body(target):
+            return _refusal(
+                "ppt_set_text",
+                f"'{path[-1]}' in group '{group_name}' holds no text.",
+                ["ppt_get_group_items"],
+                error=f"'{path[-1]}' in group '{group_name}' has no text frame",
+            )
+        _gvml_text.set_text(target, text)
+        _gvml_shapes.strip_creation_ids(element)
+        package.parts[package.drawing_part()] = (
+            _canvas.serialize_drawing(root).encode("utf-8"))
+        x, y, _cx, _cy = _gvml_shapes.xfrm_of(element)
+        wanted = _gvml_text.text_of(target)
 
-            def check(readback, path=path, wanted=wanted):
-                try:
-                    back = _gvml_shapes.only_child(
-                        _canvas.children(_canvas.parse(readback.drawing())), "group")
-                    landed = _gvml_text.find_member(back, path)
-                    got = None if landed is None else _gvml_text.text_of(landed)
-                except PackageError as exc:
-                    return f"the pasted group could not be read ({exc})"
-                if got != wanted:
-                    return f"the member reads back {got!r}, not {wanted!r}"
-                return None
-
+        def check(readback, path=path, wanted=wanted):
             try:
-                replaced = replace_shape(
-                    pres, slide, slide_index, index, package.to_bytes(), clip,
-                    "ppt_set_text", _Types[msoGroup], _canvas.pt(x), _canvas.pt(y),
-                    "group", check, ["ppt_ungroup_shapes"],
-                )
-            except Refused as refused:
-                return refused.payload
-            return with_warnings({
-                "status": "success",
-                "slide_index": slide_index,
-                "shape_name": path[-1],
-                "group_name": replaced.name,
-                "text_length": len(wanted),
-                "paragraph_count": wanted.count("\n") + 1,
-            }, clip, replaced.warnings)
+                back = _gvml_shapes.only_child(
+                    _canvas.children(_canvas.parse(readback.drawing())), "group")
+                landed = _gvml_text.find_member(back, path)
+                got = None if landed is None else _gvml_text.text_of(landed)
+            except PackageError as exc:
+                return f"the pasted group could not be read ({exc})"
+            if got != wanted:
+                return f"the member reads back {got!r}, not {wanted!r}"
+            return None
+
+        try:
+            replaced = replace_shape(
+                pres, slide, slide_index, index, package.to_bytes(), clip,
+                "ppt_set_text", _Types[msoGroup], _canvas.pt(x), _canvas.pt(y),
+                "group", check, ["ppt_ungroup_shapes"],
+            )
+        except Refused as refused:
+            return refused.payload
+        return with_warnings({
+            "status": "success",
+            "slide_index": slide_index,
+            "shape_name": path[-1],
+            "group_name": replaced.name,
+            "text_length": len(wanted),
+            "paragraph_count": wanted.count("\n") + 1,
+        }, clip, replaced.warnings)
     finally:
         clip.restore()
     return None
