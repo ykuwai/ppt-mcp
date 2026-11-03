@@ -17,11 +17,13 @@ from typing import Literal, Optional, Union
 
 # pythoncom does not exist on macOS, and this module has to stay importable
 # there so the Apple Event implementations at the bottom can take the place of
-# the COM ones (#185, the same guard ppt_com/export.py already carries). The
-# only use of it is inside _set_chart_data_impl, which is replaced wholesale on
-# macOS and never runs.
+# the COM ones (#185, the same guard ppt_com/export.py already carries). It is
+# used only by the Windows impls, which are replaced wholesale on macOS and
+# never run there.
 if sys.platform == "win32":
     import pythoncom
+else:
+    pythoncom = None
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -365,28 +367,43 @@ WORKBOOK_LEFT_OPEN = (
 )
 
 
-def _close_chart_workbook(chart, workbook, attempts=5, wait=0.5) -> bool:
+def _wait_pumping(seconds) -> None:
+    """Wait on the STA thread while still answering COM calls into it."""
+    end = time.monotonic() + seconds
+    while True:
+        if pythoncom is not None:
+            pythoncom.PumpWaitingMessages()
+        left = end - time.monotonic()
+        if left <= 0:
+            return
+        time.sleep(min(0.05, left))
+
+
+def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5) -> bool:
     """Close a chart's data workbook, and say whether it closed.
 
     A workbook left open keeps the chart in edit mode: the next chart PowerPoint
     is asked to insert or edit answers with a dialog asking for Excel's dialogs
     to be closed, or waits for it, and every call after that times out. Excel
-    still starting up can answer the first Close with an error, or hand back a
-    workbook its type information does not describe yet, so that ``Close`` is
-    not even found. The workbook is asked for again and closed again, a few
-    times, before giving up; giving up is logged and reported, never silent.
+    still starting up can answer with an error, or hand back a workbook its type
+    information does not describe yet, so that ``Close`` is not even found. So
+    the workbook is asked for again and closed again, a few times, before giving
+    up; giving up is logged and reported, never silent. Closing a workbook that
+    is already closed does no harm, and the chart hands out its workbook object
+    even then, so a failure to get it is retried rather than taken as closed.
 
-    A workbook that can no longer be had from the chart is taken as closed.
+    ``workbook`` is the one the caller holds, or None to open it first, as
+    ``ChartData.Activate`` does for a chart just added.
     """
     last = None
     for attempt in range(attempts):
         if attempt:
-            time.sleep(wait)
-            try:
-                workbook = chart.ChartData.Workbook
-            except Exception:  # noqa: BLE001 - not open any more is what we want
-                return True
+            _wait_pumping(wait)
         try:
+            if workbook is None or attempt:
+                if workbook is None and not attempt:
+                    chart.ChartData.Activate()
+                workbook = chart.ChartData.Workbook
             workbook.Close(False)
             return True
         except Exception as e:  # noqa: BLE001 - retried, then reported
@@ -406,14 +423,9 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     chart = chart_shape.Chart
 
     # CRITICAL: AddChart2 auto-opens an Excel workbook. MUST close it to
-    # prevent leaked Excel processes.
-    try:
-        chart.ChartData.Activate()
-        workbook = chart.ChartData.Workbook
-    except Exception:
-        logger.debug("The new chart's workbook is not open", exc_info=True)
-        workbook = None
-    closed = workbook is None or _close_chart_workbook(chart, workbook)
+    # prevent leaked Excel processes, and a chart left in edit mode stops the
+    # next one being added.
+    closed = _close_chart_workbook(chart)
 
     type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
     result = {
@@ -437,7 +449,12 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     chart = shape.Chart
 
     chart.ChartData.Activate()
-    wb = chart.ChartData.Workbook
+    try:
+        wb = chart.ChartData.Workbook
+    except Exception:
+        # Activate opened it; do not leave it open on the way out.
+        _close_chart_workbook(chart)
+        raise
     try:
         ws = wb.Worksheets(1)
         ws.Cells.Clear()
