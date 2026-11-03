@@ -29,6 +29,7 @@ the group's own disappearance and the slide growing.
 """
 
 import logging
+from typing import Optional
 
 from appscript.reference import CommandError
 
@@ -38,6 +39,7 @@ from backend.unsupported import refusal as _refusal
 from gvml import PackageError, build
 from gvml import canvas as _canvas
 from gvml import shapes as _gvml_shapes
+from gvml import text as _gvml_text
 from gvml.package import Graft
 from ppt_com.constants import msoGroup
 from ppt_mac.gvml_paste import (
@@ -45,6 +47,7 @@ from ppt_mac.gvml_paste import (
     Refused,
     copy_shape_package,
     paste_package,
+    replace_shape,
     unused_name,
     with_warnings,
 )
@@ -282,3 +285,125 @@ def _get_group_items_impl(slide_index, shape_name_or_index):
         "group_name": group_name,
         "items": items,
     }, clip)
+
+
+def set_member_text(slide_index: int, member: str, text: str) -> Optional[dict]:
+    """Write a group member's text, which Apple Events cannot reach (#220).
+
+    ``member`` is the member's name, or "Group/Child" as Windows writes it.
+    None when no group on the slide holds a member by that name, so the
+    caller can answer as it would for any name not on the slide.
+
+    The group is copied, the member's text rewritten in the package, and the
+    package pasted back over the group with ``replace_shape``: paste, read
+    back, delete the original, give the copy the group's name, position and z
+    order. The members keep their names, which ungrouping would not. What is
+    lost is what every edit through this route loses, the group's animations,
+    and the result says so.
+    """
+    import xml.etree.ElementTree as ET
+
+    from backend.mac_enums import MsoShapeType as _Types
+    from backend.mac_ae import shapes_of
+
+    path = [part for part in member.split("/") if part]
+    if not path:
+        return None
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+    groups = []
+    for index, shape in enumerate(shapes_of(slide), start=1):
+        try:
+            if _win_constant(_WIN_SHAPE_TYPE, shape.shape_type()) == msoGroup:
+                groups.append((index, shape))
+        except CommandError:
+            continue
+    if len(path) > 1:
+        groups = [(i, g) for i, g in groups if g.name() == path[0]]
+        path = path[1:]
+
+    clip = Clipboard.take()
+    try:
+        # Every group is read before anything is written: a bare name held by
+        # members of two groups is refused rather than taken from the first.
+        found = []
+        for index, group in groups:
+            try:
+                package = copy_shape_package(group, clip, "ppt_set_text")
+            except Refused as refused:
+                return refused.payload
+            root = ET.fromstring(package.drawing())
+            try:
+                element = _gvml_shapes.only_child(
+                    _canvas.children(_canvas.canvas_of(root)), "group")
+            except PackageError:
+                continue
+            target = _gvml_text.find_member(element, path)
+            if target is not None:
+                found.append((index, group.name(), package, root, element, target))
+        if not found:
+            return None
+        if len(found) > 1:
+            holders = [name for _, name, *_ in found]
+            if len(set(holders)) < len(holders):
+                # A duplicated group keeps its name, so the path cannot tell
+                # them apart either.
+                how = (f"The groups share a name too, so rename one first "
+                       f"(ppt_update_shape shape_name='{holders[0]}' name=...) and "
+                       "name the member with its group.")
+            else:
+                how = f"Name it with its group, as '{holders[0]}/{path[-1]}'."
+            return _refusal(
+                "ppt_set_text",
+                f"Members named '{path[-1]}' are in more than one group "
+                f"({', '.join(holders)}), so the name does not say which. {how}",
+                ["ppt_get_group_items"],
+                error=f"'{path[-1]}' is a member of {len(found)} groups",
+            )
+        [(index, group_name, package, root, element, target)] = found
+        if not _gvml_text.has_text_body(target):
+            return _refusal(
+                "ppt_set_text",
+                f"'{path[-1]}' in group '{group_name}' holds no text.",
+                ["ppt_get_group_items"],
+                error=f"'{path[-1]}' in group '{group_name}' has no text frame",
+            )
+        _gvml_text.set_text(target, text)
+        _gvml_shapes.strip_creation_ids(element)
+        package.parts[package.drawing_part()] = (
+            _canvas.serialize_drawing(root).encode("utf-8"))
+        x, y, _cx, _cy = _gvml_shapes.xfrm_of(element)
+        wanted = _gvml_text.text_of(target)
+
+        def check(readback, path=path, wanted=wanted):
+            try:
+                back = _gvml_shapes.only_child(
+                    _canvas.children(_canvas.parse(readback.drawing())), "group")
+                landed = _gvml_text.find_member(back, path)
+                got = None if landed is None else _gvml_text.text_of(landed)
+            except PackageError as exc:
+                return f"the pasted group could not be read ({exc})"
+            if got != wanted:
+                return f"the member reads back {got!r}, not {wanted!r}"
+            return None
+
+        try:
+            replaced = replace_shape(
+                pres, slide, slide_index, index, package.to_bytes(), clip,
+                "ppt_set_text", _Types[msoGroup], _canvas.pt(x), _canvas.pt(y),
+                "group", check, ["ppt_ungroup_shapes"],
+            )
+        except Refused as refused:
+            return refused.payload
+        return with_warnings({
+            "status": "success",
+            "slide_index": slide_index,
+            "shape_name": path[-1],
+            "group_name": replaced.name,
+            "text_length": len(wanted),
+            "paragraph_count": wanted.count("\n") + 1,
+        }, clip, replaced.warnings)
+    finally:
+        clip.restore()
+    return None
+
