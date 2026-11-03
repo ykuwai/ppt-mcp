@@ -297,7 +297,9 @@ def test_call_tool_refuses_a_non_string():
 
 def test_every_presentation_bound_tool_advertises_the_argument():
     server = _server_module()
-    tools = server.mcp._tool_manager.list_tools()
+    # The catalog tools take their own arguments, ppt_run's `presentation` among them.
+    tools = [t for t in server.mcp._tool_manager.list_tools()
+             if t.name not in server._CATALOG_TOOLS]
     without = set(server._TOOLS_WITHOUT_PRESENTATION_ARG)
     names = {t.name for t in tools}
     assert without <= names, f"stale entries: {sorted(without - names)}"

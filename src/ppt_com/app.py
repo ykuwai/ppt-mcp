@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from backend import ppt, handle_com_error
+from utils import coauthoring
 from ppt_com.constants import WINDOW_STATE_NAMES, ppSelectionNone, ppSelectionSlides, ppSelectionShapes, ppSelectionText
 
 logger = logging.getLogger(__name__)
@@ -135,6 +136,12 @@ def _list_presentations_impl() -> dict:
             "read_only": int(p.ReadOnly) == -1,  # msoTrue=-1; bool() misidentifies msoCTrue(1)
             "saved": bool(p.Saved),
         })
+        try:
+            state = coauthoring.status(p)
+        except Exception:
+            state = None
+        if state is not None:
+            presentations[-1]["pending_updates"] = state["pending_updates"]
     return {"presentations": presentations, "count": len(presentations)}
 
 

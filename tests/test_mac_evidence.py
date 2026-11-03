@@ -24,6 +24,7 @@ than letting an echo pass for evidence.
 
 import os
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -364,6 +365,37 @@ class TestTextAtCreation:
                     None, None, None, None, None, None, None,
                 )
 
+    @pytest.mark.parametrize("anchor", ["middle", "bottom"])
+    def test_a_text_box_set_off_the_top_keeps_its_height(self, anchor):
+        """PowerPoint shrinks a text box to its text once the text is in, so
+        a 120 pt box asked to centre its text came back 27 pt tall. Off the
+        top, the box stops fitting its text and keeps the height it was given."""
+        from appscript import k
+
+        from ppt_mac.shapes import _add_textbox_impl
+
+        with _fake_deck([]) as deck:
+            deck.make_is_a_text_box = True
+            _add_textbox_impl(
+                1, 10, 10, 300, 120, "Hello",
+                None, None, None, None, None, None, anchor,
+            )
+            box = deck.slide_shapes[-1]
+        assert box.text_frame.auto_size() == k.ppAutoSizeNone
+        assert box.height() == 120
+
+    def test_a_text_box_at_the_top_still_fits_its_text(self):
+        from ppt_mac.shapes import _add_textbox_impl
+
+        with _fake_deck([]) as deck:
+            deck.make_is_a_text_box = True
+            _add_textbox_impl(
+                1, 10, 10, 300, 120, "Hello",
+                None, None, None, None, None, None, "top",
+            )
+            box = deck.slide_shapes[-1]
+        assert box.text_frame.auto_size() is None
+
     def test_text_that_lands_is_not_complained_about(self):
         from ppt_mac.shapes import _add_shape_impl
 
@@ -684,6 +716,53 @@ class TestExportEvidence:
                     str(tmp_path / "out"), "png", 1, None, None, None,
                     None, None, None,
                 )
+
+
+    def test_pages_after_a_hidden_slide_are_one_slide_further_on(self, monkeypatch):
+        # Live: with slide 6 of 7 hidden, the preview of slide 6 showed slide
+        # 7, and slide 7 had no page at all.
+        from ppt_mac import export as mac_export
+
+        deck = _HiddenDeck(7, hidden={6})
+        monkeypatch.setattr(mac_export, "count", lambda slides: len(slides.items))
+        monkeypatch.setattr(mac_export, "_save_pdf", deck.save)
+        assert mac_export._save_pdf_of(deck, "out.pdf", [5, 7]) == [5, 6]
+        assert deck.saved_hidden == {6}
+
+    def test_a_hidden_slide_asked_for_is_shown_for_the_export_only(self, monkeypatch):
+        from ppt_mac import export as mac_export
+
+        deck = _HiddenDeck(7, hidden={2, 6})
+        monkeypatch.setattr(mac_export, "count", lambda slides: len(slides.items))
+        monkeypatch.setattr(mac_export, "_save_pdf", deck.save)
+        assert mac_export._save_pdf_of(deck, "out.pdf", [6, 7]) == [5, 6]
+        assert deck.saved_hidden == {2}
+        assert deck.hidden() == {2, 6}
+
+
+class _HiddenDeck:
+    """Slides of which some are hidden, and what was hidden when it was saved."""
+
+    class _Slides:
+        def __init__(self, items):
+            self.items = items
+
+        def __getitem__(self, number):
+            return self.items[number - 1]
+
+    def __init__(self, total, hidden):
+        self.slides = self._Slides([
+            SimpleNamespace(slide_show_transition=SimpleNamespace(
+                hidden=_Prop(number in hidden)))
+            for number in range(1, total + 1)])
+        self.saved_hidden = None
+
+    def hidden(self):
+        return {n for n, s in enumerate(self.slides.items, start=1)
+                if s.slide_show_transition.hidden()}
+
+    def save(self, pres, destination):
+        self.saved_hidden = self.hidden()
 
 
 # ---------------------------------------------------------------------------
@@ -1199,6 +1278,36 @@ class TestTheCopyOutsideTheContainer:
 
         assert presentation._refresh_external_copy(str(inside)) is None
         assert presentation._refresh_external_copy(None) is None
+
+    def test_a_restarted_server_still_refreshes_the_copy(self, tmp_path, monkeypatch):
+        """The record outlives the process: a client that restarts its server
+        between the save as and the save still gets its copy refreshed."""
+        from ppt_mac import presentation
+
+        inside = tmp_path / "container" / "deck.pptx"
+        inside.parent.mkdir()
+        inside.write_bytes(b"first version")
+        outside = tmp_path / "Documents" / "deck.pptx"
+        outside.parent.mkdir()
+        outside.write_bytes(b"first version")
+
+        presentation._remember_copy(str(inside), str(outside))
+        monkeypatch.setattr(presentation, "_EXTERNAL_COPIES", {})  # a new process
+        inside.write_bytes(b"second version")
+
+        assert presentation._refresh_external_copy(str(inside)) == str(outside)
+        assert outside.read_bytes() == b"second version"
+
+    def test_closing_the_deck_forgets_its_copy_for_good(self, tmp_path, monkeypatch):
+        from ppt_mac import presentation
+
+        inside = tmp_path / "deck.pptx"
+        inside.write_bytes(b"data")
+        presentation._remember_copy(str(inside), str(tmp_path / "copy.pptx"))
+        presentation._forget_copy(str(inside))
+        monkeypatch.setattr(presentation, "_EXTERNAL_COPIES", {})
+
+        assert presentation._refresh_external_copy(str(inside)) is None
 
     def test_a_copy_that_cannot_be_written_does_not_fail_the_save(self, tmp_path):
         """The save landed. Saying where it did not reach beats raising."""

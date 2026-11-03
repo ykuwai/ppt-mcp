@@ -8,6 +8,11 @@ import pytest
 # Allow tests to import from src/ without installing the package.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+# The tests that load the server read the whole tool list, which catalog mode
+# leaves off; pinned so a PPT_TOOL_MODE in the developer's environment cannot
+# change it. tests/test_tool_catalog.py sets the mode itself.
+os.environ["PPT_TOOL_MODE"] = "full"
+
 
 if sys.platform == "darwin":
 
@@ -30,6 +35,14 @@ if sys.platform == "darwin":
             )
 
         monkeypatch.setattr(mac_ae, "app", refuse)
+
+    @pytest.fixture(autouse=True)
+    def _no_real_copies_file(monkeypatch, tmp_path):
+        """Nor the record of copies in PowerPoint's container, which a save
+        as writes and a save reads."""
+        from ppt_mac import presentation
+
+        monkeypatch.setattr(presentation, "_COPIES_FILE", str(tmp_path / "copies.json"))
 
 
 def combo_chart_xml(chart_xml_bytes):

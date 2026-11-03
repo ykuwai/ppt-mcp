@@ -248,6 +248,36 @@ class TestWindowsClose:
         app.Quit.assert_not_called()
         assert result == {"success": True, "closed": "a.pptx"}
 
+    def _protected(self, monkeypatch, save):
+        # #264: closing a file open in Protected View raised at Saved = True.
+        from ppt_com import presentation
+
+        app = MagicMock()
+        pres = MagicMock(Name="a.pptx", FullName=r"C:\a.pptx")
+        type(pres).Saved = property(lambda self: True, _refuse)
+        window = MagicMock()
+        window.Presentation.FullName = r"C:\a.pptx"
+        app.ProtectedViewWindows.Count = 1
+        app.ProtectedViewWindows.return_value = window
+        app.Presentations.Count = 0
+        monkeypatch.setattr(presentation.ppt, "_get_app_impl", lambda allow_launch=False: app)
+        monkeypatch.setattr(presentation, "_resolve_presentation", lambda app, **kw: pres)
+        return presentation._close_presentation_impl(save, None, None, True), pres, window
+
+    def test_a_file_in_protected_view_is_closed_through_its_window(self, monkeypatch):
+        result, pres, window = self._protected(monkeypatch, save=False)
+        window.Close.assert_called_once_with()
+        pres.Close.assert_not_called()
+        assert result["closed"] == "a.pptx"
+
+    def test_and_is_not_saved(self, monkeypatch):
+        with pytest.raises(ValueError, match="Protected View, which is read-only"):
+            self._protected(monkeypatch, save=True)
+
+
+def _refuse(self, value):
+    raise RuntimeError("Presentation.Saved : Invalid request.")
+
 
 # ---------------------------------------------------------------------------
 # macOS: launched in the background, and closed like Windows

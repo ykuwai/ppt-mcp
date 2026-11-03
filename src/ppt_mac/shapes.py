@@ -47,12 +47,13 @@ from backend.mac_enums import (
     MsoTextOrientation,
     MsoVerticalAnchor,
     MsoZOrderCmd,
+    PpAutoSize,
     PpParagraphAlignment,
     to_keyword,
 )
 from ppt_com.constants import (
     DASH_STYLE_MAP, DASH_STYLE_NAMES, GRADIENT_STYLE_MAP, SHAPE_TYPE_NAMES,
-    msoBringForward, msoGroup, msoSendToBack,
+    msoBringForward, msoGroup, msoSendToBack, ppAutoSizeNone,
 )
 from utils.color import hex_to_rgb_list, rgb_list_to_hex
 from utils.navigation import goto_slide
@@ -767,7 +768,13 @@ def _add_textbox_impl(
     if align is not None:
         _apply_alignment(textbox.text_frame.text_range, align)
 
-    # Inline vertical anchor, which saves a follow-up ppt_set_textframe call
+    # Inline vertical anchor, which saves a follow-up ppt_set_textframe call.
+    # A text box shrinks to its text as soon as the text is written, so a 120 pt
+    # box asked to sit its text in the middle came back 27 pt tall with nothing
+    # to centre in. Off the top, the box keeps the height it was given.
+    if vertical_anchor is not None and vertical_anchor.lower() != "top":
+        textbox.text_frame.auto_size.set(to_keyword(PpAutoSize, ppAutoSizeNone, "auto size"))
+        textbox.height.set(height)
     if vertical_anchor is not None:
         textbox.text_frame.vertical_anchor.set(
             to_keyword(
@@ -825,11 +832,30 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height,
                 os.remove(staged)
             except OSError:
                 logger.debug("Could not remove the staged image at %s", staged)
+    # PowerPoint for Mac makes the picture 25 pt square, whatever the image,
+    # and keeping that square's proportions while setting one side keeps it
+    # square. The image's own size is read from the file instead, and both
+    # sides are set from it: at 96 dpi when no size was asked for, as
+    # PowerPoint for Windows places an image with no resolution of its own.
+    pixels = _image_pixels(absolute)
+    natural = pixels[0] / pixels[1] if pixels else None
+    # Both given: the caller means those proportions, as on Windows. A side
+    # worked out here only puts the image's own back, and the picture stays
+    # locked to them, as PowerPoint locks a picture it places.
+    stretched = width is not None and height is not None
+    if natural is not None:
+        if width is None and height is None:
+            width, height = pixels[0] * 0.75, pixels[1] * 0.75
+        elif height is None:
+            height = width / natural
+        elif width is None:
+            width = height * natural
     if width is not None and height is not None:
-        # Both specified: user intentionally overrides aspect ratio.
         pic.lock_aspect_ratio.set(False)
         pic.width.set(width)
         pic.height.set(height)
+        if not stretched:
+            pic.lock_aspect_ratio.set(True)
     elif width is not None:
         pic.lock_aspect_ratio.set(True)
         pic.width.set(width)
@@ -846,7 +872,22 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height,
         "width": size[0],
         "height": size[1],
         **placed,
+        # The image's own proportions and size, for the layout check;
+        # report_layout takes them out of the result.
+        "_natural_aspect": natural,
+        "_pixels": pixels,
     }
+
+
+def _image_pixels(path):
+    """An image file's width and height in pixels, or None."""
+    from utils.package import image_size
+
+    try:
+        with open(path, "rb") as handle:
+            return image_size(handle.read())
+    except OSError:
+        return None
 
 
 def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y,
@@ -1310,7 +1351,15 @@ def _update_many_impl(slide_index, shape_names, all_shapes, exclude,
 
 def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height,
                        rotation, name, adjustments,
-                       dleft=None, dtop=None, dwidth=None, dheight=None):
+                       dleft=None, dtop=None, dwidth=None, dheight=None, alt_text=None):
+    if alt_text is not None:
+        # Refused before anything is written, so the rest of the call is not
+        # half applied.
+        raise ValueError(
+            "PowerPoint for Mac does not let a script set alt text: its scripting "
+            "dictionary has no such property. Set it in PowerPoint (right-click the "
+            "shape, View Alt Text), or on Windows with this tool."
+        )
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()

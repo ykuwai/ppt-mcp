@@ -99,3 +99,60 @@ def test_tool_schemas_are_self_contained(server):
     params = schemas["ppt_add_section"]["properties"]["params"]
     assert params["properties"]["slide_index"]["minimum"] == 1
     assert "slide_index" in params["required"]
+
+
+def test_tool_schemas_carry_no_generated_titles(server):
+    """Pydantic's per-field `title`, which repeats the field's name, is dropped:
+    with the null branches below it was a sixth of what the tools cost a client."""
+    tools = asyncio.run(server.mcp.list_tools())
+
+    def titles(node, parent=None):
+        if isinstance(node, list):
+            return sum(titles(item) for item in node)
+        if not isinstance(node, dict):
+            return 0
+        own = 1 if isinstance(node.get("title"), str) and parent != "properties" else 0
+        return own + sum(titles(value, key) for key, value in node.items())
+
+    assert sum(titles(_input_schema(t)) for t in tools) == 0
+
+
+def test_a_parameter_called_title_is_kept(server):
+    tools = {t.name: _input_schema(t) for t in asyncio.run(server.mcp.list_tools())}
+    params = tools["ppt_format_chart"]["properties"]["params"]["properties"]
+    assert "title" in params
+
+
+def test_an_optional_field_is_one_type_with_a_null_default(server):
+    tools = {t.name: _input_schema(t) for t in asyncio.run(server.mcp.list_tools())}
+    font_size = tools["ppt_add_textbox"]["properties"]["params"]["properties"]["font_size"]
+    assert font_size["type"] == "number"
+    assert font_size["default"] is None
+    assert "anyOf" not in font_size
+
+
+def test_slim_keeps_a_null_that_means_something(server):
+    """Only a null that means "not given" is folded. A field whose default is
+    not null keeps null as a choice of its own, and a union keeps its branches."""
+    meant = {"anyOf": [{"type": "integer"}, {"type": "null"}], "default": 3}
+    assert server._slim(meant) == meant
+    union = {"anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "null"}], "default": None}
+    assert server._slim(union) == union
+    folded = server._slim({"anyOf": [{"type": "string"}, {"type": "null"}], "default": None,
+                           "title": "Name", "description": "d"})
+    assert folded == {"type": "string", "default": None, "description": "d"}
+
+
+def test_a_null_sent_for_an_optional_field_is_still_accepted(server):
+    """The schema no longer lists null, but validation is Pydantic's, which
+    still takes it: a client that sends null gets the default, as before."""
+    from src.ppt_com.shapes import AddTextboxInput
+
+    model = AddTextboxInput(slide_index=1, left=0, top=0, width=10, height=10, font_size=None)
+    assert model.font_size is None
+def test_every_tool_has_a_description(server):
+    """A tool with no description is only a name to the model:
+    ppt_batch_apply_formatting registered without one."""
+    tools = asyncio.run(server.mcp.list_tools())
+    bare = sorted(t.name for t in tools if not (t.description or "").strip())
+    assert bare == [], f"tools without a description: {bare}"

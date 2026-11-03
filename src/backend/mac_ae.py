@@ -23,8 +23,10 @@ an STA apartment, but PowerPoint wedges under concurrent access, and keeping the
 same shape means the tool modules see one lifecycle surface on both platforms.
 """
 
+import errno
 import logging
 import os
+import pwd
 import shutil
 import subprocess
 import tempfile
@@ -185,7 +187,8 @@ def shapes_of(container) -> list:
 
 
 class StagingBlocked(PermissionError):
-    """macOS will not let this process into PowerPoint's container."""
+    """PowerPoint's container cannot be used: macOS keeps this process out,
+    its permissions do, or PowerPoint has never made it."""
 
 
 def staging_dir(folder: Optional[str] = None) -> str:
@@ -206,18 +209,54 @@ def staging_dir(folder: Optional[str] = None) -> str:
         with tempfile.NamedTemporaryFile(dir=folder, prefix=".ppt_mcp_probe_"):
             pass
     except PermissionError as e:
-        raise StagingBlocked(
-            f"macOS is keeping ppt-mcp out of PowerPoint's own folder, {folder}. "
-            "PowerPoint for Mac is sandboxed, so every file it reads or writes for this "
-            "server (a picture, an icon, a template or theme, a preview, an export, a "
-            "saved copy) passes through that folder, and since macOS 14 another app may "
-            "only enter it with the user's consent. Give the app that started this "
-            "server, such as Terminal, iTerm, VS Code or Claude, Full Disk Access in "
-            "System Settings > Privacy & Security > Full Disk Access, then try again. "
-            "Shapes, text, tables and charts work without it. "
-            f"(The error was: {e})"
-        ) from e
+        raise StagingBlocked(f"{_staging_problem(folder, e)} (The error was: {e})") from e
     return folder
+
+
+_WHY_THE_FOLDER = (
+    "PowerPoint for Mac is sandboxed, so every file it reads or writes for this "
+    "server (a picture, an icon, a template or theme, a preview, an export, a saved "
+    "copy) passes through that folder. Shapes, text, tables and charts work without it."
+)
+
+
+def _staging_problem(folder: str, error: PermissionError) -> str:
+    """What keeps ppt-mcp out of PowerPoint's folder, and what to do about it.
+
+    Three causes give a PermissionError here, and only one is fixed with Full
+    Disk Access. PowerPoint never started on this account has no container,
+    and creating one in ~/Library/Containers is refused. A folder whose owner
+    or permissions shut this user out answers EACCES, "Permission denied".
+    macOS's privacy protection answers EPERM, "Operation not permitted".
+    """
+    parts = folder.split(os.sep)
+    if "Containers" in parts and len(parts) > parts.index("Containers") + 1:
+        root = os.sep.join(parts[:parts.index("Containers") + 2])
+        if not os.path.isdir(root):
+            return (f"PowerPoint for Mac's own folder, {root}, does not exist: PowerPoint "
+                    "is not installed, or has never been started on this account. Start it "
+                    f"once, then try again. {_WHY_THE_FOLDER}")
+    if error.errno == errno.EACCES:
+        where = folder
+        while where and not os.path.exists(where):
+            where = os.path.dirname(where)
+        try:
+            owner = os.stat(where).st_uid
+            whose = pwd.getpwuid(owner).pw_name
+        except (OSError, KeyError):
+            owner, whose = None, "another user"
+        if owner is not None and owner != os.getuid():
+            cause = f"{where} belongs to {whose}, not to this user"
+        else:
+            cause = f"the permissions of {where} do not let this user write to it"
+        return (f"ppt-mcp may not write to PowerPoint's own folder, {folder}: {cause}. "
+                f"Give it back to this user (chown -R \"$(whoami)\" \"{where}\", and "
+                f"chmod u+rwx), then try again. {_WHY_THE_FOLDER}")
+    return (f"macOS is keeping ppt-mcp out of PowerPoint's own folder, {folder}. "
+            f"{_WHY_THE_FOLDER} Since macOS 14 another app may only enter it with the "
+            "user's consent. Give the app that started this server, such as Terminal, "
+            "iTerm, VS Code or Claude, Full Disk Access in System Settings > Privacy & "
+            "Security > Full Disk Access, then try again.")
 
 
 def stage_into_container(path: str) -> str:

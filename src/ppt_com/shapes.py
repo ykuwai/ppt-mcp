@@ -18,6 +18,7 @@ from utils.redraw import FrozenRedraw
 from utils.validation import font_size_warning
 from ppt_com.shape_lookup import resolve_shape, walk_group_children
 from ppt_com.layout_check import report_layout, touched_names
+from ppt_com.text import _set_complex_script_font
 from ppt_com.constants import (
     SHAPE_TYPE_NAMES,
     msoTrue, msoFalse, msoTriStateMixed,
@@ -26,6 +27,7 @@ from ppt_com.constants import (
     msoBringToFront, msoSendToBack, msoBringForward, msoSendBackward,
     GRADIENT_STYLE_MAP,
     DASH_STYLE_NAMES,
+    ppAutoSizeNone,
 )
 
 logger = logging.getLogger(__name__)
@@ -221,7 +223,7 @@ class AddShapeInput(BaseModel):
         default=None,
         description="Text color '#RRGGBB'.",
     )
-    align: Optional[str] = Field(
+    align: Optional[Literal["left", "center", "right", "justify"]] = Field(
         default=None,
         description="Paragraph alignment for shape text: 'left', 'center', 'right', or 'justify'.",
     )
@@ -233,7 +235,7 @@ class AddShapeInput(BaseModel):
             "For gradient fills this is the start/fore color."
         ),
     )
-    fill_type: Optional[str] = Field(
+    fill_type: Optional[Literal["solid", "none", "gradient"]] = Field(
         default=None,
         description="Fill type: 'solid', 'none', or 'gradient'. Defaults to 'solid' when fill_color is given.",
     )
@@ -241,7 +243,9 @@ class AddShapeInput(BaseModel):
         default=None,
         description="Gradient end/back color '#RRGGBB'. Only used when fill_type='gradient'.",
     )
-    fill_gradient_style: Optional[str] = Field(
+    fill_gradient_style: Optional[Literal[
+        "horizontal", "vertical", "diagonal_up", "diagonal_down", "from_corner", "from_center",
+    ]] = Field(
         default=None,
         description=(
             "Gradient direction. One of: 'horizontal', 'vertical', 'diagonal_up', "
@@ -299,6 +303,14 @@ class AddShapeInput(BaseModel):
     @classmethod
     def validate_colours(cls, value, info):
         return check_hex(value, _NO_COLOUR.get(info.field_name, ""))
+
+    # Checked here, like the colours, so a wrong one is refused before the
+    # shape exists rather than leaving it behind unstyled. Any case is taken,
+    # as it always was.
+    @field_validator("align", "fill_type", "fill_gradient_style", mode="before")
+    @classmethod
+    def lower_case_choices(cls, value):
+        return value.lower() if isinstance(value, str) else value
 
 
 class AddTextboxInput(BaseModel):
@@ -432,6 +444,14 @@ class UpdateShapeInput(BaseModel):
     dwidth: Optional[float] = Field(default=None, description="Widen by this many points, relative to the current width.")
     dheight: Optional[float] = Field(default=None, description="Heighten by this many points, relative to the current height.")
     name: Optional[str] = Field(default=None, description="New name for the shape")
+    alt_text: Optional[str] = Field(
+        default=None,
+        description=(
+            "Alt text: what a screen reader says for the shape, such as a picture "
+            "or chart. One shape at a time. Windows only: PowerPoint for Mac does "
+            "not let a script set it."
+        ),
+    )
     adjustments: Optional[dict[int, float]] = Field(
         default=None,
         description=(
@@ -492,10 +512,10 @@ class UpdateShapeInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_single_shape_only_fields(self):
-        # A rename would make duplicates, and adjustment handles mean
-        # different things on different shapes.
+        # A rename would make duplicates, adjustment handles mean different
+        # things on different shapes, and alt text describes one.
         if self.all or self.shape_names:
-            for field in ("name", "adjustments"):
+            for field in ("name", "adjustments", "alt_text"):
                 if getattr(self, field) is not None:
                     raise ValueError(
                         f"{field} applies to one shape, so it cannot be used "
@@ -705,6 +725,7 @@ def _apply_shape_attrs(
             if font_name is not None:
                 font.Name = font_name
                 font.NameFarEast = font_name
+                _set_complex_script_font(font, font_name)
             if font_size is not None:
                 font.Size = font_size
             if bold is not None:
@@ -801,6 +822,7 @@ def _add_textbox_impl(
         if font_name is not None:
             font.Name = font_name
             font.NameFarEast = font_name  # East Asian characters (e.g. Japanese)
+            _set_complex_script_font(font, font_name)
         if font_size is not None:
             font.Size = font_size
         if bold is not None:
@@ -832,6 +854,11 @@ def _add_textbox_impl(
                 f"Must be one of: {sorted(VERTICAL_ANCHOR_MAP)}"
             )
         textbox.TextFrame.VerticalAnchor = anchor_val
+        # A text box shrinks to its text, so off the top it keeps the height
+        # it was given; otherwise there is nothing to sit the text in.
+        if anchor_val != 1:
+            textbox.TextFrame.AutoSize = ppAutoSizeNone
+            textbox.Height = height
 
     placed = place_in_zorder(slide, textbox, zorder)
     return {
@@ -861,6 +888,9 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height,
         SaveWithDocument=msoTrue,
         Left=left, Top=top, Width=-1, Height=-1,
     )
+    pixels = _file_pixels(file_path)
+    natural = (pixels[0] / pixels[1] if pixels else None) or (
+        pic.Width / pic.Height if pic.Height else None)
     if width is not None and height is not None:
         # Both specified: user intentionally overrides aspect ratio.
         pic.LockAspectRatio = msoFalse
@@ -880,7 +910,23 @@ def _add_picture_impl(slide_index, file_path, left, top, width, height,
         "width": round(pic.Width, 2),
         "height": round(pic.Height, 2),
         **placed,
+        # The image's own proportions and size, for the layout check;
+        # report_layout takes them out of the result.
+        "_natural_aspect": natural,
+        "_pixels": pixels,
     }
+
+
+def _file_pixels(path):
+    """An image file's width and height in pixels, or None when it cannot be read."""
+    from utils.package import image_size
+
+    try:
+        with open(path, "rb") as handle:
+            size = image_size(handle.read())
+    except OSError:
+        return None
+    return size if size and size[0] and size[1] else None
 
 
 def _add_line_impl(slide_index, begin_x, begin_y, end_x, end_y,
@@ -1329,7 +1375,7 @@ def _update_many_impl(slide_index, shape_names, all_shapes, exclude,
 
 def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, height,
                        rotation, name, adjustments,
-                       dleft=None, dtop=None, dwidth=None, dheight=None):
+                       dleft=None, dtop=None, dwidth=None, dheight=None, alt_text=None):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
@@ -1340,6 +1386,8 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
                     dleft, dtop, dwidth, dheight)
     if name is not None:
         shape.Name = name
+    if alt_text is not None:
+        shape.AlternativeText = alt_text
 
     # Apply adjustment handle values.
     if adjustments:
@@ -1366,6 +1414,8 @@ def _update_shape_impl(slide_index, shape_name, shape_index, left, top, width, h
         "width": round(shape.Width, 2),
         "height": round(shape.Height, 2),
     }
+    if alt_text is not None:
+        result["alt_text"] = shape.AlternativeText
 
     # Include current adjustment values in response when adjustments were set.
     if adjustments:
@@ -1549,6 +1599,7 @@ def add_line(params: AddLineInput) -> str:
             params.begin_x, params.begin_y, params.end_x, params.end_y,
             params.zorder,
         )
+        report_layout(result, params.slide_index, touched_names(result))
         return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": f"Failed to add line: {str(e)}"})
@@ -1649,6 +1700,7 @@ def update_shape(params: UpdateShapeInput) -> str:
                 params.left, params.top, params.width, params.height,
                 params.rotation, params.name, params.adjustments,
                 params.dleft, params.dtop, params.dwidth, params.dheight,
+                params.alt_text,
             )
         report_layout(result, params.slide_index, touched_names(result))
         return json.dumps(result)
