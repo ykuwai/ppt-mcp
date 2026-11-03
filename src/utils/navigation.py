@@ -1,10 +1,32 @@
 """Navigation helpers for PowerPoint automation."""
 
 import logging
+import os
 
 from backend import IS_MACOS, ppt
 
 logger = logging.getLogger(__name__)
+
+
+def _follow_edits(value):
+    """Whether a write shows the slide it works on, from PPT_FOLLOW_EDITS."""
+    value = value.strip().lower()
+    if value in ("on", "true", "1", "yes", ""):
+        return True
+    if value in ("off", "false", "0", "no"):
+        return False
+    # Read at import, so a typo must not stop the server from starting.
+    logger.warning(
+        "PPT_FOLLOW_EDITS=%r is not a setting; use 'on' (the default), or 'off' "
+        "to leave the window on the slide the user is looking at. Using 'on'.", value)
+    return True
+
+
+# On, each write moves the deck's window to the slide it works on, so the user
+# sees where the model is. Off, the window stays where the user left it, for
+# working in the same deck at the same time: the edits land either way.
+# ppt_goto_slide moves it in both cases, since moving it is what it is for.
+FOLLOW_EDITS = _follow_edits(os.getenv("PPT_FOLLOW_EDITS", "on"))
 
 
 def goto_slide(app, slide_index: int) -> None:
@@ -24,7 +46,11 @@ def goto_slide(app, slide_index: int) -> None:
             compatibility. Both platforms resolve the window from the
             session target rather than from this.
         slide_index: 1-based slide index to navigate to.
+
+    Does nothing while ``FOLLOW_EDITS`` is off.
     """
+    if not FOLLOW_EDITS:
+        return
     try:
         if IS_MACOS:
             # Navigate the target deck's own window rather than the frontmost

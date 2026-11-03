@@ -363,6 +363,14 @@ If no PowerPoint is running when a tool needs one (`ppt_create_presentation`, `p
 
 When a close leaves no presentation open in a PowerPoint the server started, `ppt_close_presentation` quits PowerPoint too and says so (`powerpoint_quit`). A PowerPoint you started yourself is never quit, and neither is one that still has a presentation open (on Windows, or a file open in Protected View). Pass `keep_powerpoint_open=true` to keep it running, for example to open another presentation straight away. Until a tool starts PowerPoint again, tools that need it answer that PowerPoint is not running, where they would otherwise have reported an empty list.
 
+### Working in the same deck as the model
+
+Each write moves the deck's window to the slide it works on, so you can see where the model is. To work in the deck yourself at the same time, without the window jumping to another slide, set `PPT_FOLLOW_EDITS=off` in the server's `env`. The edits land the same way; only the window stays where you left it. `ppt_goto_slide` still moves it when asked. The accepted values are `on` (the default) and `off`; anything else is ignored with a warning. While you are typing in a text box PowerPoint may hold the model's call for a moment, and undo (Ctrl+Z) is shared, so it can take back the model's last change.
+
+```json
+"env": { "PPT_FOLLOW_EDITS": "off" }
+```
+
 ### Icons on a network that blocks the icon sites
 
 `ppt_search_icons` reads its icon list from `fonts.google.com`, and `ppt_add_svg_icon` downloads icons from `cdn.jsdelivr.net`. Every download, pictures by URL included, gives up after 15 seconds and says which host it could not reach. Three settings change that:
