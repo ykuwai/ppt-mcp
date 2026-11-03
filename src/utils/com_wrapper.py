@@ -23,6 +23,7 @@ from typing import Any, Callable, Optional
 from urllib.parse import unquote
 
 from utils import coauthoring
+from utils.foreground import Foreground, run_keeping_foreground
 
 logger = logging.getLogger(__name__)
 
@@ -497,6 +498,9 @@ class PowerPointCOMWrapper:
         # The process it was, when it could be read, so a PowerPoint that took
         # its place is not mistaken for it. See `_still_ours`.
         self._launched_pid: Optional[int] = None
+        # What hands the foreground back after a call that took it; made on
+        # first use, False where there is none. See utils.foreground.
+        self._foreground_api: Any = None
         # The per-call target of the operation a worker is running, if its
         # tool call named one (see call_presentation).  Thread-local, because
         # an abandoned worker and its replacement can overlap.
@@ -611,6 +615,21 @@ class PowerPointCOMWrapper:
             except AttributeError:
                 return  # app went away; _get_app_impl will reconnect
 
+    def _foreground(self):
+        """The Win32 foreground reader the worker hands the front back with,
+        or None where there is none (off Windows, or if it cannot be made)."""
+        if self._foreground_api is False:
+            return None
+        if self._foreground_api is None:
+            try:
+                self._foreground_api = Foreground() if sys.platform == "win32" else False
+            except Exception:  # noqa: BLE001 - a tool must still run without it
+                logger.debug("No foreground reader; PowerPoint may take the front", exc_info=True)
+                self._foreground_api = False
+            if self._foreground_api is False:
+                return None
+        return self._foreground_api
+
     def _run_item(self, func, args, kwargs, future, idempotent: bool) -> None:
         """Run one queued operation and settle its future.
 
@@ -662,7 +681,7 @@ class PowerPointCOMWrapper:
                 started = True
 
             try:
-                future.set_result(func(*args, **kwargs))
+                future.set_result(run_keeping_foreground(func, args, kwargs, self._foreground()))
                 return
             except pywintypes.com_error as e:
                 if e.hresult not in _BUSY_HRESULTS:
