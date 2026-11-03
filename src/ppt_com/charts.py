@@ -399,8 +399,29 @@ _letting_go = 0
 _letting_go_lock = __import__("threading").Lock()
 
 
+def _without_its_frames(error):
+    """A copy of ``error`` to raise elsewhere, holding none of its frames.
+
+    The frames of an error raised in the workbook work hold that work's
+    references to Excel. Handing the error itself to the worker would have the
+    worker let go of them, which is the wait this thread is there to take.
+    """
+    import copy
+
+    try:
+        bare = copy.copy(error)
+    except Exception:  # noqa: BLE001 - an error that does not copy
+        return RuntimeError(f"{type(error).__name__}: {error}")
+    bare.__traceback__ = bare.__context__ = bare.__cause__ = None
+    return bare
+
+
 def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
-    """Run ``work(chart)`` on a short-lived thread and return what it returns.
+    """Run ``work(chart, keep)`` on a short-lived thread and return what it returns.
+
+    ``work`` puts every Excel object it gets into the list ``keep``, so that
+    none of them is let go before the answer is handed back. Letting go of one
+    when the function returns, as a local, would block right there.
 
     Letting go of a chart's data workbook after it is closed can block for
     about a minute: Excel, closing down, answers the final Release only then
@@ -422,7 +443,7 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
     """
     oleobj = getattr(chart, "_oleobj_", None)
     if pythoncom is None or not isinstance(oleobj, pythoncom.TypeIIDs[pythoncom.IID_IDispatch]):
-        return work(chart)
+        return work(chart, [])
     import threading
 
     import win32com.client
@@ -434,12 +455,15 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
     def run():
         pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
         try:
+            there, keep, failure = None, [], None
             try:
                 there = win32com.client.Dispatch(pythoncom.CoGetInterfaceAndReleaseStream(
                     stream, pythoncom.IID_IDispatch))
-                outcome["value"] = work(there)
+                outcome["value"] = work(there, keep)
             except BaseException as e:  # noqa: BLE001 - handed to the caller
-                outcome["error"] = e
+                # The error itself, and with it its frames, stays here.
+                failure = e
+                outcome["error"] = _without_its_frames(e)
             finally:
                 done.set()
             # Excel's references go here, on this thread, however long it takes.
@@ -447,7 +471,8 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
             with _letting_go_lock:
                 _letting_go += 1
             started = time.monotonic()
-            there = None
+            there = failure = None
+            keep.clear()
             with _letting_go_lock:
                 _letting_go -= 1
                 left = _letting_go
@@ -468,7 +493,7 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
     return outcome.get("value")
 
 
-def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5) -> bool:
+def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5, keep=None) -> bool:
     """Close a chart's data workbook, and say whether it closed.
 
     A workbook left open keeps the chart in edit mode: the next chart PowerPoint
@@ -482,7 +507,8 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5) -> bool:
     even then, so a failure to get it is retried rather than taken as closed.
 
     ``workbook`` is the one the caller holds, or None to open it first, as
-    ``ChartData.Activate`` does for a chart just added.
+    ``ChartData.Activate`` does for a chart just added. Each workbook got here
+    goes into ``keep``, when given, so it is let go only when the caller says.
     """
     last = None
     for attempt in range(attempts):
@@ -493,10 +519,13 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5) -> bool:
                 if workbook is None and not attempt:
                     chart.ChartData.Activate()
                 workbook = chart.ChartData.Workbook
+                if keep is not None:
+                    keep.append(workbook)
             workbook.Close(False)
             return True
         except Exception as e:  # noqa: BLE001 - retried, then reported
-            last = e
+            # Only its text: the error's frames would hold the workbook.
+            last = f"{type(e).__name__}: {e}"
     logger.warning("Could not close a chart's data workbook after %d tries: %s", attempts, last)
     return False
 
@@ -514,7 +543,8 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     # CRITICAL: AddChart2 auto-opens an Excel workbook. MUST close it to
     # prevent leaked Excel processes, and a chart left in edit mode stops the
     # next one being added.
-    closed = _on_a_thread_of_its_own(chart, _close_chart_workbook)
+    closed = _on_a_thread_of_its_own(
+        chart, lambda chart, keep: _close_chart_workbook(chart, keep=keep))
 
     type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
     result = {
@@ -531,17 +561,24 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     return result
 
 
-def _write_chart_data(chart, categories, series) -> bool:
-    """Write the data into the chart's workbook and close it; say whether it closed."""
+def _write_chart_data(chart, categories, series, keep=None) -> bool:
+    """Write the data into the chart's workbook and close it; say whether it closed.
+
+    The workbook, sheet and range objects go into ``keep``, when given, so they
+    are let go only when the caller says, not when this returns.
+    """
+    keep = [] if keep is None else keep
     chart.ChartData.Activate()
     try:
         wb = chart.ChartData.Workbook
+        keep.append(wb)
     except Exception:
         # Activate opened it; do not leave it open on the way out.
-        _close_chart_workbook(chart)
+        _close_chart_workbook(chart, keep=keep)
         raise
     try:
         ws = wb.Worksheets(1)
+        keep.append(ws)
         ws.Cells.Clear()
 
         # Write categories in column A starting at row 2
@@ -562,6 +599,7 @@ def _write_chart_data(chart, categories, series) -> bool:
         last_row = len(categories) + 1
         last_col = len(series) + 1
         data_range = ws.Range(ws.Cells(1, 1), ws.Cells(last_row, last_col))
+        keep.append(data_range)
         addr = "Sheet1!" + data_range.Address
         chart._oleobj_.InvokeTypes(
             1413, 0, 1, (24, 0),
@@ -569,7 +607,7 @@ def _write_chart_data(chart, categories, series) -> bool:
             addr, pythoncom.Empty if pythoncom is not None else None,
         )
     finally:
-        closed = _close_chart_workbook(chart, wb)
+        closed = _close_chart_workbook(chart, wb, keep=keep)
     return closed
 
 
@@ -582,7 +620,7 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     chart = shape.Chart
 
     closed = _on_a_thread_of_its_own(
-        chart, lambda chart: _write_chart_data(chart, categories, series))
+        chart, lambda chart, keep: _write_chart_data(chart, categories, series, keep))
 
     result = {
         "success": True,

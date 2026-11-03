@@ -190,7 +190,7 @@ class TestOnAThreadOfItsOwn:
         here = threading.get_ident()
         d = self.dictionary()
 
-        def work(there):
+        def work(there, keep):
             there.Add("from", "the other thread")
             return threading.get_ident()
 
@@ -200,11 +200,70 @@ class TestOnAThreadOfItsOwn:
     def test_an_error_there_is_raised_here(self):
         from ppt_com.charts import _on_a_thread_of_its_own
 
-        def work(there):
+        def work(there, keep):
             raise ValueError("Excel said no")
 
         with pytest.raises(ValueError, match="Excel said no"):
             _on_a_thread_of_its_own(self.dictionary(), work)
+
+    class SlowToLetGo:
+        """Stands in for a closed workbook, whose release blocks a while."""
+
+        def __init__(self, seconds, released):
+            self.seconds, self.released = seconds, released
+
+        def __del__(self):
+            import threading
+            import time
+
+            time.sleep(self.seconds)
+            self.released.append(threading.get_ident())
+
+    def wait_for(self, released):
+        import time
+
+        end = time.monotonic() + 10
+        while not released and time.monotonic() < end:
+            time.sleep(0.05)
+        return released
+
+    def test_what_the_work_keeps_is_let_go_there_after_answering(self):
+        import threading
+        import time
+
+        from ppt_com.charts import _on_a_thread_of_its_own
+
+        released = []
+
+        def work(there, keep):
+            workbook = self.SlowToLetGo(2, released)
+            keep.append(workbook)
+            return "closed"
+
+        started = time.monotonic()
+        assert _on_a_thread_of_its_own(self.dictionary(), work) == "closed"
+        assert time.monotonic() - started < 1.5
+        assert self.wait_for(released)[0] != threading.get_ident()
+
+    def test_an_error_there_leaves_its_references_there(self):
+        import threading
+        import time
+
+        from ppt_com.charts import _on_a_thread_of_its_own
+
+        released = []
+
+        def work(there, keep):
+            workbook = self.SlowToLetGo(2, released)  # noqa: F841 - held by the frame
+            raise ValueError("Excel said no")
+
+        started = time.monotonic()
+        with pytest.raises(ValueError, match="Excel said no") as raised:
+            _on_a_thread_of_its_own(self.dictionary(), work)
+        assert raised.value.__traceback__ is not None
+        del raised
+        assert time.monotonic() - started < 1.5
+        assert self.wait_for(released)[0] != threading.get_ident()
 
     def test_work_that_does_not_finish_in_time_is_left_to_finish_there(self):
         import time
@@ -212,7 +271,7 @@ class TestOnAThreadOfItsOwn:
         from ppt_com.charts import TIMED_OUT, _on_a_thread_of_its_own
 
         started = time.monotonic()
-        assert _on_a_thread_of_its_own(self.dictionary(), lambda there: time.sleep(3),
+        assert _on_a_thread_of_its_own(self.dictionary(), lambda there, keep: time.sleep(3),
                                        timeout=0.5) is TIMED_OUT
         assert time.monotonic() - started < 2
 
@@ -221,4 +280,4 @@ class TestOnAThreadOfItsOwn:
 
         from ppt_com.charts import _on_a_thread_of_its_own
 
-        assert _on_a_thread_of_its_own(SimpleNamespace(), lambda c: "inline") == "inline"
+        assert _on_a_thread_of_its_own(SimpleNamespace(), lambda c, keep: "inline") == "inline"
