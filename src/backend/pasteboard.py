@@ -6,8 +6,8 @@ paste, so the write and the paste cannot be separated by another job (design
 section 2). Keeping this module free of PowerPoint means it can be faked in a
 test with a dict.
 
-What is here was measured before it was written (docs/gvml-design.md section
-0 and 3). Reading fifteen types off a PowerPoint copy took 39 ms. Writing
+What is here was measured before it was written (sections 0 and 3 of the
+GVML design on #211). Reading fifteen types off a PowerPoint copy took 39 ms. Writing
 every one of them back except PowerPoint's own in-process pointer types,
 ``com.microsoft.PowerPoint-12.0-Internal-*`` and ``com.microsoft.ole.source.*``,
 gave a pasteboard PowerPoint could paste from again. The pointer types are

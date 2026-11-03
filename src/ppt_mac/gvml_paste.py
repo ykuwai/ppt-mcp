@@ -4,8 +4,8 @@ Every tool that reaches PowerPoint through the clipboard goes through here:
 ``ppt_add_chart``, ``ppt_build_freeform`` and ``ppt_group_shapes`` paste a
 package, ``ppt_get_chart_data``, ``ppt_get_shape_nodes`` and
 ``ppt_get_group_items`` copy one off. What they share is the procedure and its
-checks, which are the whole reason the route is trustworthy (docs/gvml-design.md
-sections 2, 3 and 8):
+checks, which are the whole reason the route is trustworthy (sections 2, 3
+and 8 of the GVML design on #211):
 
 1. The user's clipboard is saved before anything is written and put back
    afterwards, unless something else wrote to it in between.

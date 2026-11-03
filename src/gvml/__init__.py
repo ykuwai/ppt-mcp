@@ -14,7 +14,8 @@ standard library, knows nothing about PowerPoint or appscript, and runs on
 Windows, which is where the CI is. ``ppt_mac/gvml_paste.py`` is the other half,
 the one that puts a package on the pasteboard and drives the paste.
 
-Two facts from the measurements behind ``docs/gvml-design.md`` shape every
+Two facts from the measurements behind the GVML design on #211
+(https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420) shape every
 module here. PowerPoint says nothing about a package it cannot use: ``paste
 object`` returns no error and the slide does not change, whether the bytes are
 not a zip, the XML is broken, the canvas is empty or the elements are in the

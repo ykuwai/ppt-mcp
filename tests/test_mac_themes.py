@@ -399,9 +399,12 @@ class TestTheDocumentedRefusalsMatchTheCode:
                 sources = [ast.get_source_segment(text, r) or "" for r in returns]
                 # `_refuse_for_shape` and `_refuse_for_node_tool` build the
                 # same payload for a whole module's worth of tools, so a
-                # refusal is any return that goes through one of the three.
+                # refusal is any return that goes through one of them or the
+                # shared `refusal` and `unsupported` (#248: three built the
+                # dict by hand and were not counted).
                 if all(
-                    "_refusal" in s or "_refuse_" in s or "unsupported" in s
+                    "refusal(" in s or "_refusal" in s or "_refuse_" in s
+                    or "unsupported" in s
                     for s in sources
                 ):
                     found.add("ppt_" + node.name[1:-5])

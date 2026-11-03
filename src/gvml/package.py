@@ -7,7 +7,7 @@ drawing itself at ``clipboard/drawings/drawing1.xml``. A chart adds
 picture adds ``clipboard/media/image1.png`` the same way, and the theme part
 PowerPoint includes is optional in both directions.
 
-``validate`` is the check the design (docs/gvml-design.md section 8) puts in
+``validate`` is the check that section 8 of the GVML design on #211 puts in
 front of every paste. PowerPoint will not report a broken package, so this is
 the only place a mistake in our own assembly can be caught before it turns
 into a silent no-op on the slide.
