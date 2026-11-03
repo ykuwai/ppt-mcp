@@ -364,7 +364,7 @@ On Windows, a presentation opened from a server (SharePoint, OneDrive) can be ed
 - `ppt_set_default_shape_style`: Set default fill/border/font before inserting shapes. Can capture all properties from a template shape including gradients.
 - `ppt_add_shape`: Supports inline text styling (`font_name`, `font_size`, `bold`, `font_color`, `align`) — no need for a separate `ppt_format_text` call.
 - `ppt_add_slide`: Accepts `count` to create multiple slides at once.
-- `ppt_set_slide_background`: Accepts `slide_indices` to set background on multiple slides in one call.
+- `ppt_set_slide_background` and `ppt_set_slide_transition`: Accept `slide_indices` to change several slides in one call.
 
 ## Design thinking
 

@@ -391,7 +391,8 @@ class TestSlideTransition:
             with pytest.raises(ValueError, match="push, wipe, split and reveal"):
                 _set_slide_transition_impl(1, "push", None, None, None, None)
 
-        assert deck.transition.entry_effect() is None
+        # Refused before the slide is even looked up, so nothing was touched.
+        assert not hasattr(deck, "transition")
 
 
 @macos_only
