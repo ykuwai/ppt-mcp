@@ -771,12 +771,66 @@ def _get_all_text_impl(slide_indices) -> str:
 # ---------------------------------------------------------------------------
 # Apple Event implementation functions
 # ---------------------------------------------------------------------------
+def _in_a_group(slide_index, shape_name_or_index) -> bool:
+    """Whether the name is not a top-level shape, so it may be a group's member."""
+    from ppt_mac.group_text import is_top_level
+
+    pres = ppt._get_pres_impl()
+    return not is_top_level(pres.slides[slide_index], shape_name_or_index)
+
+
+def _set_member_text(slide_index, identifier, text, start, length, search_text,
+                     occurrence, runs):
+    """ppt_set_text on a member of a group; see ppt_mac.group_text. None when
+    no group on the slide holds the name."""
+    from gvml import text as gvml_text
+    from ppt_com.text import _resolve_span
+    from ppt_mac.group_text import edit_member
+
+    if runs is not None:
+        raise ValueError(
+            f"'{identifier}' is inside a group, where runs cannot be written. "
+            "Set the text, then format it with ppt_format_text."
+        )
+    expected = {}
+
+    def edit(member):
+        if start is None and search_text is None:
+            gvml_text.write_text(member, text)
+            expected["text"] = gvml_text.read_text(member)
+            return {"status": "success", "text_length": len(expected["text"]),
+                    "paragraph_count": expected["text"].count(gvml_text.PARAGRAPH) + 1}
+        full = gvml_text.read_text(member)
+        at, span = _resolve_span(full, identifier, start, length, search_text, occurrence)
+        gvml_text.replace_span(member, at, span, text)
+        expected["text"] = gvml_text.read_text(member)
+        return {"status": "success", "start": at, "replaced_length": span,
+                "written_length": len(text), "text": expected["text"],
+                "text_length": len(expected["text"])}
+
+    def check(member):
+        got = gvml_text.read_text(member)
+        if got != expected["text"]:
+            return f"its text reads back as {got!r}, not {expected['text']!r}"
+        return None
+
+    return edit_member(slide_index, identifier, "ppt_set_text", edit, check)
+
+
 def _set_text_impl(slide_index: int, shape_name_or_index, text,
                    start=None, length=None, search_text=None, occurrence=1,
                    runs=None) -> dict:
     from ppt_com.text import (
         _check_format_spec, _for_powerpoint, _resolve_span, run_offsets,
     )
+
+    if _in_a_group(slide_index, shape_name_or_index):
+        result = _set_member_text(slide_index, shape_name_or_index, text, start,
+                                  length, search_text, occurrence, runs)
+        if result is not None:
+            return result
+        from ppt_mac.group_text import not_found
+        raise not_found(slide_index, shape_name_or_index)
 
     shape, tr = _text_frame_of(slide_index, shape_name_or_index)
     name = shape.name()
@@ -964,9 +1018,63 @@ def _get_text_impl(slide_index: int, shape_name_or_index, measure=False) -> dict
     return result
 
 
+def _format_member(slide_index, identifier, font_name, font_name_fareast,
+                   font_size, bold, italic, underline, color, font_color_theme,
+                   highlight_color):
+    """ppt_format_text on a member of a group; see ppt_mac.group_text. None
+    when no group on the slide holds the name."""
+    from gvml import text as gvml_text
+    from ppt_mac.group_text import edit_member
+    from utils.color import theme_color_name
+
+    if highlight_color is not None:
+        raise ValueError(
+            f"'{identifier}' is inside a group, where a highlight cannot be "
+            "written. Everything else ppt_format_text takes can be."
+        )
+    colour = font_color_theme or color
+    if colour is not None:
+        colour = theme_color_name(colour) or colour
+    wanted = {
+        "sz": None if font_size is None else str(int(round(font_size * 100))),
+        "b": None if bold is None else ("1" if bold else "0"),
+        "i": None if italic is None else ("1" if italic else "0"),
+        "u": None if underline is None else ("sng" if underline else "none"),
+        "color": None if colour is None else gvml_text.SCHEME_COLORS.get(
+            colour, colour.lstrip("#").upper()),
+        "latin": font_name,
+    }
+    wanted = {key: value for key, value in wanted.items() if value is not None}
+
+    def edit(member):
+        runs = gvml_text.format_runs(
+            member, font_name=font_name, font_name_fareast=font_name_fareast,
+            font_size=font_size, bold=bold, italic=italic, underline=underline,
+            color=colour)
+        return {"status": "success", "runs_formatted": runs}
+
+    def check(member):
+        for run in gvml_text.run_formats(member):
+            for key, value in wanted.items():
+                if run[key] != value:
+                    return f"a run reads back with {key}={run[key]!r}, not {value!r}"
+        return None
+
+    return edit_member(slide_index, identifier, "ppt_format_text", edit, check)
+
+
 def _format_text_impl(slide_index, shape_name_or_index,
                       font_name, font_name_fareast, font_size, bold, italic, underline,
                       color, font_color_theme, highlight_color) -> dict:
+    if _in_a_group(slide_index, shape_name_or_index):
+        result = _format_member(slide_index, shape_name_or_index, font_name,
+                                font_name_fareast, font_size, bold, italic, underline,
+                                color, font_color_theme, highlight_color)
+        if result is not None:
+            return result
+        from ppt_mac.group_text import not_found
+        raise not_found(slide_index, shape_name_or_index)
+
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()

@@ -293,9 +293,10 @@ def _shape_index(
         raise ValueError(
             f"Shape '{identifier}' is not on this slide at the top level. "
             f"It may be inside one of these groups: {', '.join(grouped)}. "
-            "Nothing reaches a group's children by name here; "
-            "ppt_get_group_items lists them, and ppt_ungroup_shapes is the "
-            "only way to edit one, though it renames the children as it goes. "
+            "ppt_get_group_items lists their members; ppt_set_text and "
+            "ppt_format_text reach a member by its name or its path "
+            "('Group/Member'), and other tools need it ungrouped, which "
+            "renames the members. "
             f"On the slide itself: {', '.join(names) if names else 'nothing'}."
         )
     raise ValueError(
