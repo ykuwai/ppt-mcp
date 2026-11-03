@@ -219,7 +219,7 @@ class _PowerPointServer(MCPServer):
             _refuse_unknown_arguments(name, tool, arguments)
         token = call_presentation.set(wanted)
         coauthoring_token = call_coauthoring.set(_coauthoring_call(name, tool, arguments))
-        undo_token = call_undo_entry.set(_undo_entry_for(name, tool))
+        undo_token = call_undo_entry.set(_undo_entry_for(name, tool, arguments))
         try:
             return _flag_failure(await super().call_tool(name, arguments, *args, **kwargs))
         except ToolError as exc:
@@ -321,6 +321,8 @@ _TOOLS_WITHOUT_COAUTHORING = frozenset({
 # The tools that work the undo stack themselves, and so must not start an entry
 # of their own first: an entry started just before Undo is the one it undoes.
 _TOOLS_THAT_DRIVE_UNDO = frozenset({"ppt_undo", "ppt_redo", "ppt_start_undo_entry"})
+# The ribbon commands that do the same through ppt_execute_mso.
+_MSO_COMMANDS_THAT_DRIVE_UNDO = frozenset({"undo", "redo"})
 
 
 def _is_read_only(tool) -> bool:
@@ -331,7 +333,18 @@ def _is_read_only(tool) -> bool:
     return bool(read_only)
 
 
-def _undo_entry_for(name, tool):
+def _call_params(arguments) -> dict:
+    """The call's ``params``, as a dict, whether sent as an object or as JSON."""
+    params = arguments.get("params") if isinstance(arguments, dict) else None
+    if isinstance(params, str):
+        try:
+            params = json.loads(params)
+        except ValueError:
+            params = None
+    return params if isinstance(params, dict) else {}
+
+
+def _undo_entry_for(name, tool, arguments=None):
     """A fresh undo step for a tool call that changes the deck, or None.
 
     PowerPoint gathers every change made through COM since the last
@@ -342,6 +355,10 @@ def _undo_entry_for(name, tool):
     """
     if name in _TOOLS_THAT_DRIVE_UNDO or _is_read_only(tool):
         return None
+    if name == "ppt_execute_mso":
+        command = str(_call_params(arguments).get("command_name") or "").strip().lower()
+        if command in _MSO_COMMANDS_THAT_DRIVE_UNDO:
+            return None
     return UndoEntry()
 
 

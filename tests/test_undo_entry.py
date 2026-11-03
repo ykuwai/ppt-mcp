@@ -93,3 +93,12 @@ class TestWhichCallsGetOne:
         assert "ppt_list_shapes" in read_only
         for name in read_only:
             assert server._undo_entry_for(name, tools[name]) is None, name
+
+    def test_undo_and_redo_run_as_ribbon_commands_do_not_either(self):
+        tools, server = self.tools()
+        mso = tools["ppt_execute_mso"]
+        for command in ("Undo", "Redo", "undo"):
+            assert server._undo_entry_for("ppt_execute_mso", mso, {"params": {"command_name": command}}) is None
+        assert server._undo_entry_for("ppt_execute_mso", mso, {"params": '{"command_name": "Redo"}'}) is None
+        assert isinstance(server._undo_entry_for(
+            "ppt_execute_mso", mso, {"params": {"command_name": "AlignLeft"}}), UndoEntry)
