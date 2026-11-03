@@ -1309,6 +1309,14 @@ def _for_powerpoint(text):
     return text.replace(chr(10), chr(13))
 
 
+def _from_powerpoint(text):
+    """The other way: PowerPoint's \r paragraph breaks as the \n a caller sent.
+
+    \v comes back as it went in.
+    """
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def run_offsets(runs):
     """The 1-based (start, length) of each run in the text they make together.
 
