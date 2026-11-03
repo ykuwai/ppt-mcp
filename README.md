@@ -468,6 +468,10 @@ Smaller differences:
   PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
   systems get a refusal naming the reason rather than a blank box.
 
+## 🤝 Contributing
+
+Pull requests are welcome. Base them on `develop`, one topic each, with tests; [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
+
 ## 📄 License
 
 MIT
