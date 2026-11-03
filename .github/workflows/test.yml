@@ -3,8 +3,8 @@ name: Tests
 # Runs on every push and PR, and is called by publish.yml so a release cannot
 # ship without passing the same checks.
 #
-# windows-latest is required: the tests import pywin32, which has no Linux
-# wheel. They do NOT need a live PowerPoint instance — the COM connection is
+# windows-latest is required for the COM half: the tests import pywin32, which
+# has no Linux wheel. They do NOT need a live PowerPoint instance — the COM connection is
 # established lazily on the first tool call (#148), so importing the server is
 # safe on a headless runner.
 on:
@@ -69,3 +69,28 @@ jobs:
 
       - name: Run tests
         run: ${{ matrix.run }}
+
+  # The macOS half of the suite: the Apple Event backend against its fakes,
+  # which tests/conftest.py keeps off any real PowerPoint. These tests skip on
+  # Windows, so without this job a test that fails only on a Mac (#248's
+  # headline count, for one) was seen by nobody until someone ran it there.
+  test-macos:
+    name: pytest (macOS)
+    runs-on: macos-latest
+
+    env:
+      UV_PYTHON: "3.12"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          cache-suffix: macos
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Run tests
+        run: uv run --frozen pytest -q
