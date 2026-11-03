@@ -646,11 +646,25 @@ def _get_tags_impl(slide_index, shape_name_or_index, target_type):
 def _replace_font_impl(original_font, replacement_font):
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
-    pres.Fonts.Replace(original_font, replacement_font)
+    # Fonts.Replace answers "Object required" (0x800A01A8) for a font the deck
+    # does not use, where the Mac replaces nothing and says so.
+    used = [pres.Fonts(i).Name for i in range(1, pres.Fonts.Count + 1)]
+    named = next((name for name in used if name.casefold() == original_font.casefold()), None)
+    if named is None:
+        return {
+            "success": True,
+            "original_font": original_font,
+            "replacement_font": replacement_font,
+            "replaced": False,
+            "note": f"'{original_font}' is not used in this presentation, so nothing "
+                    f"was changed. The fonts it uses: {used}.",
+        }
+    pres.Fonts.Replace(named, replacement_font)
     return {
         "success": True,
         "original_font": original_font,
         "replacement_font": replacement_font,
+        "replaced": True,
     }
 
 
