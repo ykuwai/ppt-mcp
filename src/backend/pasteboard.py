@@ -24,7 +24,7 @@ so none is set up here.
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from AppKit import NSData, NSPasteboard
+from AppKit import NSData, NSPasteboard, NSURL
 
 # Types that are pointers into PowerPoint's own process and must not be written
 # back from ours.
@@ -81,6 +81,18 @@ def write(uti: str, data: bytes) -> int:
     ns_data = NSData.dataWithBytes_length_(data, len(data))
     if not board.setData_forType_(ns_data, uti):
         raise RuntimeError(f"NSPasteboard declined to take {len(data)} bytes of {uti}")
+    return int(board.changeCount())
+
+
+def write_files(paths: List[str]) -> int:
+    """Replace the pasteboard with file URLs, one item per file, and return
+    the new change count. What Finder puts there when files are copied, so a
+    paste into a document, a mail or a folder takes the files themselves."""
+    board = _board()
+    board.clearContents()
+    urls = [NSURL.fileURLWithPath_(path) for path in paths]
+    if not board.writeObjects_(urls):
+        raise RuntimeError(f"NSPasteboard declined to take {len(urls)} file URL(s)")
     return int(board.changeCount())
 
 

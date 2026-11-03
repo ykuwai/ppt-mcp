@@ -825,12 +825,13 @@ def register_tools(mcp):
         },
     )
     async def tool_copy_to_clipboard(params: CopyToClipboardInput) -> str:
-        """Copy slides as PNG images to the Windows clipboard.
+        """Copy slides as PNG images to the clipboard.
 
         By default, copies the currently viewed slide.
         Specify slide_indices to copy specific slides.
         Single slide is placed as a bitmap (paste directly as image).
-        Multiple slides are placed as file drop (paste inserts all images).
+        Multiple slides are placed as file drop (paste inserts all images);
+        on macOS as file URLs, as Finder copies files.
         """
         return await run_offloaded(copy_to_clipboard, params)
 
