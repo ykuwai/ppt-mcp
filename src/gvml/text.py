@@ -54,6 +54,12 @@ def text_of(shape: ET.Element) -> str:
     body = _body(shape)
     if body is None:
         raise PackageError("the shape has no text body")
+    return body_text(body)
+
+
+def body_text(body: ET.Element) -> str:
+    """``text_of`` for any element holding ``a:p`` paragraphs: a shape's
+    ``a:txBody``, a SmartArt node's ``dgm:t``, a drawn node's ``dsp:txBody``."""
     paragraphs = []
     for p in body.findall(f"{_A}p"):
         parts = []
@@ -72,6 +78,11 @@ def set_text(shape: ET.Element, text: str) -> None:
     body = _body(shape)
     if body is None:
         raise PackageError("the shape has no text body")
+    write_body(body, text)
+
+
+def write_body(body: ET.Element, text: str) -> None:
+    """``set_text`` for any element holding ``a:p`` paragraphs (see ``body_text``)."""
     old = body.findall(f"{_A}p")
     first = old[0] if old else None
     ppr = first.find(f"{_A}pPr") if first is not None else None
@@ -244,6 +255,15 @@ def format_runs(shape: ET.Element, *, font_name=None, font_name_fareast=None,
     body = _body(shape)
     if body is None:
         raise PackageError("the shape has no text body")
+    return format_body_runs(body, font_name=font_name, font_name_fareast=font_name_fareast,
+                            font_size=font_size, bold=bold, italic=italic,
+                            underline=underline, color=color)
+
+
+def format_body_runs(body: ET.Element, *, font_name=None, font_name_fareast=None,
+                     font_size=None, bold=None, italic=None, underline=None,
+                     color=None) -> int:
+    """``format_runs`` for any element holding ``a:p`` paragraphs (see ``body_text``)."""
     runs = list(body.iter(f"{_A}r"))
     targets = []
     for run in runs:
