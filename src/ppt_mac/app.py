@@ -14,6 +14,7 @@ import logging
 from typing import Optional
 
 from backend.mac_ae import count, elements, is_missing, ppt, shapes_of
+from backend.unsupported import refusal
 
 logger = logging.getLogger(__name__)
 
@@ -172,12 +173,11 @@ def _set_window_state_impl(window_state: str) -> dict:
     nothing that maximises or minimises the application, and there is no
     single application window to act on in the first place.
     """
-    return {
-        "error": "ppt_set_window_state is not available on macOS",
-        "reason": (
+    return refusal(
+        "ppt_set_window_state",
+        (
             "PowerPoint for Mac exposes no application window state to Apple "
             "Events. Individual presentation windows can be moved and resized, "
             "but there is nothing to maximise or minimise."
         ),
-        "platform": "macOS",
-    }
+    )

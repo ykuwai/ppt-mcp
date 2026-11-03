@@ -1,6 +1,6 @@
 """Run the clipboard tools against a live PowerPoint and print what landed.
 
-The checks that only a hand can make (docs/gvml-design.md section 7): that
+The checks that only a hand can make (section 7 of the GVML design on #211): that
 PowerPoint accepts the packages, that a second paste does not land inside the
 first chart, that the clipboard comes back, that the chart survives a save
 and reopen, that position and z order read back as written, and that the

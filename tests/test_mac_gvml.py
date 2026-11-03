@@ -7,7 +7,7 @@ count. appscript only installs on macOS, so the file is skipped elsewhere;
 the XML itself is tested in ``test_gvml.py``, which runs everywhere.
 
 What is pinned here is the procedure and its refusals, the list in
-docs/gvml-design.md section 7: the order of the steps, that a paste which
+section 7 of the GVML design on #211: the order of the steps, that a paste which
 added nothing is refused rather than reported, that a clipboard rewritten
 between the write and the paste stops the paste, that a navigation that failed
 stops it too, that what landed wrong is removed before the refusal, that the

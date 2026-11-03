@@ -26,6 +26,7 @@ from typing import List, Optional
 
 from backend.mac_ae import EXPORT_STAGING_DIR, count, mactypes, ppt, staging_dir
 from backend.mac_enums import PpSaveAsFileType, to_keyword
+from backend.unsupported import refusal
 from ppt_com.constants import ppSaveAsPDF
 
 logger = logging.getLogger(__name__)
@@ -430,16 +431,15 @@ def _copy_to_clipboard_impl(*args, **kwargs) -> dict:
     but nothing of the existing code carries over, so this is a rewrite rather
     than a translation and it is not part of this port.
     """
-    return {
-        "error": "ppt_copy_to_clipboard is not available on macOS",
-        "reason": (
+    return refusal(
+        "ppt_copy_to_clipboard",
+        (
             "The Windows implementation writes DIB and HDROP formats through "
             "the Win32 clipboard API, which has no counterpart here. macOS "
             "would need an NSPasteboard implementation written from scratch."
         ),
-        "platform": "macOS",
-        "alternatives": ["ppt_export_images", "ppt_export_pdf"],
-    }
+        alternatives=["ppt_export_images", "ppt_export_pdf"],
+    )
 
 
 def render_slide_png(slide_index: int, width: Optional[int] = None) -> bytes:

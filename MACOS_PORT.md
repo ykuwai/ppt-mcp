@@ -3,9 +3,10 @@
 Status: design study, now partly built. The measurements below stand; where
 building it changed the answer, the section says so.
 
-What has shipped so far, on the `macos-support` branch. The package installs
-and 563 tests run on macOS (#185), the Apple Event backend and the generated
-enumeration tables (#186), and the app and export tools (#187).
+It shipped in v2.1.0, through #184 and its sub-issues: the package and its
+tests on macOS (#185), the Apple Event backend and the generated enumeration
+tables (#186), the app and export tools (#187), and every other module after
+them. Section 6.1 lists what still refuses.
 
 The one place building it beat the study: **slide images do work**, just not the
 way Windows does them. Section 6 said there is no export command, which is true,
@@ -57,7 +58,7 @@ Three things are absent from the dictionary. Charts, SmartArt and freeform
 path building have no words in it at all. Two of them come back another way:
 the clipboard carries a DrawingML package for any shape, PowerPoint pastes one
 back whatever it holds, and every chart, freeform and group tool goes through
-it (`docs/gvml-design.md`). Creating and reading is a paste or a copy; editing
+it ([the GVML design on #211](https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420)). Creating and reading is a paste or a copy; editing
 an existing chart or path is a copy, a rewrite and a paste back, after which
 the original is deleted and the new shape put back in its place. That makes
 it a new object with the old name, and the tool says so. Section 6 says what
@@ -513,7 +514,7 @@ This is the honest part. These are not workarounds waiting to be found.
 
 | Area | Windows | macOS | Lines affected |
 |---|---|---|---|
-| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. A chart is added by writing its XML and pasting it through the clipboard, and its data is read the same way (`docs/gvml-design.md`). An existing chart is edited by copying it, rewriting its `chart1.xml` and pasting it back over the original, which keeps name, position and z order and loses animations, said in `warnings` | `charts.py` 1,126 |
+| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. A chart is added by writing its XML and pasting it through the clipboard, and its data is read the same way ([the GVML design on #211](https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420)). An existing chart is edited by copying it, rewriting its `chart1.xml` and pasting it back over the original, which keeps name, position and z order and loses animations, said in `warnings` | `charts.py` 1,126 |
 | SmartArt | `SmartArt` object model | **no class, no command**. `shape type smartart graphic` exists, so an existing graphic is a shape like any other | `smartart.py` 810 |
 | Freeform paths | `Shapes.BuildFreeform` | **no builder**. A path is written as `a:custGeom` and pasted through the clipboard, and read back the same way. Nodes are moved, inserted, deleted and switched between line and curve by rewriting the path and pasting it back over the original. The editing type (corner, smooth, symmetric) is not in the XML either and stays refused | `freeform.py` 765 |
 | Grouping | `ShapeRange.Group` | **no `select` command, so no shape range**. The members are copied off the slide one by one, wrapped in one `a:grpSp` and pasted back as a group; the originals are deleted only once the group is verified | `groups.py` |
@@ -533,7 +534,7 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**157 tools. 145 do the job. 12 always refuse.**
+**157 tools. 142 do the job. 15 always refuse.**
 
 | Why | Tools |
 |---|---|
@@ -544,6 +545,9 @@ checked against the code by a test, so it cannot quietly go stale.
 | Deleting one effect answers -50 and clearing its shape costs the slide | `ppt_remove_animation`, `ppt_copy_animation` |
 | No table style, only the text direction | `ppt_set_table_style` |
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
+| No application window state, only each deck's window position and size | `ppt_set_window_state` |
+| No Boolean merge verbs (union, combine, intersect, subtract, fragment), and no shape range to merge | `ppt_merge_shapes` |
+| Built on the Win32 clipboard API (DIB and HDROP); an NSPasteboard version is #247 | `ppt_copy_to_clipboard` |
 
 A further **19 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
@@ -730,7 +734,7 @@ lives.
 **Phase 3, the rest, and the honest refusals.**
 
 **Phase 4, the clipboard.** Charts, freeforms and groups through
-`com.microsoft.Art--GVML-ClipFormat`, in the order `docs/gvml-design.md`
+`com.microsoft.Art--GVML-ClipFormat`, in the order [the GVML design on #211](https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420)
 section 6 gives: the six tools that create or read first, then the five that
 edit a chart, then the four that edit a path. All three tiers are in.
 
@@ -744,7 +748,7 @@ back that way. Charts and freeforms no longer depend on it.
 
 Written down so nobody re-derives it.
 
-1. Whether `run VB macro` actually executes. Section 6.1 has the one line test.
+1. Whether `run VB macro` actually executes. Section 6.2 has the one line test.
    It matters for SmartArt now; charts are made through the clipboard instead.
 2. ~~Table cell addressing.~~ Settled. `get cell from` is the wrong route and
    `table.rows[r].cells[c]` is the right one; see section 5.1. Every table tool
@@ -753,11 +757,11 @@ Written down so nobody re-derives it.
    and write through `slide master`'s `theme`'s `theme color scheme`. What does
    not work is the Windows walk, because a deck's `designs` collection counts
    zero here and `designs[1]` answers -1728.
-4. Sections. The command answered through appscript and failed with -1708
-   through AppleScript, which should not both be true and needs one clean run.
-5. Align, distribute, group and ungroup all take a `shape range`, and the only
-   route to one appears to be through the window's selection. That changes the
-   shape of those four tools.
+4. ~~Sections.~~ Settled in a96e592: adding and managing sections work, and
+   the tools stopped refusing them.
+5. ~~Align, distribute, group and ungroup need a `shape range`.~~ Settled
+   without one. Align and distribute compute each shape's position and set it,
+   and grouping goes through the clipboard (#211).
 6. ~~Whether passing a file reference rather than a path string hands PowerPoint
    a sandbox extension.~~ Settled, and the answer is half of each. A file
    reference is necessary, `save in: "<path>"` as text writes nothing anywhere

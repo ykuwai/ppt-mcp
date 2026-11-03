@@ -16,7 +16,7 @@ pasteboard as a DrawingML package holding ``chart1.xml``, caches and all, and
 without a workbook. So a chart is added by writing ``chart1.xml`` from the
 ``XlChartType`` integer and pasting it, and its data is read by copying it
 and reading the caches. Both were measured before they were written
-(docs/gvml-design.md section 0). The XML writer and reader are in
+(section 0 of the GVML design on #211). The XML writer and reader are in
 ``gvml/charts.py``, the paste procedure in ``ppt_mac/gvml_paste.py``.
 
 **Editing is copy, rewrite, paste back, delete the original.** The five

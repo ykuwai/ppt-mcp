@@ -13,7 +13,7 @@ at all. Each member is copied with ``copy shape``, which puts a DrawingML
 package on the clipboard, the members are wrapped in one ``a:grpSp`` and
 pasted back as a single group, and only once the group is on the slide and
 verified are the originals deleted. See ``ppt_mac/gvml_paste.py`` for the
-procedure and ``docs/gvml-design.md`` for the measurements behind it.
+procedure and the GVML design on #211 for the measurements behind it.
 
 **A group's members cannot be read through the dictionary.** ``shape`` has a
 ``shape`` element, which reads as though a group's members are reached the

@@ -423,7 +423,7 @@ What catalog mode gives up is per-tool control in the client: approving or block
 
 ## 🍎 macOS support
 
-**12 tools refuse on macOS. The rest work.** The 12 are listed by name in
+**15 tools refuse on macOS. The rest work.** The 15 are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what

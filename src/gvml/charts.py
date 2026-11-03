@@ -4,7 +4,7 @@ The writer takes the Windows integer, not the friendly name. Resolving
 ``'column'`` to 51 stays where it is in ``ppt_com/charts.py``, so a name added
 there is spelled the same in a Mac caller's error, and this table only has to
 know what each integer looks like in XML. Two tables, one step each; see
-docs/gvml-design.md section 1.
+section 1 of the GVML design on #211.
 
 Every template's element order was checked against ``chart1.xml`` as
 PowerPoint itself writes it after a paste, which is the fixture
