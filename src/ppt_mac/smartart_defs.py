@@ -30,10 +30,9 @@ The few that differ from what PowerPoint for Windows calls the same layout
 are given the Windows name (``_WINDOWS_NAMES``), so every layout both
 installs carry has one name on both, and no two layouts share one.
 
-The names are English, so a layout is looked up by them alone.
-``ppt_com.smartart.SMARTART_ENGLISH_ALIASES`` is not used here: checked
-against the names Windows itself reports for the same ids, most of its
-entries name a different layout.
+The names are already English, so a layout is looked up by them alone, and
+``ppt_com.smartart.SMARTART_ENGLISH_ALIASES``, which gives a Windows install
+in another language its English names, is not needed here.
 """
 
 import glob
