@@ -49,7 +49,7 @@ else:  # pragma: no cover - non-Windows
     pywintypes = _NotWindows()
 
 
-def share_type_information(dynamic, com_error) -> None:
+def share_type_information(dynamic, com_error, null_iid, funcdesc_kind, invoke_func) -> None:
     """Bind each COM name once per interface, not once per object.
 
     pywin32's late binding gives every object PowerPoint hands back a fresh
@@ -62,11 +62,18 @@ def share_type_information(dynamic, com_error) -> None:
     against 8.0 s.
 
     ``dynamic`` is ``win32com.client.dynamic``; ``com_error`` what its type
-    information raises. An object without a type library keeps pywin32's own
-    path.
+    information raises; ``funcdesc_kind`` and ``invoke_func`` pythoncom's
+    DESCKIND_FUNCDESC and INVOKE_FUNC. An object without a type library keeps
+    pywin32's own path, and so does one whose interface is ``null_iid``: type
+    information made up by different servers can all say IID_NULL and mean
+    different members.
+
+    Only what the type library says is shared. What pywin32 guesses from one
+    object's answer stays with that object; see ``keep_guesses_per_object``.
     """
     original = dynamic.MakeOleRepr
     shared = {}
+    shared_ids = set()
 
     def make_ole_repr(dispatch, typeinfo, typecomp):
         if typeinfo is None or typecomp is None:
@@ -75,18 +82,93 @@ def share_type_information(dynamic, com_error) -> None:
             interface = typeinfo.GetTypeAttr()[0]
         except com_error:
             return original(dispatch, typeinfo, typecomp)
+        if interface == null_iid:
+            return original(dispatch, typeinfo, typecomp)
         olerepr = shared.get(interface)
         if olerepr is None:
             olerepr = shared[interface] = original(dispatch, typeinfo, typecomp)
+            shared_ids.add(id(olerepr))
         return olerepr
 
     dynamic.MakeOleRepr = make_ole_repr
+    keep_guesses_per_object(dynamic, shared_ids, funcdesc_kind, invoke_func)
+
+
+def is_guess(entry, funcdesc_kind, invoke_func) -> bool:
+    """Whether a map entry is pywin32's guess rather than the type library's.
+
+    A real method is a FUNCDESC invoked as a function, and a property that takes
+    arguments, moved into the method map so it can be called, is marked
+    ``wasProperty``. Anything else in the method map was put there by
+    ``CDispatch.__getattr__`` because one object answered a property read with
+    an error that a method call would also give.
+    """
+    if entry.wasProperty:
+        return False
+    desc = entry.desc
+    return (desc is None
+            or getattr(desc, "desckind", None) != funcdesc_kind
+            or getattr(desc, "invkind", None) != invoke_func)
+
+
+def keep_guesses_per_object(dynamic, shared_ids, funcdesc_kind, invoke_func) -> None:
+    """Keep what pywin32 learns from one object's answer on that object alone.
+
+    ``CDispatch.__getattr__`` reads a property, and when the object answers
+    with one of ERRORS_BAD_CONTEXT (E_INVALIDARG, DISP_E_TYPEMISMATCH and the
+    like) it concludes the name is a method and writes that into
+    ``_olerepr_.mapFuncs``, which is looked at before the properties. With one
+    olerepr per object that is pywin32's own design: one object's odd answer
+    decides how that object is read. Shared by every object of the interface,
+    it turned one error on one shape into a bound method, in place of the
+    value, for that property of every shape after it, which the layout check's
+    ``except Exception`` then turned into a fact silently missing for the rest
+    of the process. ``__setattr__`` likewise stores the dispid one object gave
+    for a name its type library did not know.
+
+    So after each read and each write, an entry that came from such a guess is
+    taken back out of a shared olerepr. The object that made the guess keeps
+    the method it built in its own ``_builtMethods_``, so it behaves as it
+    always did, and every other object asks for itself.
+
+    ``shared_ids`` holds the ids of the olereprs ``share_type_information``
+    shares; an olerepr of its own is left to pywin32.
+    """
+    cdispatch = dynamic.CDispatch
+    original_get = cdispatch.__getattr__
+    original_set = cdispatch.__setattr__
+
+    def __getattr__(self, attr):
+        olerepr = self.__dict__.get("_olerepr_")
+        if olerepr is None or id(olerepr) not in shared_ids or attr in olerepr.mapFuncs:
+            return original_get(self, attr)
+        try:
+            return original_get(self, attr)
+        finally:
+            entry = olerepr.mapFuncs.get(attr)
+            if entry is not None and is_guess(entry, funcdesc_kind, invoke_func):
+                del olerepr.mapFuncs[attr]
+
+    def __setattr__(self, attr, value):
+        olerepr = self.__dict__.get("_olerepr_")
+        if olerepr is None or id(olerepr) not in shared_ids or attr in olerepr.propMap:
+            return original_set(self, attr, value)
+        try:
+            return original_set(self, attr, value)
+        finally:
+            entry = olerepr.propMap.get(attr)
+            if entry is not None and entry.desc is None:
+                del olerepr.propMap[attr]
+
+    cdispatch.__getattr__ = __getattr__
+    cdispatch.__setattr__ = __setattr__
 
 
 if sys.platform == "win32":
     import win32com.client.dynamic
 
-    share_type_information(win32com.client.dynamic, pythoncom.com_error)
+    share_type_information(win32com.client.dynamic, pythoncom.com_error, pythoncom.IID_NULL,
+                           pythoncom.DESCKIND_FUNCDESC, pythoncom.INVOKE_FUNC)
 
 
 class QueuedCalls:
