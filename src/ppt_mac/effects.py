@@ -33,7 +33,7 @@ from appscript.reference import CommandError
 from backend.mac_ae import ppt, raw, slide_at as _slide
 from backend.unsupported import refusal as _refusal
 from ppt_mac.shapes import _get_shape
-from utils.color import hex_to_rgb_list
+from backend.mac_enums import set_mac_color
 from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)
@@ -157,7 +157,7 @@ def _set_glow_impl(slide_index, shape_name_or_index, radius,
     glow.radius.set(radius)
 
     if color is not None:
-        glow.color.set(hex_to_rgb_list(color))
+        set_mac_color(glow, "color", color)
 
     result = {
         "status": "success",

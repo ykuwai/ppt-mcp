@@ -39,6 +39,7 @@ from backend.mac_ae import (
     windows_constant as _windows_constant,
 )
 from backend.mac_enums import (
+    set_mac_color,
     MsoVerticalAnchor,
     PpBorderType,
     PpParagraphAlignment,
@@ -116,7 +117,7 @@ def _apply_cell_font(cell, font_name, font_name_fareast, font_size, bold, italic
     if italic is not None:
         font.italic.set(bool(italic))
     if color is not None:
-        font.font_color.set(hex_to_rgb_list(color))
+        set_mac_color(font, "font_color", color)
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +335,7 @@ def _set_table_cell_impl(
     # Cell fill
     if fill_color is not None:
         cell.shape.fill_format.visible.set(True)
-        cell.shape.fill_format.fore_color.set(hex_to_rgb_list(fill_color))
+        set_mac_color(cell.shape.fill_format, "fore_color", fill_color)
 
     if va_key is not None:
         cell.shape.text_frame.vertical_anchor.set(

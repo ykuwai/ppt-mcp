@@ -39,6 +39,7 @@ from backend.mac_ae import (
     stage_into_container,
 )
 from backend.mac_enums import (
+    set_mac_color,
     MsoAutoShapeType,
     MsoFillType,
     MsoGradientStyle,
@@ -55,7 +56,7 @@ from ppt_com.constants import (
     DASH_STYLE_MAP, DASH_STYLE_NAMES, GRADIENT_STYLE_MAP, SHAPE_TYPE_NAMES,
     msoBringForward, msoGroup, msoSendToBack, ppAutoSizeNone,
 )
-from utils.color import hex_to_rgb_list, rgb_list_to_hex
+from utils.color import rgb_list_to_hex
 from utils.navigation import goto_slide
 from utils.redraw import FrozenRedraw
 
@@ -386,7 +387,7 @@ def _apply_font(font, font_name, font_size, bold, italic, font_color) -> None:
     if italic is not None:
         font.italic.set(bool(italic))
     if font_color is not None:
-        font.font_color.set(hex_to_rgb_list(font_color))
+        set_mac_color(font, "font_color", font_color)
 
 
 def _apply_alignment(text_range, align) -> None:
@@ -623,15 +624,15 @@ def _apply_shape_attrs(
                 variant=1,
             )
             if fill_color is not None:
-                fill.fore_color.set(hex_to_rgb_list(fill_color))
+                set_mac_color(fill, "fore_color", fill_color)
             if fill_color2 is not None:
-                fill.back_color.set(hex_to_rgb_list(fill_color2))
+                set_mac_color(fill, "back_color", fill_color2)
         elif effective_type == "solid":
             # `solid` is a command on macOS, the same as Fill.Solid() is a
             # method on Windows.
             fill.solid()
             if fill_color is not None:
-                fill.fore_color.set(hex_to_rgb_list(fill_color))
+                set_mac_color(fill, "fore_color", fill_color)
         if fill_transparency is not None and effective_type != "none":
             fill.transparency.set(fill_transparency)
 
@@ -642,7 +643,7 @@ def _apply_shape_attrs(
         if failure:
             warnings.append(failure)
     if line_color is not None:
-        shape.line_format.fore_color.set(hex_to_rgb_list(line_color))
+        set_mac_color(shape.line_format, "fore_color", line_color)
     if line_weight is not None:
         shape.line_format.line_weight.set(line_weight)
 

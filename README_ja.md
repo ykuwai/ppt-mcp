@@ -33,7 +33,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 - **26カテゴリ・157ツール** — スライド、シェイプ、テキスト、テーブル、グラフ、アニメーション、SmartArt、メディア、フリーフォームパスなど
 - **AIエージェントに安全** — `ppt_activate_presentation` で操作対象ファイルを固定。誤って別のプレゼンを編集するミスを防止
 - **[Google Material Symbols](https://fonts.google.com/icons) アイコン** — 2,500以上のアイコンをキーワード検索し、テーマカラーでSVG挿入
-- **テーマカラー連携** — RGB値のハードコードではなく `accent1`、`accent2` などのテーマカラー名で指定
+- **テーマカラー連携** — 塗りつぶし・線・影・光彩・文字の色を、RGB値のハードコードではなく `accent1`、`accent2` などのテーマカラー名で指定。テーマを変えると図形の色も追従
 - **WindowsとmacOSに対応** — ツール名も引数も返り値も両者で同一。PowerPoint for Macで届かない操作は、黙って何もせずそう答える
 
 ## 📋 動作環境
