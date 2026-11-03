@@ -788,6 +788,59 @@ except Exception:
     _inlined_tool_count = 0
 
 
+def _slim(node):
+    """A JSON schema without what Pydantic adds and no model reads.
+
+    Every field gets a ``title`` that repeats its name, and every optional one
+    is ``anyOf: [X, {"type": "null"}]`` with ``default: null``. Clients send
+    these schemas with every request, and the two made up about a sixth of
+    the 112k tokens the tools cost. A field left out still takes its default,
+    so saying only X loses nothing; one whose null means something other than
+    leaving it out, a default that is not null, keeps its anyOf.
+    """
+    if isinstance(node, list):
+        return [_slim(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    slim = {}
+    for key, value in node.items():
+        if key == "title" and isinstance(value, str):
+            continue
+        if key in ("properties", "$defs") and isinstance(value, dict):
+            # Names here are the caller's: a parameter may be called "title".
+            slim[key] = {name: _slim(field) for name, field in value.items()}
+        else:
+            slim[key] = _slim(value)
+    branches = slim.get("anyOf")
+    if (isinstance(branches, list) and "default" in slim and slim["default"] is None
+            and {"type": "null"} in branches):
+        rest = [b for b in branches if b != {"type": "null"}]
+        if len(rest) == 1 and isinstance(rest[0], dict) and not set(rest[0]) & set(slim):
+            slim.pop("anyOf")
+            slim = {**rest[0], **slim}
+    return slim
+
+
+def _slim_tool_schemas(server) -> int:
+    """Run every tool's input schema through _slim. Returns how many changed."""
+    changed = 0
+    for tool in server._tool_manager.list_tools():
+        slim = _slim(tool.parameters)
+        if slim != tool.parameters:
+            tool.parameters = slim
+            changed += 1
+    return changed
+
+
+try:
+    _slimmed_tool_count = _slim_tool_schemas(mcp)
+except Exception:
+    # The same SDK internals as _inline_schema_defs. The full schemas are
+    # still correct, only larger, so degrade instead of failing to start.
+    logger.warning("Could not slim the tool schemas; they keep their full form", exc_info=True)
+    _slimmed_tool_count = 0
+
+
 def _add_presentation_arg(server) -> int:
     """Declare the per-call `presentation` argument in the input schemas.
 

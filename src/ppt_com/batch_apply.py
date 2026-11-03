@@ -288,9 +288,29 @@ def batch_apply_formatting(params: BatchApplyFormattingInput) -> str:
 def register_tools(mcp):
     @mcp.tool(
         name="ppt_batch_apply_formatting",
-        annotations={"readOnlyHint": False},
+        annotations={
+            "title": "Batch Apply Formatting",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     )
     async def tool_batch_apply_formatting(params: BatchApplyFormattingInput) -> str:
+        """Apply the same formatting operations to several shapes in one call.
+
+        Each operation is {"tool": name, "params": {...}}, where name is one of
+        set_fill, set_line, set_shadow, set_glow, set_reflection, set_soft_edge
+        or format_text, and params are that tool's arguments without
+        slide_index and shape_name_or_index. Every operation is applied to every
+        shape in `shapes`, in order: for example, set_fill plus set_line with
+        visible=false on four cards is 1 call instead of 8.
+
+        Arguments are checked as the single tools check them, so a misspelled
+        one fails that operation instead of being ignored. The result lists,
+        for each shape, each operation's status and any error; a shape that is
+        not found is reported and the rest still run.
+        """
         return await run_offloaded(batch_apply_formatting, params)
 
 
