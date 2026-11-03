@@ -49,6 +49,46 @@ else:  # pragma: no cover - non-Windows
     pywintypes = _NotWindows()
 
 
+def share_type_information(dynamic, com_error) -> None:
+    """Bind each COM name once per interface, not once per object.
+
+    pywin32's late binding gives every object PowerPoint hands back a fresh
+    LazyDispatchItem, and every attribute's first use on it is bound again
+    through ITypeComp, as if shape 2's .Left were nothing like shape 1's. On a
+    deck of 50 slides of 25 shapes that was 80% of a layout check's time: 87 s,
+    of which 11 s was PowerPoint (#264). The item a name is bound into is the
+    interface's, not the object's, so objects of one interface share it.
+    Reading the same five slides both ways gave identical facts, in 2.2 s
+    against 8.0 s.
+
+    ``dynamic`` is ``win32com.client.dynamic``; ``com_error`` what its type
+    information raises. An object without a type library keeps pywin32's own
+    path.
+    """
+    original = dynamic.MakeOleRepr
+    shared = {}
+
+    def make_ole_repr(dispatch, typeinfo, typecomp):
+        if typeinfo is None or typecomp is None:
+            return original(dispatch, typeinfo, typecomp)
+        try:
+            interface = typeinfo.GetTypeAttr()[0]
+        except com_error:
+            return original(dispatch, typeinfo, typecomp)
+        olerepr = shared.get(interface)
+        if olerepr is None:
+            olerepr = shared[interface] = original(dispatch, typeinfo, typecomp)
+        return olerepr
+
+    dynamic.MakeOleRepr = make_ole_repr
+
+
+if sys.platform == "win32":
+    import win32com.client.dynamic
+
+    share_type_information(win32com.client.dynamic, pythoncom.com_error)
+
+
 class QueuedCalls:
     """The COM futures one tool call has queued, so they can be cancelled.
 
