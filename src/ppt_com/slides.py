@@ -1636,7 +1636,8 @@ def register_tools(mcp):
         touch the clipboard; a password-protected source is copied via the
         clipboard instead. Either way the copies take on the destination's
         design (slide master and layouts), and each copy is checked against
-        its source.
+        its source. On macOS the slides go through the clipboard, which is
+        put back afterwards.
 
         Both presentations must already be open (use ppt_open_presentation).
         Returns new_slide_indices, per copy its source index and title

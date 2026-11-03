@@ -1337,6 +1337,139 @@ class TestDuplicatingASlide:
         assert events == ["take", "claim", "restore"]
 
 
+class _CopyDeck:
+    """An open presentation: its number in PowerPoint and its slide IDs."""
+
+    def __init__(self, index, ids, name):
+        self.index, self.ids, self._name = index, list(ids), name
+        deck = self
+
+        class _Slides:
+            def __getitem__(self, i):
+                class _Slide:
+                    def delete(self_inner):
+                        deck.ids.pop(i - 1)
+                return _Slide()
+
+        self.slides = _Slides()
+
+    def name(self):
+        return self._name
+
+    def full_name(self):
+        return "/decks/" + self._name
+
+
+@macos_only
+class TestCopyingIntoAnotherDeck:
+    """`paste object presentation N` pastes into deck N, not the one in front,
+    at its end (seen live on PowerPoint 16.114), so slides are copied between
+    decks that way and then moved into place (#246)."""
+
+    def _wire(self, monkeypatch, decks, fail_on_paste=None):
+        from ppt_mac import gvml_paste
+        from ppt_mac import slides as mac_slides
+
+        scripts, events, pasted = [], [], [0]
+        by_index = {d.index: d for d in decks}
+
+        def run(script, *args, **kwargs):
+            scripts.append(script)
+            if "paste object presentation" in script:
+                pasted[0] += 1
+                if fail_on_paste == pasted[0]:
+                    raise RuntimeError("paste failed")
+                by_index[int(script.rsplit(" ", 1)[1])].ids.append(900 + pasted[0])
+            return ""
+
+        class FakeClipboard:
+            warnings = ()
+
+            @classmethod
+            def take(cls):
+                events.append("take")
+                return cls()
+
+            def claim(self):
+                pass
+
+            def restore(self):
+                events.append("restore")
+
+        def realize(pres, final):
+            assert sorted(final) == sorted(pres.ids)
+            pres.ids = list(final)
+
+        monkeypatch.setattr(mac_slides, "osascript", run)
+        monkeypatch.setattr(mac_slides, "_slide_ids", lambda pres: list(pres.ids))
+        monkeypatch.setattr(mac_slides, "_slide_count", lambda pres: len(pres.ids))
+        monkeypatch.setattr(mac_slides, "_presentation_index", lambda app, pres: pres.index)
+        monkeypatch.setattr(mac_slides, "_realize_order", realize)
+        monkeypatch.setattr(gvml_paste, "Clipboard", FakeClipboard)
+        return mac_slides, scripts, events
+
+    def test_slides_are_pasted_into_the_deck_named_and_appended(self, monkeypatch):
+        src, dst = _CopyDeck(1, [256, 257, 258], "Source"), _CopyDeck(2, [300], "Target")
+        mac_slides, scripts, events = self._wire(monkeypatch, [src, dst])
+
+        result = mac_slides._copy_across(None, src, dst, None, [3, 1], None)
+
+        assert scripts == [
+            'tell application "Microsoft PowerPoint" to copy object slide 3 of presentation 1',
+            'tell application "Microsoft PowerPoint" to paste object presentation 2',
+            'tell application "Microsoft PowerPoint" to copy object slide 1 of presentation 1',
+            'tell application "Microsoft PowerPoint" to paste object presentation 2',
+        ]
+        assert dst.ids == [300, 901, 902] and src.ids == [256, 257, 258]
+        assert result["new_slide_indices"] == [2, 3]
+        assert result["copied"] == [{"source_index": 3, "new_index": 2},
+                                    {"source_index": 1, "new_index": 3}]
+        assert (result["method"], result["target_presentation"]) == ("clipboard", "Target")
+        assert events == ["take", "restore", "take", "restore"]
+
+    def test_insert_at_puts_the_copies_there_in_order(self, monkeypatch):
+        src, dst = _CopyDeck(1, [256, 257], "Source"), _CopyDeck(2, [300, 301, 302], "Target")
+        mac_slides, _, _ = self._wire(monkeypatch, [src, dst])
+
+        result = mac_slides._copy_across(None, src, dst, None, [1, 2], 2)
+
+        assert dst.ids == [300, 901, 902, 301, 302]
+        assert result["new_slide_indices"] == [2, 3]
+
+    def test_an_index_out_of_range_is_refused_before_anything_is_copied(self, monkeypatch):
+        src, dst = _CopyDeck(1, [256], "Source"), _CopyDeck(2, [300], "Target")
+        mac_slides, scripts, _ = self._wire(monkeypatch, [src, dst])
+
+        with pytest.raises(ValueError, match=r"\[4\] out of range \(1-1\)"):
+            mac_slides._copy_across(None, src, dst, 4, None, None)
+        with pytest.raises(ValueError, match=r"insert_at 5 out of range \(1-2\)"):
+            mac_slides._copy_across(None, src, dst, 1, None, 5)
+        assert scripts == []
+
+    def test_a_failure_takes_the_copies_already_made_back_out(self, monkeypatch):
+        src, dst = _CopyDeck(1, [256, 257], "Source"), _CopyDeck(2, [300], "Target")
+        mac_slides, _, events = self._wire(monkeypatch, [src, dst], fail_on_paste=2)
+
+        with pytest.raises(RuntimeError, match="paste failed"):
+            mac_slides._copy_across(None, src, dst, None, [1, 2], None)
+        assert dst.ids == [300]
+        assert events[-1] == "restore"
+
+    def test_the_tool_copies_across_rather_than_refusing(self, monkeypatch):
+        from backend.mac_ae import ppt
+
+        src, dst = _CopyDeck(1, [256], "Source"), _CopyDeck(2, [300], "Target")
+        mac_slides, _, _ = self._wire(monkeypatch, [src, dst])
+        monkeypatch.setattr(ppt, "_get_app_impl", lambda *a, **kw: object())
+        monkeypatch.setattr(
+            mac_slides, "_resolve_presentation",
+            lambda app, presentation_index=None, presentation_name=None:
+                dst if presentation_name == "Target" else src)
+
+        result = mac_slides._copy_slide_impl(1, None, None, "Source", None, "Target", None)
+        assert result["success"] and dst.ids == [300, 901]
+
+
 @macos_only
 class TestShrinkToFitOnTheMac:
     def test_it_is_refused_by_name_before_anything_is_written(self, monkeypatch):
