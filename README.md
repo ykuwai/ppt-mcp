@@ -389,7 +389,7 @@ When a close leaves no presentation open in a PowerPoint the server started, `pp
 
 ### The tool list: catalog mode
 
-A client sends the description of every tool it lists with every request, and this server's 157 come to about 112k tokens, a large part of a 128k or 200k window before any work. So the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
+A client sends the description of every tool it lists with every request, and this server's 157 come to about 112k tokens, a large part of a 128k or 200k window before any work. With `PPT_TOOL_MODE=catalog` in the server's `env`, the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
 
 | Tool | What it does |
 |---|---|
@@ -399,7 +399,7 @@ A client sends the description of every tool it lists with every request, and th
 
 The tools themselves are the same, with the same arguments, checks and answers, and `presentation` is passed the same way. The model asks `ppt_describe` before using a tool for the first time, which costs one call. Building the same 12-slide deck through Claude Code, the context peaked at 136k tokens in catalog mode against 206k with every tool listed, and the run cost a third less.
 
-What catalog mode gives up is per-tool control in the client: approving or blocking a tool by its name, and its read-only hint, apply to the three tools above rather than to each one. To list every tool by its own name, as before, set `PPT_TOOL_MODE=full` in the server's `env`. A value other than `catalog` or `full` is ignored with a warning, and catalog mode is used.
+What catalog mode gives up is per-tool control in the client: approving or blocking a tool by its name, and its read-only hint, apply to the three tools above rather than to each one. That is why it is not the default: every tool is listed by its own name unless the setting asks otherwise, which is also what `PPT_TOOL_MODE=full` says. A value other than `catalog` or `full` is ignored with a warning, and every tool is listed.
 
 ```json
 {
@@ -407,7 +407,7 @@ What catalog mode gives up is per-tool control in the client: approving or block
     "powerpoint": {
       "command": "uvx",
       "args": ["ppt-mcp"],
-      "env": { "PPT_TOOL_MODE": "full" }
+      "env": { "PPT_TOOL_MODE": "catalog" }
     }
   }
 }

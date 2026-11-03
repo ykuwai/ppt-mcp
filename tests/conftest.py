@@ -8,8 +8,9 @@ import pytest
 # Allow tests to import from src/ without installing the package.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-# The tests that load the server read the whole tool list, which catalog mode,
-# the default, leaves off. tests/test_tool_catalog.py sets the mode itself.
+# The tests that load the server read the whole tool list, which catalog mode
+# leaves off; pinned so a PPT_TOOL_MODE in the developer's environment cannot
+# change it. tests/test_tool_catalog.py sets the mode itself.
 os.environ["PPT_TOOL_MODE"] = "full"
 
 

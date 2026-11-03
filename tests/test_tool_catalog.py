@@ -72,8 +72,7 @@ def _probe(mode):
 
 @pytest.fixture(scope="module")
 def catalog():
-    # No setting at all: catalog mode is the default.
-    return _probe(None)
+    return _probe("catalog")
 
 
 def test_three_tools_are_listed_and_all_stay_registered(catalog):
@@ -128,5 +127,13 @@ def test_full_mode_lists_every_tool_but_the_three():
     assert not {"ppt_describe", "ppt_run", "ppt_run_steps"} & set(full["listed"])
 
 
-def test_a_setting_that_is_not_one_falls_back_to_catalog():
-    assert sorted(_probe("ful")["listed"]) == ["ppt_describe", "ppt_run", "ppt_run_steps"]
+def test_no_setting_lists_every_tool():
+    # Catalog mode lists other names, which a client's per-tool rules would
+    # not match, so it is never turned on unasked.
+    default = _probe(None)
+    assert len(default["listed"]) == default["registered"] - 3
+
+
+def test_a_setting_that_is_not_one_falls_back_to_full():
+    mistyped = _probe("catalogue")
+    assert len(mistyped["listed"]) == mistyped["registered"] - 3

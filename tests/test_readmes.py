@@ -57,7 +57,8 @@ def test_each_describes_the_catalog_tools_and_how_to_list_every_tool(lang):
     body = text(lang)
     for name in CATALOG:
         assert f"`{name}`" in body, f"{READMES[lang]} does not name {name}"
-    assert '"PPT_TOOL_MODE": "full"' in body
+    assert '"PPT_TOOL_MODE": "catalog"' in body
+    assert "PPT_TOOL_MODE=catalog" in body
     assert "PPT_TOOL_MODE=full" in body
     assert "$prev.shape_name" in body
 

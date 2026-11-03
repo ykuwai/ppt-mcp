@@ -401,15 +401,15 @@ class TestRunSteps:
 # ---------------------------------------------------------------------------
 class TestHelpers:
     @pytest.mark.parametrize("value, mode", [
-        ("catalog", "catalog"), ("", "catalog"), ("  CATALOG ", "catalog"),
-        ("full", "full"), ("FULL", "full"), ("all", "full"),
+        ("catalog", "catalog"), ("  CATALOG ", "catalog"),
+        ("full", "full"), ("FULL", "full"), ("all", "full"), ("", "full"),
     ])
     def test_the_mode_setting(self, value, mode):
         assert _server()._tool_mode(value) == mode
 
-    def test_a_mistyped_mode_is_catalog_with_a_warning(self, caplog):
+    def test_a_mistyped_mode_is_full_with_a_warning(self, caplog):
         with caplog.at_level(logging.WARNING):
-            assert _server()._tool_mode("fll") == "catalog"
+            assert _server()._tool_mode("fll") == "full"
         assert "PPT_TOOL_MODE='fll' is not a setting" in caplog.text
 
     @pytest.mark.parametrize("description, summary", [
