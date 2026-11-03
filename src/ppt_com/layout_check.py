@@ -5146,9 +5146,11 @@ def _fill_facts(shape):
     except Exception:
         pass
     try:
-        facts["solid"] = fill.Type == msoFillSolid
+        fill_type = fill.Type
     except Exception:
-        pass
+        fill_type = None
+    if fill_type is not None:
+        facts["solid"] = fill_type == msoFillSolid
     try:
         facts["color_hex"] = int_to_hex(fill.ForeColor.RGB)
     except Exception:
@@ -5157,11 +5159,11 @@ def _fill_facts(shape):
         facts["transparency"] = round(fill.Transparency, 2)
     except Exception:
         pass
-    try:
-        if fill.Type == msoFillGradient:
+    if fill_type == msoFillGradient:
+        try:
             facts["gradient"] = _gradient_facts(fill)
-    except Exception:
-        pass
+        except Exception:
+            pass
     return facts
 
 
@@ -5197,7 +5199,11 @@ def _text_facts(shape, full):
     """
     from ppt_com.shapes import _text_frame_state
 
-    tr = shape.TextFrame.TextRange
+    # Each object is fetched once and handed on: on Windows every fetch is a
+    # COM call and a new wrapper, and a long deck has thousands of shapes.
+    frame = shape.TextFrame
+    tr = frame.TextRange
+    frame2 = None
     try:
         content = tr.Text or ""
     except Exception:
@@ -5211,7 +5217,11 @@ def _text_facts(shape, full):
         "orientation": None, "vertical_anchor": None,
     }
     if full:
-        state = _text_frame_state(shape) or {}
+        try:
+            frame2 = shape.TextFrame2
+        except Exception:
+            frame2 = None
+        state = _text_frame_state(shape, frame, frame2) or {}
         for key in ("margins", "word_wrap", "autofit", "orientation", "vertical_anchor"):
             facts[key] = state.get(key)
     if not facts["chars"]:
@@ -5244,12 +5254,13 @@ def _text_facts(shape, full):
             if not run.Text.strip():
                 continue
             font = run.Font
+            colour = font.Color
             try:
                 # A theme colour is the template's choice, an RGB one the caller's.
-                theme = font.Color.ObjectThemeColor != 0
+                theme = colour.ObjectThemeColor != 0
             except Exception:
                 theme = None
-            styles.add((int_to_hex(font.Color.RGB), round(font.Size, 1),
+            styles.add((int_to_hex(colour.RGB), round(font.Size, 1),
                         font.Bold == msoTrue, getattr(font, "Name", None) or None, theme))
         except Exception:
             continue
@@ -5258,7 +5269,7 @@ def _text_facts(shape, full):
         for colour, size, bold, name, theme in sorted(styles, key=lambda s: (s[0] or "", s[1] or 0))
     ]
     try:
-        caps = shape.TextFrame2.TextRange.Font.Allcaps
+        caps = (frame2 if frame2 is not None else shape.TextFrame2).TextRange.Font.Allcaps
         facts["all_caps"] = {msoTrue: True, 0: False}.get(caps)
     except Exception:
         pass
@@ -5620,9 +5631,13 @@ def _inner_facts(shapes, refs):
     still spill, read wrong or be left as stand-in words.
     """
     inner = []
-    for facts, ref in zip(shapes, refs, strict=True):
+    for facts in shapes:
         if facts["type"] not in (msoGroup, msoSmartArt):
             continue
+        # By its place on the slide, not by its place in ``shapes``: a shape
+        # PowerPoint would not describe is left out of ``shapes`` but not out
+        # of ``refs``, and pairing the two in order failed the whole slide.
+        ref = refs[facts["z"] - 1]
         try:
             members = list(_members_of(ref))
         except Exception:
@@ -5742,7 +5757,8 @@ def _slide_facts_impl(slide_indices, navigate, detail, template_cache=None):
             design = slide.Design.Name
         except Exception:
             design = None
-        refs = [slide.Shapes(z) for z in range(1, slide.Shapes.Count + 1)]
+        collection = slide.Shapes
+        refs = [collection(z) for z in range(1, collection.Count + 1)]
         shapes = read_shapes(refs, _geometry_facts, _read_appearance, detail)
         if detail is None:
             _with_chart_parts(shapes, refs)
@@ -5923,18 +5939,28 @@ def _installed_fonts_impl():
     # first. The files hold both.
     _FONTS["installed"] = FontNames(names, (
         os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"),
-        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts")))
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts")),
+        # The @ names are the same families set for vertical text, which no
+        # caller picks from a list.
+        listed=(n for n in names if not n.startswith("@")))
     return _FONTS["installed"]
 
 
 class FontNames(frozenset):
     """The installed fonts' names, lower case. One not among them is looked
-    for in the font files of ``folders``, read once and only then."""
+    for in the font files of ``folders``, read once and only then.
 
-    def __new__(cls, names, folders=()):
-        found = super().__new__(cls, (n.lower() for n in names if n))
+    ``listed`` keeps the names as they are written, for ppt_list_fonts to
+    show: ``names`` unless the reader gives a shorter list of families.
+    """
+
+    def __new__(cls, names, folders=(), listed=None):
+        names = [n for n in names if n]
+        found = super().__new__(cls, (n.lower() for n in names))
         found.folders = tuple(folders)
         found.other_names = None
+        found.listed = sorted({n for n in (names if listed is None else listed) if n},
+                              key=str.lower)
         return found
 
     def __contains__(self, name):
@@ -6248,6 +6274,26 @@ def _issue_key(finding):
     return finding.get("slide_index"), finding["type"], tuple(finding["shapes"])
 
 
+# The most shapes a change to the whole deck reads before and after itself.
+# Reading a shape costs about 5 ms on the Mac and, with the type information
+# shared, about 20 ms over COM; #264 measured a deck of 50 slides of 25 shapes
+# at 14 s on the Mac and over two minutes on Windows for the two reads, against
+# 0.1 to 3 s for the change. At this many the two reads stay within seconds.
+DECK_CHECK_MOST_SHAPES = 300
+
+
+class DeckTooLarge:
+    """What deck_snapshot answers for a deck past DECK_CHECK_MOST_SHAPES."""
+
+    def __init__(self, shapes):
+        self.shapes = shapes
+
+
+def _deck_shape_count_impl():
+    pres = ppt._get_pres_impl()
+    return sum(pres.Slides(i).Shapes.Count for i in range(1, pres.Slides.Count + 1))
+
+
 def deck_snapshot(trust_template=True):
     """What is wrong with the deck before a change to the whole of it.
 
@@ -6255,11 +6301,16 @@ def deck_snapshot(trust_template=True):
     than blaming itself for problems that were already there. A change to the
     theme's colours is the caller's choice, not the template's, so it is read
     without ``trust_template``; see ``_as_designed``. None too while
-    ``CHECK_EACH_WRITE`` is off, without reading anything.
+    ``CHECK_EACH_WRITE`` is off, without reading anything. A DeckTooLarge for
+    a deck with more shapes than DECK_CHECK_MOST_SHAPES, which is counted, not
+    read, and left to ``ppt_check_layout``.
     """
     if not CHECK_EACH_WRITE:
         return None
     try:
+        shapes = ppt.execute(_deck_shape_count_impl)
+        if shapes > DECK_CHECK_MOST_SHAPES:
+            return DeckTooLarge(shapes)
         return {_issue_key(f) for f in _deck_findings_now(trust_template)}
     except Exception:  # noqa: BLE001 - the change itself still goes ahead
         logger.debug("Reading the deck before a deck-wide change failed", exc_info=True)
@@ -6275,6 +6326,14 @@ def report_deck_change(result: dict, before, trust_template=True) -> dict:
     so only what is new is reported.
     """
     if not isinstance(result, dict) or "error" in result or before is None:
+        return result
+    if isinstance(before, DeckTooLarge):
+        result["layout_check_skipped"] = (
+            f"The deck has {before.shapes} shapes, more than the "
+            f"{DECK_CHECK_MOST_SHAPES} a change to the whole deck checks before and "
+            "after itself, since reading them all twice would take longer than the "
+            "change. Run ppt_check_layout on the slides that matter, or on the whole "
+            "deck once the changes are done.")
         return result
     try:
         after = _deck_findings_now(trust_template)

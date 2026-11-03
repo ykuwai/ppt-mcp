@@ -47,7 +47,7 @@ from backend.mac_ae import (
 )
 from backend.unsupported import refusal as _refusal
 from ppt_mac.shapes import _get_shape
-from utils.navigation import goto_slide
+from utils.navigation import goto_slide, return_to, shown_slide
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +148,7 @@ def _copy_shape_to_slide_impl(src_slide_index, shape_name_or_index, dst_slide_in
     # number. It raises rather than returning, and the tool function turns that
     # into the same error body.
     window = target_window(pres)
+    was = shown_slide(window)
     try:
         window.view.go_to_slide(number=dst_slide_index)
     except CommandError as exc:
@@ -160,44 +161,48 @@ def _copy_shape_to_slide_impl(src_slide_index, shape_name_or_index, dst_slide_in
             ["ppt_add_shape", "ppt_duplicate_slide"],
         )
 
-    # Clear the selection first. A paste leaves what it pasted selected, and
-    # `paste object` puts the next one *inside* the selection when that
-    # selection is a chart, as one of the chart's own `userShapes`. The slide's
-    # shape count does not change, so the check below reads it as a silent
-    # no-op, while the chart has in fact been rewritten. Measured on this
-    # machine: after a paste the window's selection type is `shapes`, and
-    # `unselect` returns it to `none` without disturbing the paste that
-    # follows. A selection that cannot be cleared is not worth failing over,
-    # because the ordinary case has nothing selected at all.
     try:
-        window.selection.unselect()
-    except CommandError as exc:
-        logger.debug("Could not clear the selection before pasting: %s", exc)
+        # Clear the selection first. A paste leaves what it pasted selected, and
+        # `paste object` puts the next one *inside* the selection when that
+        # selection is a chart, as one of the chart's own `userShapes`. The slide's
+        # shape count does not change, so the check below reads it as a silent
+        # no-op, while the chart has in fact been rewritten. Measured on this
+        # machine: after a paste the window's selection type is `shapes`, and
+        # `unselect` returns it to `none` without disturbing the paste that
+        # follows. A selection that cannot be cleared is not worth failing over,
+        # because the ordinary case has nothing selected at all.
+        try:
+            window.selection.unselect()
+        except CommandError as exc:
+            logger.debug("Could not clear the selection before pasting: %s", exc)
 
-    window.view.paste_object()
+        window.view.paste_object()
 
-    # Nothing is trusted because it did not raise. `paste object` declares no
-    # result at all, so the shape count is the only evidence there is.
-    shapes_now = shapes_of(dst_slide)
-    if len(shapes_now) != before + 1:
-        return _refusal(
-            "ppt_copy_shape_to_slide",
-            f"PowerPoint reported success and slide {dst_slide_index} still "
-            f"has {len(shapes_now)} shapes, which is the silent no-op recorded "
-            "in MACOS_PORT section 5. The clipboard round trip is the only "
-            "route to a copy here, and it can be lost to whatever else has "
-            "written to the clipboard in between.",
-            ["ppt_add_shape", "ppt_duplicate_slide"],
-        )
+        # Nothing is trusted because it did not raise. `paste object` declares no
+        # result at all, so the shape count is the only evidence there is.
+        shapes_now = shapes_of(dst_slide)
+        if len(shapes_now) != before + 1:
+            return _refusal(
+                "ppt_copy_shape_to_slide",
+                f"PowerPoint reported success and slide {dst_slide_index} still "
+                f"has {len(shapes_now)} shapes, which is the silent no-op recorded "
+                "in MACOS_PORT section 5. The clipboard round trip is the only "
+                "route to a copy here, and it can be lost to whatever else has "
+                "written to the clipboard in between.",
+                ["ppt_add_shape", "ppt_duplicate_slide"],
+            )
 
-    # The pasted shape lands at the end of the z order, and it is fetched
-    # through a reference this module built rather than through anything
-    # PowerPoint handed back.
-    return {
-        "success": True,
-        "new_shape_name": shapes_now[-1].name(),
-        "destination_slide": dst_slide_index,
-    }
+        # The pasted shape lands at the end of the z order, and it is fetched
+        # through a reference this module built rather than through anything
+        # PowerPoint handed back.
+        return {
+            "success": True,
+            "new_shape_name": shapes_now[-1].name(),
+            "destination_slide": dst_slide_index,
+        }
+    finally:
+        # Moved only to paste; off, the user's slide is put back.
+        return_to(window, was)
 
 
 def _copy_formatting_impl(slide_index, source_shape, target_shapes):

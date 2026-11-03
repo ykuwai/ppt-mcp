@@ -103,9 +103,8 @@ _WHAT_EFFECT = (
     "so a number this rejects is not one of them)"
 )
 _WHAT_TRANSITION = (
-    "slide transition effect (push, wipe, split and reveal each exist here as "
-    "four directional variants and in no plain form, so there is nothing to "
-    "choose without being told the direction; the other seven all work)"
+    "slide transition effect (every name ppt_set_slide_transition lists is "
+    "available here, so a number this rejects is not one of them)"
 )
 _WHAT_DIRECTION = "animation direction"
 _WHAT_TRIGGER = "animation trigger"
@@ -326,49 +325,52 @@ def _after_effect_report(eff) -> tuple:
 # ---------------------------------------------------------------------------
 def _set_slide_transition_impl(
     slide_index, effect, duration, advance_on_click, advance_on_time, advance_time,
+    slide_indices=None,
 ):
     from ppt_com.animation import TRANSITION_EFFECT_MAP
 
-    app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
-    pres = ppt._get_pres_impl()
-    slide = _slide(pres, slide_index)
-
+    targets = slide_indices or [slide_index]
     effect_int = (
         TRANSITION_EFFECT_MAP.get(effect, effect) if isinstance(effect, str) else effect
     )
-
-    transition = slide.slide_show_transition
     # PpEntryEffect covers seven of the transitions Windows names, and the rest
     # raise here rather than landing on something that looks close.
     wanted = to_keyword(PpEntryEffect, effect_int, _WHAT_TRANSITION)
-    transition.entry_effect.set(wanted)
 
-    # Nothing is trusted because it did not raise, and this is one read.
-    if _read(transition.entry_effect) != wanted:
-        return _refusal(
-            "ppt_set_slide_transition",
-            "PowerPoint reported success but the slide's transition did not "
-            "change, which is the silent no-op recorded in MACOS_PORT "
-            "section 5.",
-        )
+    app = ppt._get_app_impl()
+    goto_slide(app, targets[0])
+    pres = ppt._get_pres_impl()
+    # Every slide is found before the first is changed, so an index past the
+    # end changes none of them.
+    slides = [_slide(pres, idx) for idx in targets]
 
-    if duration is not None:
-        # Windows calls this `Duration`; macOS already uses that word for an
-        # effect's own timing, so the slide's is `transition duration`.
-        transition.transition_duration.set(duration)
-    if advance_on_click is not None:
-        transition.advance_on_click.set(bool(advance_on_click))
-    if advance_on_time is not None:
-        transition.advance_on_time.set(bool(advance_on_time))
-    if advance_time is not None:
-        transition.advance_time.set(advance_time)
+    for slide in slides:
+        transition = slide.slide_show_transition
+        transition.entry_effect.set(wanted)
 
-    return {
-        "success": True,
-        "slide_index": slide_index,
-        "effect": effect_int,
-    }
+        # Nothing is trusted because it did not raise, and this is one read.
+        if _read(transition.entry_effect) != wanted:
+            return _refusal(
+                "ppt_set_slide_transition",
+                "PowerPoint reported success but the slide's transition did not "
+                "change, which is the silent no-op recorded in MACOS_PORT "
+                "section 5.",
+            )
+
+        if duration is not None:
+            # Windows calls this `Duration`; macOS already uses that word for an
+            # effect's own timing, so the slide's is `transition duration`.
+            transition.transition_duration.set(duration)
+        if advance_on_click is not None:
+            transition.advance_on_click.set(bool(advance_on_click))
+        if advance_on_time is not None:
+            transition.advance_on_time.set(bool(advance_on_time))
+        if advance_time is not None:
+            transition.advance_time.set(advance_time)
+
+    if slide_indices is None:
+        return {"success": True, "slide_index": slide_index, "effect": effect_int}
+    return {"success": True, "slide_indices": list(targets), "effect": effect_int}
 
 
 def _add_animation_impl(

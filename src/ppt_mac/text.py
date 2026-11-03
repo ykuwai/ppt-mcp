@@ -45,6 +45,7 @@ from backend.mac_ae import (
     windows_constant as _windows_constant,
 )
 from backend.mac_enums import (
+    set_mac_color,
     MsoShapeType,
     MsoTextOrientation,
     MsoThemeColorIndex,
@@ -303,7 +304,7 @@ def _apply_font_props(font, font_name, font_name_fareast, font_size, bold,
     if underline is not None:
         font.underline.set(bool(underline))
     if color is not None:
-        font.font_color.set(hex_to_rgb_list(color))
+        set_mac_color(font, "font_color", color)
     if font_color_theme is not None:
         font.font_color_theme_index.set(
             to_keyword(
@@ -438,8 +439,11 @@ def _runs_to_markdown(paragraph) -> str:
 
     if not raw:
         return _text_of(paragraph).replace("\r", "").replace("\v", "\n")
+    return _format_runs(raw)
 
-    # Merge consecutive runs with identical formatting
+
+def _format_runs(raw) -> str:
+    """Runs as Markdown, consecutive ones with the same emphasis merged."""
     merged = []
     for r in raw:
         if merged and merged[-1]["bold"] == r["bold"] and merged[-1]["italic"] == r["italic"]:
@@ -596,17 +600,13 @@ def _collect_text_shapes(slide) -> list:
             except Exception:
                 pass
 
-        # Recurse into groups early (no need to build info dict).
-        # Pass group's position as offset since child coordinates are
-        # relative to the group, not the slide.
+        # A group answers no members over Apple Events (shapes counts 0), so
+        # its members are read from the package `copy shape` writes for it.
         if shape_kind == group_kind:
             try:
-                g_top = shape.top()
-                g_left = shape.left_position()
-                for child in shapes_of(shape):
-                    _process_shape(child, offset_top + g_top, offset_left + g_left)
-            except Exception:
-                pass
+                shapes.extend(_group_text_infos(shape))
+            except Exception as exc:  # noqa: BLE001 - a group that cannot be read is skipped
+                logger.debug("Could not read the text inside a group: %s", exc)
             return
 
         info = {
@@ -643,8 +643,119 @@ def _collect_text_shapes(slide) -> list:
     return shapes
 
 
+def _package_paragraphs(member) -> list:
+    """A group member's paragraphs, read from the package: each one's runs as
+    {"text", "bold", "italic"} (a line break as \\n), the bullet the
+    paragraph itself sets ("bullet", "number" or None) and its level."""
+    from gvml.package import NS_A
+
+    a = f"{{{NS_A}}}"
+    body = member.find(f"{a}txSp/{a}txBody")
+    if body is None:
+        return []
+    out = []
+    for paragraph in body.findall(f"{a}p"):
+        runs = []
+        for child in paragraph:
+            if child.tag in (f"{a}r", f"{a}fld"):
+                rpr = child.find(f"{a}rPr")
+                t = child.find(f"{a}t")
+                runs.append({
+                    "text": (t.text or "") if t is not None else "",
+                    "bold": rpr is not None and rpr.get("b") == "1",
+                    "italic": rpr is not None and rpr.get("i") == "1",
+                })
+            elif child.tag == f"{a}br":
+                runs.append({"text": "\n", "bold": False, "italic": False})
+        ppr = paragraph.find(f"{a}pPr")
+        bullet = None
+        if ppr is not None:
+            if ppr.find(f"{a}buAutoNum") is not None:
+                bullet = "number"
+            elif ppr.find(f"{a}buChar") is not None:
+                bullet = "bullet"
+        level = int(ppr.get("lvl", "0")) + 1 if ppr is not None else 1
+        out.append({"runs": runs, "bullet": bullet, "level": level})
+    return out
+
+
+def _text_members(element) -> list:
+    """The element itself, or every shape inside it when it is a group."""
+    from gvml import shapes as gvml_shapes
+
+    if not element.tag.endswith("}grpSp"):
+        return [element]
+    found = []
+    for child in element:
+        if child.tag in gvml_shapes._NON_VISUAL:
+            found += _text_members(child)
+    return found
+
+
+def _group_text_infos(group) -> list:
+    """The text of a group's members, as _collect_text_shapes reports a shape.
+
+    Each member that holds text is one entry, at its box on the slide (a
+    member of a group inside the group at that inner group's box), with its
+    paragraphs read from the package rather than a shape reference, since
+    there is none to read them from. The clipboard is put back afterwards.
+    """
+    from gvml import canvas as gvml_canvas
+    from gvml import shapes as gvml_shapes
+    from ppt_mac.gvml_paste import Clipboard, Refused, copy_shape_package
+
+    clip = Clipboard.take()
+    try:
+        try:
+            package = copy_shape_package(group, clip, "ppt_get_all_text")
+        except Refused:
+            return []
+    finally:
+        clip.restore()
+    root = gvml_shapes.only_child(
+        gvml_canvas.children(gvml_canvas.parse(package.drawing())), "group")
+    boxes = gvml_shapes.group_items(root)
+    direct = [child for child in root if child.tag in gvml_shapes._NON_VISUAL]
+
+    infos = []
+    for child, box in zip(direct, boxes):
+        for member in _text_members(child):
+            paragraphs = _package_paragraphs(member)
+            if not any(run["text"].strip() for p in paragraphs for run in p["runs"]):
+                continue
+            infos.append({
+                "shape": None, "paragraphs": paragraphs,
+                "top": box["top"], "left": box["left"],
+                "width": box["width"], "height": box["height"],
+                "is_title": False, "is_subtitle": False, "has_table": False,
+            })
+    return infos
+
+
+def _paragraphs_to_markdown(paragraphs, as_heading: str = "") -> str:
+    """_shape_paragraphs_to_markdown for paragraphs read from a package."""
+    if as_heading:
+        text = " ".join("".join(r["text"] for r in p["runs"]) for p in paragraphs)
+        return f"{as_heading} {' '.join(text.split())}"
+    lines = []
+    for p in paragraphs:
+        text = _format_runs([dict(r) for r in p["runs"] if r["text"]]).strip()
+        if not text:
+            lines.append("")
+            continue
+        indent = "  " * max(0, p["level"] - 1)
+        prefix = {"number": f"{indent}1. ", "bullet": f"{indent}- "}.get(p["bullet"], "")
+        lines.append(f"{prefix}{text}")
+    return "\n".join(lines)
+
+
 def _shape_info_to_markdown(info: dict, subheading_level: str = "##") -> str:
     """Convert a single shape_info dict to Markdown text."""
+    if info.get("paragraphs") is not None:
+        runs = [r for p in info["paragraphs"] for r in p["runs"] if r["text"].strip()]
+        if runs and all(r["bold"] for r in runs):
+            return _paragraphs_to_markdown(info["paragraphs"], as_heading=subheading_level)
+        return _paragraphs_to_markdown(info["paragraphs"])
     shape = info["shape"]
 
     # Table
@@ -777,7 +888,30 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text,
         _check_format_spec, _for_powerpoint, _resolve_span, run_offsets,
     )
 
-    shape, tr = _text_frame_of(slide_index, shape_name_or_index)
+    try:
+        shape, tr = _text_frame_of(slide_index, shape_name_or_index)
+    except ValueError:
+        # A group's member is reached through the group's clipboard package
+        # (#220), for the whole text or a span inside one line; runs need the
+        # live text range, which a member does not have here. Only for a name
+        # no shape on the slide has: a shape that is there and holds no text
+        # says so.
+        if (isinstance(shape_name_or_index, str)
+                and shape_name_or_index not in _top_level_names(slide_index)):
+            if runs is not None:
+                raise ValueError(
+                    f"'{shape_name_or_index}' is not on slide {slide_index} at the "
+                    "top level. If it is inside a group, its runs cannot be "
+                    "written there: set the text, then format it with "
+                    "ppt_format_text."
+                ) from None
+            from ppt_mac.groups import set_member_text
+
+            member = set_member_text(slide_index, shape_name_or_index, text, start,
+                                     length, search_text, occurrence)
+            if member is not None:
+                return member
+        raise
     name = shape.name()
 
     if runs is not None:
@@ -970,7 +1104,27 @@ def _format_text_impl(slide_index, shape_name_or_index,
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.slides[slide_index]
-    shape = _get_shape(slide, shape_name_or_index)
+    try:
+        shape = _get_shape(slide, shape_name_or_index)
+    except ValueError:
+        # A group's member, through the group's package as ppt_set_text
+        # reaches one (#220). A highlight is not a run property there.
+        if (isinstance(shape_name_or_index, str)
+                and shape_name_or_index not in _top_level_names(slide_index)):
+            if highlight_color is not None:
+                raise ValueError(
+                    f"'{shape_name_or_index}' is not on slide {slide_index} at the "
+                    "top level. If it is inside a group, a highlight cannot be "
+                    "written there; everything else ppt_format_text takes can be."
+                ) from None
+            from ppt_mac.groups import format_member_text
+
+            member = format_member_text(
+                slide_index, shape_name_or_index, font_name, font_name_fareast,
+                font_size, bold, italic, underline, font_color_theme or color)
+            if member is not None:
+                return member
+        raise
 
     _require_text_frame(shape)
 
@@ -1000,6 +1154,12 @@ def _format_text_impl(slide_index, shape_name_or_index,
     if warnings:
         result["warnings"] = warnings
     return result
+
+
+def _top_level_names(slide_index):
+    from ppt_mac.shapes import _shape_names
+
+    return _shape_names(ppt._get_pres_impl().slides[slide_index])
 
 
 def _text_frame_of(slide_index, shape_name_or_index):

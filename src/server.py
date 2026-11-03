@@ -39,7 +39,7 @@ except ModuleNotFoundError:
 from pydantic import ValidationError
 
 from utils.arguments import describe_unknown_top_level, describe_validation_error
-from utils.com_wrapper import call_presentation
+from utils.com_wrapper import UndoEntry, call_presentation, call_undo_entry
 from utils.coauthoring import CallCoauthoring, call_coauthoring
 
 # Configure logging to stderr (stdout is used for MCP protocol)
@@ -193,6 +193,10 @@ class _PowerPointServer(MCPServer):
     `params` is rewritten from pydantic's report into one sentence naming the
     tool, the argument, the likely intended name and the valid ones. Both
     still answer as a tool error (isError true).
+
+    A tool that answers a failure, a JSON object with a top-level "error", is
+    marked isError true here too (#249), with its text left exactly as the
+    tool wrote it; see _flag_failure.
     """
 
     async def call_tool(self, name, arguments, *args, **kwargs):
@@ -215,14 +219,16 @@ class _PowerPointServer(MCPServer):
             _refuse_unknown_arguments(name, tool, arguments)
         token = call_presentation.set(wanted)
         coauthoring_token = call_coauthoring.set(_coauthoring_call(name, tool, arguments))
+        undo_token = call_undo_entry.set(_undo_entry_for(name, tool, arguments))
         try:
-            return await super().call_tool(name, arguments, *args, **kwargs)
+            return _flag_failure(await super().call_tool(name, arguments, *args, **kwargs))
         except ToolError as exc:
             readable = _readable_validation_error(name, tool, exc)
             if readable is None:
                 raise
             raise ToolError(readable) from exc.__cause__
         finally:
+            call_undo_entry.reset(undo_token)
             call_coauthoring.reset(coauthoring_token)
             call_presentation.reset(token)
 
@@ -248,11 +254,112 @@ class _PowerPointServer(MCPServer):
             return None
 
 
+def _failure_payload(text):
+    """The JSON object `text` holds if it is a failure (a top-level "error"), else None."""
+    if not text or not text.lstrip().startswith("{"):
+        return None
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return None
+    return payload if isinstance(payload, dict) and "error" in payload else None
+
+
+def _sdk_passes_call_tool_result():
+    """Whether the SDK sends a CallToolResult from call_tool as it is.
+
+    mcp 1.19 was the first to. Before it, the low-level handler checks the
+    result against the tool's output schema and answers "Output validation
+    error" instead of the tool's text, so failures there stay as they were.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        major, minor = (int(part) for part in version("mcp").split(".")[:2])
+    except (PackageNotFoundError, ValueError):
+        return True
+    return (major, minor) >= (1, 19)
+
+
+_SDK_PASSES_CALL_TOOL_RESULT = _sdk_passes_call_tool_result()
+
+
+def _flag_failure(result):
+    """`result` as a tool error (isError true) if the tool answered a failure.
+
+    Every tool answers a failure as json.dumps({"error": ...}), which the SDK
+    sends as a success. Raising ToolError instead would mark it, but the SDK
+    puts "Error executing tool <name>: " in front of the text, and the JSON no
+    longer parses. A CallToolResult with isError set keeps the text as it is.
+    It carries no structured content, the shape #249 measured: a client does
+    not check an error result against the tool's output schema.
+    """
+    if hasattr(result, "content") and not isinstance(result, (list, tuple, dict)):
+        # mcp 2.x answers a CallToolResult already.
+        if getattr(result, "is_error", False) or _failure_payload(_text_of(result.content)) is None:
+            return result
+        return result.model_copy(update={"is_error": True, "structured_content": None})
+    # mcp 1.x answers (blocks, structured) for a tool with an output schema,
+    # which is every tool returning str, and the blocks alone for the others.
+    # A dict is structured content only, and no tool here answers one.
+    blocks = result[0] if isinstance(result, tuple) else result
+    if (not _SDK_PASSES_CALL_TOOL_RESULT or isinstance(result, dict)
+            or _failure_payload(_text_of(blocks or [])) is None):
+        return result
+    from mcp.types import CallToolResult
+
+    return CallToolResult(content=list(blocks), isError=True)
+
+
 # Presentation-bound tools that handle co-authoring themselves (save) or have
 # no deck left to look at afterwards (save as under a new name, close).
 _TOOLS_WITHOUT_COAUTHORING = frozenset({
     "ppt_save_presentation", "ppt_save_presentation_as", "ppt_close_presentation",
 })
+
+
+# The tools that work the undo stack themselves, and so must not start an entry
+# of their own first: an entry started just before Undo is the one it undoes.
+_TOOLS_THAT_DRIVE_UNDO = frozenset({"ppt_undo", "ppt_redo", "ppt_start_undo_entry"})
+# The ribbon commands that do the same through ppt_execute_mso.
+_MSO_COMMANDS_THAT_DRIVE_UNDO = frozenset({"undo", "redo"})
+
+
+def _is_read_only(tool) -> bool:
+    annotations = getattr(tool, "annotations", None)
+    read_only = getattr(annotations, "readOnlyHint", None)
+    if read_only is None:
+        read_only = getattr(annotations, "read_only_hint", None)
+    return bool(read_only)
+
+
+def _call_params(arguments) -> dict:
+    """The call's ``params``, as a dict, whether sent as an object or as JSON."""
+    params = arguments.get("params") if isinstance(arguments, dict) else None
+    if isinstance(params, str):
+        try:
+            params = json.loads(params)
+        except ValueError:
+            params = None
+    return params if isinstance(params, dict) else {}
+
+
+def _undo_entry_for(name, tool, arguments=None):
+    """A fresh undo step for a tool call that changes the deck, or None.
+
+    PowerPoint gathers every change made through COM since the last
+    StartNewUndoEntry into one undo entry, so without one per call a single
+    Undo took back everything the tools had done, slides included (#298).
+    utils.com_wrapper starts it before the call's first COM operation. macOS
+    has no StartNewUndoEntry and its backend does not read it.
+    """
+    if name in _TOOLS_THAT_DRIVE_UNDO or _is_read_only(tool):
+        return None
+    if name == "ppt_execute_mso":
+        command = str(_call_params(arguments).get("command_name") or "").strip().lower()
+        if command in _MSO_COMMANDS_THAT_DRIVE_UNDO:
+            return None
+    return UndoEntry()
 
 
 def _coauthoring_call(name, tool, arguments):
@@ -350,7 +457,7 @@ mcp = _PowerPointServer(
 3. When adding slides, use `ppt_add_slide` with `count` to create multiple slides at once instead of calling it repeatedly.
 4. After placing text, set fonts explicitly with `ppt_batch_apply_formatting` or `ppt_set_default_fonts`. On Japanese-locale systems, the slide master default is often 游ゴシック, which renders thin and illegible when projected. """ + _PREFERRED_FONTS + """
 5. For visual symbols, `ppt_search_icons` + `ppt_add_svg_icon` produce crisper, scalable results than emoji characters and are generally preferred in presentations.
-6. Use `ppt_get_slide_preview` to visually inspect slides as you work.
+6. Use `ppt_get_slide_preview` to visually inspect slides as you work. The image is usually larger than the slide is in points; its result gives `pixels_per_point` to convert.
 7. """ + _WRITE_CHECKS + """ When a slide is finished, run `ppt_check_layout` on it, and before calling the deck done, run it once more with no `slide_index`, which also compares the titles across slides. A slide is done when it reports no issues, or only ones you mean to keep: if the same finding comes back after two attempts to fix it, treat it as intended (a photo behind white text, an overlap you designed, something the template draws) and move on. The write tools check only the shapes they touched, and a slide copied into another open deck is not checked, so run `ppt_check_layout` there after copying. The check measures rather than looks, so it works with or without image input.
 8. Build a slide at a time, not the whole deck at once. Before the first shape, fix the grid (margins, column positions, a type scale and a palette) and keep every shape on it: most alignment issues are coordinates a few points apart. Decide on photos up front, since adding them later changes the layout. Finish each slide, with its issues acted on, `ppt_check_layout` clean, or its remaining findings intended, and a preview checked if you can see images, before starting the next. Fix problems in place with the call each `fix` names. Deleting and rebuilding a slide or the deck to move something a few points costs many calls and finds the same problems again.
 
@@ -364,13 +471,13 @@ On Windows, a presentation opened from a server (SharePoint, OneDrive) can be ed
 - `ppt_set_default_shape_style`: Set default fill/border/font before inserting shapes. Can capture all properties from a template shape including gradients.
 - `ppt_add_shape`: Supports inline text styling (`font_name`, `font_size`, `bold`, `font_color`, `align`) — no need for a separate `ppt_format_text` call.
 - `ppt_add_slide`: Accepts `count` to create multiple slides at once.
-- `ppt_set_slide_background`: Accepts `slide_indices` to set background on multiple slides in one call.
+- `ppt_set_slide_background` and `ppt_set_slide_transition`: Accept `slide_indices` to change several slides in one call.
 
 ## Design thinking
 
 Before placing any shapes, take a moment to plan:
 - **Slide structure**: decide the narrative arc and number of slides upfront
-- **Color system**: use accent colors from `ppt_get_presentation_info` instead of hardcoding RGB values. Pick one accent and use it consistently for icons, headings, and highlights.
+- **Color system**: use the deck's accent colors instead of hardcoding RGB values: pass the name, such as `"accent1"`, where a fill, line, text or icon color is taken, and the shape follows the theme if it changes. Pick one accent and use it consistently for icons, headings, and highlights.
 - **Icons**: whenever content has distinct points, steps, or features, add an icon for each — use `ppt_search_icons` + `ppt_add_svg_icon`
 - **One message per slide**: decide what this slide communicates, then place only what supports that message
 
@@ -715,8 +822,10 @@ class GetSlidePreviewInput(BaseModel):
         "openWorldHint": False,
     },
 )
-async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
-    """Get a visual preview of a PowerPoint slide as an image.
+# No return annotation: it answers an image and a text block, and the SDK
+# builds an output schema from `list[Image | str]` and fails on Image.
+async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput):
+    """Get a visual preview of a PowerPoint slide as an image, with its scale in pixels per point.
 
     This is the RECOMMENDED way to visually inspect slides for appearance, design,
     layout, colors, text readability, and overall quality. Much more efficient
@@ -726,12 +835,32 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
     can see which slide is being inspected.
 
     Returns:
-        Image: PNG image of the slide for visual inspection
+        Image: PNG image of the slide for visual inspection, followed by JSON
+        giving its scale: image_width_px and image_height_px, slide_width_pt
+        and slide_height_pt, and pixels_per_point. Multiply a position or size
+        in points by pixels_per_point to find it in the image; the image is
+        usually larger than the slide is in points.
     """
     from backend import IS_MACOS, ppt
     from utils.navigation import goto_slide
 
     def _export_slide_impl(slide_idx: int):
+        image_data = _export_slide_png(slide_idx)
+        return image_data, _slide_size_in_points()
+
+    def _slide_size_in_points():
+        # Looked up through the module, so macOS gets its own. A slide size
+        # that cannot be read costs the scale, not the preview.
+        from ppt_com import layout
+
+        try:
+            size = layout._get_slide_size_impl()
+            return size["width_points"], size["height_points"]
+        except Exception:
+            logger.debug("Cannot read the slide size for the preview", exc_info=True)
+            return None
+
+    def _export_slide_png(slide_idx: int):
         if IS_MACOS:
             # PowerPoint for Mac has no Slide.Export. The preview is rendered
             # from the deck's PDF export instead; see ppt_mac/export.py.
@@ -770,8 +899,38 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput) -> Image:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
 
-    image_data = await run_offloaded(ppt.execute, _export_slide_impl, params.slide_index)
-    return Image(data=image_data, format="png")
+    image_data, slide_size = await run_offloaded(
+        ppt.execute, _export_slide_impl, params.slide_index)
+    return [Image(data=image_data, format="png"),
+            json.dumps(preview_scale(params.slide_index, image_data, slide_size))]
+
+
+def preview_scale(slide_index, image_data, slide_size):
+    """What ppt_get_slide_preview says beside its image, to convert between
+    the image's pixels and the slide's points.
+
+    The image of a 960 pt slide is 1920 px across on Windows, and a caller
+    measuring a chart in it took the pixels for points twice and concluded
+    the chart was ignoring its width (#194).
+    """
+    said = {"slide_index": slide_index}
+    size = png_size(image_data)
+    if size:
+        said["image_width_px"], said["image_height_px"] = size
+    if slide_size:
+        said["slide_width_pt"], said["slide_height_pt"] = slide_size
+    if size and slide_size and slide_size[0]:
+        said["pixels_per_point"] = round(size[0] / slide_size[0], 4)
+    return said
+
+
+def png_size(data):
+    """(width, height) in pixels from a PNG's header, or None."""
+    import struct
+
+    if not data or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        return None
+    return struct.unpack(">II", data[16:24])
 
 
 # =============================================================================
@@ -986,8 +1145,13 @@ def _content_of(result):
     """What call_tool answered, as a list of content blocks under either SDK major."""
     if hasattr(result, "content") and not isinstance(result, (list, tuple, dict)):
         # mcp 2.x answers a CallToolResult, and an error in it is not raised.
+        # A tool's own failure (see _flag_failure) is passed on as its blocks,
+        # so ppt_run answers the same JSON and is marked failed in turn; a
+        # ToolError raised here would reach the caller with the SDK's prefix.
         if getattr(result, "isError", False) or getattr(result, "is_error", False):
-            raise ToolError(_text_of(result.content) or "The tool failed.")
+            text = _text_of(result.content)
+            if _failure_payload(text) is None:
+                raise ToolError(text or "The tool failed.")
         result = result.content
     if isinstance(result, tuple):  # mcp 1.x: (unstructured, structured)
         result = result[0]
@@ -1096,10 +1260,11 @@ async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
     Each step is {"tool": name, "params": {...}}. A value "$prev.key" is
     the previous step's result field, and "$2.shape_name" the second
     step's, so a step can use the shape the one before it made. The answer
-    lists each step's result; images (slide previews) follow it. With
+    lists each step's result; images (slide previews) follow it. A step
+    fails when its tool raises or answers {"error": ...}; with
     stop_on_error, the first failing step ends the run and says why.
     """
-    report, results, images = [], [], []
+    report, results, images, failed = [], [], [], []
     for number, step in enumerate(steps, start=1):
         step = step if isinstance(step, dict) else {}
         tool = step.get("tool")
@@ -1109,6 +1274,7 @@ async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
         except Exception as exc:  # noqa: BLE001 - reported per step
             report.append({"step": number, "tool": tool, "error": str(exc)})
             results.append(None)
+            failed.append((number, tool, str(exc)))
             if stop_on_error:
                 break
             continue
@@ -1117,11 +1283,31 @@ async def ppt_run_steps(steps: list[dict], presentation: str | None = None,
             data = json.loads(text) if text else {}
         except ValueError:
             data = {"text": text}
-        results.append(data)
+        if isinstance(data, dict) and data.get("error"):
+            # Most tools answer a failure with {"error": ...} rather than
+            # raising it (#249), so that answer fails the step too: it stops
+            # the run, and a reference to it says the step has no result.
+            entry = {"step": number, "tool": tool, "error": data["error"]}
+            details = {k: v for k, v in data.items() if k != "error"}
+            if details:
+                entry["details"] = details
+            report.append(entry)
+            results.append(None)
+            failed.append((number, tool, str(data["error"])))
+            if stop_on_error:
+                break
+            continue
         report.append({"step": number, "tool": tool, "result": data})
         images += [b for b in blocks if getattr(b, "type", "") == "image"]
-    summary = json.dumps({"steps": report, "ran": len(report), "of": len(steps)},
-                         ensure_ascii=False)
+        results.append(data)
+    summary = {"steps": report, "ran": len(report), "of": len(steps)}
+    if failed:
+        # A top-level "error", so the run is marked failed (isError true) by
+        # the same rule as any tool's own answer; see _flag_failure.
+        number, tool, message = failed[0]
+        more = f" ({len(failed)} steps failed)" if len(failed) > 1 else ""
+        summary["error"] = f"Step {number} ({tool}) failed: {message}{more}"
+    summary = json.dumps(summary, ensure_ascii=False)
     return [summary, *images] if images else summary
 
 if CATALOG_MODE:

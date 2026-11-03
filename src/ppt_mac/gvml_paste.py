@@ -4,8 +4,8 @@ Every tool that reaches PowerPoint through the clipboard goes through here:
 ``ppt_add_chart``, ``ppt_build_freeform`` and ``ppt_group_shapes`` paste a
 package, ``ppt_get_chart_data``, ``ppt_get_shape_nodes`` and
 ``ppt_get_group_items`` copy one off. What they share is the procedure and its
-checks, which are the whole reason the route is trustworthy (docs/gvml-design.md
-sections 2, 3 and 8):
+checks, which are the whole reason the route is trustworthy (sections 2, 3
+and 8 of the GVML design on #211):
 
 1. The user's clipboard is saved before anything is written and put back
    afterwards, unless something else wrote to it in between.
@@ -56,6 +56,7 @@ from backend.mac_ae import (
 )
 from backend.unsupported import refusal as _refusal
 from gvml import GVML_UTI, Package, PackageError, validate
+from utils.navigation import return_to, shown_slide
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +246,7 @@ def paste_package(
     # onto the slide that view is showing. `goto_slide` swallows its own
     # failures, so the navigation is sent here where it can refuse.
     window = target_window(pres)
+    was = shown_slide(window)
     try:
         window.view.go_to_slide(number=slide_index)
     except CommandError as exc:
@@ -257,89 +259,93 @@ def paste_package(
             alternatives,
         )) from exc
 
-    # A paste leaves its result selected, and a chart selection swallows the
-    # next paste into the chart's own shapes. Clearing costs one event.
     try:
-        window.selection.unselect()
-    except CommandError as exc:
-        logger.debug("Could not clear the selection before pasting: %s", exc)
+        # A paste leaves its result selected, and a chart selection swallows the
+        # next paste into the chart's own shapes. Clearing costs one event.
+        try:
+            window.selection.unselect()
+        except CommandError as exc:
+            logger.debug("Could not clear the selection before pasting: %s", exc)
 
-    # The server cannot serialise the user. If anything wrote to the clipboard
-    # between our write and here, pasting would put that on the slide.
-    if pasteboard.change_count() != mine:
-        raise Refused(_refusal(
-            tool_name,
-            "The clipboard was written to by something else between this "
-            "tool's write and its paste, so nothing was pasted rather than "
-            "paste whatever is there now. Nothing on the slide changed.",
-            ["Call the tool again"],
-        ))
+        # The server cannot serialise the user. If anything wrote to the clipboard
+        # between our write and here, pasting would put that on the slide.
+        if pasteboard.change_count() != mine:
+            raise Refused(_refusal(
+                tool_name,
+                "The clipboard was written to by something else between this "
+                "tool's write and its paste, so nothing was pasted rather than "
+                "paste whatever is there now. Nothing on the slide changed.",
+                ["Call the tool again"],
+            ))
 
-    window.view.paste_object()
+        window.view.paste_object()
 
-    # `paste object` declares no result, so the slide is the only evidence.
-    after = shapes_of(slide)
-    landed = len(after) - before
-    if landed == 0:
-        raise Refused(_refusal(
-            tool_name,
-            f"`paste object` returned no error and slide {slide_index} still "
-            f"has {before} shape(s), so PowerPoint discarded the package "
-            "without saying so. That is the silent no-op recorded in "
-            "MACOS_PORT section 5, and it is what PowerPoint does with a "
-            "package it cannot use.",
-            alternatives,
-        ))
-    if landed != 1:
-        remaining = _remove_landed(slide, before)
-        note = (
-            f" The extra shapes could not all be removed; still on the slide: "
-            f"{remaining}." if remaining else " They were removed again."
-        )
-        raise Refused(_refusal(
-            tool_name,
-            f"The paste put {landed} shapes on slide {slide_index} where one "
-            f"was expected.{note}",
-            alternatives,
-        ))
-
-    shape = after[-1]
-    actual_type = shape.shape_type()
-    if actual_type != expected_type:
-        remaining = _remove_landed(slide, before)
-        note = (
-            f" It could not be removed and is still on the slide as {remaining}."
-            if remaining else " It was removed again."
-        )
-        raise Refused(_refusal(
-            tool_name,
-            f"The paste landed as '{_keyword_name(actual_type)}' rather than "
-            f"'{_keyword_name(expected_type)}'.{note}",
-            alternatives,
-        ))
-    shape = shapes_of(slide)[-1]
-    name = shape.name()
-
-    # The position is not honoured by the paste, which drops the shape in the
-    # middle of the view and further down and right on each repeat, so it is
-    # written now and read back.
-    warnings: List[str] = []
-    try:
-        shape.left_position.set(left)
-        shape.top.set(top)
-        got_left, got_top = shape.left_position(), shape.top()
-    except CommandError as exc:
-        warnings.append(
-            f"'{name}' was pasted but its position could not be written "
-            f"({error_number(exc)}); it is wherever PowerPoint put it."
-        )
-    else:
-        if abs(got_left - left) > _POSITION_TOLERANCE or abs(got_top - top) > _POSITION_TOLERANCE:
-            warnings.append(
-                f"'{name}' was asked to sit at ({left}, {top}) and reads back "
-                f"at ({round(got_left, 2)}, {round(got_top, 2)})."
+        # `paste object` declares no result, so the slide is the only evidence.
+        after = shapes_of(slide)
+        landed = len(after) - before
+        if landed == 0:
+            raise Refused(_refusal(
+                tool_name,
+                f"`paste object` returned no error and slide {slide_index} still "
+                f"has {before} shape(s), so PowerPoint discarded the package "
+                "without saying so. That is the silent no-op recorded in "
+                "MACOS_PORT section 5, and it is what PowerPoint does with a "
+                "package it cannot use.",
+                alternatives,
+            ))
+        if landed != 1:
+            remaining = _remove_landed(slide, before)
+            note = (
+                f" The extra shapes could not all be removed; still on the slide: "
+                f"{remaining}." if remaining else " They were removed again."
             )
-    return Pasted(shape, name, warnings)
+            raise Refused(_refusal(
+                tool_name,
+                f"The paste put {landed} shapes on slide {slide_index} where one "
+                f"was expected.{note}",
+                alternatives,
+            ))
+
+        shape = after[-1]
+        actual_type = shape.shape_type()
+        if actual_type != expected_type:
+            remaining = _remove_landed(slide, before)
+            note = (
+                f" It could not be removed and is still on the slide as {remaining}."
+                if remaining else " It was removed again."
+            )
+            raise Refused(_refusal(
+                tool_name,
+                f"The paste landed as '{_keyword_name(actual_type)}' rather than "
+                f"'{_keyword_name(expected_type)}'.{note}",
+                alternatives,
+            ))
+        shape = shapes_of(slide)[-1]
+        name = shape.name()
+
+        # The position is not honoured by the paste, which drops the shape in the
+        # middle of the view and further down and right on each repeat, so it is
+        # written now and read back.
+        warnings: List[str] = []
+        try:
+            shape.left_position.set(left)
+            shape.top.set(top)
+            got_left, got_top = shape.left_position(), shape.top()
+        except CommandError as exc:
+            warnings.append(
+                f"'{name}' was pasted but its position could not be written "
+                f"({error_number(exc)}); it is wherever PowerPoint put it."
+            )
+        else:
+            if abs(got_left - left) > _POSITION_TOLERANCE or abs(got_top - top) > _POSITION_TOLERANCE:
+                warnings.append(
+                    f"'{name}' was asked to sit at ({left}, {top}) and reads back "
+                    f"at ({round(got_left, 2)}, {round(got_top, 2)})."
+                )
+        return Pasted(shape, name, warnings)
+    finally:
+        # Moved only to paste; off, the user's slide is put back.
+        return_to(window, was)
 
 
 # ---------------------------------------------------------------------------

@@ -3,9 +3,10 @@
 Status: design study, now partly built. The measurements below stand; where
 building it changed the answer, the section says so.
 
-What has shipped so far, on the `macos-support` branch. The package installs
-and 563 tests run on macOS (#185), the Apple Event backend and the generated
-enumeration tables (#186), and the app and export tools (#187).
+It shipped in v2.1.0, through #184 and its sub-issues: the package and its
+tests on macOS (#185), the Apple Event backend and the generated enumeration
+tables (#186), the app and export tools (#187), and every other module after
+them. Section 6.1 lists what still refuses.
 
 The one place building it beat the study: **slide images do work**, just not the
 way Windows does them. Section 6 said there is no export command, which is true,
@@ -54,10 +55,10 @@ appscript 1.4.0 (October 2025) publishes universal2 wheels for CPython 3.10
 through 3.14, so there is no build step and no compiler on the user's machine.
 
 Three things are absent from the dictionary. Charts, SmartArt and freeform
-path building have no words in it at all. Two of them come back another way:
+path building have no words in it at all. All three come back another way:
 the clipboard carries a DrawingML package for any shape, PowerPoint pastes one
-back whatever it holds, and every chart, freeform and group tool goes through
-it (`docs/gvml-design.md`). Creating and reading is a paste or a copy; editing
+back whatever it holds, and every chart, SmartArt, freeform and group tool goes through
+it ([the GVML design on #211](https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420)). Creating and reading is a paste or a copy; editing
 an existing chart or path is a copy, a rewrite and a paste back, after which
 the original is deleted and the new shape put back in its place. That makes
 it a new object with the old name, and the tool says so. Section 6 says what
@@ -174,7 +175,7 @@ them in one place.
 | `ref.count()` raises -1708 | PowerPoint's dictionary declares no Standard Suite commands at all, only the `window` class | `len(ref.get())` |
 | `ref.get()` raises -1728 on an empty collection | PowerPoint errors instead of returning an empty list | catch and return 0 |
 | `PP.open(...)` returns `None` and opens nothing | same missing Standard Suite | shell out to `osascript` with `open POSIX file "…"`, which does work, verified |
-| `ref.duplicate()` raises `unpack requires a buffer of 4 bytes` | appscript falls back to a code PowerPoint does not answer | `copy object` the slide and `paste object` it into its own presentation, the clipboard saved and put back; the osascript `duplicate slide` used before answers "Parameter error" (-50) on PowerPoint 16.114 |
+| `ref.duplicate()` raises `unpack requires a buffer of 4 bytes` | appscript falls back to a code PowerPoint does not answer | `copy object` the slide and `paste object` it into its own presentation, the clipboard saved and put back; the osascript `duplicate slide` used before answers "Parameter error" (-50) on PowerPoint 16.114. `paste object presentation N` pastes into deck N, not the one in front, at its end, so `ppt_copy_slide` copies into another deck the same way and moves the copies into place |
 | `shape.rotation` raises `AttributeError` | the dictionary defines both an enumerator and a property named `rotation`, and appscript resolves the collision toward the enumerator | reach the property by raw code. Verified working, set 33 and read 33.0 back |
 | `line_format.dash_style` raises `AttributeError` | same collision class, the `line dash style …` enumerators take the name | raw code `b'LFds'` |
 | PowerPoint stops answering | a modal sheet, or an operation that wedged it | every call carries `timeout=`, which appscript supports on every command |
@@ -194,7 +195,9 @@ The last row deserves emphasis. PowerPoint wedged repeatedly during this study,
 several times past 12 seconds and three times fatally with -609. The Windows
 wrapper already has the right shape for this in `com_wrapper.py:107-135` (retry
 on busy, optional ESC to dismiss a dialog); the Mac side needs the same policy
-with a different trigger.
+with a different trigger. It has the retry on errors that mean a call never
+landed, and since #245 the replacement of a worker stuck inside one call, which
+section 5.4 describes.
 
 `active presentation` raising -1728 whenever the start gallery is frontmost is
 worth calling out separately, because it is the Mac echo of a problem the
@@ -457,6 +460,22 @@ together can still run the wrong way round, and the read answers honestly about
 a deck that has not grown yet. Nothing inside the server can put that right, so
 the instructions say to call these tools one after another on macOS.
 
+Splitting the wait also made a stuck worker possible to recognise, which is
+what #245 was about. An Apple Event that never answers used to hold the worker
+for as long as it took, and every call queued behind it waited too, until each
+was told that PowerPoint was still busy. That was the wrong thing to hear, and
+nothing after them could run either. Since the per call budget starts only once
+the worker claims a job, a job still running when it runs out is a worker stuck
+inside one call, not a busy queue. Its caller then abandons that worker and
+starts a fresh one on a fresh queue, the way the Windows wrapper has since
+#199. Everything still in the old queue is taken back, and those callers hear
+at once that an earlier request got stuck and that theirs was not sent. The
+stuck thread cannot be stopped, since an Apple Event in flight cannot be
+recalled, so it is left to finish or not. Each worker carries a generation
+number, and one that has been replaced runs nothing more, retries nothing and
+leaves the shared connection alone. The appscript reference is not tied to the
+thread that made it, so unlike Windows there is nothing to reconnect.
+
 ### 5.5 PowerPoint cannot read an SVG, and does not say so
 
 `ppt_add_svg_icon` handed PowerPoint the SVG it downloaded. PowerPoint answered
@@ -495,10 +514,10 @@ This is the honest part. These are not workarounds waiting to be found.
 
 | Area | Windows | macOS | Lines affected |
 |---|---|---|---|
-| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. A chart is added by writing its XML and pasting it through the clipboard, and its data is read the same way (`docs/gvml-design.md`). An existing chart is edited by copying it, rewriting its `chart1.xml` and pasting it back over the original, which keeps name, position and z order and loses animations, said in `warnings` | `charts.py` 1,126 |
-| SmartArt | `SmartArt` object model | **no class, no command**. `shape type smartart graphic` exists, so an existing graphic is a shape like any other | `smartart.py` 810 |
+| Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. A chart is added by writing its XML and pasting it through the clipboard, and its data is read the same way ([the GVML design on #211](https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420)). An existing chart is edited by copying it, rewriting its `chart1.xml` and pasting it back over the original, which keeps name, position and z order and loses animations, said in `warnings` | `charts.py` 1,126 |
+| SmartArt | `SmartArt` object model | **no class, no command**. A graphic's clipboard package carries its data model and its layout, colour and style definitions, and PowerPoint for Mac installs every definition it offers as a file of that same XML (`SmartArt.framework/…/Resources/lo`, `cs`, `qs`). So nodes are written, added, deleted and formatted in the data model, a layout, colour scheme or style is swapped by putting the installed file in place of the part, and a new graphic is those parts around a fresh data model; PowerPoint lays it out on the paste. The layouts are the Mac's own: 158 of them are shared with Windows, 18 are only on Windows and 4 only on the Mac, so a layout index comes from `ppt_list_smartart_layouts` on the Mac. Colour scheme and style indices match Windows | `smartart.py`, `smartart_defs.py` |
 | Freeform paths | `Shapes.BuildFreeform` | **no builder**. A path is written as `a:custGeom` and pasted through the clipboard, and read back the same way. Nodes are moved, inserted, deleted and switched between line and curve by rewriting the path and pasting it back over the original. The editing type (corner, smooth, symmetric) is not in the XML either and stays refused | `freeform.py` 765 |
-| Grouping | `ShapeRange.Group` | **no `select` command, so no shape range**. The members are copied off the slide one by one, wrapped in one `a:grpSp` and pasted back as a group; the originals are deleted only once the group is verified | `groups.py` |
+| Grouping | `ShapeRange.Group` | **no `select` command, so no shape range**. The members are copied off the slide one by one, wrapped in one `a:grpSp` and pasted back as a group; the originals are deleted only once the group is verified. A member's text is written the same way (#220): `ppt_set_text` with a member's name, or `Group/Member`, copies the group, rewrites that member's text (the whole of it, or a span inside one line) and pastes the group back, members' names kept; `ppt_format_text` sets a member's runs the same way | `groups.py` |
 | Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all. Solved another way, by exporting the deck to PDF and rendering pages with Quartz, which is what shipped | `export.py` 848 |
 | Line visibility | `Shape.Line.Visible = False` | `line format` has **no `visible` property**. Weight 0 and transparency 1.0 both apply cleanly and are the practical stand-ins | every tool taking `line_visible` |
 | Screen redraw suppression | `LockWindowUpdate` on `PPTFrameClass` | no equivalent. Less needed, because a whole tool call is 80 ms rather than a visible sequence, but the flicker fix from #164 does not transfer | `utils/redraw.py` 91 |
@@ -515,17 +534,18 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**155 tools. 143 do the job. 12 always refuse.**
+**157 tools. 146 do the job. 11 always refuse.**
 
 | Why | Tools |
 |---|---|
 | No `nodes`, and a node's editing type (corner, smooth, symmetric) is not stored in the XML the clipboard carries either; PowerPoint reads it off the handle geometry. Moving the handles with the node position tool is the way to change it | `ppt_set_node_editing_type` |
-| No `smart art` class | `ppt_add_smartart`, `ppt_modify_smartart`, `ppt_list_smartart_options` |
 | No `select` command, so no shape range | `ppt_select_shapes` |
 | No tags anywhere in the dictionary | `ppt_set_tag`, `ppt_get_tags` |
 | Deleting one effect answers -50 and clearing its shape costs the slide | `ppt_remove_animation`, `ppt_copy_animation` |
 | No table style, only the text direction | `ppt_set_table_style` |
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
+| No application window state, only each deck's window position and size | `ppt_set_window_state` |
+| No Boolean merge verbs (union, combine, intersect, subtract, fragment), and no shape range to merge | `ppt_merge_shapes` |
 
 A further **19 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
@@ -574,25 +594,60 @@ Treat that absence carefully. Symbols are stored with type signature suffixes
 (`AddPictureWW`, `AddNodesP-`), so **presence is reliable evidence and absence is
 not**. A first pass with exact string matching wrongly reported `AddTable` and
 `BuildFreeform` missing for exactly that reason, and `AddShape` does not appear
-either. So the honest statement is that `AddChart` was **not found by a method
-whose negatives are unreliable**, which makes charts through VBA unlikely rather
-than settled.
+either. So the honest statement was that `AddChart` was **not found by a method
+whose negatives are unreliable**, which made charts through VBA unlikely rather
+than settled. The spike below settled it: neither is there.
 
-What is solid is the other direction. SmartArt, freeform paths and slide image
-export are all present in the library and become recoverable if `run VB macro`
-can be made to execute at all.
+**The spike (#189), on PowerPoint for Mac 16.114.** `run VB macro` executes.
+What it took, and what it found:
 
-Whether it executes is unproven. With no macro present it returns -18, which is
-equally consistent with "macro not found" and "handler is a stub". One line
-closes the question. Put `Sub Ping()` in a `.pptm`, open it, and call it.
+- **A macro file can be made without anyone editing it.** A `vbaProject.bin`
+  was generated from VBA source text (the containers by
+  [MS-OVBA](https://github.com/Beakerboy/MS-OVBA), the source compressed with
+  literal-only chunks, because that library's compressor corrupts a module
+  longer than about 1 KB) with no compiled p-code, so PowerPoint compiles the
+  source on load. Put into a `.pptm` (a `/ppt/vbaProject.bin` override with
+  `application/vnd.ms-office.vbaProject`, the presentation part as
+  `presentation.macroEnabled.main+xml`, a `vbaProject` relationship), it opens,
+  lists its macros under Tools ▸ Macro ▸ Macros, and compiles.
+- **Opening it asks.** With the default security setting PowerPoint asks
+  "This presentation contains macros. Do you want to disable macros before
+  opening the file?" every time the file is opened, and nothing runs until
+  Enable Macros is clicked.
+- **`run VB macro macro name "Ping"` runs it** once macros are enabled, and
+  `list of parameters {"hello", "world"}` arrives as two `String` arguments.
+  The bare name is enough; the module and file need not be named.
+- **It returns nothing**, not the integer the dictionary declares: assigning
+  the result fails in AppleScript with -2753, "the variable is not defined".
+  The macro wrote its results into a text box on the slide, which was read
+  back over Apple Events.
+- **-18 means the macro could not be run**, not that the command is a stub.
+  It came back for every call while the macro prompt was still open, and
+  while the project failed to compile.
+- **One compile error disables every macro in the project**, silently: the
+  Macros dialog still lists them and Run does nothing. VBA binds `Shapes`
+  early here, so `Shapes.AddChart2` written into the source is a compile
+  error ("Method or data member not found"). Calls to methods that may be
+  missing go through an `Object` variable, where a missing one is a runtime
+  error the macro can catch.
+- **`AddChart` and `AddChart2` are absent.** Both, called late bound, fail
+  with error 438, "Object doesn't support this property or method".
+- **`AddSmartArt` works.** `Shapes.AddSmartArt(Application.SmartArtLayouts(1),
+  ...)` made a five-node Basic Block List; `SmartArtLayouts.Count` is 159
+  here, against 162 layout files in the install.
 
-Three constraints to weigh before building on it. Macro security consent is a
-real user facing cost, and an MCP server that asks people to lower it is a hard
-sell. `run VB macro` takes only a list of text and returns only an integer, so
-anything richer has to come back out of band. And it can only run a macro that
-is already in the file. The old `do visual basic`, which compiled a string, is
-gone from the dictionary entirely, so there is no route that does not involve
-shipping a `.pptm` with the macro already in it.
+So the VBA route reaches SmartArt and not charts, and costs a macro prompt on
+every open of the file that carries the macro. Nothing uses it: charts,
+SmartArt and freeform paths are all made through the clipboard (the table
+above) with no prompt. Not tried: delivering the macro as an add-in (`.ppam`) with
+`register add in`, which changes PowerPoint's add-in list for good, and
+running a macro in one open file against another.
+
+The constraints weighed before the spike still stand. Macro security consent
+is a real user facing cost, and an MCP server that asks people to lower it is
+a hard sell. Anything richer than the arguments has to come back out of band.
+And it can only run a macro that is already in an open file: the old
+`do visual basic`, which compiled a string, is gone from the dictionary.
 
 ---
 
@@ -655,9 +710,9 @@ exists and burns turns looking for it. The tool stays listed and returns a
 structured refusal naming the platform, the reason and a route to take instead.
 
 ```json
-{"error": "ppt_add_smartart is not available on macOS",
- "reason": "PowerPoint for Mac's Apple Event dictionary has no `smart art` class and no command that makes one. ...",
- "alternatives": ["ppt_add_shape and ppt_add_connector, for a diagram drawn by hand"]}
+{"error": "ppt_set_tag is not available on macOS",
+ "reason": "PowerPoint for Mac's Apple Event dictionary has no Tags collection on a shape, a slide or a presentation. ...",
+ "alternatives": ["Carry the value in the shape's name with ppt_update_shape", "ppt_set_slide_notes"]}
 ```
 
 The tools that go through the clipboard follow the same rule from the other
@@ -712,13 +767,13 @@ lives.
 **Phase 3, the rest, and the honest refusals.**
 
 **Phase 4, the clipboard.** Charts, freeforms and groups through
-`com.microsoft.Art--GVML-ClipFormat`, in the order `docs/gvml-design.md`
+`com.microsoft.Art--GVML-ClipFormat`, in the order [the GVML design on #211](https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420)
 section 6 gives: the six tools that create or read first, then the five that
 edit a chart, then the four that edit a path. All three tiers are in.
 
-**Spike, in parallel and not on the critical path.** Whether a shipped `.ppam`
-plus `run VB macro` can reach the VBA object model. If it can, SmartArt comes
-back that way. Charts and freeforms no longer depend on it.
+**Spike, in parallel and not on the critical path.** Whether `run VB macro`
+can reach the VBA object model. It can (section 6.2), behind a macro prompt;
+charts, freeforms and SmartArt do not depend on it.
 
 ---
 
@@ -726,8 +781,10 @@ back that way. Charts and freeforms no longer depend on it.
 
 Written down so nobody re-derives it.
 
-1. Whether `run VB macro` actually executes. Section 6.1 has the one line test.
-   It matters for SmartArt now; charts are made through the clipboard instead.
+1. ~~Whether `run VB macro` actually executes.~~ Settled: it does, from a
+   generated `.pptm` once its macros are enabled, and `AddChart` is absent
+   while `AddSmartArt` works; see section 6.2. Nothing depends on it; charts,
+   freeforms and SmartArt are made through the clipboard instead.
 2. ~~Table cell addressing.~~ Settled. `get cell from` is the wrong route and
    `table.rows[r].cells[c]` is the right one; see section 5.1. Every table tool
    now runs live.
@@ -735,11 +792,11 @@ Written down so nobody re-derives it.
    and write through `slide master`'s `theme`'s `theme color scheme`. What does
    not work is the Windows walk, because a deck's `designs` collection counts
    zero here and `designs[1]` answers -1728.
-4. Sections. The command answered through appscript and failed with -1708
-   through AppleScript, which should not both be true and needs one clean run.
-5. Align, distribute, group and ungroup all take a `shape range`, and the only
-   route to one appears to be through the window's selection. That changes the
-   shape of those four tools.
+4. ~~Sections.~~ Settled in a96e592: adding and managing sections work, and
+   the tools stopped refusing them.
+5. ~~Align, distribute, group and ungroup need a `shape range`.~~ Settled
+   without one. Align and distribute compute each shape's position and set it,
+   and grouping goes through the clipboard (#211).
 6. ~~Whether passing a file reference rather than a path string hands PowerPoint
    a sandbox extension.~~ Settled, and the answer is half of each. A file
    reference is necessary, `save in: "<path>"` as text writes nothing anywhere

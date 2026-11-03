@@ -204,35 +204,46 @@ def _duplicate_once(app, pres, slide_index: int) -> int:
     Apple Event one, because appscript falls back to a code PowerPoint does not
     answer, and the AppleScript ``duplicate slide`` answers "Parameter error"
     (-50) on PowerPoint 16.114. So the slide is copied and pasted into its own
-    presentation, the user's clipboard put back afterwards, and the copy is
-    found by diffing the slide IDs rather than by trusting a return value.
+    presentation; see _paste_copy.
+    """
+    return _paste_copy(app, pres, slide_index, pres)
+
+
+def _paste_copy(app, src_pres, slide_index: int, dst_pres) -> int:
+    """Copy one slide and paste it into a presentation, answering the copy's ID.
+
+    `paste object` takes the presentation to paste into, the one named and
+    not whichever is in front, and puts the slide at its end. The user's
+    clipboard is put back afterwards, and the copy is found by diffing the
+    destination's slide IDs rather than by trusting a return value.
     """
     from ppt_mac.gvml_paste import Clipboard
 
-    before = _slide_ids(pres)
-    pres_index = _presentation_index(app, pres)
+    before = _slide_ids(dst_pres)
+    src_index = _presentation_index(app, src_pres)
+    dst_index = _presentation_index(app, dst_pres)
     clip = Clipboard.take()
     try:
         osascript(
             'tell application "Microsoft PowerPoint" to copy object '
-            f"slide {slide_index} of presentation {pres_index}"
+            f"slide {slide_index} of presentation {src_index}"
         )
         clip.claim()
         osascript(
             'tell application "Microsoft PowerPoint" to paste object '
-            f"presentation {pres_index}"
+            f"presentation {dst_index}"
         )
     finally:
         clip.restore()
         for warning in clip.warnings:
-            logger.warning("Duplicating slide %d: %s", slide_index, warning)
-    after = _slide_ids(pres)
+            logger.warning("Copying slide %d: %s", slide_index, warning)
+    after = _slide_ids(dst_pres)
     fresh = [sid for sid in after if sid not in set(before)]
     if len(fresh) != 1:
         raise RuntimeError(
-            "PowerPoint reported no error but did not duplicate slide "
-            f"{slide_index} (the deck went from {len(before)} to "
-            f"{len(after)} slides)."
+            f"PowerPoint reported no error but did not copy slide {slide_index} "
+            f"(the deck it went to went from {len(before)} to {len(after)} "
+            "slides)."
         )
     return fresh[0]
 
@@ -605,27 +616,8 @@ def _copy_slide_impl(
     )
 
     if src_pres.full_name() != dst_pres.full_name():
-        # Windows copies between decks with InsertFromFile, or through the
-        # clipboard for a password-protected source. The Mac clipboard verbs
-        # are `copy object` and `paste object`, and `paste object`
-        # declares a direct parameter whose type does not resolve to any class
-        # in the dictionary, so there is no way to say which deck it should
-        # paste into. Guessing would paste into whichever deck PowerPoint
-        # happens to consider current, which is a silent write to the wrong
-        # file, so this refuses instead.
-        return {
-            "error": "ppt_copy_slide across presentations is not available on macOS",
-            "reason": (
-                "PowerPoint for Mac's 'paste object' command takes no "
-                "addressable destination, so a slide cannot be pasted into a "
-                "chosen presentation. Copying within one presentation works."
-            ),
-            "platform": "macOS",
-            "alternatives": [
-                "ppt_copy_slide within a single presentation",
-                "ppt_duplicate_slide",
-            ],
-        }
+        return _copy_across(app, src_pres, dst_pres, slide_index, slide_indices,
+                            insert_at)
 
     sources = [slide_index] if slide_index is not None else list(slide_indices)
 
@@ -670,6 +662,60 @@ def _copy_slide_impl(
         "success": True,
         "copied_count": len(new_indices),
         "new_slide_indices": new_indices,
+        "target_presentation": dst_pres.name(),
+        "source_presentation": src_pres.name(),
+    }
+
+
+def _copy_across(app, src_pres, dst_pres, slide_index, slide_indices, insert_at) -> dict:
+    """Copy slides into another open presentation, through the clipboard.
+
+    Windows inserts from a saved copy of the source, or pastes; here each
+    slide is pasted into the destination by name (see _paste_copy), at its
+    end, and the copies are then moved to insert_at. If anything fails, every
+    slide that was not in the destination before is removed again, so it is
+    left as it was.
+    """
+    sources = [slide_index] if slide_index is not None else list(slide_indices)
+
+    src_total = _slide_count(src_pres)
+    out_of_range = [i for i in sources if i < 1 or i > src_total]
+    if out_of_range:
+        raise ValueError(
+            f"Source slide index(es) {out_of_range} out of range (1-{src_total})"
+        )
+    dst_total = _slide_count(dst_pres)
+    append = insert_at is None or insert_at == -1
+    if not append and (insert_at < 1 or insert_at > dst_total + 1):
+        raise ValueError(f"insert_at {insert_at} out of range (1-{dst_total + 1})")
+
+    before = _slide_ids(dst_pres)
+    new_ids = []
+    try:
+        for index in sources:
+            new_ids.append(_paste_copy(app, src_pres, index, dst_pres))
+        target = len(before) + 1 if append else insert_at
+        _realize_order(dst_pres, before[: target - 1] + new_ids + before[target - 1:])
+    except Exception:
+        for sid in reversed(_slide_ids(dst_pres)):
+            if sid not in set(before):
+                try:
+                    dst_pres.slides[_slide_ids(dst_pres).index(sid) + 1].delete()
+                except Exception:
+                    pass
+        raise
+
+    ids_now = _slide_ids(dst_pres)
+    new_indices = [ids_now.index(sid) + 1 for sid in new_ids]
+    return {
+        "success": True,
+        "copied_count": len(new_indices),
+        "new_slide_indices": new_indices,
+        "copied": [
+            {"source_index": src_i, "new_index": new_i}
+            for src_i, new_i in zip(sources, new_indices)
+        ],
+        "method": "clipboard",
         "target_presentation": dst_pres.name(),
         "source_presentation": src_pres.name(),
     }

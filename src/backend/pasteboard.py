@@ -6,8 +6,8 @@ paste, so the write and the paste cannot be separated by another job (design
 section 2). Keeping this module free of PowerPoint means it can be faked in a
 test with a dict.
 
-What is here was measured before it was written (docs/gvml-design.md section
-0 and 3). Reading fifteen types off a PowerPoint copy took 39 ms. Writing
+What is here was measured before it was written (sections 0 and 3 of the
+GVML design on #211). Reading fifteen types off a PowerPoint copy took 39 ms. Writing
 every one of them back except PowerPoint's own in-process pointer types,
 ``com.microsoft.PowerPoint-12.0-Internal-*`` and ``com.microsoft.ole.source.*``,
 gave a pasteboard PowerPoint could paste from again. The pointer types are
@@ -24,7 +24,7 @@ so none is set up here.
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from AppKit import NSData, NSPasteboard
+from AppKit import NSData, NSPasteboard, NSURL
 
 # Types that are pointers into PowerPoint's own process and must not be written
 # back from ours.
@@ -81,6 +81,20 @@ def write(uti: str, data: bytes) -> int:
     ns_data = NSData.dataWithBytes_length_(data, len(data))
     if not board.setData_forType_(ns_data, uti):
         raise RuntimeError(f"NSPasteboard declined to take {len(data)} bytes of {uti}")
+    return int(board.changeCount())
+
+
+def write_files(paths: List[str]) -> int:
+    """Replace the pasteboard with file URLs and return the new change count.
+
+    What Finder puts there when files are copied, so a paste drops the files:
+    the counterpart of a Windows CF_HDROP. The files have to outlive the call.
+    """
+    board = _board()
+    board.clearContents()
+    urls = [NSURL.fileURLWithPath_(path) for path in paths]
+    if not board.writeObjects_(urls):
+        raise RuntimeError(f"NSPasteboard declined to take {len(urls)} file URLs")
     return int(board.changeCount())
 
 

@@ -33,7 +33,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 - **157 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
-- **Theme color awareness** — Use `accent1`, `accent2`, etc. instead of hardcoded RGB values
+- **Theme color awareness** — Pass `accent1`, `accent2`, etc. wherever a fill, line, shadow, glow or text color is taken, instead of hardcoded RGB values; the shapes follow the theme when it changes
 - **Windows and macOS** — The same tools, arguments and return values on both; where PowerPoint for Mac cannot do something, the tool says so rather than quietly doing nothing
 
 ## 📋 Requirements
@@ -161,7 +161,7 @@ uv sync
 | **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check |
 | **Effects** | 3 | Glow and reflection (on the shape or on its text), soft edge |
 | **Comments** | 3 | Add, list, delete |
-| **Advanced** | 19 | Tags, fonts (set defaults + bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
+| **Advanced** | 19 | Tags, fonts (list the deck's or this computer's, set defaults, bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
 | | **157** | |
 
@@ -329,7 +329,7 @@ A slide is judged as the slide show draws it. Lines a build-up shows one at a ti
 
 Each issue names the shapes and says how to fix it, with the tool call and its values. A fix keeps the slide together rather than only clearing the issue: a card grows with its padding and the rest of its row, and a shape brought back onto the slide keeps the slide's margin. The tools that add, copy, move, resize, align, distribute or retext a shape, or fill a placeholder, also check the shape they touched and report any problem in their own result, under `layout_issues`, so it is caught by the call that caused it. A new slide background, or a new fill under text, reports the text it left hard to read, and a change to the whole deck, its theme, theme colours, fonts or slide size, reports what it broke that was not broken before.
 
-Each of those checks reads the slide back, which adds a moment to every write, more on the Mac. To leave the checking to `ppt_check_layout` alone, set `PPT_LAYOUT_CHECKS=off` in the server's `env`; the server's instructions then tell the model to run it after each few changes. The accepted values are `on` (the default) and `off`; anything else is ignored with a warning and the checks stay on. A change to the whole deck (theme, theme colours, font, default fonts, slide size) reads every slide before and after, so on a long deck it takes noticeably longer, on the Mac above all. Paragraph formatting, bullets, picture crops and formats, grouping, SmartArt, chart data, lines, deleting table rows and columns, splitting cells and copying slides are checked the same way. A slide copied into another open deck is not: the check reads the deck the server is working on.
+Each of those checks reads the slide back, which adds a moment to every write, more on the Mac. To leave the checking to `ppt_check_layout` alone, set `PPT_LAYOUT_CHECKS=off` in the server's `env`; the server's instructions then tell the model to run it after each few changes. The accepted values are `on` (the default) and `off`; anything else is ignored with a warning and the checks stay on. A change to the whole deck (theme, theme colours, font, default fonts, slide size) reads every slide before and after. On a deck of more than 300 shapes it reads neither, since that would take longer than the change, and says so under `layout_check_skipped`, leaving the deck to `ppt_check_layout`. Paragraph formatting, bullets, picture crops and formats, grouping, SmartArt, chart data, lines, deleting table rows and columns, splitting cells and copying slides are checked the same way. A slide copied into another open deck is not: the check reads the deck the server is working on.
 
 On a deck made from a template, the template is part of the check. The graphics its slide master and layouts draw are read, so a chart sized over the logo or a footnote on the confidentiality line is reported, and what the template designed is taken as meant: a placeholder still in the theme's colours, or a caption layout's own smaller title, is not held to the rest, and in a deck on two designs each design's titles are compared only with each other. Theme colours set with `ppt_set_theme_colors` are the caller's, so that call judges the placeholders in them too, and so does every later check once the theme's own text colour no longer reads on its background. PowerPoint for Mac exposes the master's graphics but not a layout's own, nor what is inside a group, so there the layout's graphics, its title's place, the theme's fonts and the text inside groups are read from the deck's saved file, while it holds what is on screen. On a deck not yet saved, or changed since, a layout's design is allowed for through its placeholders.
 
@@ -362,6 +362,14 @@ ESC cancels without committing, so there are no destructive side effects. This i
 If no PowerPoint is running when a tool needs one (`ppt_create_presentation`, `ppt_open_presentation`, `ppt_connect`), the server starts it. On macOS it starts in the background and does not take the front from the app you are working in.
 
 When a close leaves no presentation open in a PowerPoint the server started, `ppt_close_presentation` quits PowerPoint too and says so (`powerpoint_quit`). A PowerPoint you started yourself is never quit, and neither is one that still has a presentation open (on Windows, or a file open in Protected View). Pass `keep_powerpoint_open=true` to keep it running, for example to open another presentation straight away. Until a tool starts PowerPoint again, tools that need it answer that PowerPoint is not running, where they would otherwise have reported an empty list.
+
+### Working in the same deck as the model
+
+Each write moves the deck's window to the slide it works on, so you can see where the model is. To work in the deck yourself at the same time, without the window jumping to another slide, set `PPT_FOLLOW_EDITS=off` in the server's `env`. The edits land the same way; only the window stays where you left it. `ppt_goto_slide` still moves it when asked. The accepted values are `on` (the default) and `off`; anything else is ignored with a warning. While you are typing in a text box PowerPoint may hold the model's call for a moment, and undo (Ctrl+Z) is shared, so it can take back the model's last change.
+
+```json
+"env": { "PPT_FOLLOW_EDITS": "off" }
+```
 
 ### Icons on a network that blocks the icon sites
 
@@ -415,7 +423,7 @@ What catalog mode gives up is per-tool control in the client: approving or block
 
 ## 🍎 macOS support
 
-**12 tools refuse on macOS. The rest work.** The 12 are listed by name in
+**11 tools refuse on macOS. The rest work.** The 11 are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what
@@ -424,9 +432,6 @@ something the tool says so rather than doing something unexpected.
 
 Not available on macOS:
 
-- **SmartArt.** The dictionary has no class and no command for it, so it
-  cannot be created or edited from a script. An existing graphic is still an
-  ordinary shape and can be moved, resized, read and deleted.
 - **A freeform node's editing type.** Corner, smooth and symmetric are not
   stored anywhere a script can reach; move the node's handles instead.
 - **Removing one animation.** Clearing a slide's animations works.
@@ -464,9 +469,18 @@ Smaller differences:
   result says how many were lost. A few formatting arguments that depend on
   the chart's rendered size (`chart_style`, legend and title coordinates,
   the 8-direction legend presets, `tick_label_font_size`) are refused by name.
+- **Text inside a group is edited the same way.** `ppt_set_text` (the whole
+  text, or a span inside one line) and `ppt_format_text` reach a group's
+  member by its name, or by its path (`"Group 4/TextBox 3"`); the group is
+  copied, the member rewritten and the group pasted back. The members keep
+  their names, and the group loses its animations, as above.
 - Icons are rasterised with `sips` before they are inserted, because
   PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
   systems get a refusal naming the reason rather than a blank box.
+
+## 🤝 Contributing
+
+Pull requests are welcome. Base them on `develop`, one topic each, with tests; [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
 
 ## 📄 License
 

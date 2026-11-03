@@ -11,7 +11,7 @@ from typing import Literal, Optional, Union
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from utils.offload import run_offloaded
-from utils.color import check_hex, hex_to_int, int_to_hex
+from utils.color import COLOR_OR_THEME, check_color, int_to_hex, set_com_color
 from backend import ppt
 from utils.navigation import goto_slide
 from utils.redraw import FrozenRedraw
@@ -221,7 +221,7 @@ class AddShapeInput(BaseModel):
     )
     font_color: Optional[str] = Field(
         default=None,
-        description="Text color '#RRGGBB'.",
+        description="Text color: " + COLOR_OR_THEME + ".",
     )
     align: Optional[Literal["left", "center", "right", "justify"]] = Field(
         default=None,
@@ -231,7 +231,7 @@ class AddShapeInput(BaseModel):
     fill_color: Optional[str] = Field(
         default=None,
         description=(
-            "Solid fill color '#RRGGBB'. Implies fill_type='solid' when fill_type is omitted. "
+            "Solid fill color: " + COLOR_OR_THEME + ". Implies fill_type='solid' when fill_type is omitted. "
             "For gradient fills this is the start/fore color."
         ),
     )
@@ -241,7 +241,7 @@ class AddShapeInput(BaseModel):
     )
     fill_color2: Optional[str] = Field(
         default=None,
-        description="Gradient end/back color '#RRGGBB'. Only used when fill_type='gradient'.",
+        description="Gradient end/back color: " + COLOR_OR_THEME + ". Only used when fill_type='gradient'.",
     )
     fill_gradient_style: Optional[Literal[
         "horizontal", "vertical", "diagonal_up", "diagonal_down", "from_corner", "from_center",
@@ -263,7 +263,7 @@ class AddShapeInput(BaseModel):
     )
     line_color: Optional[str] = Field(
         default=None,
-        description="Border color '#RRGGBB'. Implies line_visible=true if line_visible is not specified.",
+        description="Border color: " + COLOR_OR_THEME + ". Implies line_visible=true if line_visible is not specified.",
     )
     line_weight: Optional[float] = Field(
         default=None,
@@ -302,7 +302,7 @@ class AddShapeInput(BaseModel):
     @field_validator("font_color", "fill_color", "fill_color2", "line_color")
     @classmethod
     def validate_colours(cls, value, info):
-        return check_hex(value, _NO_COLOUR.get(info.field_name, ""))
+        return check_color(value, _NO_COLOUR.get(info.field_name, ""))
 
     # Checked here, like the colours, so a wrong one is refused before the
     # shape exists rather than leaving it behind unstyled. Any case is taken,
@@ -338,7 +338,7 @@ class AddTextboxInput(BaseModel):
     font_size: Optional[float] = Field(default=None, description="Font size in points.")
     bold: Optional[bool] = Field(default=None, description="Bold on/off.")
     italic: Optional[bool] = Field(default=None, description="Italic on/off.")
-    font_color: Optional[str] = Field(default=None, description="Text color '#RRGGBB'.")
+    font_color: Optional[str] = Field(default=None, description="Text color: " + COLOR_OR_THEME + ".")
     align: Optional[str] = Field(
         default=None,
         description="Paragraph alignment for all text: 'left', 'center', 'right', or 'justify'.",
@@ -354,7 +354,7 @@ class AddTextboxInput(BaseModel):
     @field_validator("font_color")
     @classmethod
     def validate_colours(cls, value):
-        return check_hex(value)
+        return check_color(value)
 
 
 class AddPictureInput(BaseModel):
@@ -733,7 +733,7 @@ def _apply_shape_attrs(
             if italic is not None:
                 font.Italic = msoTrue if italic else msoFalse
             if font_color is not None:
-                font.Color.RGB = hex_to_int(font_color)
+                set_com_color(font.Color, font_color)
 
         if align is not None:
             _ALIGN = {"left": 1, "center": 2, "right": 3, "justify": 4}
@@ -757,13 +757,13 @@ def _apply_shape_attrs(
             gstyle = GRADIENT_STYLE_MAP.get(fill_gradient_style or "horizontal", 1)
             fill.TwoColorGradient(Style=gstyle, Variant=1)
             if fill_color is not None:
-                fill.ForeColor.RGB = hex_to_int(fill_color)
+                set_com_color(fill.ForeColor, fill_color)
             if fill_color2 is not None:
-                fill.BackColor.RGB = hex_to_int(fill_color2)
+                set_com_color(fill.BackColor, fill_color2)
         elif effective_type == "solid":
             fill.Solid()
             if fill_color is not None:
-                fill.ForeColor.RGB = hex_to_int(fill_color)
+                set_com_color(fill.ForeColor, fill_color)
         if fill_transparency is not None and effective_type != "none":
             fill.Transparency = fill_transparency
 
@@ -771,7 +771,7 @@ def _apply_shape_attrs(
     if line_visible is not None:
         shape.Line.Visible = msoTrue if line_visible else msoFalse
     if line_color is not None:
-        shape.Line.ForeColor.RGB = hex_to_int(line_color)
+        set_com_color(shape.Line.ForeColor, line_color)
     if line_weight is not None:
         shape.Line.Weight = line_weight
 
@@ -830,7 +830,7 @@ def _add_textbox_impl(
         if italic is not None:
             font.Italic = msoTrue if italic else msoFalse
         if font_color is not None:
-            font.Color.RGB = hex_to_int(font_color)
+            set_com_color(font.Color, font_color)
 
     # Inline alignment — avoids a follow-up ppt_set_paragraph_format call
     if align is not None:
@@ -1036,7 +1036,7 @@ def _glows(shape):
     return glows
 
 
-def _text_frame_state(shape):
+def _text_frame_state(shape, frame=None, frame2=None):
     """Report the text frame settings that decide how text is drawn.
 
     ppt_get_text answers with the size a run was set to, and when the frame is
@@ -1051,16 +1051,23 @@ def _text_frame_state(shape):
     natural height and putting it back.
 
     Returns None for a shape with no text frame at all.
+
+    ``frame`` is the shape's TextFrame and ``frame2`` its TextFrame2 when the
+    caller already holds them. A caller that passes ``frame`` has read it, so
+    the shape has a frame and HasTextFrame is not asked again. Each one is a
+    COM call saved per shape, which a layout check of a long deck pays a
+    thousand times over.
     """
     from ppt_com.text import (
         AUTO_SIZE_NAMES, ORIENTATION_NAMES, VERTICAL_ANCHOR_NAMES,
     )
 
-    try:
-        if not shape.HasTextFrame:
+    if frame is None:
+        try:
+            if not shape.HasTextFrame:
+                return None
+        except Exception:
             return None
-    except Exception:
-        return None
 
     state = {
         "autofit": None,
@@ -1073,12 +1080,13 @@ def _text_frame_state(shape):
     # AutoSize lives on TextFrame2. TextFrame's own AutoSize cannot say
     # shrink_to_fit, which is the one state worth reading.
     try:
-        state["autofit"] = AUTO_SIZE_NAMES.get(shape.TextFrame2.AutoSize)
+        tf2 = frame2 if frame2 is not None else shape.TextFrame2
+        state["autofit"] = AUTO_SIZE_NAMES.get(tf2.AutoSize)
     except Exception:
         pass
 
     try:
-        tf = shape.TextFrame
+        tf = frame if frame is not None else shape.TextFrame
     except Exception:
         return state
 

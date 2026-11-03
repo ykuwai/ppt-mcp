@@ -13,7 +13,7 @@ at all. Each member is copied with ``copy shape``, which puts a DrawingML
 package on the clipboard, the members are wrapped in one ``a:grpSp`` and
 pasted back as a single group, and only once the group is on the slide and
 verified are the originals deleted. See ``ppt_mac/gvml_paste.py`` for the
-procedure and ``docs/gvml-design.md`` for the measurements behind it.
+procedure and the GVML design on #211 for the measurements behind it.
 
 **A group's members cannot be read through the dictionary.** ``shape`` has a
 ``shape`` element, which reads as though a group's members are reached the
@@ -29,6 +29,7 @@ the group's own disappearance and the slide growing.
 """
 
 import logging
+from typing import Optional
 
 from appscript.reference import CommandError
 
@@ -38,6 +39,7 @@ from backend.unsupported import refusal as _refusal
 from gvml import PackageError, build
 from gvml import canvas as _canvas
 from gvml import shapes as _gvml_shapes
+from gvml import text as _gvml_text
 from gvml.package import Graft
 from ppt_com.constants import msoGroup
 from ppt_mac.gvml_paste import (
@@ -45,6 +47,7 @@ from ppt_mac.gvml_paste import (
     Refused,
     copy_shape_package,
     paste_package,
+    replace_shape,
     unused_name,
     with_warnings,
 )
@@ -282,3 +285,197 @@ def _get_group_items_impl(slide_index, shape_name_or_index):
         "group_name": group_name,
         "items": items,
     }, clip)
+
+
+def set_member_text(slide_index: int, member: str, text: str, start=None, length=None,
+                    search_text=None, occurrence=1) -> Optional[dict]:
+    """Write a group member's text, which Apple Events cannot reach (#220).
+
+    ``member`` is the member's name, or "Group/Child" as Windows writes it.
+    None when no group on the slide holds a member by that name, so the
+    caller can answer as it would for any name not on the slide.
+
+    The whole text, or a span of it (``start``/``length`` or ``search_text``,
+    as ``ppt_set_text`` takes them) inside one line of one paragraph, which
+    keeps its run's formatting. See ``_edit_member`` for the route.
+    """
+    from ppt_com.text import _resolve_span
+
+    def edit(target, name):
+        fields = {}
+        if start is None and search_text is None:
+            _gvml_text.set_text(target, text)
+        else:
+            at, span = _resolve_span(_gvml_text.text_of(target), name, start, length,
+                                     search_text, occurrence)
+            _gvml_text.replace_span(target, at, span, text)
+            fields = {"start": at, "replaced_length": span, "written_length": len(text)}
+        wanted = _gvml_text.text_of(target)
+        if fields:
+            fields["text"] = wanted
+        fields.update(text_length=len(wanted), paragraph_count=wanted.count("\n") + 1)
+
+        def check(landed):
+            got = _gvml_text.text_of(landed)
+            return None if got == wanted else f"the member reads back {got!r}, not {wanted!r}"
+
+        return check, fields
+
+    return _edit_member(slide_index, member, "ppt_set_text", edit)
+
+
+def format_member_text(slide_index: int, member: str, font_name=None,
+                       font_name_fareast=None, font_size=None, bold=None, italic=None,
+                       underline=None, color=None) -> Optional[dict]:
+    """ppt_format_text on a group member: every run's character formatting.
+    ``color`` is hex or a theme name. None when no group holds the member."""
+    from utils.color import theme_color_name
+
+    colour = None if color is None else (theme_color_name(color) or color)
+    wanted = {
+        "sz": None if font_size is None else str(int(round(font_size * 100))),
+        "b": None if bold is None else ("1" if bold else "0"),
+        "i": None if italic is None else ("1" if italic else "0"),
+        "u": None if underline is None else ("sng" if underline else "none"),
+        "color": None if colour is None else _gvml_text.SCHEME_COLORS.get(
+            colour, colour.lstrip("#").upper()),
+        "latin": font_name,
+    }
+    wanted = {key: value for key, value in wanted.items() if value is not None}
+
+    def edit(target, name):
+        runs = _gvml_text.format_runs(
+            target, font_name=font_name, font_name_fareast=font_name_fareast,
+            font_size=font_size, bold=bold, italic=italic, underline=underline,
+            color=colour)
+
+        def check(landed):
+            for run in _gvml_text.run_formats(landed):
+                for key, value in wanted.items():
+                    if run[key] != value:
+                        return f"a run reads back with {key}={run[key]!r}, not {value!r}"
+            return None
+
+        return check, {"runs_formatted": runs}
+
+    return _edit_member(slide_index, member, "ppt_format_text", edit)
+
+
+def _edit_member(slide_index: int, member: str, tool_name: str, edit) -> Optional[dict]:
+    """Copy the group holding ``member``, edit the member, paste the group back.
+
+    ``edit(target, name)`` changes the member element in place and answers
+    ``(check, fields)``: ``check(landed)`` says what is missing from the
+    member as the pasted group reads back, or None, and ``fields`` go into
+    the result. A ValueError from ``edit`` is passed on with nothing changed.
+
+    The package is pasted back over the group with ``replace_shape``: paste,
+    read back, delete the original, give the copy the group's name, position
+    and z order. The members keep their names, which ungrouping would not.
+    What is lost is what every edit through this route loses, the group's
+    animations, and the result says so.
+    """
+    import xml.etree.ElementTree as ET
+
+    from backend.mac_enums import MsoShapeType as _Types
+    from backend.mac_ae import shapes_of
+
+    path = [part for part in member.split("/") if part]
+    if not path:
+        return None
+    pres = ppt._get_pres_impl()
+    slide = _slide(pres, slide_index)
+    groups = []
+    for index, shape in enumerate(shapes_of(slide), start=1):
+        try:
+            if _win_constant(_WIN_SHAPE_TYPE, shape.shape_type()) == msoGroup:
+                groups.append((index, shape))
+        except CommandError:
+            continue
+    if len(path) > 1:
+        groups = [(i, g) for i, g in groups if g.name() == path[0]]
+        path = path[1:]
+
+    clip = Clipboard.take()
+    try:
+        # Every group is read before anything is written: a bare name held by
+        # members of two groups is refused rather than taken from the first.
+        found = []
+        for index, group in groups:
+            try:
+                package = copy_shape_package(group, clip, tool_name)
+            except Refused as refused:
+                return refused.payload
+            root = ET.fromstring(package.drawing())
+            try:
+                element = _gvml_shapes.only_child(
+                    _canvas.children(_canvas.canvas_of(root)), "group")
+            except PackageError:
+                continue
+            target = _gvml_text.find_member(element, path)
+            if target is not None:
+                found.append((index, group.name(), package, root, element, target))
+        if not found:
+            return None
+        if len(found) > 1:
+            holders = [name for _, name, *_ in found]
+            if len(set(holders)) < len(holders):
+                # A duplicated group keeps its name, so the path cannot tell
+                # them apart either.
+                how = (f"The groups share a name too, so rename one first "
+                       f"(ppt_update_shape shape_name='{holders[0]}' name=...) and "
+                       "name the member with its group.")
+            else:
+                how = f"Name it with its group, as '{holders[0]}/{path[-1]}'."
+            return _refusal(
+                tool_name,
+                f"Members named '{path[-1]}' are in more than one group "
+                f"({', '.join(holders)}), so the name does not say which. {how}",
+                ["ppt_get_group_items"],
+                error=f"'{path[-1]}' is a member of {len(found)} groups",
+            )
+        [(index, group_name, package, root, element, target)] = found
+        if not _gvml_text.has_text_body(target):
+            return _refusal(
+                tool_name,
+                f"'{path[-1]}' in group '{group_name}' holds no text.",
+                ["ppt_get_group_items"],
+                error=f"'{path[-1]}' in group '{group_name}' has no text frame",
+            )
+        check_member, fields = edit(target, path[-1])
+        _gvml_shapes.strip_creation_ids(element)
+        package.parts[package.drawing_part()] = (
+            _canvas.serialize_drawing(root).encode("utf-8"))
+        x, y, _cx, _cy = _gvml_shapes.xfrm_of(element)
+
+        def check(readback, path=path):
+            try:
+                back = _gvml_shapes.only_child(
+                    _canvas.children(_canvas.parse(readback.drawing())), "group")
+                landed = _gvml_text.find_member(back, path)
+            except PackageError as exc:
+                return f"the pasted group could not be read ({exc})"
+            if landed is None:
+                return "the member is not in the pasted group"
+            return check_member(landed)
+
+        try:
+            replaced = replace_shape(
+                pres, slide, slide_index, index, package.to_bytes(), clip,
+                tool_name, _Types[msoGroup], _canvas.pt(x), _canvas.pt(y),
+                "group", check, ["ppt_ungroup_shapes"],
+            )
+        except Refused as refused:
+            return refused.payload
+        result = {
+            "status": "success",
+            "slide_index": slide_index,
+            "shape_name": path[-1],
+            "group_name": replaced.name,
+        }
+        result.update(fields)
+        return with_warnings(result, clip, replaced.warnings)
+    finally:
+        clip.restore()
+    return None
+

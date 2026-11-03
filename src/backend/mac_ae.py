@@ -34,7 +34,7 @@ import threading
 import time
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeout
-from queue import Queue
+from queue import Empty, Queue
 from typing import Any, Callable, Optional
 
 from appscript import app, its, k, mactypes  # noqa: F401  (re-exported for tools)
@@ -205,12 +205,70 @@ def staging_dir(folder: Optional[str] = None) -> str:
     """
     folder = folder or EXPORT_STAGING_DIR
     try:
-        os.makedirs(folder, exist_ok=True)
-        with tempfile.NamedTemporaryFile(dir=folder, prefix=".ppt_mcp_probe_"):
-            pass
+        _probe_within(folder, STAGING_PROBE_TIMEOUT)
+    except StagingBlocked:
+        raise
     except PermissionError as e:
         raise StagingBlocked(f"{_staging_problem(folder, e)} (The error was: {e})") from e
     return folder
+
+
+# How long the probe may take before the folder is taken to be held by a
+# question macOS is asking on screen.
+STAGING_PROBE_TIMEOUT = 3.0
+
+# A probe still waiting on that question, by folder. It is left to finish
+# rather than started again, so one question is asked, not one per call.
+_waiting_probes: dict = {}
+_waiting_lock = threading.Lock()
+
+
+def _probe(folder: str) -> None:
+    os.makedirs(folder, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=folder, prefix=".ppt_mcp_probe_"):
+        pass
+
+
+def _probe_within(folder: str, timeout: float) -> None:
+    """Probe the folder, but give up after ``timeout`` seconds.
+
+    When the app that started this server has not been allowed into other
+    apps' data, macOS does not refuse the first look into PowerPoint's
+    container: it asks on screen whether to allow it, and the call that
+    looked waits until someone answers. Nobody may be there to answer, so
+    every write whose layout check reads a picture, and every export, stalled
+    until the call's own time ran out, 69 seconds each. A probe that has not
+    finished in time is left to wait for the answer in the background, and
+    the folder is refused until it has one.
+    """
+    with _waiting_lock:
+        waiting = _waiting_probes.get(folder)
+        if waiting is None or waiting.done():
+            waiting = Future()
+
+            def run(future=waiting):
+                try:
+                    _probe(folder)
+                except BaseException as e:  # noqa: BLE001 - handed to the caller
+                    future.set_exception(e)
+                else:
+                    future.set_result(None)
+
+            _waiting_probes[folder] = waiting
+            threading.Thread(target=run, name="ppt-mcp-staging-probe", daemon=True).start()
+    try:
+        waiting.result(timeout=timeout)
+    except FutureTimeout:
+        raise StagingBlocked(_STAGING_ASKED.format(folder=folder)) from None
+
+
+_STAGING_ASKED = (
+    "macOS is asking on screen whether the app that started this server, such as "
+    "Claude, Terminal or VS Code, may access data from other apps, and PowerPoint's "
+    "own folder, {folder}, stays closed until that question is answered. Answer Allow, "
+    "then try again. If no question is showing, give that app Full Disk Access in "
+    "System Settings > Privacy & Security > Full Disk Access."
+)
 
 
 _WHY_THE_FOLDER = (
@@ -382,6 +440,7 @@ class _Job:
     __slots__ = (
         "func", "args", "kwargs", "idempotent",
         "future", "started", "settled", "_lock", "_dropped",
+        "behind_a_wedge",
     )
 
     def __init__(self, func: Callable, args: tuple, kwargs: dict,
@@ -400,6 +459,9 @@ class _Job:
         self.settled = threading.Event()
         self._lock = threading.Lock()
         self._dropped = False
+        # Set when the worker this job was queued for got stuck and was
+        # replaced, so its caller is told that rather than that it cancelled.
+        self.behind_a_wedge = False
 
     def claim(self) -> bool:
         """Worker side. True when the job is still wanted."""
@@ -476,7 +538,15 @@ class PowerPointAppleEventWrapper:
         self._launched_pid: Optional[int] = None
         # The per-call target of the job the worker is running, if its tool
         # call named one. See `call_presentation` in utils.com_wrapper.
+        # Thread-local, because an abandoned worker and its replacement can
+        # overlap.
         self._call_local = threading.local()
+        # Which worker generation is the live one. A worker abandoned after a
+        # wedge keeps its own generation, sees that it is no longer current,
+        # and stops touching shared state. The Windows wrapper does the same
+        # (#199); this is the macOS half of it (#245).
+        self._generation = 0
+        self._recover_lock = threading.Lock()
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -484,28 +554,112 @@ class PowerPointAppleEventWrapper:
         """Start the worker thread. Does not touch PowerPoint."""
         if self._running:
             return
-        self._running = True
+        with self._recover_lock:
+            self._running = True
+            # A deliberate restart is a fresh start, not a continuation of the
+            # last wedge, and a new queue cannot hand the worker a stop
+            # sentinel left over from the previous shutdown.
+            self._generation = 0
+            self._queue = Queue()
+            self._start_worker(self._queue, self._generation)
+        logger.info("Apple Event worker thread started")
+
+    def _start_worker(self, queue: Queue, generation: int) -> None:
+        """Spawn a worker bound to one queue and one generation."""
         self._thread = threading.Thread(
-            target=self._worker, daemon=True, name="AppleEvent-Worker"
+            target=self._worker,
+            args=(queue, generation),
+            daemon=True,
+            name="AppleEvent-Worker-%d" % generation,
         )
         self._thread.start()
-        logger.info("Apple Event worker thread started")
 
     def stop(self) -> None:
         """Stop the worker thread. Leaves PowerPoint running."""
         if not self._running:
             return
-        self._running = False
-        self._queue.put(None)
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=5.0)
+        # Under the recovery lock, and read once. A wedge confirmed at this
+        # moment would otherwise swap the queue and the thread in between,
+        # leaving the sentinel on the abandoned queue and the live worker
+        # running while this reported that it had stopped.
+        with self._recover_lock:
+            self._running = False
+            queue = self._queue
+            thread = self._thread
+        queue.put(None)
+        if thread and thread.is_alive():
+            thread.join(timeout=5.0)
         self._app = None
         logger.info("Apple Event worker thread stopped")
 
-    def _worker(self) -> None:
-        while self._running:
-            item = self._queue.get()
+    def _recover_from_wedge(self, generation: int) -> bool:
+        """Abandon a worker stuck inside one job and start a fresh one.
+
+        An Apple Event in flight cannot be recalled from this side, so the
+        stuck thread cannot be reclaimed. It is a daemon thread and is left to
+        finish or not. What this buys is that the next call meets a worker
+        that is free, rather than queueing behind the stuck one and being told
+        two minutes later that PowerPoint is still busy.
+
+        There is nothing to reconnect. Unlike a COM proxy, the appscript
+        reference is not tied to the thread that made it, so the new worker
+        goes on using it. If PowerPoint itself is what stopped answering, the
+        next call finds that out for itself.
+
+        Args:
+            generation: the worker generation the timed out call belonged to.
+                Nothing is done if that generation has already been replaced,
+                so several callers timing out together still produce one
+                replacement.
+
+        Returns:
+            True if this call did the replacing.
+        """
+        with self._recover_lock:
+            if generation != self._generation or not self._running:
+                return False
+            old_queue = self._queue
+            self._generation = generation + 1
+            self._queue = Queue()
+            logger.error(
+                "The Apple Event worker is stuck inside one call. Abandoning "
+                "it and starting worker generation %d.", self._generation,
+            )
+            self._start_worker(self._queue, self._generation)
+
+        # Outside the lock. Everything the stuck worker had not started is
+        # taken back rather than run once it comes free, long after its
+        # callers were told it had failed. Taking it back also wakes them.
+        while True:
+            try:
+                job = old_queue.get_nowait()
+            except Empty:
+                break
+            if job is not None:
+                job.behind_a_wedge = True
+                job.drop()
+        # If the stuck worker ever does return it goes back to the queue, and
+        # this stops it waiting there for good.
+        old_queue.put(None)
+        return True
+
+    def _worker(self, queue: Queue, generation: int) -> None:
+        """Run jobs off one queue until stopped or replaced.
+
+        Each worker owns the queue it was started with rather than reading
+        self._queue, so a worker abandoned after a wedge cannot take work off
+        the queue its replacement is serving.
+        """
+        while self._running and generation == self._generation:
+            item = queue.get()
             if item is None:
+                break
+            if generation != self._generation:
+                # Replaced while this job sat in the queue, so it arrived
+                # after the old queue was emptied. It is not this worker's to
+                # run any more.
+                item.behind_a_wedge = True
+                item.drop()
                 break
             if not item.claim():
                 # The caller stopped waiting and already said so. Running this
@@ -518,6 +672,13 @@ class PowerPointAppleEventWrapper:
                 continue
             func, args, kwargs, future = item.func, item.args, item.kwargs, item.future
             for attempt in range(_RETRY_MAX + 1):
+                if attempt and generation != self._generation:
+                    # Replaced while sleeping before this retry: the new worker
+                    # is sending Apple Events now, and this one must not.
+                    future.set_exception(AppleEventError(
+                        "PowerPoint did not answer, and the request was not sent "
+                        "again because a fresh worker has taken over."))
+                    break
                 try:
                     future.set_result(func(*args, **kwargs))
                     break
@@ -536,6 +697,13 @@ class PowerPointAppleEventWrapper:
                             "may already have been applied, so it was not sent "
                             "again. Look at the slide before retrying."
                         ))
+                        break
+                    if number in _RETRYABLE and generation != self._generation:
+                        # This worker was replaced while it was stuck. Trying
+                        # again would send a second Apple Event alongside the
+                        # new worker's, and clearing the reference would take
+                        # it away from the worker that is using it.
+                        future.set_exception(self._translate(exc))
                         break
                     if number in _RETRYABLE and attempt < _RETRY_MAX:
                         logger.warning(
@@ -616,7 +784,13 @@ class PowerPointAppleEventWrapper:
         if wanted is not None:
             func = bind_call_presentation(self._call_local, wanted, func)
         job = _Job(func, args, kwargs, idempotent)
-        self._queue.put(job)
+        # Under the recovery lock, so that the generation this call is
+        # charged to and the queue it lands on are the same pair. A recovery
+        # in between would otherwise leave the job behind the sentinel on a
+        # queue no worker serves.
+        with self._recover_lock:
+            generation = self._generation
+            self._queue.put(job)
 
         # Register with whatever is watching this request, so that a caller who
         # goes away takes its queued work with it. `utils.offload` puts a
@@ -645,6 +819,13 @@ class PowerPointAppleEventWrapper:
                     "the same turn."
                 )
             # It started while that was being decided, so wait for it properly.
+        elif job.dropped and job.behind_a_wedge:
+            raise AppleEventError(
+                "An earlier request got stuck inside PowerPoint, so this one "
+                "was not sent. Nothing was changed. The stuck worker has been "
+                "replaced, so retry once any dialog open in PowerPoint is "
+                "closed."
+            )
         elif job.dropped:
             # Cancelled from outside while it sat in the queue. The work is
             # discarded either way; returning now is what frees this thread,
@@ -658,12 +839,26 @@ class PowerPointAppleEventWrapper:
         try:
             return job.future.result(timeout=_CALL_BUDGET)
         except FutureTimeout:
+            if job.future.done():
+                # Not this wait running out. Either func raised TimeoutError
+                # itself, which is the same class since Python 3.11, or it
+                # finished in the moment the wait ended. Either way there is a
+                # real outcome to hand back.
+                return job.future.result()
+            # The budget started when the worker claimed the job, so this is
+            # time spent inside it and not in the queue. That is what makes it
+            # a wedge rather than a busy worker, and why everything queued
+            # behind it is better off with a fresh one.
+            recovered = self._recover_from_wedge(generation)
             # `str()` on this one is the empty string, so letting it out reaches
             # the caller as "Failed to add picture: " with nothing after it.
             raise AppleEventError(
                 f"PowerPoint did not finish this within {_CALL_BUDGET}s and the "
                 "request was abandoned. It may still be working, so check the "
-                "deck before asking for the same thing again.",
+                "deck before asking for the same thing again."
+                + (" The worker was stuck inside it, so a fresh one has taken "
+                   "over and later calls will not wait behind it."
+                   if recovered else ""),
                 AE_TIMED_OUT,
             ) from None
 

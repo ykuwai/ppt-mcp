@@ -262,14 +262,38 @@ class TestAnimationEnums:
         assert _windows_constant(MsoAnimEffect, k.animation_type_teeter) == 80
         assert _windows_constant(MsoAnimEffect, k.animation_type_grow_shrink) == 59
 
-    def test_a_transition_with_four_directions_and_no_plain_form(self):
-        """These are not missing. They are four each, and choosing is a guess."""
+    def test_the_transitions_are_powerpoints_own_numbers(self):
+        """3844 to 3848 were sent for fade to reveal, and are none of them."""
+        from appscript import k
+
         from backend.mac_enums import PpEntryEffect, to_keyword
         from ppt_mac.animation import _WHAT_TRANSITION
 
-        assert to_keyword(PpEntryEffect, 3844, _WHAT_TRANSITION)  # fade
-        with pytest.raises(ValueError, match="four directional variants"):
-            to_keyword(PpEntryEffect, 3845, _WHAT_TRANSITION)  # ppEffectPush
+        assert to_keyword(PpEntryEffect, 3849, _WHAT_TRANSITION) == k.entry_effect_fade
+        assert to_keyword(PpEntryEffect, 3855, _WHAT_TRANSITION) == k.entry_effect_push_up
+        with pytest.raises(ValueError, match="not one of them"):
+            to_keyword(PpEntryEffect, 3844, _WHAT_TRANSITION)
+
+    def test_every_transition_matches_the_dictionary(self):
+        """PowerPoint for Mac's codes end in the Windows number: push down is
+        0x00f60f0c, and 0x0f0c is 3852. So the table is checked against them."""
+        import re
+        from pathlib import Path
+
+        from backend.mac_enums import PpEntryEffect
+
+        sdef = Path("/Applications/Microsoft PowerPoint.app/Contents/Resources/PowerPoint.sdef")
+        if not sdef.exists():
+            pytest.skip("PowerPoint for Mac is not installed here")
+        codes = {
+            name: int(code, 16) & 0xFFFF
+            for name, code in re.findall(
+                r'<enumerator name="entry effect ([^"]+)" code="0x([0-9a-f]+)"',
+                sdef.read_text(encoding="utf-8"))
+        }
+        for number, keyword in PpEntryEffect.items():
+            name = keyword.name[len("entry_effect_"):].replace("_", " ")
+            assert codes.get(name) == number, (number, keyword.name)
 
     def test_every_shape_the_tool_advertises_is_reachable(self):
         """Fourteen of the sixty used to fail, for the same reason as above."""
@@ -388,10 +412,12 @@ class TestSlideTransition:
         from ppt_mac.animation import _set_slide_transition_impl
 
         with _fake_deck([], shape_names=["Title"]) as deck:
-            with pytest.raises(ValueError, match="push, wipe, split and reveal"):
-                _set_slide_transition_impl(1, "push", None, None, None, None)
+            # 3845 is circle on Windows, and not in the table here.
+            with pytest.raises(ValueError, match="matching the Windows constant 3845"):
+                _set_slide_transition_impl(1, 3845, None, None, None, None)
 
-        assert deck.transition.entry_effect() is None
+        # Refused before the slide is even looked up, so nothing was touched.
+        assert not hasattr(deck, "transition")
 
 
 @macos_only
@@ -1249,6 +1275,41 @@ class TestStagingThroughPowerPointsContainer:
         assert "not installed, or has never been started" in message
         assert "Full Disk Access" not in message
 
+    def test_a_question_on_screen_is_waited_on_once_and_briefly(self, tmp_path, monkeypatch):
+        # Without consent macOS asks on screen, and the look into the folder
+        # waits for the answer: every write whose layout check read a picture
+        # stalled 69 seconds.
+        import threading
+        import time
+
+        from backend import mac_ae
+
+        folder = tmp_path / "Documents"
+        monkeypatch.setattr(mac_ae, "EXPORT_STAGING_DIR", str(folder))
+        monkeypatch.setattr(mac_ae, "STAGING_PROBE_TIMEOUT", 0.2)
+        monkeypatch.setattr(mac_ae, "_waiting_probes", {})
+        answered, probes = threading.Event(), []
+        real = mac_ae._probe
+
+        def asking(where):
+            probes.append(where)
+            answered.wait(10)
+            real(where)
+
+        monkeypatch.setattr(mac_ae, "_probe", asking)
+        started = time.monotonic()
+        with pytest.raises(mac_ae.StagingBlocked, match="asking on screen") as caught:
+            mac_ae.staging_dir()
+        assert time.monotonic() - started < 2
+        assert "Answer Allow" in str(caught.value) and str(folder) in str(caught.value)
+        with pytest.raises(mac_ae.StagingBlocked, match="asking on screen"):
+            mac_ae.staging_dir()
+        assert len(probes) == 1, "a second question was asked"
+
+        answered.set()
+        mac_ae._waiting_probes[str(folder)].result(timeout=5)
+        assert mac_ae.staging_dir() == str(folder)
+
     def test_an_open_folder_is_used_and_left_clean(self, tmp_path, monkeypatch):
         from backend import mac_ae
 
@@ -1299,6 +1360,139 @@ class TestDuplicatingASlide:
             'tell application "Microsoft PowerPoint" to paste object presentation 2',
         ]
         assert events == ["take", "claim", "restore"]
+
+
+class _CopyDeck:
+    """An open presentation: its number in PowerPoint and its slide IDs."""
+
+    def __init__(self, index, ids, name):
+        self.index, self.ids, self._name = index, list(ids), name
+        deck = self
+
+        class _Slides:
+            def __getitem__(self, i):
+                class _Slide:
+                    def delete(self_inner):
+                        deck.ids.pop(i - 1)
+                return _Slide()
+
+        self.slides = _Slides()
+
+    def name(self):
+        return self._name
+
+    def full_name(self):
+        return "/decks/" + self._name
+
+
+@macos_only
+class TestCopyingIntoAnotherDeck:
+    """`paste object presentation N` pastes into deck N, not the one in front,
+    at its end (seen live on PowerPoint 16.114), so slides are copied between
+    decks that way and then moved into place (#246)."""
+
+    def _wire(self, monkeypatch, decks, fail_on_paste=None):
+        from ppt_mac import gvml_paste
+        from ppt_mac import slides as mac_slides
+
+        scripts, events, pasted = [], [], [0]
+        by_index = {d.index: d for d in decks}
+
+        def run(script, *args, **kwargs):
+            scripts.append(script)
+            if "paste object presentation" in script:
+                pasted[0] += 1
+                if fail_on_paste == pasted[0]:
+                    raise RuntimeError("paste failed")
+                by_index[int(script.rsplit(" ", 1)[1])].ids.append(900 + pasted[0])
+            return ""
+
+        class FakeClipboard:
+            warnings = ()
+
+            @classmethod
+            def take(cls):
+                events.append("take")
+                return cls()
+
+            def claim(self):
+                pass
+
+            def restore(self):
+                events.append("restore")
+
+        def realize(pres, final):
+            assert sorted(final) == sorted(pres.ids)
+            pres.ids = list(final)
+
+        monkeypatch.setattr(mac_slides, "osascript", run)
+        monkeypatch.setattr(mac_slides, "_slide_ids", lambda pres: list(pres.ids))
+        monkeypatch.setattr(mac_slides, "_slide_count", lambda pres: len(pres.ids))
+        monkeypatch.setattr(mac_slides, "_presentation_index", lambda app, pres: pres.index)
+        monkeypatch.setattr(mac_slides, "_realize_order", realize)
+        monkeypatch.setattr(gvml_paste, "Clipboard", FakeClipboard)
+        return mac_slides, scripts, events
+
+    def test_slides_are_pasted_into_the_deck_named_and_appended(self, monkeypatch):
+        src, dst = _CopyDeck(1, [256, 257, 258], "Source"), _CopyDeck(2, [300], "Target")
+        mac_slides, scripts, events = self._wire(monkeypatch, [src, dst])
+
+        result = mac_slides._copy_across(None, src, dst, None, [3, 1], None)
+
+        assert scripts == [
+            'tell application "Microsoft PowerPoint" to copy object slide 3 of presentation 1',
+            'tell application "Microsoft PowerPoint" to paste object presentation 2',
+            'tell application "Microsoft PowerPoint" to copy object slide 1 of presentation 1',
+            'tell application "Microsoft PowerPoint" to paste object presentation 2',
+        ]
+        assert dst.ids == [300, 901, 902] and src.ids == [256, 257, 258]
+        assert result["new_slide_indices"] == [2, 3]
+        assert result["copied"] == [{"source_index": 3, "new_index": 2},
+                                    {"source_index": 1, "new_index": 3}]
+        assert (result["method"], result["target_presentation"]) == ("clipboard", "Target")
+        assert events == ["take", "restore", "take", "restore"]
+
+    def test_insert_at_puts_the_copies_there_in_order(self, monkeypatch):
+        src, dst = _CopyDeck(1, [256, 257], "Source"), _CopyDeck(2, [300, 301, 302], "Target")
+        mac_slides, _, _ = self._wire(monkeypatch, [src, dst])
+
+        result = mac_slides._copy_across(None, src, dst, None, [1, 2], 2)
+
+        assert dst.ids == [300, 901, 902, 301, 302]
+        assert result["new_slide_indices"] == [2, 3]
+
+    def test_an_index_out_of_range_is_refused_before_anything_is_copied(self, monkeypatch):
+        src, dst = _CopyDeck(1, [256], "Source"), _CopyDeck(2, [300], "Target")
+        mac_slides, scripts, _ = self._wire(monkeypatch, [src, dst])
+
+        with pytest.raises(ValueError, match=r"\[4\] out of range \(1-1\)"):
+            mac_slides._copy_across(None, src, dst, 4, None, None)
+        with pytest.raises(ValueError, match=r"insert_at 5 out of range \(1-2\)"):
+            mac_slides._copy_across(None, src, dst, 1, None, 5)
+        assert scripts == []
+
+    def test_a_failure_takes_the_copies_already_made_back_out(self, monkeypatch):
+        src, dst = _CopyDeck(1, [256, 257], "Source"), _CopyDeck(2, [300], "Target")
+        mac_slides, _, events = self._wire(monkeypatch, [src, dst], fail_on_paste=2)
+
+        with pytest.raises(RuntimeError, match="paste failed"):
+            mac_slides._copy_across(None, src, dst, None, [1, 2], None)
+        assert dst.ids == [300]
+        assert events[-1] == "restore"
+
+    def test_the_tool_copies_across_rather_than_refusing(self, monkeypatch):
+        from backend.mac_ae import ppt
+
+        src, dst = _CopyDeck(1, [256], "Source"), _CopyDeck(2, [300], "Target")
+        mac_slides, _, _ = self._wire(monkeypatch, [src, dst])
+        monkeypatch.setattr(ppt, "_get_app_impl", lambda *a, **kw: object())
+        monkeypatch.setattr(
+            mac_slides, "_resolve_presentation",
+            lambda app, presentation_index=None, presentation_name=None:
+                dst if presentation_name == "Target" else src)
+
+        result = mac_slides._copy_slide_impl(1, None, None, "Source", None, "Target", None)
+        assert result["success"] and dst.ids == [300, 901]
 
 
 @macos_only
@@ -1369,3 +1563,65 @@ class TestAltTextOnTheMac:
         with pytest.raises(ValueError, match="View Alt Text"):
             _update_shape_impl(1, "Photo", None, 10, None, None, None, None, None, None,
                                alt_text="Our team")
+
+
+@macos_only
+class TestCopyingSlideImagesToThePasteboard:
+    """#247: one slide goes on as PNG data, several as file URLs."""
+
+    def _deck(self, monkeypatch, rendered_dir):
+        import types
+
+        from ppt_mac import export
+
+        app = types.SimpleNamespace(presentations="decks")
+        pres = types.SimpleNamespace(slides="slides")
+        monkeypatch.setattr(export.ppt, "_get_app_impl", lambda: app)
+        monkeypatch.setattr(export.ppt, "_get_pres_impl", lambda: pres)
+        monkeypatch.setattr(export, "count", lambda ref: 1 if ref == "decks" else 3)
+        monkeypatch.setattr(export, "goto_slide", lambda app, index: None)
+        monkeypatch.setattr(export, "_staging_path", lambda suffix: str(rendered_dir / ("deck" + suffix)))
+        monkeypatch.setattr(export, "_save_pdf_of", lambda pres, path, numbers: list(numbers))
+
+        def render(pdf, pages, width=None, height=None, *rest):
+            out = []
+            for page in pages:
+                image = rendered_dir / f"render{page}.png"
+                image.write_bytes(b"\x89PNG" + bytes([page]))
+                out.append((page, str(image), 100, 50))
+            return out
+
+        monkeypatch.setattr(export, "_render_pdf_pages", render)
+        return export
+
+    def test_one_slide_goes_on_as_png(self, tmp_path, monkeypatch):
+        from backend import pasteboard
+
+        export = self._deck(monkeypatch, tmp_path)
+        written = []
+        monkeypatch.setattr(pasteboard, "write", lambda uti, data: written.append((uti, data)) or 1)
+        result = export._copy_to_clipboard_impl([2], None, None)
+        assert written == [("public.png", b"\x89PNG\x02")]
+        assert result["method"] == "public.png" and result["temp_dir"] is None
+        assert list(tmp_path.iterdir()) == [], "the rendered image was left behind"
+
+    def test_several_go_on_as_files_that_outlive_the_call(self, tmp_path, monkeypatch):
+        from backend import pasteboard
+
+        export = self._deck(monkeypatch, tmp_path)
+        written = []
+        monkeypatch.setattr(pasteboard, "write_files", lambda paths: written.append(paths) or 1)
+        monkeypatch.setattr(export.atexit, "register", lambda *args: None)
+        result = export._copy_to_clipboard_impl([1, 3], None, None)
+        [files] = written
+        assert [p.rsplit("/", 1)[-1] for p in files] == ["Slide1.png", "Slide3.png"]
+        assert all(open(p, "rb").read().startswith(b"\x89PNG") for p in files)
+        assert result["method"] == "file URLs" and result["temp_dir"]
+
+    def test_a_slide_past_the_end_is_refused_before_anything_is_written(self, tmp_path, monkeypatch):
+        from backend import pasteboard
+
+        export = self._deck(monkeypatch, tmp_path)
+        monkeypatch.setattr(pasteboard, "write", lambda *a: pytest.fail("written"))
+        with pytest.raises(ValueError, match="out of range"):
+            export._copy_to_clipboard_impl([4], None, None)

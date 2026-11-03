@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from utils.offload import run_offloaded
 from backend import ppt
@@ -19,12 +19,19 @@ from ppt_com.constants import (
     msoAnimEffectWipe, msoAnimEffectZoom,
     msoAnimTriggerOnPageClick, msoAnimTriggerWithPrevious,
     msoAnimTriggerAfterPrevious,
-    ppEffectNone, ppEffectFade, ppEffectPush, ppEffectWipe, ppEffectSplit,
     ANIMATION_EFFECT_NAMES, ANIMATION_TRIGGER_NAMES,
     ANIM_DIRECTION_MAP, ANIM_DIRECTION_NAMES,
     AFTER_EFFECT_MAP, AFTER_EFFECT_NAMES,
     BUILD_LEVEL_MAP, BUILD_LEVEL_NAMES,
     TEXT_UNIT_EFFECT_MAP, TEXT_UNIT_EFFECT_NAMES,
+    ppEffectNone, ppEffectCut, ppEffectFade, ppEffectFadeSmoothly,
+    ppEffectPushDown, ppEffectPushLeft, ppEffectPushRight, ppEffectPushUp,
+    ppEffectWipeLeft, ppEffectWipeUp, ppEffectWipeRight, ppEffectWipeDown,
+    ppEffectSplitHorizontalOut, ppEffectSplitHorizontalIn,
+    ppEffectSplitVerticalOut, ppEffectSplitVerticalIn,
+    ppEffectRevealSmoothLeft, ppEffectRevealSmoothRight,
+    ppEffectRevealBlackLeft, ppEffectRevealBlackRight,
+    ppEffectRandom, ppEffectBlindsHorizontal, ppEffectBlindsVertical, ppEffectDissolve,
 )
 from utils.color import hex_to_int
 from ppt_com.shape_lookup import resolve_shape as _get_shape
@@ -61,10 +68,28 @@ TRIGGER_MAP: dict[str, int] = {
     "on_click": 1, "with_previous": 2, "after_previous": 3, "on_shape_click": 4,
 }
 
+# A plain name is PowerPoint's own default for that transition: Push from
+# the bottom, Wipe from the right, Split vertically out, Reveal smoothly from
+# the right. The directions are named as PowerPoint's constants name them,
+# by the way the slide moves, so push_up comes in from the bottom.
 TRANSITION_EFFECT_MAP: dict[str, int] = {
-    "none": 0, "cut": 257, "fade": 3844, "push": 3845,
-    "wipe": 3846, "split": 3847, "reveal": 3848,
-    "random": 513, "blinds_horizontal": 769, "blinds_vertical": 770, "dissolve": 1537,
+    "none": ppEffectNone, "cut": ppEffectCut,
+    "fade": ppEffectFadeSmoothly, "fade_through_black": ppEffectFade,
+    "push": ppEffectPushUp, "push_up": ppEffectPushUp, "push_down": ppEffectPushDown,
+    "push_left": ppEffectPushLeft, "push_right": ppEffectPushRight,
+    "wipe": ppEffectWipeLeft, "wipe_left": ppEffectWipeLeft, "wipe_up": ppEffectWipeUp,
+    "wipe_right": ppEffectWipeRight, "wipe_down": ppEffectWipeDown,
+    "split": ppEffectSplitVerticalOut,
+    "split_vertical_out": ppEffectSplitVerticalOut,
+    "split_vertical_in": ppEffectSplitVerticalIn,
+    "split_horizontal_out": ppEffectSplitHorizontalOut,
+    "split_horizontal_in": ppEffectSplitHorizontalIn,
+    "reveal": ppEffectRevealSmoothLeft, "reveal_left": ppEffectRevealSmoothLeft,
+    "reveal_right": ppEffectRevealSmoothRight,
+    "reveal_black_left": ppEffectRevealBlackLeft,
+    "reveal_black_right": ppEffectRevealBlackRight,
+    "random": ppEffectRandom, "blinds_horizontal": ppEffectBlindsHorizontal,
+    "blinds_vertical": ppEffectBlindsVertical, "dissolve": ppEffectDissolve,
 }
 
 
@@ -75,13 +100,23 @@ class SetSlideTransitionInput(BaseModel):
     """Input for setting a slide transition effect."""
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    slide_index: int = Field(..., ge=1, description="1-based slide index")
+    slide_index: Optional[int] = Field(
+        default=None, ge=1,
+        description="1-based slide index. Required if slide_indices is not provided.",
+    )
+    slide_indices: Optional[list[int]] = Field(
+        default=None,
+        description="List of 1-based slide indices to give the same transition. "
+        "Overrides slide_index when provided.",
+    )
     effect: Union[int, str] = Field(
         default="fade",
         description=(
             "Transition effect: friendly name ('fade', 'push', 'wipe', 'split', "
-            "'cut', 'reveal', 'random', 'blinds_horizontal', 'blinds_vertical', "
-            "'dissolve', 'none') or PpEntryEffect integer"
+            "'reveal', 'cut', 'dissolve', 'random', 'blinds_horizontal', "
+            "'blinds_vertical', 'none'; with a direction, such as 'push_down', "
+            "'wipe_up', 'split_horizontal_in', 'reveal_right' or "
+            "'fade_through_black') or PpEntryEffect integer"
         ),
     )
     duration: Optional[float] = Field(
@@ -96,6 +131,36 @@ class SetSlideTransitionInput(BaseModel):
     advance_time: Optional[float] = Field(
         default=None, description="Auto-advance time in seconds"
     )
+
+    @model_validator(mode="after")
+    def validate_slide_target(self):
+        """At least one slide, and every index 1 or more, as ppt_set_slide_background."""
+        if self.slide_indices is not None and len(self.slide_indices) == 0:
+            raise ValueError("slide_indices must not be empty")
+        if self.slide_index is None and not self.slide_indices:
+            raise ValueError("Either slide_index or slide_indices must be provided")
+        for idx in self.slide_indices or ():
+            if idx < 1:
+                raise ValueError(f"All slide indices must be >= 1, got {idx}")
+        return self
+
+    @field_validator("effect")
+    @classmethod
+    def known_effect(cls, value):
+        """A name is one of TRANSITION_EFFECT_MAP's, refused here rather than by PowerPoint."""
+        if isinstance(value, int):
+            return value
+        name = value.strip().lower().replace(" ", "_").replace("-", "_")
+        if name not in TRANSITION_EFFECT_MAP:
+            import difflib
+
+            close = difflib.get_close_matches(name, TRANSITION_EFFECT_MAP, n=1)
+            hint = f" Did you mean '{close[0]}'?" if close else ""
+            raise ValueError(
+                f"Unknown transition '{value}'.{hint} Known: "
+                + ", ".join(TRANSITION_EFFECT_MAP) + "."
+            )
+        return name
 
 
 class AddAnimationInput(BaseModel):
@@ -428,30 +493,33 @@ class UpdateAnimationInput(BaseModel):
 # ---------------------------------------------------------------------------
 def _set_slide_transition_impl(
     slide_index, effect, duration, advance_on_click, advance_on_time, advance_time,
+    slide_indices=None,
 ):
+    targets = slide_indices or [slide_index]
     app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
+    goto_slide(app, targets[0])
     pres = ppt._get_pres_impl()
-    slide = pres.Slides(slide_index)
+    # Every slide is found before the first is changed, so an index past the
+    # end changes none of them.
+    slides = [pres.Slides(idx) for idx in targets]
 
-    transition = slide.SlideShowTransition
     effect_int = TRANSITION_EFFECT_MAP.get(effect, effect) if isinstance(effect, str) else effect
-    transition.EntryEffect = effect_int
+    for slide in slides:
+        transition = slide.SlideShowTransition
+        transition.EntryEffect = effect_int
 
-    if duration is not None:
-        transition.Duration = duration
-    if advance_on_click is not None:
-        transition.AdvanceOnClick = msoTrue if advance_on_click else msoFalse
-    if advance_on_time is not None:
-        transition.AdvanceOnTime = msoTrue if advance_on_time else msoFalse
-    if advance_time is not None:
-        transition.AdvanceTime = advance_time
+        if duration is not None:
+            transition.Duration = duration
+        if advance_on_click is not None:
+            transition.AdvanceOnClick = msoTrue if advance_on_click else msoFalse
+        if advance_on_time is not None:
+            transition.AdvanceOnTime = msoTrue if advance_on_time else msoFalse
+        if advance_time is not None:
+            transition.AdvanceTime = advance_time
 
-    return {
-        "success": True,
-        "slide_index": slide_index,
-        "effect": effect_int,
-    }
+    if slide_indices is None:
+        return {"success": True, "slide_index": slide_index, "effect": effect_int}
+    return {"success": True, "slide_indices": list(targets), "effect": effect_int}
 
 
 def _add_animation_impl(
@@ -996,6 +1064,7 @@ def set_slide_transition(params: SetSlideTransitionInput) -> str:
             _set_slide_transition_impl,
             params.slide_index, params.effect, params.duration,
             params.advance_on_click, params.advance_on_time, params.advance_time,
+            params.slide_indices,
         )
         return json.dumps(result)
     except Exception as e:

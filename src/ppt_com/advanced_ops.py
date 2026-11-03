@@ -88,74 +88,102 @@ def _fetch_icon_metadata():
         return _icon_cache
 
 
+def _words(text):
+    """The words of a name, tag or category, lower case: `heat_pump` is
+    `heat` and `pump`."""
+    return [w for w in re.split(r"[\s_\-]+", (text or "").lower()) if w]
+
+
+def _word_match(word, words):
+    """How well a query word matches a set of words: 2 for the same word, 1
+    for one that begins the other (`heat` and `heating`), else 0.
+
+    A prefix needs three letters, so `a` does not match every word.
+    """
+    if word in words:
+        return 2
+    for other in words:
+        short, long_ = sorted((word, other), key=len)
+        if len(short) >= 3 and long_.startswith(short):
+            return 1
+    return 0
+
+
+# What a query word scores where it matches: (whole word, prefix).
+_NAME_POINTS, _TAG_POINTS, _CATEGORY_POINTS = (30, 15), (20, 8), (5, 2)
+
+
+def _points(match, points):
+    return points[0] if match == 2 else points[1] if match == 1 else 0
+
+
 def _search_icons(query: str, max_results: int = 20):
     """Search Material Symbols icons by keyword.
 
-    Scoring:
-    - Exact icon name match: +100
-    - Full query (multi-word) found in icon name: +50
-    - All query words found in icon name: +40
-    - Query word found in icon name: +30
-    - Exact tag match: +20
-    - Query word found in a tag: +10
-    - Query word found in a category: +5
-    - Popularity bonus (normalized to 0-10 range)
+    A query word matches a whole word of an icon's name, tags or categories,
+    or a word it begins or that begins it, never a substring: "air" used to
+    find `airlines` and `chair` alike, and "air conditioner heating" put six
+    aeroplanes ahead of `heat_pump`.
+
+    Ranking, in order:
+    1. How many of the query's words the icon matches.
+    2. How many of those are whole words rather than prefixes.
+    3. The score:
+       - Exact icon name match: +100, or the query's words joined by _: +90
+       - All query words whole in the icon name: +40
+       - Per query word: in the name +30 (a prefix +15), in a tag +20 (+8),
+         in a category +5 (+2)
+       - Popularity bonus (normalized to 0-10 range)
 
     Returns a sorted list of dicts with name, tags, categories, score.
     """
     icons = _fetch_icon_metadata()
     query_lower = query.lower().strip()
-    query_words = query_lower.split()
+    query_words = list(dict.fromkeys(_words(query_lower)))
 
-    results = []
+    ranked = []
     for icon in icons:
         name = icon.get("name", "")
-        tags = [t.lower() for t in icon.get("tags", [])]
-        categories = [c.lower() for c in icon.get("categories", [])]
+        name_words = set(_words(name))
+        tag_words = {w for tag in icon.get("tags", []) for w in _words(tag)}
+        category_words = {w for cat in icon.get("categories", []) for w in _words(cat)}
         popularity = icon.get("popularity", 0)
 
         score = 0
-
-        # Exact name match (query == name)
         if name == query_lower:
             score += 100
-        # Full query string in name (e.g. "arrow_forward" contains "arrow forward" as "arrow_forward")
-        elif query_lower.replace(" ", "_") == name:
+        elif "_".join(query_words) == name:
             score += 90
-        # Full query in name
-        elif query_lower in name:
-            score += 50
 
-        # Bonus: all query words found in name
-        if len(query_words) > 1 and all(w in name for w in query_words):
+        matched = whole = whole_in_name = 0
+        for word in query_words:
+            by_name = _word_match(word, name_words)
+            by_tag = _word_match(word, tag_words)
+            by_category = _word_match(word, category_words)
+            best = max(by_name, by_tag, by_category)
+            if not best:
+                continue
+            matched += 1
+            whole += best == 2
+            whole_in_name += by_name == 2
+            score += (_points(by_name, _NAME_POINTS) + _points(by_tag, _TAG_POINTS)
+                      + _points(by_category, _CATEGORY_POINTS))
+        if len(query_words) > 1 and whole_in_name == len(query_words):
             score += 40
 
-        # Per-word scoring
-        for word in query_words:
-            if word in name:
-                score += 30
-            for tag in tags:
-                if word == tag:
-                    score += 20
-                elif word in tag:
-                    score += 10
-            for cat in categories:
-                if word in cat:
-                    score += 5
-
-        if score > 0:
+        if matched:
             # Small popularity bonus (normalized)
             score += min(popularity / 1000, 10)
-            results.append({
+            ranked.append(((matched, whole, score), {
                 "name": name,
                 "categories": icon.get("categories", []),
                 "tags": icon.get("tags", [])[:8],  # limit tags for readability
                 "popularity": popularity,
                 "score": round(score, 2),
-            })
+            }))
 
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return _drop_what_cannot_be_inserted(results, max_results)
+    ranked.sort(key=lambda pair: pair[0], reverse=True)
+    return _drop_what_cannot_be_inserted([icon for _, icon in ranked], max_results)
 
 
 # The icon set ppt_add_svg_icon downloads from. Searching went to Google Fonts
@@ -256,6 +284,20 @@ class GetTagsInput(BaseModel):
 
 
 # --- Fonts ---
+class ListFontsInput(BaseModel):
+    """Input for listing fonts. Optional: the tool takes no params by default."""
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    installed: bool = Field(
+        default=False,
+        description=(
+            "False (the default) lists the fonts the presentation uses. True "
+            "lists the font families installed on this computer instead, to "
+            "pick one from; it needs no open presentation."
+        ),
+    )
+
+
 class ReplaceFontInput(BaseModel):
     """Input for replacing a font throughout the presentation."""
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -573,7 +615,9 @@ class SearchIconsInput(BaseModel):
         ...,
         description=(
             "Search keyword(s) for finding icons. Examples: 'home', 'arrow', "
-            "'settings gear', 'chart graph'. Multiple words narrow the search."
+            "'settings gear', 'chart graph'. Each word matches whole words of an "
+            "icon's name, tags and categories, or a word it begins; with several "
+            "words, icons matching more of them come first."
         ),
     )
     max_results: int = Field(
@@ -646,11 +690,25 @@ def _get_tags_impl(slide_index, shape_name_or_index, target_type):
 def _replace_font_impl(original_font, replacement_font):
     app = ppt._get_app_impl()
     pres = ppt._get_pres_impl()
-    pres.Fonts.Replace(original_font, replacement_font)
+    # Fonts.Replace answers "Object required" (0x800A01A8) for a font the deck
+    # does not use, where the Mac replaces nothing and says so.
+    used = [pres.Fonts(i).Name for i in range(1, pres.Fonts.Count + 1)]
+    named = next((name for name in used if name.casefold() == original_font.casefold()), None)
+    if named is None:
+        return {
+            "success": True,
+            "original_font": original_font,
+            "replacement_font": replacement_font,
+            "replaced": False,
+            "note": f"'{original_font}' is not used in this presentation, so nothing "
+                    f"was changed. The fonts it uses: {used}.",
+        }
+    pres.Fonts.Replace(named, replacement_font)
     return {
         "success": True,
         "original_font": original_font,
         "replacement_font": replacement_font,
+        "replaced": True,
     }
 
 
@@ -1020,7 +1078,9 @@ def _select_shapes_impl(slide_index, shape_names):
     # view must be active to select a shape"), so this tool deliberately
     # brings the target presentation's window to the foreground.
     ppt._activate_target_window_impl()
-    goto_slide(app, slide_index)
+    # Moved whatever PPT_FOLLOW_EDITS says: a selection is made on the slide
+    # the window shows, and showing it is what selecting asks for.
+    goto_slide(app, slide_index, force=True)
 
     # Select first shape (replace=True is default)
     first_shape = _get_shape(slide, shape_names[0])
@@ -1535,13 +1595,25 @@ def replace_font(params: ReplaceFontInput) -> str:
         return json.dumps({"error": f"Failed to replace font: {str(e)}"})
 
 
-def list_fonts() -> str:
-    """List all fonts used in the active presentation.
+def list_fonts(params: Optional[ListFontsInput] = None) -> str:
+    """List the fonts the active presentation uses, or those installed here.
 
     Returns:
         JSON with font count and names.
     """
     try:
+        if params is not None and params.installed:
+            # The list the layout check reads to name a font this computer
+            # lacks, looked up through its module so macOS gets its own.
+            from ppt_com import layout_check
+
+            names = ppt.execute(layout_check._installed_fonts_impl)
+            return json.dumps({
+                "success": True,
+                "installed": True,
+                "fonts_count": len(names.listed),
+                "fonts": names.listed,
+            }, ensure_ascii=False)
         result = ppt.execute(_list_fonts_impl)
         return json.dumps(result)
     except Exception as e:
@@ -1965,12 +2037,16 @@ def register_tools(mcp):
             "openWorldHint": False,
         },
     )
-    async def tool_list_fonts() -> str:
-        """List all fonts used in the active presentation.
+    async def tool_list_fonts(params: Optional[ListFontsInput] = None) -> str:
+        """List the fonts the active presentation uses, or with installed=true those installed on this computer.
 
-        Returns the names of all fonts embedded or referenced in the presentation.
+        Takes no params by default, and then returns the fonts the
+        presentation's theme and text refer to. A font the deck asks for
+        that is not installed is reported by ppt_check_layout as
+        font_missing. Set installed to true to list the font families this
+        computer has instead, to choose one that will draw here.
         """
-        return await run_offloaded(list_fonts)
+        return await run_offloaded(list_fonts, params)
 
     @mcp.tool(
         name="ppt_set_default_fonts",
@@ -2247,8 +2323,10 @@ def register_tools(mcp):
     async def tool_search_icons(params: SearchIconsInput) -> str:
         """Search Google's Material Symbols icon library by keyword.
 
-        Returns matching icon names sorted by relevance (name, tags, and
-        category matching + popularity). Each result includes the icon
+        Returns matching icon names sorted by relevance: first by how many of
+        the query's words match a whole word of the icon's name, tags or
+        categories (or a word they begin), then by where they match and by
+        popularity. Each result includes the icon
         name, categories, sample tags, and popularity score.
         Use the returned icon name with ppt_add_svg_icon to insert it
         into a slide. Supports multi-word queries (e.g. 'arrow forward',

@@ -4,13 +4,13 @@ import json
 import logging
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from utils.offload import run_offloaded
 from backend import ppt
 from ppt_com.layout_check import report_layout, touched_names
 from utils.navigation import goto_slide
-from utils.color import hex_to_int
+from utils.color import COLOR_OR_THEME, check_color, set_com_color
 from ppt_com.constants import (
     msoTrue, msoFalse,
     msoFillSolid, msoFillGradient,
@@ -55,17 +55,19 @@ class SetFillInput(BaseModel):
     shape_name_or_index: Union[str, int] = Field(
         ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
-    fill_type: str = Field(
-        ..., description="'solid', 'gradient', or 'none'"
+    fill_type: Optional[str] = Field(
+        default=None,
+        description="'solid', 'gradient', or 'none'. Defaults to 'solid' when color is "
+        "given, and to 'gradient' when gradient colors are, as in ppt_add_shape.",
     )
     color: Optional[str] = Field(
-        default=None, description="Fill color as '#RRGGBB' hex (for solid fill)"
+        default=None, description="Fill color for a solid fill: " + COLOR_OR_THEME + "."
     )
     gradient_color1: Optional[str] = Field(
-        default=None, description="Gradient start color as '#RRGGBB'"
+        default=None, description="Gradient start color: " + COLOR_OR_THEME + "."
     )
     gradient_color2: Optional[str] = Field(
-        default=None, description="Gradient end color as '#RRGGBB'"
+        default=None, description="Gradient end color: " + COLOR_OR_THEME + "."
     )
     gradient_style: Optional[str] = Field(
         default=None,
@@ -74,6 +76,30 @@ class SetFillInput(BaseModel):
     transparency: Optional[float] = Field(
         default=None, description="Transparency 0.0 (opaque) to 1.0 (fully transparent)"
     )
+
+    @field_validator("color", "gradient_color1", "gradient_color2")
+    @classmethod
+    def validate_colours(cls, value):
+        return check_color(value)
+
+    @model_validator(mode="after")
+    def infer_fill_type(self):
+        """Take fill_type from the colours when it is left out, as ppt_add_shape does.
+
+        The batch is reached for after the single shape tool, where a colour
+        alone means a solid fill, so requiring fill_type here was a surprise.
+        """
+        if self.fill_type is None:
+            if self.gradient_color1 is not None or self.gradient_color2 is not None:
+                self.fill_type = "gradient"
+            elif self.color is not None:
+                self.fill_type = "solid"
+            else:
+                raise ValueError(
+                    "Pass fill_type ('solid', 'gradient' or 'none'), or a color "
+                    "for a solid fill, or gradient_color1 and gradient_color2."
+                )
+        return self
 
 
 class SetLineInput(BaseModel):
@@ -84,7 +110,7 @@ class SetLineInput(BaseModel):
     shape_name_or_index: Union[str, int] = Field(
         ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
-    color: Optional[str] = Field(default=None, description="Line color as '#RRGGBB'")
+    color: Optional[str] = Field(default=None, description="Line color: " + COLOR_OR_THEME + ".")
     weight: Optional[float] = Field(default=None, description="Line weight in points")
     dash_style: Optional[str] = Field(
         default=None, description=DASH_STYLE_DESCRIPTION
@@ -99,6 +125,11 @@ class SetLineInput(BaseModel):
     def _dash_style_known(cls, v):
         return check_dash_style(v)
 
+    @field_validator("color")
+    @classmethod
+    def validate_colours(cls, value):
+        return check_color(value)
+
 
 class SetShadowInput(BaseModel):
     """Input for setting shadow effect."""
@@ -112,13 +143,18 @@ class SetShadowInput(BaseModel):
     blur: Optional[float] = Field(default=None, description="Shadow blur radius in points")
     offset_x: Optional[float] = Field(default=None, description="Shadow horizontal offset in points")
     offset_y: Optional[float] = Field(default=None, description="Shadow vertical offset in points")
-    color: Optional[str] = Field(default=None, description="Shadow color as '#RRGGBB'")
+    color: Optional[str] = Field(default=None, description="Shadow color: " + COLOR_OR_THEME + ".")
     transparency: Optional[float] = Field(
         default=None, description="Transparency 0.0 (opaque) to 1.0 (fully transparent)"
     )
     target: Literal["shape", "text"] = Field(
         default="shape", description=TARGET_FIELD_DESCRIPTION
     )
+
+    @field_validator("color")
+    @classmethod
+    def validate_colours(cls, value):
+        return check_color(value)
 
 
 # ---------------------------------------------------------------------------
@@ -140,14 +176,14 @@ def _set_fill_impl(slide_index, shape_name_or_index, fill_type,
     elif fill_type == "solid":
         fill.Solid()
         if color is not None:
-            fill.ForeColor.RGB = hex_to_int(color)
+            set_com_color(fill.ForeColor, color)
     elif fill_type == "gradient":
         style_val = GRADIENT_STYLE_MAP.get(gradient_style, msoGradientHorizontal)
         fill.TwoColorGradient(Style=style_val, Variant=1)
         if gradient_color1 is not None:
-            fill.ForeColor.RGB = hex_to_int(gradient_color1)
+            set_com_color(fill.ForeColor, gradient_color1)
         if gradient_color2 is not None:
-            fill.BackColor.RGB = hex_to_int(gradient_color2)
+            set_com_color(fill.BackColor, gradient_color2)
     else:
         raise ValueError(
             f"Invalid fill_type '{fill_type}'. Valid values: 'solid', 'gradient', 'none'"
@@ -181,7 +217,7 @@ def _set_line_impl(slide_index, shape_name_or_index,
         line.Visible = msoTrue if visible else msoFalse
 
     if color is not None:
-        line.ForeColor.RGB = hex_to_int(color)
+        set_com_color(line.ForeColor, color)
 
     if weight is not None:
         line.Weight = weight
@@ -219,7 +255,7 @@ def _set_shadow_impl(slide_index, shape_name_or_index,
         if offset_y is not None:
             shadow.OffsetY = offset_y
         if color is not None:
-            shadow.ForeColor.RGB = hex_to_int(color)
+            set_com_color(shadow.ForeColor, color)
         if transparency is not None:
             shadow.Transparency = transparency
 

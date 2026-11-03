@@ -32,6 +32,7 @@ from appscript.reference import CommandError
 
 from backend.mac_ae import ppt, slide_at as _slide
 from backend.mac_enums import MsoFlipCmd, MsoGradientStyle, to_keyword
+from backend.unsupported import refusal
 from ppt_com.constants import (
     ALIGN_CMD_MAP,
     DISTRIBUTE_CMD_MAP,
@@ -302,17 +303,16 @@ def _merge_shapes_impl(slide_index, shape_names, merge_type, primary_shape):
             f"Unknown merge_type '{merge_type}'. "
             f"Valid values: {list(MERGE_CMD_MAP.keys())}"
         )
-    return {
-        "error": "ppt_merge_shapes is not available on macOS",
-        "reason": (
+    return refusal(
+        "ppt_merge_shapes",
+        (
             "PowerPoint for Mac exposes no union, combine, intersect, subtract "
             "or fragment command to Apple Events, and the shapes to merge "
             "would have to be gathered into a shape range in the first place, "
             "which a script cannot do. " + _NO_SHAPE_RANGE
         ),
-        "platform": "macOS",
-        "alternatives": ["ppt_add_shape"],
-    }
+        alternatives=["ppt_add_shape"],
+    )
 
 
 def _get_slide_size_impl():

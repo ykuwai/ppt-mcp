@@ -18,6 +18,7 @@ so every export is staged there and moved out afterwards by this process, which
 is not sandboxed.
 """
 
+import atexit
 import logging
 import os
 import shutil
@@ -27,6 +28,7 @@ from typing import List, Optional
 from backend.mac_ae import EXPORT_STAGING_DIR, count, mactypes, ppt, staging_dir
 from backend.mac_enums import PpSaveAsFileType, to_keyword
 from ppt_com.constants import ppSaveAsPDF
+from utils.navigation import goto_slide
 
 logger = logging.getLogger(__name__)
 
@@ -422,23 +424,72 @@ def _export_images_impl(
     }
 
 
-def _copy_to_clipboard_impl(*args, **kwargs) -> dict:
-    """Refuse, because this is built on the Win32 clipboard API.
+def _copy_to_clipboard_impl(
+    slide_indices: Optional[List[int]],
+    width: Optional[int],
+    height: Optional[int],
+) -> dict:
+    """Put slide images on the pasteboard, as the Windows tool does (#247).
 
-    The Windows implementation talks to user32 and kernel32 directly to put a
-    DIB or an HDROP on the clipboard. macOS has an equivalent in NSPasteboard,
-    but nothing of the existing code carries over, so this is a rewrite rather
-    than a translation and it is not part of this port.
+    The images are rendered from the deck's PDF with Quartz, as every slide
+    image here is. One slide goes on as PNG data, which pastes as a picture;
+    several go on as file URLs, which paste as files, the counterpart of the
+    Windows CF_DIB and CF_HDROP. The files for several stay in a temporary
+    folder until the server exits, since a paste reads them when it happens.
     """
+    from backend import pasteboard
+    from backend.mac_ae import target_window
+
+    app = ppt._get_app_impl()
+    if count(app.presentations) == 0:
+        raise RuntimeError(
+            "No presentation is open. "
+            "Use ppt_create_presentation or ppt_open_presentation first."
+        )
+    pres = ppt._get_pres_impl()
+    total_slides = count(pres.slides)
+
+    if not slide_indices:
+        # The slide the window shows, as on Windows.
+        try:
+            slide_indices = [int(target_window(pres).view.slide.slide_index())]
+        except Exception:
+            slide_indices = [1]
+    for number in slide_indices:
+        if number < 1 or number > total_slides:
+            raise ValueError(f"Slide index {number} out of range (1-{total_slides})")
+
+    goto_slide(app, slide_indices[-1])
+
+    staged_pdf = _staging_path(".pdf")
+    rendered = []
+    try:
+        pages = _save_pdf_of(pres, staged_pdf, slide_indices)
+        rendered = _render_pdf_pages(staged_pdf, pages, width, height)
+        if len(rendered) == 1:
+            with open(rendered[0][1], "rb") as handle:
+                pasteboard.write("public.png", handle.read())
+            folder = None
+        else:
+            folder = tempfile.mkdtemp(prefix="ppt_clipboard_")
+            files = []
+            for number, (_, image, _, _) in zip(slide_indices, rendered, strict=True):
+                final = os.path.join(folder, f"Slide{number}.png")
+                shutil.move(image, final)
+                files.append(final)
+            pasteboard.write_files(files)
+            atexit.register(shutil.rmtree, folder, True)
+    finally:
+        for path in [staged_pdf] + [image for (_, image, _, _) in rendered]:
+            if path and os.path.exists(path):
+                os.remove(path)
+
     return {
-        "error": "ppt_copy_to_clipboard is not available on macOS",
-        "reason": (
-            "The Windows implementation writes DIB and HDROP formats through "
-            "the Win32 clipboard API, which has no counterpart here. macOS "
-            "would need an NSPasteboard implementation written from scratch."
-        ),
-        "platform": "macOS",
-        "alternatives": ["ppt_export_images", "ppt_export_pdf"],
+        "success": True,
+        "slide_indices": slide_indices,
+        "count": len(slide_indices),
+        "method": "public.png" if folder is None else "file URLs",
+        "temp_dir": folder,
     }
 
 

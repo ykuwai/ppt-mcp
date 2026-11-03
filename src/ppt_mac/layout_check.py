@@ -34,6 +34,7 @@ import logging
 from appscript import k
 
 from backend.mac_ae import (
+    count_of,
     elements,
     is_missing,
     ppt,
@@ -642,11 +643,12 @@ def _installed_fonts_impl():
     from utils.fonts import names_in_folder
 
     names = set()
+    styles = set()
     manager = NSFontManager.sharedFontManager()
     for family in manager.availableFontFamilies() or []:
         names.add(str(family))
         for member in manager.availableMembersOfFontFamily_(family) or []:
-            names.add(f"{family} {member[1]}")
+            styles.add(f"{family} {member[1]}")
     bundle = "/Applications/Microsoft PowerPoint.app/Contents/Resources/DFonts"
     names |= names_in_folder(bundle)
     cloud = os.path.expanduser(
@@ -658,8 +660,12 @@ def _installed_fonts_impl():
     # The system's list names a font once; the files hold the names a deck
     # made elsewhere asks for it by: "ヒラギノ角ゴシック W3" and "Hiragino Kaku
     # Gothic ProN W3" for what it lists as "Hiragino Sans".
+    # ppt_list_fonts shows the families without each one's styles, which on
+    # an ordinary Mac would multiply the list several times over.
     _FONTS["installed"] = FontNames(
-        names, ("/System/Library/Fonts", "/Library/Fonts", os.path.expanduser("~/Library/Fonts")))
+        names | styles,
+        ("/System/Library/Fonts", "/Library/Fonts", os.path.expanduser("~/Library/Fonts")),
+        listed=names)
     return _FONTS["installed"]
 
 
@@ -802,4 +808,17 @@ def _colours(raw):
         colours.append("#" + "".join(f"{min(255, round(raw[i + c] * 255 / alpha)):02X}"
                                      for c in range(3)))
     return colours
+
+
+def _deck_shape_count_impl():
+    """How many shapes the deck has, one event per slide.
+
+    The counterpart of the COM helper, for ``deck_snapshot`` to tell a deck too
+    large to read twice. Counted through each slide, which is safe where the
+    collection itself is not (see ``count_of``).
+    """
+    from ppt_mac.slides import _slide_count
+
+    pres = ppt._get_pres_impl()
+    return sum(count_of(_slide(pres, i), k.shape) for i in range(1, _slide_count(pres) + 1))
 

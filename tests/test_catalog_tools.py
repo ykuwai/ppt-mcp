@@ -3,7 +3,8 @@
 They reach the other tools through the server's own call_tool, so here they
 are pointed at a stand-in server whose tools need no PowerPoint: one makes a
 "shape" and answers its name, one echoes what it was given, one fails, one
-answers plain text, one an image, and one takes no arguments. A crash's text
+answers plain text, one an image, and one takes no arguments. One answers
+{"error": ...} rather than raising, as most of the real tools do (#249). A crash's text
 reaches the caller under mcp 1.x and stays on the server under 2.x; a ToolError's
 reaches it under both, and the probes check each as a direct call would answer. The mode itself,
 read when the server loads, is in test_tool_catalog.py.
@@ -69,6 +70,14 @@ def probes(monkeypatch):
         """Refuse, saying why."""
         raise server.ToolError("slide 9 does not exist")
 
+    @srv.tool(name="ppt_find")
+    async def find(params: _Echo) -> str:
+        """Find a shape, answering an error object when it is not there."""
+        if params.value == "Title 1":
+            return json.dumps({"shape_name": "Title 1", "error": None})
+        return json.dumps({"error": f"Shape '{params.value}' not found",
+                           "available": ["Title 1"]})
+
     @srv.tool(name="ppt_text")
     async def text(params: _Echo) -> str:
         """Answer plain text?"""
@@ -122,7 +131,7 @@ class TestDescribe:
     def test_no_names_answers_the_list_one_line_a_tool(self, probes):
         lines = run(probes.ppt_describe).splitlines()
         assert lines == sorted(lines, key=lambda line: [
-            "ppt_make", "ppt_echo", "ppt_fail", "ppt_refuse", "ppt_text", "ppt_picture", "ppt_bare",
+            "ppt_make", "ppt_echo", "ppt_fail", "ppt_refuse", "ppt_find", "ppt_text", "ppt_picture", "ppt_bare",
         ].index(line.split(":")[0]))
         assert "ppt_echo: Answer what it was given." in lines
 
@@ -221,6 +230,11 @@ class TestRun:
         with pytest.raises(Exception, match="slide 9 does not exist"):
             run(probes.ppt_run, "ppt_refuse", {})
 
+    def test_an_error_answer_comes_back_as_the_tool_gave_it(self, probes):
+        # ppt_run answers exactly what the tool answers, as a direct call would.
+        blocks = run(probes.ppt_run, "ppt_find", {"value": "Box"})
+        assert json.loads(text_of(blocks))["error"] == "Shape 'Box' not found"
+
     def test_an_image_comes_back_as_an_image(self, probes):
         blocks = run(probes.ppt_run, "ppt_picture", {"slide_index": 2})
         assert [getattr(b, "type", "") for b in blocks] == ["text", "image"]
@@ -318,6 +332,32 @@ class TestRunSteps:
     def test_a_refusal_in_a_step_keeps_its_reason(self, probes):
         report, _ = steps(probes, [{"tool": "ppt_refuse", "params": {}}])
         assert "slide 9 does not exist" in report["steps"][0]["error"]
+
+    def test_an_error_answer_stops_the_run_and_says_which_step(self, probes):
+        report, _ = steps(probes, [
+            {"tool": "ppt_echo", "params": {}},
+            {"tool": "ppt_find", "params": {"value": "Box"}},
+            {"tool": "ppt_echo", "params": {}},
+        ])
+        assert (report["ran"], report["of"]) == (2, 3)
+        assert report["steps"][1] == {"step": 2, "tool": "ppt_find",
+                                      "error": "Shape 'Box' not found",
+                                      "details": {"available": ["Title 1"]}}
+
+    def test_an_empty_error_is_a_result(self, probes):
+        report, _ = steps(probes, [{"tool": "ppt_find", "params": {"value": "Title 1"}}])
+        assert report["steps"][0]["result"]["shape_name"] == "Title 1"
+
+    def test_without_stopping_an_error_answer_leaves_no_result_to_refer_to(self, probes):
+        report, _ = steps(probes, [
+            {"tool": "ppt_find", "params": {"value": "Box"}},
+            {"tool": "ppt_echo", "params": {"value": "$1.shape_name"}},
+            {"tool": "ppt_echo", "params": {"value": 3}},
+        ], stop_on_error=False)
+        assert (report["ran"], report["of"]) == (3, 3)
+        assert report["steps"][0]["error"] == "Shape 'Box' not found"
+        assert "no result" in report["steps"][1]["error"]
+        assert report["steps"][2]["result"]["value"] == 3
 
     def test_without_stopping_every_step_runs_and_each_failure_is_reported(self, probes):
         report, _ = steps(probes, [
@@ -443,6 +483,17 @@ class TestHelpers:
 
         with pytest.raises(Exception, match="it broke"):
             _server()._content_of(Result())
+
+    def test_content_from_a_tool_that_answered_its_failure_is_its_blocks(self):
+        # Marked failed by call_tool (#249), and passed on so that ppt_run
+        # answers the same JSON rather than a prefixed ToolError.
+        class Block:
+            type, text = "text", '{"error": "slide 9 does not exist"}'
+
+        class Result:
+            content, isError = [Block()], True
+
+        assert _server()._content_of(Result())[0].text == Block.text
 
     def test_content_from_a_result_that_worked_is_its_blocks(self):
         class Block:

@@ -20,6 +20,22 @@ THEME_COLOR_MAP = {
     "followed_hyperlink": 12,
 }
 
+# Spelled as callers write them: "Accent 1", "accent-1", "ACCENT1".
+_THEME_KEYS = {name.replace("_", ""): name for name in THEME_COLOR_MAP}
+
+# What a colour argument that takes either says, in its description.
+COLOR_OR_THEME = "'#RRGGBB', or a theme colour such as 'accent1', which follows the theme"
+
+
+def theme_color_name(value):
+    """The theme colour `value` names, as THEME_COLOR_MAP spells it, or None."""
+    if not isinstance(value, str):
+        return None
+    key = value.strip().lower()
+    for sep in (" ", "-", "_"):
+        key = key.replace(sep, "")
+    return _THEME_KEYS.get(key)
+
 
 def rgb_to_int(r: int, g: int, b: int) -> int:
     """Convert RGB values (0-255 each) to PowerPoint's BGR integer format.
@@ -52,14 +68,15 @@ def hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
         # instructions tell callers to use the deck's accent colours and only
         # some tools take one by name. `Invalid hex color: #accent1` sends
         # nobody anywhere, so say where the number lives.
-        if raw.lower().replace(" ", "_").replace("-", "_") in THEME_COLOR_MAP:
+        if theme_color_name(raw):
             raise ValueError(
                 f"'{raw}' is a theme colour name, and this argument takes a "
                 "hex value like '#156082'. Read the deck's own value from "
                 "ppt_get_presentation_info, which returns accent_colors as "
-                "hex. The arguments that take a name instead are "
-                "ppt_format_text's font_color_theme and ppt_add_svg_icon's "
-                "color."
+                "hex. The colours of ppt_add_shape, ppt_add_textbox, "
+                "ppt_set_fill, ppt_set_line, ppt_set_shadow, ppt_set_glow, "
+                "ppt_format_text, ppt_format_text_range, ppt_set_table_cell, "
+                "ppt_batch_apply_formatting and ppt_add_svg_icon take a name."
             )
         raise ValueError(f"Invalid hex color: #{hex_str}")
     return (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
@@ -82,6 +99,26 @@ def check_hex(value, otherwise: str = ""):
         )
     hex_to_rgb(value)
     return value
+
+
+def check_color(value, otherwise: str = ""):
+    """check_hex for an argument that also takes a theme colour name.
+
+    A name comes back as THEME_COLOR_MAP spells it, so the tool sets the
+    theme colour itself (set_com_color, or set_mac_color on macOS) and the
+    shape follows the theme when it changes, which a hex value read from it
+    would not.
+    """
+    return theme_color_name(value) or check_hex(value, otherwise)
+
+
+def set_com_color(color_format, value) -> None:
+    """Set a COM ColorFormat to a hex value, or to a theme colour by name."""
+    name = theme_color_name(value)
+    if name:
+        color_format.ObjectThemeColor = THEME_COLOR_MAP[name]
+    else:
+        color_format.RGB = hex_to_int(value)
 
 
 def hex_to_int(hex_str: str) -> int:
