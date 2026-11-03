@@ -194,7 +194,9 @@ The last row deserves emphasis. PowerPoint wedged repeatedly during this study,
 several times past 12 seconds and three times fatally with -609. The Windows
 wrapper already has the right shape for this in `com_wrapper.py:107-135` (retry
 on busy, optional ESC to dismiss a dialog); the Mac side needs the same policy
-with a different trigger.
+with a different trigger. It has the retry on errors that mean a call never
+landed, and since #245 the replacement of a worker stuck inside one call, which
+section 5.4 describes.
 
 `active presentation` raising -1728 whenever the start gallery is frontmost is
 worth calling out separately, because it is the Mac echo of a problem the
@@ -456,6 +458,22 @@ order the transport hands them over, so "add a slide" and "read slide 4" sent
 together can still run the wrong way round, and the read answers honestly about
 a deck that has not grown yet. Nothing inside the server can put that right, so
 the instructions say to call these tools one after another on macOS.
+
+Splitting the wait also made a stuck worker possible to recognise, which is
+what #245 was about. An Apple Event that never answers used to hold the worker
+for as long as it took, and every call queued behind it waited too, until each
+was told that PowerPoint was still busy. That was the wrong thing to hear, and
+nothing after them could run either. Since the per call budget starts only once
+the worker claims a job, a job still running when it runs out is a worker stuck
+inside one call, not a busy queue. Its caller then abandons that worker and
+starts a fresh one on a fresh queue, the way the Windows wrapper has since
+#199. Everything still in the old queue is taken back, and those callers hear
+at once that an earlier request got stuck and that theirs was not sent. The
+stuck thread cannot be stopped, since an Apple Event in flight cannot be
+recalled, so it is left to finish or not. Each worker carries a generation
+number, and one that has been replaced runs nothing more, retries nothing and
+leaves the shared connection alone. The appscript reference is not tied to the
+thread that made it, so unlike Windows there is nothing to reconnect.
 
 ### 5.5 PowerPoint cannot read an SVG, and does not say so
 
