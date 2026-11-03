@@ -1231,6 +1231,36 @@ class TestTheCopyOutsideTheContainer:
         assert presentation._refresh_external_copy(str(inside)) is None
         assert presentation._refresh_external_copy(None) is None
 
+    def test_a_restarted_server_still_refreshes_the_copy(self, tmp_path, monkeypatch):
+        """The record outlives the process: a client that restarts its server
+        between the save as and the save still gets its copy refreshed."""
+        from ppt_mac import presentation
+
+        inside = tmp_path / "container" / "deck.pptx"
+        inside.parent.mkdir()
+        inside.write_bytes(b"first version")
+        outside = tmp_path / "Documents" / "deck.pptx"
+        outside.parent.mkdir()
+        outside.write_bytes(b"first version")
+
+        presentation._remember_copy(str(inside), str(outside))
+        monkeypatch.setattr(presentation, "_EXTERNAL_COPIES", {})  # a new process
+        inside.write_bytes(b"second version")
+
+        assert presentation._refresh_external_copy(str(inside)) == str(outside)
+        assert outside.read_bytes() == b"second version"
+
+    def test_closing_the_deck_forgets_its_copy_for_good(self, tmp_path, monkeypatch):
+        from ppt_mac import presentation
+
+        inside = tmp_path / "deck.pptx"
+        inside.write_bytes(b"data")
+        presentation._remember_copy(str(inside), str(tmp_path / "copy.pptx"))
+        presentation._forget_copy(str(inside))
+        monkeypatch.setattr(presentation, "_EXTERNAL_COPIES", {})
+
+        assert presentation._refresh_external_copy(str(inside)) is None
+
     def test_a_copy_that_cannot_be_written_does_not_fail_the_save(self, tmp_path):
         """The save landed. Saying where it did not reach beats raising."""
         from ppt_mac import presentation

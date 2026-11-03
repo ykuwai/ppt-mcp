@@ -31,6 +31,14 @@ if sys.platform == "darwin":
 
         monkeypatch.setattr(mac_ae, "app", refuse)
 
+    @pytest.fixture(autouse=True)
+    def _no_real_copies_file(monkeypatch, tmp_path):
+        """Nor the record of copies in PowerPoint's container, which a save
+        as writes and a save reads."""
+        from ppt_mac import presentation
+
+        monkeypatch.setattr(presentation, "_COPIES_FILE", str(tmp_path / "copies.json"))
+
 
 def combo_chart_xml(chart_xml_bytes):
     """A combo chart built from a plain one, for the tests that need two plots.

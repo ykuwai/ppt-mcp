@@ -22,6 +22,7 @@ slide master and cannot be set at all.
 """
 
 import glob as glob_mod
+import json
 import logging
 import os
 import shutil
@@ -451,7 +452,56 @@ def _save_presentation_impl(
 # the advice to save at every break watched their own file fall further behind
 # without being told. Keyed by the container path, which is what the open deck
 # answers for itself.
+#
+# Kept in a file beside the staged decks as well. A client that restarts its
+# MCP server, or reconnects, starts a new process with an empty dict, and a
+# save from there refreshed nothing and said nothing, so a deck saved as
+# ~/Documents/report.pptx before the restart kept its old contents there.
 _EXTERNAL_COPIES: dict = {}
+_COPIES_FILE = os.path.join(EXPORT_STAGING_DIR, ".ppt-mcp-copies.json")
+
+
+def _saved_copies() -> dict:
+    """The copies recorded in the file, or none when it cannot be read."""
+    try:
+        with open(_COPIES_FILE, encoding="utf-8") as f:
+            copies = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return copies if isinstance(copies, dict) else {}
+
+
+def _write_copies(copies: dict) -> None:
+    try:
+        with open(_COPIES_FILE, "w", encoding="utf-8") as f:
+            json.dump(copies, f)
+    except OSError:
+        logger.debug("Could not record the copies in %s", _COPIES_FILE)
+
+
+def _remember_copy(staged: str, target: str) -> None:
+    _EXTERNAL_COPIES[staged] = target
+    copies = _saved_copies()
+    copies[staged] = target
+    _write_copies(copies)
+
+
+def _forget_copy(staged: str) -> None:
+    _EXTERNAL_COPIES.pop(staged, None)
+    copies = _saved_copies()
+    if copies.pop(staged, None) is not None:
+        _write_copies(copies)
+
+
+def _copy_of(staged: str) -> Optional[str]:
+    """Where the deck staged at ``staged`` has its copy, from this process or
+    from the file an earlier one left."""
+    target = _EXTERNAL_COPIES.get(staged)
+    if target is None:
+        target = _saved_copies().get(staged)
+        if target is not None:
+            _EXTERNAL_COPIES[staged] = target
+    return target
 
 
 def _free_staged_path(app, target: str) -> str:
@@ -477,7 +527,7 @@ def _free_staged_path(app, target: str) -> str:
         name = base if attempt == 1 else f"{stem}-{attempt}{ext}"
         candidate = os.path.join(EXPORT_STAGING_DIR, name)
         key = os.path.abspath(candidate)
-        registered = _EXTERNAL_COPIES.get(key)
+        registered = _copy_of(key)
         if registered is not None and registered != wanted:
             # Held by a different deck that still wants its own copy refreshed.
             continue
@@ -501,7 +551,7 @@ def _refresh_external_copy(local: Optional[str]) -> Optional[str]:
     """
     if not local:
         return None
-    target = _EXTERNAL_COPIES.get(os.path.abspath(local))
+    target = _copy_of(os.path.abspath(local))
     if not target:
         return None
     try:
@@ -656,7 +706,7 @@ def _save_presentation_as_impl(
         if not saved_in_place:
             # Remember it, so an ordinary save from here on refreshes this copy
             # too rather than leaving it behind in the container.
-            _EXTERNAL_COPIES[os.path.abspath(staged)] = os.path.abspath(target)
+            _remember_copy(os.path.abspath(staged), os.path.abspath(target))
         if saved_in_place:
             warnings.append(
                 f"The deck was saved to {target}, which is inside PowerPoint's "
@@ -736,7 +786,7 @@ def _close_presentation_impl(
         )
 
     if local:
-        _EXTERNAL_COPIES.pop(os.path.abspath(local), None)
+        _forget_copy(os.path.abspath(local))
 
     result = {"success": True, "closed": name}
     if closed_copy:
