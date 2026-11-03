@@ -380,10 +380,12 @@ def _wait_pumping(seconds) -> None:
         time.sleep(min(0.05, left))
 
 
-# How long a tool waits for the chart's workbook work on its own thread. Well
-# under the worker's per call budget, so a stuck Excel is reported as such
-# rather than as a wedged worker.
-_WORKBOOK_WAIT = 30.0
+# How long a tool waits for the chart's workbook work on its own thread, and
+# before that for the threads of earlier charts to end. Together well under the
+# worker's per call budget, so a stuck Excel is reported as such rather than as
+# a wedged worker.
+_WORKBOOK_WAIT = 25.0
+_EARLIER_WAIT = 15.0
 
 # What _on_a_thread_of_its_own answers when that wait ran out.
 TIMED_OUT = object()
@@ -395,12 +397,15 @@ EXCEL_TOO_SLOW = (
     "window before adding or editing another chart."
 )
 
-# The done events of workbook work not finished yet. A call that timed out
-# leaves its work running, so the next one waits for that first, and two threads
-# never drive a chart's data in Excel at once.
-_unfinished = []
-# Side threads not ended yet, working or letting go, for the log.
-_alive = 0
+EXCEL_STILL_CLOSING = (
+    "Excel is still closing the data workbook of an earlier chart, so nothing "
+    "was changed. Try again in a minute."
+)
+
+# The end events of side threads not ended yet, working or letting go. A chart
+# tool waits for them before it touches a chart, so PowerPoint's chart code is
+# never driven while Excel is still closing an earlier chart's workbook.
+_running = []
 _threads_lock = threading.Lock()
 
 
@@ -430,6 +435,30 @@ def _wait_for(event, end) -> bool:
     return True
 
 
+def _wait_for_earlier_charts(timeout=_EARLIER_WAIT) -> None:
+    """Wait until the side threads of earlier charts have ended.
+
+    Before this, the second chart's data was being written while the thread of
+    the first was still letting go of that chart's closed workbook, and
+    PowerPoint crashed in its chart code (#311). Raises when they have not
+    ended within ``timeout``, before anything is changed.
+    """
+    with _threads_lock:
+        _running[:] = [e for e in _running if not e.is_set()]
+        earlier = list(_running)
+    if not earlier:
+        return
+    started = time.monotonic()
+    end = started + timeout
+    for event in earlier:
+        if not _wait_for(event, end):
+            logger.warning("Excel was still closing an earlier chart's workbook after %.0f s",
+                           timeout)
+            raise RuntimeError(EXCEL_STILL_CLOSING)
+    logger.info("Waited %.1f s for an earlier chart's workbook to be let go",
+                time.monotonic() - started)
+
+
 def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
     """Run ``work(chart, keep)`` on a short-lived thread and return what it returns.
 
@@ -448,11 +477,9 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
 
     When the work has not finished within ``timeout``, ``TIMED_OUT`` is
     answered and the work is left to finish on its thread, so the worker never
-    waits on Excel for longer than that. Work an earlier call left running is
-    waited for first, within the same ``timeout``, and ``TIMED_OUT`` is
-    answered without starting this one when it is still running. Each thread
-    still letting go lives about a minute at most, blocked in one COM call;
-    several at once are harmless.
+    waits on Excel for longer than that. The thread is registered in
+    ``_running`` until it has let go of everything, and the chart tools call
+    ``_wait_for_earlier_charts`` before touching a chart.
 
     A chart that is not a COM object (a test's stand-in), or no COM at all,
     runs ``work`` right here.
@@ -463,22 +490,11 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
     import win32com.client
 
     end = time.monotonic() + timeout
-    with _threads_lock:
-        _unfinished[:] = [e for e in _unfinished if not e.is_set()]
-        earlier = list(_unfinished)
-    for event in earlier:
-        if not _wait_for(event, end):
-            logger.warning("Excel is still busy with an earlier chart's data")
-            return TIMED_OUT
-
     stream = pythoncom.CoMarshalInterThreadInterfaceInStream(pythoncom.IID_IDispatch, oleobj)
-    done = threading.Event()
+    done, ended = threading.Event(), threading.Event()
     outcome = {}
 
     def run():
-        global _alive
-        with _threads_lock:
-            _alive += 1
         initialized = False
         there, keep, failure = None, [], None
         try:
@@ -498,17 +514,14 @@ def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
             started = time.monotonic()
             there = failure = None
             keep.clear()
-            logger.debug("Let go of a chart workbook in %.1f s", time.monotonic() - started)
+            logger.info("Let go of a chart workbook in %.1f s", time.monotonic() - started)
         finally:
             if initialized:
                 pythoncom.CoUninitialize()
-            with _threads_lock:
-                _alive -= 1
-                left = _alive
-            logger.debug("%d chart workbook threads still running", left)
+            ended.set()
 
     with _threads_lock:
-        _unfinished.append(done)
+        _running.append(ended)
     threading.Thread(target=run, name="chart-workbook", daemon=True).start()
     if not _wait_for(done, end):
         logger.warning("Excel did not finish with a chart's data within %.0f s", timeout)
@@ -562,6 +575,7 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     slide = pres.Slides(slide_index)
 
     type_int = _resolve_chart_type(chart_type)
+    _wait_for_earlier_charts()
     chart_shape = slide.Shapes.AddChart2(-1, type_int, left, top, width, height)
     chart = chart_shape.Chart
 
@@ -643,6 +657,7 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
+    _wait_for_earlier_charts()
     chart = shape.Chart
 
     closed = _on_a_thread_of_its_own(

@@ -175,7 +175,7 @@ class TestOnAThreadOfItsOwn:
         # Work a test left running would hold up the next test's call.
         from ppt_com import charts
 
-        for event in list(charts._unfinished):
+        for event in list(charts._running):
             event.wait(10)
         finished.set()
         thread.join(10)
@@ -303,27 +303,48 @@ class TestOnAThreadOfItsOwn:
             _on_a_thread_of_its_own(self.dictionary(), lambda there, keep: "never")
         assert time.monotonic() - started < 1.5
 
-    def test_work_left_running_is_waited_for_before_the_next_starts(self):
+    def test_the_next_chart_waits_for_work_left_running(self):
         import threading
-        import time
 
-        from ppt_com.charts import TIMED_OUT, _on_a_thread_of_its_own
+        from ppt_com import charts
+        from ppt_com.charts import TIMED_OUT, _on_a_thread_of_its_own, _wait_for_earlier_charts
 
-        started, release = [], threading.Event()
+        release = threading.Event()
 
         def slow(there, keep):
-            started.append("slow")
             release.wait(5)
             return "slow done"
 
-        def quick(there, keep):
-            started.append("quick")
-            return "quick done"
-
-        d = self.dictionary()
-        assert _on_a_thread_of_its_own(d, slow, timeout=0.3) is TIMED_OUT
-        assert _on_a_thread_of_its_own(d, quick, timeout=0.3) is TIMED_OUT
-        assert started == ["slow"]
+        assert _on_a_thread_of_its_own(self.dictionary(), slow, timeout=0.3) is TIMED_OUT
+        with pytest.raises(RuntimeError, match="still closing"):
+            _wait_for_earlier_charts(timeout=0.3)
         release.set()
-        assert _on_a_thread_of_its_own(d, quick, timeout=5) == "quick done"
-        assert started == ["slow", "quick"]
+        _wait_for_earlier_charts(timeout=5)
+        assert not any(not e.is_set() for e in charts._running)
+
+    def test_the_next_chart_waits_until_the_last_one_has_let_go(self):
+        import time
+
+        from ppt_com.charts import _on_a_thread_of_its_own, _wait_for_earlier_charts
+
+        released = []
+
+        def work(there, keep):
+            keep.append(self.SlowToLetGo(1, released))
+            return "closed"
+
+        started = time.monotonic()
+        assert _on_a_thread_of_its_own(self.dictionary(), work) == "closed"
+        assert not released
+        _wait_for_earlier_charts(timeout=5)
+        assert released
+        assert time.monotonic() - started >= 0.9
+
+    def test_with_nothing_earlier_there_is_no_wait(self):
+        import time
+
+        from ppt_com.charts import _wait_for_earlier_charts
+
+        started = time.monotonic()
+        _wait_for_earlier_charts(timeout=5)
+        assert time.monotonic() - started < 0.5
