@@ -117,25 +117,23 @@ def is_guess(entry, funcdesc_kind, invoke_func) -> bool:
 def keep_guesses_per_object(dynamic, shared_ids, funcdesc_kind, invoke_func) -> None:
     """Keep what pywin32 learns from one object's answer on that object alone.
 
-    ``CDispatch.__getattr__`` reads a property, and when the object answers
-    with one of ERRORS_BAD_CONTEXT (E_INVALIDARG, DISP_E_TYPEMISMATCH and the
-    like) it concludes the name is a method and writes that into
-    ``_olerepr_.mapFuncs``, which is looked at before the properties. With one
-    olerepr per object that is pywin32's own design: one object's odd answer
-    decides how that object is read. Shared by every object of the interface,
-    it turned one error on one shape into a bound method, in place of the
-    value, for that property of every shape after it, which the layout check's
-    ``except Exception`` then turned into a fact silently missing for the rest
-    of the process. ``__setattr__`` likewise stores the dispid one object gave
-    for a name its type library did not know.
+    When a property read answers with one of ERRORS_BAD_CONTEXT,
+    ``CDispatch.__getattr__`` records the name as a method in
+    ``_olerepr_.mapFuncs``, which is looked at before the properties, and
+    ``__setattr__`` records a dispid it looked up by name. Shared, one shape's
+    odd answer made that property a bound method on every shape after it.
 
     So after each read and each write, an entry that came from such a guess is
-    taken back out of a shared olerepr. The object that made the guess keeps
-    the method it built in its own ``_builtMethods_``, so it behaves as it
-    always did, and every other object asks for itself.
-
+    taken back out of a shared olerepr. The object that guessed keeps the
+    method in its own ``_builtMethods_``, which ``__getattr__`` looks at first,
+    so it behaves as in stock pywin32, and every other object asks for itself.
     ``shared_ids`` holds the ids of the olereprs ``share_type_information``
     shares; an olerepr of its own is left to pywin32.
+
+    ``is_guess`` reads ``desckind`` and ``invkind`` off pywin32's FUNCDESC
+    objects. Were a pywin32 to give plain tuples, every method would count as
+    a guess and lose only the sharing, not its answer; the Windows test pins
+    that real methods stay shared.
     """
     cdispatch = dynamic.CDispatch
     original_get = cdispatch.__getattr__
@@ -150,7 +148,7 @@ def keep_guesses_per_object(dynamic, shared_ids, funcdesc_kind, invoke_func) -> 
         finally:
             entry = olerepr.mapFuncs.get(attr)
             if entry is not None and is_guess(entry, funcdesc_kind, invoke_func):
-                del olerepr.mapFuncs[attr]
+                olerepr.mapFuncs.pop(attr, None)
 
     def __setattr__(self, attr, value):
         olerepr = self.__dict__.get("_olerepr_")
@@ -161,7 +159,7 @@ def keep_guesses_per_object(dynamic, shared_ids, funcdesc_kind, invoke_func) -> 
         finally:
             entry = olerepr.propMap.get(attr)
             if entry is not None and entry.desc is None:
-                del olerepr.propMap[attr]
+                olerepr.propMap.pop(attr, None)
 
     cdispatch.__getattr__ = __getattr__
     cdispatch.__setattr__ = __setattr__
@@ -175,20 +173,25 @@ class _TypeCompWhenAsked:
     ``CDispatch._LazyAddAttr_`` and nowhere else. With the olerepr shared, a
     name is bound once per interface, so most wrappers never need the
     ITypeComp at all, and asking PowerPoint for it was a round trip per object.
+    Once asked for, it is kept for this wrapper's life, as pywin32 keeps it.
     """
 
-    __slots__ = ("typeinfo", "com_error")
+    __slots__ = ("typeinfo", "com_error", "typecomp", "asked")
 
     def __init__(self, typeinfo, com_error):
         self.typeinfo, self.com_error = typeinfo, com_error
+        self.typecomp, self.asked = None, False
 
     def __iter__(self):
+        if not self.asked:
+            self.asked = True
+            try:
+                self.typecomp = self.typeinfo.GetTypeComp()
+            except self.com_error:
+                # pywin32 then finds nothing to bind and asks the object by name.
+                self.typecomp = None
         yield self.typeinfo
-        try:
-            yield self.typeinfo.GetTypeComp()
-        except self.com_error:
-            # pywin32 then finds nothing to bind and asks the object by name.
-            yield None
+        yield self.typecomp
 
 
 def wrap_known_interfaces(client, shared, gencache, com_error, null_iid) -> None:
@@ -217,9 +220,10 @@ def wrap_known_interfaces(client, shared, gencache, com_error, null_iid) -> None
             interface = typeinfo.GetTypeAttr()[0] if typeinfo is not None else None
         except (com_error, AttributeError):
             return original(self, ob, userName, returnCLSID)
+        if interface is None or interface == null_iid:
+            return original(self, ob, userName, returnCLSID)
         olerepr = shared.get(interface)
-        if (olerepr is None or interface == null_iid
-                or gencache.GetClassForCLSID(str(interface)) is not None):
+        if olerepr is None or gencache.GetClassForCLSID(str(interface)) is not None:
             return original(self, ob, userName, returnCLSID)
         return cdispatch(ob, olerepr, userName, lazydata=_TypeCompWhenAsked(typeinfo, com_error))
 

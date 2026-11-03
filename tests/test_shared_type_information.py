@@ -188,13 +188,18 @@ class TestPywin32ItSelf:
                 return getattr(real, name)
 
         first.__dict__["_oleobj_"] = AnswersOddly()
-        # The odd object is read the way pywin32 has always read it.
+        # The odd object is read the way pywin32 has always read it, and keeps
+        # reading that way from its own built methods.
+        assert callable(first.Count)
         assert callable(first.Count)
         # Without the guard these were <bound method Count>, for every
         # Dictionary from then on.
         assert second.Count == 2
         assert win32com.client.Dispatch("Scripting.Dictionary").Count == 0
         assert second.Item("b") == 2
+        # Real methods, from the type library, stay shared.
+        assert "Item" in second._olerepr_.mapFuncs
+        assert "Add" in second._olerepr_.mapFuncs
 
     def test_an_object_returned_by_a_call_is_wrapped_and_reads(self):
         import os
@@ -250,6 +255,8 @@ class TestWrappingAKnownInterface:
 
         def GetTypeComp(self):
             self.asked.append("GetTypeComp")
+            if self.iid == "{NoComp}":
+                raise ComError("no ITypeComp")
             return "typecomp"
 
     def test_an_interface_already_seen_is_wrapped_with_its_shared_olerepr(self):
@@ -264,6 +271,15 @@ class TestWrappingAKnownInterface:
         typeinfo, typecomp = wrapped.lazydata
         assert (typeinfo, typecomp) == (shape, "typecomp")
         assert shape.asked[-1] == "GetTypeComp"
+        # Asked for once, then kept for the wrapper's life.
+        assert tuple(wrapped.lazydata) == (shape, "typecomp")
+        assert shape.asked.count("GetTypeComp") == 1
+
+    def test_no_itypecomp_leaves_nothing_to_bind(self):
+        client, _ = self.client({"{NoComp}": "olerepr"})
+        ob = self.Object("{NoComp}")
+        wrapped = client.CDispatch(None, None)._wrap_dispatch_(ob)
+        assert tuple(wrapped.lazydata) == (ob, None)
 
     def test_anything_else_takes_pywin32s_own_path(self):
         shared = {"{Shape}": "olerepr", NULL_IID: "null", "{Made}": "made"}
