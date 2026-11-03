@@ -421,38 +421,36 @@ class TestTheSmartArtShapeTypeGap:
 class TestSmartArt:
     """No class, and the words for its nodes outlived the thing itself."""
 
-    def test_adding_refuses_and_names_the_orphaned_vocabulary(self):
+    def test_adding_without_the_installed_definitions_refuses(self, monkeypatch, tmp_path):
+        # The layouts are read from PowerPoint's own install; without them
+        # there is nothing to build from, and the refusal says where it looked.
         from ppt_mac.smartart import _add_smartart_impl
 
+        monkeypatch.setenv("PPT_MCP_POWERPOINT_APP", str(tmp_path))
         with _no_powerpoint():
             result = _add_smartart_impl(
                 1, "Basic Process", None, 50, 50, 400, 300,
                 ["a", "b"], None, None, None, None, None, None,
             )
 
-        assert result["error"] == "ppt_add_smartart is not available on macOS"
-        assert "no `smart art` class" in result["reason"]
-        assert "`after node`" in result["reason"]
+        assert result["error"] == "ppt_add_smartart cannot find PowerPoint for Mac's SmartArt definitions"
+        assert str(tmp_path) in result["reason"]
+        assert "PPT_MCP_POWERPOINT_APP" in result["reason"]
         assert "success" not in result
 
-    def test_modifying_refuses_and_names_the_shape_and_the_action(self):
-        # The five node actions work, through the graphic's clipboard
-        # package; the other three need another graphic's parts and refuse.
+    def test_restyling_without_the_installed_definitions_refuses(self, monkeypatch, tmp_path):
         from ppt_mac.smartart import _modify_smartart_impl
 
+        monkeypatch.setenv("PPT_MCP_POWERPOINT_APP", str(tmp_path))
         with _fake_deck(["Process"]) as deck:
             deck.set_type("Process", "smartart")
             result = _modify_smartart_impl(
-                1, "Process", "change_color", 2, None,
-                None, None, None, None, None, None, None, None,
+                1, "Process", "change_color", None, None,
+                None, None, 2, None, None, None, None, None,
                 None, None, None,
             )
 
-        assert result["error"] == "ppt_modify_smartart cannot do 'change_color' on macOS"
-        assert "'Process' on slide 1 is a SmartArt graphic" in result["reason"]
-        assert "the action 'change_color'" in result["reason"]
-        assert "'add_node'" in result["alternatives"][0]
-        assert any("ppt_ungroup_shapes" in a for a in result["alternatives"])
+        assert result["error"] == "ppt_modify_smartart cannot find PowerPoint for Mac's SmartArt definitions"
         assert "success" not in result
 
     def test_a_misspelled_action_is_still_heard(self):
@@ -490,55 +488,40 @@ class TestSmartArt:
                     None, None, None,
                 )
 
-    def test_the_eight_actions_match_the_message_that_lists_them(self):
-        from ppt_mac.smartart import _ACTIONS, _modify_smartart_impl
+    @pytest.mark.parametrize("action,needs", [
+        ("change_layout", "layout_name or layout_index"),
+        ("change_color", "color_index"),
+        ("change_style", "style_index"),
+    ])
+    def test_a_restyle_without_its_argument_says_which(self, action, needs):
+        from ppt_mac.smartart import _modify_smartart_impl
 
         with _fake_deck(["Process"]) as deck:
             deck.set_type("Process", "smartart")
-            for action in _ACTIONS:
-                if action in ("set_text", "add_node", "delete_node",
-                              "format_node", "format_all_nodes"):
-                    continue  # done, not refused: see tests/test_smartart_text.py
-                result = _modify_smartart_impl(
+            with pytest.raises(ValueError, match=f"{needs} is required for '{action}'"):
+                _modify_smartart_impl(
                     1, "Process", action, 1, "x",
                     None, None, None, None, None, None, None, None,
                     None, None, None,
                 )
-                assert f"the action '{action}'" in result["reason"]
 
 
 @macos_only
 class TestListingSmartArtLayouts:
-    """Servable from a static table and deliberately not served."""
-
-    def test_it_refuses_rather_than_inventing_indices(self):
-        from ppt_mac.smartart import _list_smartart_options_impl
-
-        with _no_powerpoint():
-            result = _list_smartart_options_impl("layouts", None, None, False)
-
-        assert result["error"] == (
-            "ppt_list_smartart_layouts is not available on macOS"
-        )
-        assert "numbers that mean nothing" in result["reason"]
-
-    def test_it_carries_no_success_and_no_catalogue(self):
-        """A list of layouts nothing can use would read as a working tool."""
-        from ppt_mac.smartart import _list_smartart_options_impl
-
-        with _no_powerpoint():
-            result = _list_smartart_options_impl("layouts", None, None, False)
-
-        assert "success" not in result
-        assert "layouts" not in result
-        assert "total_count" not in result
+    """Read from PowerPoint's install; tests/test_smartart_defs.py lists them."""
 
     @pytest.mark.parametrize("list_type", ["layouts", "colors", "styles", "categories"])
-    def test_all_four_list_types_refuse(self, list_type):
+    def test_without_the_installed_definitions_each_list_refuses(
+            self, list_type, monkeypatch, tmp_path):
         from ppt_mac.smartart import _list_smartart_options_impl
 
+        monkeypatch.setenv("PPT_MCP_POWERPOINT_APP", str(tmp_path))
         with _no_powerpoint():
-            assert "error" in _list_smartart_options_impl(list_type, None, None, False)
+            result = _list_smartart_options_impl(list_type, None, None, False)
+
+        assert result["error"] == (
+            "ppt_list_smartart_layouts cannot find PowerPoint for Mac's SmartArt definitions")
+        assert "success" not in result
 
     def test_a_misspelled_list_type_is_still_heard(self):
         from ppt_mac.smartart import _list_smartart_options_impl

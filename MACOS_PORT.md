@@ -55,9 +55,9 @@ appscript 1.4.0 (October 2025) publishes universal2 wheels for CPython 3.10
 through 3.14, so there is no build step and no compiler on the user's machine.
 
 Three things are absent from the dictionary. Charts, SmartArt and freeform
-path building have no words in it at all. Two of them come back another way:
+path building have no words in it at all. All three come back another way:
 the clipboard carries a DrawingML package for any shape, PowerPoint pastes one
-back whatever it holds, and every chart, freeform and group tool goes through
+back whatever it holds, and every chart, SmartArt, freeform and group tool goes through
 it ([the GVML design on #211](https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420)). Creating and reading is a paste or a copy; editing
 an existing chart or path is a copy, a rewrite and a paste back, after which
 the original is deleted and the new shape put back in its place. That makes
@@ -515,7 +515,7 @@ This is the honest part. These are not workarounds waiting to be found.
 | Area | Windows | macOS | Lines affected |
 |---|---|---|---|
 | Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. A chart is added by writing its XML and pasting it through the clipboard, and its data is read the same way ([the GVML design on #211](https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420)). An existing chart is edited by copying it, rewriting its `chart1.xml` and pasting it back over the original, which keeps name, position and z order and loses animations, said in `warnings` | `charts.py` 1,126 |
-| SmartArt | `SmartArt` object model | **no class, no command**. `shape type smartart graphic` exists, so an existing graphic is a shape like any other | `smartart.py` 810 |
+| SmartArt | `SmartArt` object model | **no class, no command**. A graphic's clipboard package carries its data model and its layout, colour and style definitions, and PowerPoint for Mac installs every definition it offers as a file of that same XML (`SmartArt.framework/…/Resources/lo`, `cs`, `qs`). So nodes are written, added, deleted and formatted in the data model, a layout, colour scheme or style is swapped by putting the installed file in place of the part, and a new graphic is those parts around a fresh data model; PowerPoint lays it out on the paste. The layouts are the Mac's own: 158 of them are shared with Windows, 18 are only on Windows and 4 only on the Mac, so a layout index comes from `ppt_list_smartart_layouts` on the Mac. Colour scheme and style indices match Windows | `smartart.py`, `smartart_defs.py` |
 | Freeform paths | `Shapes.BuildFreeform` | **no builder**. A path is written as `a:custGeom` and pasted through the clipboard, and read back the same way. Nodes are moved, inserted, deleted and switched between line and curve by rewriting the path and pasting it back over the original. The editing type (corner, smooth, symmetric) is not in the XML either and stays refused | `freeform.py` 765 |
 | Grouping | `ShapeRange.Group` | **no `select` command, so no shape range**. The members are copied off the slide one by one, wrapped in one `a:grpSp` and pasted back as a group; the originals are deleted only once the group is verified. A member's text is written the same way (#220): `ppt_set_text` with a member's name, or `Group/Member`, copies the group, rewrites that member's text (the whole of it, or a span inside one line) and pastes the group back, members' names kept; `ppt_format_text` sets a member's runs the same way | `groups.py` |
 | Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all. Solved another way, by exporting the deck to PDF and rendering pages with Quartz, which is what shipped | `export.py` 848 |
@@ -534,12 +534,11 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**157 tools. 144 do the job. 13 always refuse.**
+**157 tools. 146 do the job. 11 always refuse.**
 
 | Why | Tools |
 |---|---|
 | No `nodes`, and a node's editing type (corner, smooth, symmetric) is not stored in the XML the clipboard carries either; PowerPoint reads it off the handle geometry. Moving the handles with the node position tool is the way to change it | `ppt_set_node_editing_type` |
-| No `smart art` class | `ppt_add_smartart`, `ppt_list_smartart_options` |
 | No `select` command, so no shape range | `ppt_select_shapes` |
 | No tags anywhere in the dictionary | `ppt_set_tag`, `ppt_get_tags` |
 | Deleting one effect answers -50 and clearing its shape costs the slide | `ppt_remove_animation`, `ppt_copy_animation` |
@@ -548,7 +547,7 @@ checked against the code by a test, so it cannot quietly go stale.
 | No application window state, only each deck's window position and size | `ppt_set_window_state` |
 | No Boolean merge verbs (union, combine, intersect, subtract, fragment), and no shape range to merge | `ppt_merge_shapes` |
 
-A further **20 tools work and refuse one argument**, with `error` naming
+A further **19 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
@@ -560,7 +559,7 @@ legend and title coordinates or an 8-direction `legend_position` (they are
 computed from the chart's rendered size, which the XML does not carry),
 `ppt_format_chart_axis` cannot take `tick_label_font_size`, `ppt_set_textframe`
 cannot take `auto_size='shrink_to_fit'` (PowerPoint for Mac refuses to set it
-from a script, under either of its names), `ppt_modify_smartart` takes `action='set_text'`, `'add_node'`, `'delete_node'`, `'format_node'` and `'format_all_nodes'`, through the graphic's clipboard package (PowerPoint lays the diagram out again when it is pasted), and not the three that would need another graphic's layout, colours or style. `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
+from a script, under either of its names). `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
 checks that report a write which did not land rather than a capability that
 is missing.
 
@@ -676,9 +675,9 @@ exists and burns turns looking for it. The tool stays listed and returns a
 structured refusal naming the platform, the reason and a route to take instead.
 
 ```json
-{"error": "ppt_add_smartart is not available on macOS",
- "reason": "PowerPoint for Mac's Apple Event dictionary has no `smart art` class and no command that makes one. ...",
- "alternatives": ["ppt_add_shape and ppt_add_connector, for a diagram drawn by hand"]}
+{"error": "ppt_set_tag is not available on macOS",
+ "reason": "PowerPoint for Mac's Apple Event dictionary has no Tags collection on a shape, a slide or a presentation. ...",
+ "alternatives": ["Carry the value in the shape's name with ppt_update_shape", "ppt_set_slide_notes"]}
 ```
 
 The tools that go through the clipboard follow the same rule from the other
@@ -738,8 +737,8 @@ section 6 gives: the six tools that create or read first, then the five that
 edit a chart, then the four that edit a path. All three tiers are in.
 
 **Spike, in parallel and not on the critical path.** Whether a shipped `.ppam`
-plus `run VB macro` can reach the VBA object model. If it can, SmartArt comes
-back that way. Charts and freeforms no longer depend on it.
+plus `run VB macro` can reach the VBA object model. Charts, freeforms and
+SmartArt no longer depend on it.
 
 ---
 
@@ -748,7 +747,8 @@ back that way. Charts and freeforms no longer depend on it.
 Written down so nobody re-derives it.
 
 1. Whether `run VB macro` actually executes. Section 6.2 has the one line test.
-   It matters for SmartArt now; charts are made through the clipboard instead.
+   Nothing depends on it now; charts, freeforms and SmartArt are made through
+   the clipboard instead.
 2. ~~Table cell addressing.~~ Settled. `get cell from` is the wrong route and
    `table.rows[r].cells[c]` is the right one; see section 5.1. Every table tool
    now runs live.

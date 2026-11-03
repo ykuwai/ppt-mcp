@@ -346,3 +346,235 @@ def node_formats(data: ET.Element) -> List[dict]:
             "latin": latin.get("typeface") if latin is not None else None,
         })
     return out
+
+
+# ---------------------------------------------------------------------------
+# Layouts, colour schemes and styles
+# ---------------------------------------------------------------------------
+# The three definitions a graphic is drawn from are whole parts of its
+# package, each a definition file of the kind PowerPoint installs, and the
+# document point's ``prSet`` names each by id and category. A colour scheme's
+# or style's id is written with an instance suffix ("…/accent1_2#1") both in
+# the part and on the point, a layout's without one, as PowerPoint writes them.
+DEFINITIONS = {
+    # kind: (part name stem, id attribute, category attribute, instance suffix)
+    "layouts": ("layout", "loTypeId", "loCatId", ""),
+    "colors": ("colors", "csTypeId", "csCatId", "#1"),
+    "styles": ("quickStyle", "qsTypeId", "qsCatId", "#1"),
+}
+
+
+def _doc_prset(data: ET.Element) -> ET.Element:
+    doc = next((pt for pt in _points(data).values() if pt.get("type") == "doc"), None)
+    if doc is None:
+        raise PackageError("the SmartArt data model has no document point")
+    pr = doc.find(f"{_D}prSet")
+    if pr is None:
+        pr = ET.Element(f"{_D}prSet")
+        doc.insert(0, pr)
+    return pr
+
+
+def definition_ids(data: ET.Element) -> Dict[str, Optional[str]]:
+    """The layout, colour scheme and style ids the document point names,
+    without the instance suffix: ``{"layouts": …, "colors": …, "styles": …}``."""
+    pr = _doc_prset(data)
+    return {kind: (pr.get(attr) or "").split("#")[0] or None
+            for kind, (_, attr, _, _) in DEFINITIONS.items()}
+
+
+def definition_part(kind: str, definition_xml: bytes, uid: str) -> bytes:
+    """An installed definition file as the part a package carries: the same
+    XML, its ``uniqueId`` given the instance suffix the kind takes."""
+    suffix = DEFINITIONS[kind][3]
+    text = definition_xml.decode("utf-8")
+    old = f'uniqueId="{uid}"'
+    if old not in text:
+        raise PackageError(f"the definition file does not carry the id {uid}")
+    return text.replace(old, f'uniqueId="{uid}{suffix}"', 1).encode("utf-8")
+
+
+def set_definition(data: ET.Element, kind: str, uid: str, category: str) -> None:
+    """Name a layout, colour scheme or style on the document point."""
+    _, attr, cat_attr, suffix = DEFINITIONS[kind]
+    pr = _doc_prset(data)
+    pr.set(attr, uid + suffix)
+    pr.set(cat_attr, category)
+    if kind == "layouts":
+        # The presentation connections name the layout they were laid out by.
+        for cxn in _connections(data):
+            if cxn.get("presId"):
+                cxn.set("presId", uid)
+
+
+# ---------------------------------------------------------------------------
+# A new graphic
+# ---------------------------------------------------------------------------
+NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+DIAGRAM_PARTS = {
+    # role: (part, content type, relationship type)
+    "dm": ("clipboard/diagrams/data1.xml",
+           "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+           _REL + "diagramData"),
+    "lo": ("clipboard/diagrams/layout1.xml",
+           "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+           _REL + "diagramLayout"),
+    "qs": ("clipboard/diagrams/quickStyle1.xml",
+           "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+           _REL + "diagramQuickStyle"),
+    "cs": ("clipboard/diagrams/colors1.xml",
+           "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml",
+           _REL + "diagramColors"),
+}
+
+# A layout that carries no sample data starts with this many nodes.
+DEFAULT_NODE_COUNT = 3
+
+
+def _sample_tree(layout_xml: bytes) -> List[tuple]:
+    """The layout's sample nodes as ``(sample id, type, parent sample id)``,
+    parents first, each parent's children in order; [] when it has none."""
+    root = ET.fromstring(layout_xml)
+    model = root.find(f"{_D}sampData/{_D}dataModel")
+    if model is None:
+        return []
+    points = {pt.get("modelId"): pt for pt in model.iter(f"{_D}pt")}
+    children: Dict[str, List[tuple]] = {}
+    for cxn in model.iter(f"{_D}cxn"):
+        if cxn.get("type", "parOf") == "parOf":
+            children.setdefault(cxn.get("srcId"), []).append(
+                (int(cxn.get("srcOrd", "0")), cxn.get("destId")))
+    doc = next((mid for mid, pt in points.items() if pt.get("type") == "doc"), None)
+    out: List[tuple] = []
+
+    def walk(mid):
+        for _, child in sorted(children.get(mid, [])):
+            kind = points.get(child, ET.Element("x")).get("type", "node")
+            if kind in ("node", "asst"):
+                out.append((child, kind, mid))
+                walk(child)
+
+    if doc is not None:
+        walk(doc)
+    return out
+
+
+def _empty_body(parent: ET.Element) -> ET.Element:
+    t = ET.SubElement(parent, f"{_D}t")
+    ET.SubElement(t, f"{{{NS_A}}}bodyPr")
+    ET.SubElement(t, f"{{{NS_A}}}lstStyle")
+    p = ET.SubElement(t, f"{{{NS_A}}}p")
+    ET.SubElement(p, f"{{{NS_A}}}endParaRPr", {"lang": "en-US"})
+    return t
+
+
+def _point(parent: ET.Element, model_id: str, kind: Optional[str] = None,
+           cxn_id: Optional[str] = None, **prset) -> ET.Element:
+    pt = ET.SubElement(parent, f"{_D}pt", {"modelId": model_id})
+    if kind:
+        pt.set("type", kind)
+    if cxn_id:
+        pt.set("cxnId", cxn_id)
+    ET.SubElement(pt, f"{_D}prSet", prset)
+    ET.SubElement(pt, f"{_D}spPr")
+    _empty_body(pt)
+    return pt
+
+
+def new_data_model(layout_xml: bytes, ids: Dict[str, tuple],
+                   texts: Optional[List[str]]) -> ET.Element:
+    """The data model of a new graphic, before PowerPoint lays it out.
+
+    ``ids`` gives each kind's ``(id, category)``. The nodes are the layout's
+    own sample nodes where it has them, which are what PowerPoint starts a
+    graphic of that layout with, else ``DEFAULT_NODE_COUNT`` nodes in a row.
+    ``texts`` fills them in ``AllNodes`` order and, past the last of them,
+    adds more after the last node at its level, as Windows' ``AddNode`` does;
+    nodes left without text are placeholders.
+    """
+    data = ET.Element(f"{_D}dataModel")
+    points = ET.SubElement(data, f"{_D}ptLst")
+    cxns = ET.SubElement(data, f"{_D}cxnLst")
+    doc_id = _new_id()
+    doc = _point(points, doc_id, "doc")
+    for kind, (uid, category) in ids.items():
+        _, attr, cat_attr, suffix = DEFINITIONS[kind]
+        doc.find(f"{_D}prSet").set(attr, uid + suffix)
+        doc.find(f"{_D}prSet").set(cat_attr, category)
+    doc.find(f"{_D}prSet").set("phldr", "1")
+
+    tree = _sample_tree(layout_xml) or [
+        (str(i), "node", None) for i in range(DEFAULT_NODE_COUNT)]
+    made = {None: doc_id}
+    order: Dict[str, int] = {}
+    for sample_id, kind, parent in tree:
+        parent_id = made.get(parent, doc_id)
+        node_id, cxn_id = _new_id(), _new_id()
+        made[sample_id] = node_id
+        _point(points, node_id, None if kind == "node" else kind, phldr="1", phldrT="[Text]")
+        par, sib = _new_id(), _new_id()
+        _point(points, par, "parTrans", cxn_id)
+        _point(points, sib, "sibTrans", cxn_id)
+        rank = order.get(parent_id, 0)
+        order[parent_id] = rank + 1
+        ET.SubElement(cxns, f"{_D}cxn", {
+            "modelId": cxn_id, "srcId": parent_id, "destId": node_id,
+            "srcOrd": str(rank), "destOrd": "0",
+            "parTransId": par, "sibTransId": sib,
+        })
+    ET.SubElement(data, f"{_D}bg")
+    ET.SubElement(data, f"{_D}whole")
+
+    for i, text in enumerate(texts or [], 1):
+        if i > len(node_ids(data)):
+            add_node(data, None, text)
+        elif text:
+            set_node_text(data, None, i, text)
+    return data
+
+
+def new_graphic(layout_xml: bytes, colors_xml: bytes, style_xml: bytes,
+                ids: Dict[str, tuple], texts: Optional[List[str]],
+                x: int, y: int, cx: int, cy: int, name: str = "Diagram 1",
+                fonts: Optional[dict] = None) -> bytes:
+    """A package holding one new SmartArt graphic at ``x, y, cx, cy`` EMU.
+
+    It carries the data model and the three definitions and nothing
+    PowerPoint lays out: no drawing of the diagram and no theme, which it
+    makes itself on the paste (checked on 16.114 with Basic Process, a
+    hierarchy and Basic Block List). ``fonts`` is ``format_nodes``' font
+    arguments, applied to every node.
+    """
+    from gvml import canvas
+    from gvml.package import Relationship, build
+
+    ET.register_namespace("dgm", NS_DGM)
+    ET.register_namespace("a", NS_A)
+    data = new_data_model(layout_xml, ids, texts)
+    if fonts and any(v is not None for v in fonts.values()):
+        format_nodes(data, None, **fonts)
+    frame = (
+        '<a:graphicFrame><a:nvGraphicFramePr>'
+        f'<a:cNvPr id="2" name="{name}"/><a:cNvGraphicFramePr/></a:nvGraphicFramePr>'
+        f'<a:graphic><a:graphicData uri="{NS_DGM}">'
+        f'<dgm:relIds xmlns:dgm="{NS_DGM}" xmlns:r="{NS_R}" '
+        'r:dm="rId1" r:lo="rId2" r:qs="rId3" r:cs="rId4"/>'
+        '</a:graphicData></a:graphic>'
+        f'<a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+        '</a:graphicFrame>'
+    )
+    content = {
+        "dm": (canvas.XML_DECL + ET.tostring(data, encoding="unicode")).encode("utf-8"),
+        "lo": definition_part("layouts", layout_xml, ids["layouts"][0]),
+        "qs": definition_part("styles", style_xml, ids["styles"][0]),
+        "cs": definition_part("colors", colors_xml, ids["colors"][0]),
+    }
+    parts, overrides, rels = {}, {}, []
+    for n, role in enumerate(("dm", "lo", "qs", "cs"), 1):
+        part, content_type, rel_type = DIAGRAM_PARTS[role]
+        parts[part] = content[role]
+        overrides[part] = content_type
+        rels.append(Relationship(f"rId{n}", rel_type, part))
+    return build(canvas.wrap(frame, x, y, cx, cy), parts, rels, overrides)
