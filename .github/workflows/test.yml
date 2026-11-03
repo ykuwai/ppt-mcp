@@ -77,6 +77,7 @@ jobs:
   test-macos:
     name: pytest (macOS)
     runs-on: macos-latest
+    timeout-minutes: 20
 
     env:
       UV_PYTHON: "3.12"
@@ -92,5 +93,7 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      # faulthandler prints every thread's stack for a test still running
+      # after two minutes, so a test that hangs on the runner says where.
       - name: Run tests
-        run: uv run --frozen pytest -q
+        run: uv run --frozen pytest -q -o faulthandler_timeout=120
