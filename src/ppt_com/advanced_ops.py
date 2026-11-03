@@ -256,6 +256,20 @@ class GetTagsInput(BaseModel):
 
 
 # --- Fonts ---
+class ListFontsInput(BaseModel):
+    """Input for listing fonts. Optional: the tool takes no params by default."""
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    installed: bool = Field(
+        default=False,
+        description=(
+            "False (the default) lists the fonts the presentation uses. True "
+            "lists the font families installed on this computer instead, to "
+            "pick one from; it needs no open presentation."
+        ),
+    )
+
+
 class ReplaceFontInput(BaseModel):
     """Input for replacing a font throughout the presentation."""
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -1551,13 +1565,25 @@ def replace_font(params: ReplaceFontInput) -> str:
         return json.dumps({"error": f"Failed to replace font: {str(e)}"})
 
 
-def list_fonts() -> str:
-    """List all fonts used in the active presentation.
+def list_fonts(params: Optional[ListFontsInput] = None) -> str:
+    """List the fonts the active presentation uses, or those installed here.
 
     Returns:
         JSON with font count and names.
     """
     try:
+        if params is not None and params.installed:
+            # The list the layout check reads to name a font this computer
+            # lacks, looked up through its module so macOS gets its own.
+            from ppt_com import layout_check
+
+            names = ppt.execute(layout_check._installed_fonts_impl)
+            return json.dumps({
+                "success": True,
+                "installed": True,
+                "fonts_count": len(names.listed),
+                "fonts": names.listed,
+            }, ensure_ascii=False)
         result = ppt.execute(_list_fonts_impl)
         return json.dumps(result)
     except Exception as e:
@@ -1981,14 +2007,16 @@ def register_tools(mcp):
             "openWorldHint": False,
         },
     )
-    async def tool_list_fonts() -> str:
-        """List the fonts the active presentation uses, not those installed.
+    async def tool_list_fonts(params: Optional[ListFontsInput] = None) -> str:
+        """List the fonts the active presentation uses, or with installed=true those installed on this computer.
 
-        Returns the names of the fonts its theme and its text refer to. It does
-        not list the fonts on this computer: a font the deck asks for that is
-        not installed is reported by ppt_check_layout as font_missing.
+        Takes no params by default, and then returns the fonts the
+        presentation's theme and text refer to. A font the deck asks for
+        that is not installed is reported by ppt_check_layout as
+        font_missing. Set installed to true to list the font families this
+        computer has instead, to choose one that will draw here.
         """
-        return await run_offloaded(list_fonts)
+        return await run_offloaded(list_fonts, params)
 
     @mcp.tool(
         name="ppt_set_default_fonts",

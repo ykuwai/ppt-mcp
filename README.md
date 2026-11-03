@@ -161,7 +161,7 @@ uv sync
 | **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check |
 | **Effects** | 3 | Glow and reflection (on the shape or on its text), soft edge |
 | **Comments** | 3 | Add, list, delete |
-| **Advanced** | 19 | Tags, fonts (set defaults + bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
+| **Advanced** | 19 | Tags, fonts (list the deck's or this computer's, set defaults, bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
 | | **157** | |
 
