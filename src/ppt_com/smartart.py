@@ -32,119 +32,163 @@ logger = logging.getLogger(__name__)
 # canonical English names so that callers can use English names regardless of
 # the Windows display language.
 #
-# The mapping covers the most commonly used layouts.  Layouts not listed here
-# will still work via their locale-specific name or index.
+# The table is generated from the layout definitions PowerPoint for Mac 16.114
+# installs (``ppt_mac.smartart_defs``), whose names were checked against
+# PowerPoint for Windows (#306, #312), in Windows' order. Layouts only Windows
+# carries are not listed and still work by their locale-specific name or index.
 SMARTART_ENGLISH_ALIASES: dict[str, str] = {
-    # --- List ---
-    "urn:microsoft.com/office/officeart/2005/8/layout/vList2": "Basic Block List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/list1": "Lined List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/vList5": "Vertical Box List",
+    # --- list ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/default": "Basic Block List",
+    "urn:microsoft.com/office/officeart/2008/layout/AlternatingHexagons": "Alternating Hexagons",
+    "urn:microsoft.com/office/officeart/2005/8/layout/pList1": "Picture Caption List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList2": "Vertical Bullet List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/list1": "Vertical Box List",
     "urn:microsoft.com/office/officeart/2005/8/layout/hList1": "Horizontal Bullet List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/vList1": "Vertical Bullet List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/default": "Basic List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/vList4": "Stacked List",
+    "urn:microsoft.com/office/officeart/2008/layout/SquareAccentList": "Square Accent List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList2": "Picture Accent List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/bList2": "Bending Picture Accent List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList9": "Stacked List",
+    "urn:microsoft.com/office/officeart/2008/layout/IncreasingCircleProcess": "Increasing Circle Process",
+    "urn:microsoft.com/office/officeart/2009/3/layout/PieProcess": "Pie Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/lProcess2": "Grouped List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/pList2": "Horizontal Picture List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList7": "Continuous Picture List",
+    "urn:microsoft.com/office/officeart/2008/layout/PictureStrips": "Picture Strips",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList4": "Vertical Picture List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList3": "Vertical Picture Accent List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList5": "Vertical Block List",
+    "urn:microsoft.com/office/officeart/2008/layout/VerticalAccentList": "Vertical Accent List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hList6": "Trapezoid List",
+    "urn:microsoft.com/office/officeart/2009/3/layout/BlockDescendingList": "Descending Block List",
     "urn:microsoft.com/office/officeart/2005/8/layout/hList3": "Table List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/lProcess": "Vertical Accent List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/chevron2": "Grouped List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hList6": "Square Accent List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy5": "Horizontal Picture List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/vList6": "Picture Accent List",
-    "urn:microsoft.com/office/officeart/2009/3/layout/PictureAccentBlocks": "Picture Accent Blocks",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hList7": "Trapezoid List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/vList3": "Vertical Arrow List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/target3": "Target List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hList4": "Tab List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/chevron1": "Vertical Chevron List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hList2": "Horizontal Labeled Hierarchy",
-    # --- Process ---
+    "urn:microsoft.com/office/officeart/2008/layout/VerticalCurvedList": "Vertical Curved List",
+    "urn:microsoft.com/office/officeart/2008/layout/VerticalCircleList": "Vertical Circle List",
+    # --- process ---
     "urn:microsoft.com/office/officeart/2005/8/layout/process1": "Basic Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/process2": "Step Up Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/process3": "Step Down Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/process4": "Accent Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/process5": "Alternating Flow",
-    "urn:microsoft.com/office/officeart/2005/8/layout/chevron3": "Continuous Block Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/arrow2": "Process Arrows",
-    "urn:microsoft.com/office/officeart/2005/8/layout/arrow6": "Circular Bending Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/arrow1": "Basic Bending Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/arrow3": "Upward Arrow",
-    "urn:microsoft.com/office/officeart/2005/8/layout/arrow5": "Converging Arrows",
-    "urn:microsoft.com/office/officeart/2005/8/layout/arrow4": "Diverging Arrows",
-    "urn:microsoft.com/office/officeart/2005/8/layout/chevron4": "Chevron List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/vProcess5": "Descending Process",
+    "urn:microsoft.com/office/officeart/2009/3/layout/StepUpProcess": "Step Up Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/StepDownProcess": "Step Down Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/process3": "Accent Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess10": "Picture Accent Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess4": "Alternating Flow",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess9": "Continuous Block Process",
+    "urn:microsoft.com/office/officeart/2009/3/layout/IncreasingArrowsProcess": "Increasing Arrows Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess3": "Continuous Arrow Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess6": "Process Arrows",
+    "urn:microsoft.com/office/officeart/2008/layout/CircleAccentTimeline": "Circle Accent Timeline",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess11": "Basic Timeline",
+    "urn:microsoft.com/office/officeart/2005/8/layout/chevron1": "Basic Chevron Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hChevron3": "Closed Chevron Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/lProcess3": "Chevron List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/chevron2": "Vertical Chevron List",
+    "urn:microsoft.com/office/officeart/2009/3/layout/SubStepProcess": "Sub-Step Process",
+    "urn:microsoft.com/office/officeart/2009/3/layout/PhasedProcess": "Phased Process",
+    "urn:microsoft.com/office/officeart/2009/3/layout/RandomtoResultProcess": "Random to Result Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/process2": "Vertical Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vProcess5": "Staggered Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/lProcess1": "Process List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/process4": "Segmented Process",
+    "urn:microsoft.com/office/officeart/2009/layout/CircleArrowProcess": "Circle Arrow Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/process5": "Basic Bending Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/bProcess3": "Repeating Bending Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/bProcess4": "Vertical Bending Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess7": "Detailed Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/vList6": "Vertical Arrow List",
+    "urn:microsoft.com/office/officeart/2008/layout/AscendingPictureAccentProcess": "Ascending Picture Accent Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow2": "Upward Arrow",
+    "urn:microsoft.com/office/officeart/2009/3/layout/DescendingProcess": "Descending Process",
+    "urn:microsoft.com/office/officeart/2005/8/layout/bProcess2": "Circular Bending Process",
+    # --- cycle ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle2": "Basic Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle1": "Text Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle5": "Block Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle6": "Nondirectional Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle3": "Continuous Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle7": "Multidirectional Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle8": "Segmented Cycle",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial6": "Radial Cycle",
+    # --- hierarchy ---
+    "urn:microsoft.com/office/officeart/2009/layout/CirclePictureHierarchy": "Circle Picture Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1": "Organization Chart",
+    "urn:microsoft.com/office/officeart/2008/layout/NameandTitleOrganizationalChart": "Name and Title Organization Chart",
+    "urn:microsoft.com/office/officeart/2008/layout/HalfCircleOrganizationChart": "Half Circle Organization Chart",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1": "Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy6": "Labeled Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy4": "Table Hierarchy",
+    "urn:microsoft.com/office/officeart/2009/3/layout/HorizontalOrganizationChart": "Horizontal Organization Chart",
+    "urn:microsoft.com/office/officeart/2008/layout/HorizontalMultiLevelHierarchy": "Horizontal Multi-Level Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy2": "Horizontal Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy5": "Horizontal Labeled Hierarchy",
+    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3": "Hierarchy List",
+    "urn:microsoft.com/office/officeart/2008/layout/LinedList": "Lined List",
+    # --- relationship ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/balance1": "Balance",
+    "urn:microsoft.com/office/officeart/2009/3/layout/CircleRelationship": "Circle Relationship",
     "urn:microsoft.com/office/officeart/2005/8/layout/funnel1": "Funnel",
     "urn:microsoft.com/office/officeart/2005/8/layout/gear1": "Gear",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hChevron3": "Phased Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/arrow7": "Repeating Bending Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/equation1": "Basic Equation",
-    "urn:microsoft.com/office/officeart/2005/8/layout/equation2": "Vertical Equation",
-    # --- Cycle ---
-    "urn:microsoft.com/office/officeart/2005/8/layout/cycle1": "Basic Cycle",
-    "urn:microsoft.com/office/officeart/2005/8/layout/cycle2": "Text Cycle",
-    "urn:microsoft.com/office/officeart/2005/8/layout/cycle3": "Block Cycle",
-    "urn:microsoft.com/office/officeart/2005/8/layout/cycle4": "Nondirectional Cycle",
-    "urn:microsoft.com/office/officeart/2005/8/layout/cycle5": "Continuous Cycle",
-    "urn:microsoft.com/office/officeart/2005/8/layout/cycle6": "Multidirectional Cycle",
-    "urn:microsoft.com/office/officeart/2005/8/layout/cycle7": "Segmented Cycle",
-    "urn:microsoft.com/office/officeart/2005/8/layout/radial1": "Basic Radial",
-    "urn:microsoft.com/office/officeart/2005/8/layout/radial2": "Diverging Radial",
-    "urn:microsoft.com/office/officeart/2005/8/layout/radial3": "Radial Venn",
-    "urn:microsoft.com/office/officeart/2005/8/layout/radial4": "Radial Cluster",
-    # --- Hierarchy ---
-    "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1": "Organization Chart",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1": "Hierarchy",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy2": "Labeled Hierarchy",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy4": "Horizontal Hierarchy",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3": "Table Hierarchy",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy6": "Horizontal Organization Chart",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy7": "Horizontal Multi-Level Hierarchy",
-    "urn:microsoft.com/office/officeart/2009/3/layout/HalfCircleOrganizationChart": "Half Circle Organization Chart",
-    "urn:microsoft.com/office/officeart/2005/8/layout/lProcess2": "Lined Hierarchy",
-    # --- Relationship ---
-    "urn:microsoft.com/office/officeart/2005/8/layout/venn1": "Basic Venn",
-    "urn:microsoft.com/office/officeart/2005/8/layout/venn2": "Linear Venn",
-    "urn:microsoft.com/office/officeart/2005/8/layout/venn3": "Stacked Venn",
-    "urn:microsoft.com/office/officeart/2005/8/layout/target1": "Basic Target",
+    "urn:microsoft.com/office/officeart/2009/3/layout/OpposingIdeas": "Opposing Ideas",
+    "urn:microsoft.com/office/officeart/2009/3/layout/PlusandMinus ": "Plus and Minus ",
+    "urn:microsoft.com/office/officeart/2009/layout/ReverseList": "Reverse List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow6": "Arrow Ribbon",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow3": "Counterbalance Arrows",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow5": "Converging Arrows",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow1": "Diverging Arrows",
+    "urn:microsoft.com/office/officeart/2005/8/layout/arrow4": "Opposing Arrows",
+    "urn:microsoft.com/office/officeart/2005/8/layout/target3": "Target List",
     "urn:microsoft.com/office/officeart/2005/8/layout/target2": "Nested Target",
-    "urn:microsoft.com/office/officeart/2005/8/layout/balance1": "Balance",
-    "urn:microsoft.com/office/officeart/2005/8/layout/opposingArrows1": "Opposing Arrows",
-    "urn:microsoft.com/office/officeart/2005/8/layout/opposingIdeas1": "Opposing Ideas",
-    "urn:microsoft.com/office/officeart/2005/8/layout/arrow8": "Counterbalance Arrows",
-    "urn:microsoft.com/office/officeart/2005/8/layout/equation3": "Formula",
-    # --- Matrix ---
-    "urn:microsoft.com/office/officeart/2005/8/layout/matrix1": "Basic Matrix",
-    "urn:microsoft.com/office/officeart/2005/8/layout/matrix2": "Titled Matrix",
-    "urn:microsoft.com/office/officeart/2005/8/layout/matrix3": "Grid Matrix",
-    "urn:microsoft.com/office/officeart/2005/8/layout/cycle8": "Cycle Matrix",
-    # --- Pyramid ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/equation1": "Equation",
+    "urn:microsoft.com/office/officeart/2005/8/layout/equation2": "Vertical Equation",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial4": "Converging Radial",
+    "urn:microsoft.com/office/officeart/2008/layout/RadialCluster": "Radial Cluster",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial2": "Radial List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial1": "Basic Radial",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial5": "Diverging Radial",
+    "urn:microsoft.com/office/officeart/2005/8/layout/target1": "Basic Target",
+    "urn:microsoft.com/office/officeart/2005/8/layout/cycle4": "Cycle Matrix",
+    "urn:microsoft.com/office/officeart/2005/8/layout/chart3": "Basic Pie",
+    "urn:microsoft.com/office/officeart/2005/8/layout/venn1": "Basic Venn",
+    "urn:microsoft.com/office/officeart/2005/8/layout/venn3": "Linear Venn",
+    "urn:microsoft.com/office/officeart/2005/8/layout/venn2": "Stacked Venn",
+    "urn:microsoft.com/office/officeart/2005/8/layout/radial3": "Radial Venn",
+    # --- matrix ---
+    "urn:microsoft.com/office/officeart/2005/8/layout/matrix3": "Basic Matrix",
+    "urn:microsoft.com/office/officeart/2005/8/layout/matrix1": "Titled Matrix",
+    "urn:microsoft.com/office/officeart/2005/8/layout/matrix2": "Grid Matrix",
+    # --- pyramid ---
     "urn:microsoft.com/office/officeart/2005/8/layout/pyramid1": "Basic Pyramid",
-    "urn:microsoft.com/office/officeart/2005/8/layout/pyramid2": "Inverted Pyramid",
-    "urn:microsoft.com/office/officeart/2005/8/layout/pyramid3": "Pyramid List",
+    "urn:microsoft.com/office/officeart/2005/8/layout/pyramid3": "Inverted Pyramid",
+    "urn:microsoft.com/office/officeart/2005/8/layout/pyramid2": "Pyramid List",
     "urn:microsoft.com/office/officeart/2005/8/layout/pyramid4": "Segmented Pyramid",
     # --- Picture ---
-    "urn:microsoft.com/office/officeart/2005/8/layout/hList5": "Picture Lineup",
-    "urn:microsoft.com/office/officeart/2005/8/layout/lProcess3": "Continuous Picture List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/vList7": "Vertical Picture Accent List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/vList8": "Alternating Picture Blocks",
-    "urn:microsoft.com/office/officeart/2009/3/layout/TitlePictureLineup": "Title Picture Lineup",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess9": "Picture Accent Process",
+    "urn:microsoft.com/office/officeart/2008/layout/BendingPictureSemi-TransparentText": "Bending Picture Semi-Transparent Text",
+    # --- picture ---
+    "urn:microsoft.com/office/officeart/2008/layout/AccentedPicture": "Accented Picture",
+    "urn:microsoft.com/office/officeart/2008/layout/CircularPictureCallout": "Circular Picture Callout",
     "urn:microsoft.com/office/officeart/2009/3/layout/SnapshotPictureList": "Snapshot Picture List",
-    "urn:microsoft.com/office/officeart/2009/3/layout/BubblePictureList": "Bubble Picture List",
-    "urn:microsoft.com/office/officeart/2009/3/layout/PictureStrips": "Picture Strips",
-    "urn:microsoft.com/office/officeart/2009/3/layout/CirclePictureHierarchy": "Circle Picture Hierarchy",
-    "urn:microsoft.com/office/officeart/2005/8/layout/radial6": "Radial Picture List",
-    # --- Other common ones ---
-    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess4": "Staggered Process",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess5": "Process List",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess7": "Circle Accent Timeline",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess8": "Basic Timeline",
-    "urn:microsoft.com/office/officeart/2005/8/layout/hProcess11": "Interconnected Block Process",
-    "urn:microsoft.com/office/officeart/2009/3/layout/ArchitectureLayout": "Architecture Layout",
+    "urn:microsoft.com/office/officeart/2009/3/layout/SpiralPicture": "Spiral Picture",
+    "urn:microsoft.com/office/officeart/2008/layout/CaptionedPictures": "Captioned Pictures",
+    "urn:microsoft.com/office/officeart/2008/layout/BendingPictureCaption": "Bending Picture Caption",
+    "urn:microsoft.com/office/officeart/2008/layout/BendingPictureSemiTransparentText": "Bending Picture Semi-Transparent Text",
+    "urn:microsoft.com/office/officeart/2008/layout/BendingPictureBlocks": "Bending Picture Blocks",
+    "urn:microsoft.com/office/officeart/2008/layout/BendingPictureCaptionList": "Bending Picture Caption List",
+    "urn:microsoft.com/office/officeart/2008/layout/TitledPictureBlocks": "Titled Picture Blocks",
+    "urn:microsoft.com/office/officeart/2008/layout/PictureGrid": "Picture Grid",
+    "urn:microsoft.com/office/officeart/2008/layout/PictureAccentBlocks": "Picture Accent Blocks",
+    "urn:microsoft.com/office/officeart/2008/layout/PictureAccentList": "Titled Picture Accent List",
+    "urn:microsoft.com/office/officeart/2008/layout/AlternatingPictureBlocks": "Alternating Picture Blocks",
+    "urn:microsoft.com/office/officeart/2008/layout/AlternatingPictureCircles": "Alternating Picture Circles",
+    "urn:microsoft.com/office/officeart/2008/layout/TitlePictureLineup": "Title Picture Lineup",
+    "urn:microsoft.com/office/officeart/2008/layout/PictureLineup": "Picture Lineup",
+    "urn:microsoft.com/office/officeart/2009/3/layout/FramedTextPicture": "Framed Text Picture",
+    "urn:microsoft.com/office/officeart/2008/layout/HexagonCluster": "Hexagon Cluster",
+    "urn:microsoft.com/office/officeart/2008/layout/BubblePictureList": "Bubble Picture List",
 }
 
-# Build a reverse mapping: lowercase English name -> layout Id
-_ENGLISH_NAME_TO_ID: dict[str, str] = {
-    v.lower(): k for k, v in SMARTART_ENGLISH_ALIASES.items()
-}
+# Build a reverse mapping: lowercase English name -> layout Ids. Office ships
+# two layouts called "Bending Picture Semi-Transparent Text", so a name can
+# have more than one.
+_ENGLISH_NAME_TO_ID: dict[str, list[str]] = {}
+for _layout_id, _name in SMARTART_ENGLISH_ALIASES.items():
+    _ENGLISH_NAME_TO_ID.setdefault(_name.lower(), []).append(_layout_id)
 
 
 def _resolve_layout(app, layout_name: str):
@@ -167,9 +211,9 @@ def _resolve_layout(app, layout_name: str):
     # 2) Try English alias: check if the search string matches any English name
     #    and resolve via layout Id
     matched_ids = set()
-    for eng_name, layout_id in _ENGLISH_NAME_TO_ID.items():
+    for eng_name, layout_ids in _ENGLISH_NAME_TO_ID.items():
         if name_lower in eng_name:
-            matched_ids.add(layout_id)
+            matched_ids.update(layout_ids)
 
     if matched_ids:
         found = []

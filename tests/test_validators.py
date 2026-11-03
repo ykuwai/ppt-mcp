@@ -2532,9 +2532,12 @@ class TestSmartArtEnglishAliases:
         """The alias mapping should have a substantial number of entries."""
         assert len(SMARTART_ENGLISH_ALIASES) >= 80
 
-    def test_reverse_mapping_same_size(self):
-        """The reverse mapping should have the same number of entries (no duplicate English names)."""
-        assert len(_ENGLISH_NAME_TO_ID) == len(SMARTART_ENGLISH_ALIASES)
+    def test_reverse_mapping_covers_every_id(self):
+        """Every Id is reachable from its English name, including the two
+        layouts Office ships under one name."""
+        ids = [i for group in _ENGLISH_NAME_TO_ID.values() for i in group]
+        assert sorted(ids) == sorted(SMARTART_ENGLISH_ALIASES)
+        assert len(_ENGLISH_NAME_TO_ID["bending picture semi-transparent text"]) == 2
 
     def test_reverse_mapping_lowercase_keys(self):
         """All keys in the reverse mapping should be lowercase."""
@@ -2542,19 +2545,36 @@ class TestSmartArtEnglishAliases:
             assert key == key.lower(), f"Key '{key}' is not lowercase"
 
     def test_known_aliases(self):
-        """Spot-check some well-known layout aliases."""
+        """Spot-check layouts the old table had wrong (#312)."""
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/default"] == "Basic Block List"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/vList2"] == "Vertical Bullet List"
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/process1"] == "Basic Process"
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"] == "Organization Chart"
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/venn1"] == "Basic Venn"
-        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/matrix1"] == "Basic Matrix"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/matrix3"] == "Basic Matrix"
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/pyramid1"] == "Basic Pyramid"
-        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/cycle1"] == "Basic Cycle"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/cycle2"] == "Basic Cycle"
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1"] == "Hierarchy"
 
+    def test_no_made_up_ids(self):
+        """Ids the old table invented, which no Office install carries, are gone."""
+        for made_up in ("vList1", "chevron4", "hProcess8", "opposingIdeas1", "ArchitectureLayout"):
+            assert not any(i.endswith("/" + made_up) for i in SMARTART_ENGLISH_ALIASES)
+
+    def test_matches_the_installed_definitions(self):
+        """Where PowerPoint for Mac is installed, the table is exactly its
+        layouts and names, so a layout name builds the same graphic on both."""
+        from ppt_mac import smartart_defs
+        try:
+            installed = smartart_defs.definitions("layouts")
+        except smartart_defs.DefinitionsMissing:
+            pytest.skip("PowerPoint for Mac is not installed")
+        assert SMARTART_ENGLISH_ALIASES == {d.id: d.name for d in installed}
+
     def test_reverse_lookup(self):
-        """Reverse mapping should return the correct Id for English names."""
-        assert _ENGLISH_NAME_TO_ID["basic process"] == "urn:microsoft.com/office/officeart/2005/8/layout/process1"
-        assert _ENGLISH_NAME_TO_ID["organization chart"] == "urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"
+        """Reverse mapping should return the correct Ids for English names."""
+        assert _ENGLISH_NAME_TO_ID["basic process"] == ["urn:microsoft.com/office/officeart/2005/8/layout/process1"]
+        assert _ENGLISH_NAME_TO_ID["organization chart"] == ["urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"]
 
     def test_alias_lookup_known(self):
         """SMARTART_ENGLISH_ALIASES.get returns the English name for a known Id."""
