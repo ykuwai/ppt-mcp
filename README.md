@@ -472,6 +472,11 @@ Smaller differences:
   result says how many were lost. A few formatting arguments that depend on
   the chart's rendered size (`chart_style`, legend and title coordinates,
   the 8-direction legend presets, `tick_label_font_size`) are refused by name.
+- **Text inside a group is edited the same way.** `ppt_set_text` (the whole
+  text, or a span inside one line) and `ppt_format_text` reach a group's
+  member by its name, or by its path (`"Group 4/TextBox 3"`); the group is
+  copied, the member rewritten and the group pasted back. The members keep
+  their names, and the group loses its animations, as above.
 - Icons are rasterised with `sips` before they are inserted, because
   PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
   systems get a refusal naming the reason rather than a blank box.

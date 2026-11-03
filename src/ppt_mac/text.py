@@ -782,15 +782,23 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text,
         shape, tr = _text_frame_of(slide_index, shape_name_or_index)
     except ValueError:
         # A group's member is reached through the group's clipboard package
-        # (#220), for whole text: a span, a search or runs need the live text
-        # range, which a member does not have here. Only for a name no shape on
-        # the slide has: a shape that is there and holds no text says so.
-        if (isinstance(shape_name_or_index, str) and runs is None and start is None
-                and search_text is None
+        # (#220), for the whole text or a span inside one line; runs need the
+        # live text range, which a member does not have here. Only for a name
+        # no shape on the slide has: a shape that is there and holds no text
+        # says so.
+        if (isinstance(shape_name_or_index, str)
                 and shape_name_or_index not in _top_level_names(slide_index)):
+            if runs is not None:
+                raise ValueError(
+                    f"'{shape_name_or_index}' is not on slide {slide_index} at the "
+                    "top level. If it is inside a group, its runs cannot be "
+                    "written there: set the text, then format it with "
+                    "ppt_format_text."
+                ) from None
             from ppt_mac.groups import set_member_text
 
-            member = set_member_text(slide_index, shape_name_or_index, text)
+            member = set_member_text(slide_index, shape_name_or_index, text, start,
+                                     length, search_text, occurrence)
             if member is not None:
                 return member
         raise
@@ -986,7 +994,27 @@ def _format_text_impl(slide_index, shape_name_or_index,
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.slides[slide_index]
-    shape = _get_shape(slide, shape_name_or_index)
+    try:
+        shape = _get_shape(slide, shape_name_or_index)
+    except ValueError:
+        # A group's member, through the group's package as ppt_set_text
+        # reaches one (#220). A highlight is not a run property there.
+        if (isinstance(shape_name_or_index, str)
+                and shape_name_or_index not in _top_level_names(slide_index)):
+            if highlight_color is not None:
+                raise ValueError(
+                    f"'{shape_name_or_index}' is not on slide {slide_index} at the "
+                    "top level. If it is inside a group, a highlight cannot be "
+                    "written there; everything else ppt_format_text takes can be."
+                ) from None
+            from ppt_mac.groups import format_member_text
+
+            member = format_member_text(
+                slide_index, shape_name_or_index, font_name, font_name_fareast,
+                font_size, bold, italic, underline, font_color_theme or color)
+            if member is not None:
+                return member
+        raise
 
     _require_text_frame(shape)
 
