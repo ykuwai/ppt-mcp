@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 from utils.offload import run_offloaded
 from backend import ppt
@@ -55,8 +55,10 @@ class SetFillInput(BaseModel):
     shape_name_or_index: Union[str, int] = Field(
         ..., description="Shape name (str) or 1-based index (int). Prefer name — indices shift when shapes are added/removed"
     )
-    fill_type: str = Field(
-        ..., description="'solid', 'gradient', or 'none'"
+    fill_type: Optional[str] = Field(
+        default=None,
+        description="'solid', 'gradient', or 'none'. Defaults to 'solid' when color is "
+        "given, and to 'gradient' when gradient colors are, as in ppt_add_shape.",
     )
     color: Optional[str] = Field(
         default=None, description="Fill color for a solid fill: " + COLOR_OR_THEME + "."
@@ -79,6 +81,25 @@ class SetFillInput(BaseModel):
     @classmethod
     def validate_colours(cls, value):
         return check_color(value)
+
+    @model_validator(mode="after")
+    def infer_fill_type(self):
+        """Take fill_type from the colours when it is left out, as ppt_add_shape does.
+
+        The batch is reached for after the single shape tool, where a colour
+        alone means a solid fill, so requiring fill_type here was a surprise.
+        """
+        if self.fill_type is None:
+            if self.gradient_color1 is not None or self.gradient_color2 is not None:
+                self.fill_type = "gradient"
+            elif self.color is not None:
+                self.fill_type = "solid"
+            else:
+                raise ValueError(
+                    "Pass fill_type ('solid', 'gradient' or 'none'), or a color "
+                    "for a solid fill, or gradient_color1 and gradient_color2."
+                )
+        return self
 
 
 class SetLineInput(BaseModel):
