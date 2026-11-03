@@ -379,6 +379,95 @@ def _wait_pumping(seconds) -> None:
         time.sleep(min(0.05, left))
 
 
+# How long a tool waits for the chart's workbook work on its own thread. Well
+# under the worker's per call budget, so a stuck Excel is reported as such
+# rather than as a wedged worker.
+_WORKBOOK_WAIT = 30.0
+
+# What _on_a_thread_of_its_own answers when that wait ran out.
+TIMED_OUT = object()
+
+EXCEL_TOO_SLOW = (
+    "Excel did not finish with the chart's data in time, so the data may not "
+    "all be written and Excel's 'Chart in Microsoft PowerPoint' window may "
+    "still be open. Check the chart with ppt_get_chart_data, and close that "
+    "window before adding or editing another chart."
+)
+
+# Threads still letting go of a closed workbook's references, for the log.
+_letting_go = 0
+_letting_go_lock = __import__("threading").Lock()
+
+
+def _on_a_thread_of_its_own(chart, work, timeout=_WORKBOOK_WAIT):
+    """Run ``work(chart)`` on a short-lived thread and return what it returns.
+
+    Letting go of a chart's data workbook after it is closed can block for
+    about a minute: Excel, closing down, answers the final Release only then
+    (#299). Done on the COM worker, that outlasted the worker's budget, the
+    worker was abandoned and the tool reported a timeout although the chart
+    was made. So everything that touches the workbook runs on a thread of its
+    own, handed the chart through COM marshaling, which signals as soon as the
+    work is done and lets go of Excel's references afterwards, however long
+    that takes, while the worker goes on.
+
+    When the work has not finished within ``timeout``, ``TIMED_OUT`` is
+    answered and the work is left to finish on its thread, so the worker never
+    waits on Excel for longer than that. Each thread still letting go lives
+    about a minute at most, blocked in one COM call; several at once are
+    harmless.
+
+    A chart that is not a COM object (a test's stand-in), or no COM at all,
+    runs ``work`` right here.
+    """
+    oleobj = getattr(chart, "_oleobj_", None)
+    if pythoncom is None or not isinstance(oleobj, pythoncom.TypeIIDs[pythoncom.IID_IDispatch]):
+        return work(chart)
+    import threading
+
+    import win32com.client
+
+    stream = pythoncom.CoMarshalInterThreadInterfaceInStream(pythoncom.IID_IDispatch, oleobj)
+    done = threading.Event()
+    outcome = {}
+
+    def run():
+        pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
+        try:
+            try:
+                there = win32com.client.Dispatch(pythoncom.CoGetInterfaceAndReleaseStream(
+                    stream, pythoncom.IID_IDispatch))
+                outcome["value"] = work(there)
+            except BaseException as e:  # noqa: BLE001 - handed to the caller
+                outcome["error"] = e
+            finally:
+                done.set()
+            # Excel's references go here, on this thread, however long it takes.
+            global _letting_go
+            with _letting_go_lock:
+                _letting_go += 1
+            started = time.monotonic()
+            there = None
+            with _letting_go_lock:
+                _letting_go -= 1
+                left = _letting_go
+            logger.debug("Let go of a chart workbook in %.1f s (%d still letting go)",
+                         time.monotonic() - started, left)
+        finally:
+            pythoncom.CoUninitialize()
+
+    threading.Thread(target=run, name="chart-workbook", daemon=True).start()
+    end = time.monotonic() + timeout
+    while not done.wait(0.05):
+        pythoncom.PumpWaitingMessages()
+        if time.monotonic() > end:
+            logger.warning("Excel did not finish with a chart's data within %.0f s", timeout)
+            return TIMED_OUT
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome.get("value")
+
+
 def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5) -> bool:
     """Close a chart's data workbook, and say whether it closed.
 
@@ -425,7 +514,7 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     # CRITICAL: AddChart2 auto-opens an Excel workbook. MUST close it to
     # prevent leaked Excel processes, and a chart left in edit mode stops the
     # next one being added.
-    closed = _close_chart_workbook(chart)
+    closed = _on_a_thread_of_its_own(chart, _close_chart_workbook)
 
     type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
     result = {
@@ -435,19 +524,15 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
         "chart_type": type_name,
         "chart_type_int": type_int,
     }
-    if not closed:
+    if closed is TIMED_OUT:
+        result["warning"] = EXCEL_TOO_SLOW
+    elif not closed:
         result["warning"] = WORKBOOK_LEFT_OPEN
     return result
 
 
-def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
-    app = ppt._get_app_impl()
-    goto_slide(app, slide_index)
-    pres = ppt._get_pres_impl()
-    slide = pres.Slides(slide_index)
-    shape = _get_chart_shape(slide, shape_name_or_index)
-    chart = shape.Chart
-
+def _write_chart_data(chart, categories, series) -> bool:
+    """Write the data into the chart's workbook and close it; say whether it closed."""
     chart.ChartData.Activate()
     try:
         wb = chart.ChartData.Workbook
@@ -481,10 +566,23 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
         chart._oleobj_.InvokeTypes(
             1413, 0, 1, (24, 0),
             ((8, 1), (12, 49)),
-            addr, pythoncom.Empty,
+            addr, pythoncom.Empty if pythoncom is not None else None,
         )
     finally:
         closed = _close_chart_workbook(chart, wb)
+    return closed
+
+
+def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
+    app = ppt._get_app_impl()
+    goto_slide(app, slide_index)
+    pres = ppt._get_pres_impl()
+    slide = pres.Slides(slide_index)
+    shape = _get_chart_shape(slide, shape_name_or_index)
+    chart = shape.Chart
+
+    closed = _on_a_thread_of_its_own(
+        chart, lambda chart: _write_chart_data(chart, categories, series))
 
     result = {
         "success": True,
@@ -492,7 +590,9 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
         "categories_count": len(categories),
         "series_count": len(series),
     }
-    if not closed:
+    if closed is TIMED_OUT:
+        result["warning"] = EXCEL_TOO_SLOW
+    elif not closed:
         result["warning"] = WORKBOOK_LEFT_OPEN
     return result
 

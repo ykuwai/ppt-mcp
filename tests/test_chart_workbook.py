@@ -134,3 +134,91 @@ def test_a_workbook_that_never_closes_is_reported(caplog):
         assert _close_chart_workbook(chart, workbook, attempts=3, wait=0) is False
     assert not workbook.closed
     assert "Excel is busy" in caplog.text
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="marshals a real COM object to a thread")
+class TestOnAThreadOfItsOwn:
+    """The workbook work runs on a thread of its own, handed a COM object
+    through marshaling, so letting go of Excel there cannot hold up the worker."""
+
+    @pytest.fixture(autouse=True)
+    def host(self):
+        """A Dictionary living in a multithreaded apartment of its own.
+
+        Like PowerPoint's objects, it then answers calls from any thread
+        without the test's thread having to pump messages for it.
+        """
+        import threading
+
+        import pythoncom
+        import win32com.client
+
+        ready, finished, held = threading.Event(), threading.Event(), {}
+
+        def serve():
+            pythoncom.CoInitializeEx(pythoncom.COINIT_MULTITHREADED)
+            try:
+                d = win32com.client.Dispatch("Scripting.Dictionary")
+                held["stream"] = pythoncom.CoMarshalInterThreadInterfaceInStream(
+                    pythoncom.IID_IDispatch, d._oleobj_)
+                ready.set()
+                finished.wait(30)
+                d = None
+            finally:
+                pythoncom.CoUninitialize()
+
+        thread = threading.Thread(target=serve, daemon=True)
+        thread.start()
+        ready.wait(10)
+        self._stream = held["stream"]
+        yield
+        finished.set()
+        thread.join(10)
+
+    def dictionary(self):
+        import pythoncom
+        import win32com.client
+
+        return win32com.client.Dispatch(pythoncom.CoGetInterfaceAndReleaseStream(
+            self._stream, pythoncom.IID_IDispatch))
+
+    def test_the_work_runs_elsewhere_on_the_same_object_and_answers_here(self):
+        import threading
+
+        from ppt_com.charts import _on_a_thread_of_its_own
+
+        here = threading.get_ident()
+        d = self.dictionary()
+
+        def work(there):
+            there.Add("from", "the other thread")
+            return threading.get_ident()
+
+        assert _on_a_thread_of_its_own(d, work) != here
+        assert d.Item("from") == "the other thread"
+
+    def test_an_error_there_is_raised_here(self):
+        from ppt_com.charts import _on_a_thread_of_its_own
+
+        def work(there):
+            raise ValueError("Excel said no")
+
+        with pytest.raises(ValueError, match="Excel said no"):
+            _on_a_thread_of_its_own(self.dictionary(), work)
+
+    def test_work_that_does_not_finish_in_time_is_left_to_finish_there(self):
+        import time
+
+        from ppt_com.charts import TIMED_OUT, _on_a_thread_of_its_own
+
+        started = time.monotonic()
+        assert _on_a_thread_of_its_own(self.dictionary(), lambda there: time.sleep(3),
+                                       timeout=0.5) is TIMED_OUT
+        assert time.monotonic() - started < 2
+
+    def test_a_stand_in_runs_right_here(self):
+        from types import SimpleNamespace
+
+        from ppt_com.charts import _on_a_thread_of_its_own
+
+        assert _on_a_thread_of_its_own(SimpleNamespace(), lambda c: "inline") == "inline"
