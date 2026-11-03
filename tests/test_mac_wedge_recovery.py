@@ -224,6 +224,33 @@ def test_an_abandoned_worker_does_not_retry_or_clear_the_live_reference(ppt):
     assert ppt._app is live
 
 
+def test_a_worker_replaced_while_waiting_to_retry_does_not_retry(ppt, monkeypatch):
+    """A retryable error just before the budget runs out puts the worker in
+    its retry sleep. If it is replaced during that sleep, the next attempt
+    would go out alongside the new worker's (Codex on #284)."""
+    from backend import mac_ae
+    from backend.mac_ae import AE_TIMED_OUT
+
+    calls = []
+    job = _job(lambda: calls.append(1) or (_ for _ in ()).throw(_command_error(AE_TIMED_OUT)),
+               idempotent=True)
+
+    def replaced_during_sleep(seconds):
+        ppt._generation += 1
+
+    monkeypatch.setattr(mac_ae.time, "sleep", replaced_during_sleep)
+    ppt.stop()
+    ppt._running = True
+    queue = mac_ae.Queue()
+    queue.put(job)
+    queue.put(None)
+    ppt._worker(queue, 0)
+
+    assert calls == [1], "the replaced worker sent the job again"
+    with pytest.raises(mac_ae.AppleEventError, match="fresh worker has taken over"):
+        job.future.result(timeout=1)
+
+
 def test_an_abandoned_worker_drops_a_job_that_arrives_late(ppt):
     """The old queue is emptied on replacement, but a job can reach the old
     worker in the gap. It must be taken back, not run."""

@@ -672,6 +672,13 @@ class PowerPointAppleEventWrapper:
                 continue
             func, args, kwargs, future = item.func, item.args, item.kwargs, item.future
             for attempt in range(_RETRY_MAX + 1):
+                if attempt and generation != self._generation:
+                    # Replaced while sleeping before this retry: the new worker
+                    # is sending Apple Events now, and this one must not.
+                    future.set_exception(AppleEventError(
+                        "PowerPoint did not answer, and the request was not sent "
+                        "again because a fresh worker has taken over."))
+                    break
                 try:
                     future.set_result(func(*args, **kwargs))
                     break
