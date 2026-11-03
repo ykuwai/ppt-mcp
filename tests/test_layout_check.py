@@ -2845,7 +2845,7 @@ class TestAChangeToTheWholeDeck:
         assert "layout_issues" not in layout_check.report_deck_change({"success": True}, before)
 
     def test_setting_theme_colours_judges_the_placeholders(self):
-        source = (Path(__file__).parent.parent / "src" / "ppt_com" / "themes.py").read_text()
+        source = (Path(__file__).parent.parent / "src" / "ppt_com" / "themes.py").read_text(encoding="utf-8")
         body = source[source.index("def set_theme_colors("):]
         body = body[:body.index("\ndef ")]
         assert "deck_snapshot(trust_template=False)" in body
