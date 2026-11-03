@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from utils.offload import run_offloaded
 from backend import ppt
+from utils.foreground import shows_powerpoint
 from ppt_com.constants import (
     msoTrue,
     msoFalse,
@@ -73,6 +74,7 @@ class SlideShowGotoInput(BaseModel):
 # ---------------------------------------------------------------------------
 # Implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
+@shows_powerpoint
 def _slideshow_start_impl(
     start_slide: Optional[int],
     end_slide: Optional[int],

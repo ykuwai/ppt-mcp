@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from backend import ppt, handle_com_error
 from utils import coauthoring
+from utils.foreground import shows_powerpoint
 from ppt_com.constants import WINDOW_STATE_NAMES, ppSelectionNone, ppSelectionSlides, ppSelectionShapes, ppSelectionText
 
 logger = logging.getLogger(__name__)
@@ -145,6 +146,7 @@ def _list_presentations_impl() -> dict:
     return {"presentations": presentations, "count": len(presentations)}
 
 
+@shows_powerpoint
 def _set_window_state_impl(window_state: str) -> dict:
     """Set the PowerPoint application window state."""
     STATE_MAP = {
