@@ -6,6 +6,7 @@ picture insertion from URL, aspect ratio locking, and icon search.
 """
 
 import json
+import re
 import logging
 import os
 import tempfile
@@ -314,7 +315,10 @@ class CropPictureInput(BaseModel):
         description=(
             "Auto-adjust the crop frame to a target aspect ratio before applying "
             "crop_shape. Resets any existing crop values and resizes the shape. "
-            "Supported values: 'square' or '1:1'. "
+            "Supported values: 'square' or '1:1', a ratio such as '16:9', or "
+            "'shape', which crops the image to the proportions the picture is "
+            "drawn at, keeping its size: a stretched picture then fills its box "
+            "undistorted. "
             "Example: crop_fit='square' + crop_shape='oval' = perfect circle. "
             "Cannot be combined with crop_left/right/top/bottom."
         ),
@@ -764,6 +768,51 @@ def _set_default_fonts_impl(latin, east_asian, apply_to_existing):
 # ---------------------------------------------------------------------------
 # Picture Crop
 # ---------------------------------------------------------------------------
+def _fit_aspect(crop_fit, width=None, height=None):
+    """The width over height crop_fit asks for, or a ValueError.
+
+    'square' or '1:1'; a ratio such as '16:9'; or 'shape', the proportions
+    the picture is drawn at now, which crops a stretched picture to fill its
+    own box instead of squeezing the image into it.
+    """
+    key = crop_fit.strip().lower()
+    if key in ("square", "1:1"):
+        return 1.0
+    if key == "shape":
+        if not width or not height:
+            raise ValueError("crop_fit='shape' needs a picture with a size")
+        return width / height
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)", key)
+    if match and float(match.group(1)) > 0 and float(match.group(2)) > 0:
+        return float(match.group(1)) / float(match.group(2))
+    raise ValueError(
+        f"Unknown crop_fit '{crop_fit}'. Supported values: 'square', '1:1', a ratio "
+        "such as '16:9', or 'shape' for the proportions the picture is drawn at"
+    )
+
+
+def _fit_crops(orig_w, orig_h, aspect, anchor):
+    """The crops, in original image points, that leave ``aspect`` showing."""
+    crops = {"left": 0.0, "right": 0.0, "top": 0.0, "bottom": 0.0}
+    if orig_w / orig_h > aspect:
+        excess = orig_w - orig_h * aspect
+        crops["left"], crops["right"] = excess * anchor, excess * (1.0 - anchor)
+    elif orig_w / orig_h < aspect:
+        excess = orig_h - orig_w / aspect
+        crops["top"], crops["bottom"] = excess * anchor, excess * (1.0 - anchor)
+    return crops
+
+
+def _fit_size(cur_w, cur_h, aspect, crop_fit):
+    """The size the cropped picture takes: its own for 'shape', otherwise the
+    largest of ``aspect`` that fits in the box it had."""
+    if crop_fit.strip().lower() == "shape":
+        return cur_w, cur_h
+    if cur_w / cur_h > aspect:
+        return cur_h * aspect, cur_h
+    return cur_w, cur_w / aspect
+
+
 def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
                        crop_top, crop_bottom, crop_shape, crop_fit, crop_anchor,
                        corner_radius_pt):
@@ -800,11 +849,7 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
 
     # Validate crop_fit
     if crop_fit is not None:
-        fit_key = crop_fit.strip().lower()
-        if fit_key not in ("square", "1:1"):
-            raise ValueError(
-                f"Unknown crop_fit '{crop_fit}'. Supported values: 'square', '1:1'"
-            )
+        _fit_aspect(crop_fit, shape.Width, shape.Height)
 
     pic_fmt = shape.PictureFormat
 
@@ -813,6 +858,12 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
         # Stage 1: Get original image dimensions and calculate crop values.
         # Stage 2: Resize the shape to square.
         anchor = crop_anchor if crop_anchor is not None else 0.5
+
+        # The box it is drawn in, before an earlier crop is undone and the
+        # picture grows back to the whole image.
+        cur_w = shape.Width
+        cur_h = shape.Height
+        cur_left, cur_top = shape.Left, shape.Top
 
         # Reset existing crops so we work from the full image.
         pic_fmt.CropLeft = 0
@@ -823,9 +874,6 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
         # Get original image dimensions via ScaleWidth/ScaleHeight reset.
         old_lock = shape.LockAspectRatio
         shape.LockAspectRatio = msoFalse
-
-        cur_w = shape.Width
-        cur_h = shape.Height
 
         # ScaleWidth(1.0, msoTrue) resets to 100% of original image size.
         shape.ScaleWidth(1.0, msoTrue)
@@ -838,23 +886,18 @@ def _crop_picture_impl(slide_index, shape_name_or_index, crop_left, crop_right,
         shape.Height = cur_h
 
         # Calculate crop values in original-image coordinates.
-        if orig_w > orig_h:
-            # Landscape: crop left and right to make content square.
-            excess = orig_w - orig_h
-            pic_fmt.CropLeft = excess * anchor
-            pic_fmt.CropRight = excess * (1.0 - anchor)
-        elif orig_h > orig_w:
-            # Portrait: crop top and bottom to make content square.
-            excess = orig_h - orig_w
-            pic_fmt.CropTop = excess * anchor
-            pic_fmt.CropBottom = excess * (1.0 - anchor)
-        # else: already square — no crop needed.
+        aspect = _fit_aspect(crop_fit, cur_w, cur_h)
+        crops = _fit_crops(orig_w, orig_h, aspect, anchor)
+        pic_fmt.CropLeft = crops["left"]
+        pic_fmt.CropRight = crops["right"]
+        pic_fmt.CropTop = crops["top"]
+        pic_fmt.CropBottom = crops["bottom"]
 
-        # Resize the shape to square (use the smaller dimension).
-        min_dim = min(cur_w, cur_h)
-        shape.Width = min_dim
-        shape.Height = min_dim
-
+        width, height = _fit_size(cur_w, cur_h, aspect, crop_fit)
+        shape.Width = width
+        shape.Height = height
+        # Cropping a side moves that edge; the picture stays where it was put.
+        shape.Left, shape.Top = cur_left, cur_top
         shape.LockAspectRatio = old_lock
     else:
         # Manual crop values (existing behavior).

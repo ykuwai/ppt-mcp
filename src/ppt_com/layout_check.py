@@ -25,23 +25,27 @@ import logging
 import math
 import os
 import re
+import tempfile
+import unicodedata
 from itertools import pairwise
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend import ppt
+from backend import IS_MACOS, ppt
 from utils.color import int_to_hex
 from utils.navigation import goto_slide
 from utils.offload import run_offloaded
+from utils.package import package_facts, picture_aspects  # noqa: F401
 from ppt_com.constants import (
     msoChart, msoEmbeddedOLEObject, msoFillGradient, msoFillSolid, msoGroup, msoLine,
     msoLinkedOLEObject, msoLinkedPicture, msoMedia, msoPicture,
     msoPlaceholder, msoSmartArt, msoTable, msoTextBox, msoTrue,
-    ppAlignCenter, ppAlignRight,
+    ppAlignCenter, ppAlignRight, ppDirectionRightToLeft,
     ppPlaceholderCenterTitle, ppPlaceholderDate, ppPlaceholderFooter,
     ppPlaceholderBody, ppPlaceholderHeader, ppPlaceholderObject,
     ppPlaceholderSlideNumber, ppPlaceholderTitle, ppPlaceholderVerticalTitle,
+    msoAnimTriggerAfterPrevious, msoAnimTriggerWithPrevious,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,6 +77,10 @@ CHECK_EACH_WRITE = _check_each_write(os.getenv("PPT_LAYOUT_CHECKS", "on"))
 # A shape may sit right on an edge; a fraction of a point past it is rounding.
 # The same allowance ppt_check_typography gives an off-slide edge.
 _EDGE_TOLERANCE = 0.5
+
+# PpEntryEffect values of the Morph transition: by object, word and character,
+# as PowerPoint for Windows reads them from a deck.
+MORPH_EFFECTS = frozenset({3954, 3955, 3956})
 
 # Edges this close are one edge. PowerPoint stores positions in EMU and reads
 # them back in points, so two shapes placed at the same number can differ in
@@ -168,6 +176,10 @@ _TITLE_ELSEWHERE = 0.25
 # Wider than this, and it is a design: a wide card beside two narrow ones.
 _ALONG_SIZE_SLIP = 0.25
 
+# A picture drawn this much wider or narrower for its height than its image
+# is stretched. Less is rounding, or a crop a point off.
+_STRETCH = 0.03
+
 # How much of a shape's text the reader keeps, for the checks that read it.
 _CONTENT_KEPT = 500
 
@@ -204,14 +216,22 @@ _UNKNOWN_BACKDROP_TYPES = frozenset({
 # allowed to be unfinished, so those wait for ppt_check_layout.
 SHAPE_FINDINGS = frozenset({
     "off_slide", "overflow", "overlap", "low_contrast", "cramped_text",
-    "narrow_margin", "misaligned", "uneven_sizes", "sample_text",
+    "narrow_margin", "misaligned", "uneven_sizes", "sample_text", "number_order",
+    "text_direction", "mixed_direction", "stretched_picture", "title_edge", "font_missing",
+    "small_text", "blurry_picture",
 })
 
 # Reported in this order, worst first.
 _ORDER = (
-    "off_slide", "overflow", "overlap", "low_contrast", "cramped_text",
-    "narrow_margin", "misaligned", "uneven_spacing", "uneven_sizes",
-    "empty_placeholder", "sample_text", "inconsistent_titles",
+    "off_slide", "overflow", "overlap", "stretched_picture", "blurry_picture", "low_contrast",
+    "small_text", "cramped_text", "chart_overlap",
+    "narrow_margin", "misaligned", "title_edge", "uneven_spacing", "uneven_sizes",
+    "number_order", "text_direction", "mixed_direction", "font_missing", "empty_placeholder",
+    "sample_text",
+    "chart_sample_data", "missing_alt_text",
+    "missing_title", "duplicate_titles",
+    "inconsistent_titles",
+    "inconsistent_body_text",
 )
 
 
@@ -859,6 +879,73 @@ def _finding(slide_index, kind, shapes, message, fix, severity="error", **extra)
     return finding
 
 
+def on_screen(animations):
+    """When each animated shape is on the screen during the slide show.
+
+    ``animations`` is the slide's main sequence in order, each effect a dict
+    of the shape's name, its category (as ``list_animations`` reports it)
+    and its trigger, None where it cannot be read. A click starts a step; an
+    effect with or after the previous one shares its step. Where the trigger
+    is unknown, as on the Mac, each effect is taken as its own click: that
+    can only keep apart shapes that really are apart, never part two that are
+    on the screen together.
+
+    The answer maps a shape that enters or leaves to the steps it is on the
+    screen for, as (from, to) pairs, ``to`` excluded. A shape with no entrance
+    or exit is on the screen throughout, and is left out.
+    """
+    step, shown = 0, {}
+    for effect in animations:
+        if effect.get("trigger") not in (msoAnimTriggerWithPrevious, msoAnimTriggerAfterPrevious):
+            step += 1
+        kind = effect.get("category")
+        if kind not in ("entrance", "exit"):
+            continue
+        spans = shown.get(effect["shape"])
+        if spans is None:
+            # Its first entrance or exit says whether it is there at the start.
+            spans = shown[effect["shape"]] = [] if kind == "entrance" else [[0, None]]
+        is_open = bool(spans) and spans[-1][1] is None
+        if kind == "entrance" and not is_open:
+            spans.append([step, None])
+        elif kind == "exit" and is_open:
+            spans[-1][1] = step
+    return {name: [(a, math.inf if b is None else b) for a, b in spans]
+            for name, spans in shown.items()}
+
+
+def moving(animations):
+    """The shapes a motion path moves during the slide show."""
+    return {effect["shape"] for effect in animations
+            if effect.get("category") == "motion_path"}
+
+
+def _together(a, b) -> bool:
+    """Whether two shapes are ever on the screen at once.
+
+    A build-up lays one line where the last one was, each shown in turn:
+    drawn on top of each other in the file, never seen so.
+    """
+    always = [(0, math.inf)]
+    return any(s < e2 and s2 < e
+               for s, e in a.get("shown") or always
+               for s2, e2 in b.get("shown") or always)
+
+
+def _parked(shape, box, slide_w, slide_h) -> bool:
+    """Whether a shape is off the slide on purpose.
+
+    One a motion path moves is judged by where it goes, not where it starts.
+    A sound's icon dragged off the slide is how it is hidden, and it still
+    plays. On a slide next to a Morph transition, a shape wholly off the slide
+    is waiting to move on, or has just moved off.
+    """
+    if shape.get("moves"):
+        return True
+    outside = box[2] <= 0 or box[0] >= slide_w or box[3] <= 0 or box[1] >= slide_h
+    return outside and (shape.get("type") == msoMedia or shape.get("morph"))
+
+
 def _off_slide(slide_index, shapes, slide_w, slide_h, layout):
     """Shapes, or the text of shapes, that reach past an edge of the slide.
 
@@ -878,7 +965,7 @@ def _off_slide(slide_index, shapes, slide_w, slide_h, layout):
         if not shape.get("visible", True):
             continue
         box = shape_box(shape) if _is_line(shape) else ink_box(shape)
-        if box is None:
+        if box is None or _parked(shape, box, slide_w, slide_h):
             continue
         past = {
             "left": -box[0],
@@ -960,6 +1047,12 @@ def _overflow(slide_index, shapes, layout):
             room = measurement["usable_width_pt"]
         elif needed is not None and room is not None and needed <= room + 0.5:
             # Wrapping is off and the overflow is a line too long for the box.
+            if text.get("autofit") == "shape_to_fit":
+                # A box sized to its text is as wide as its longest line, so a
+                # line cannot run out of its side. A Hebrew or Arabic line read
+                # wider than the box is PowerPoint for Mac reporting it up to
+                # 11 pt wider than it draws it (see text_box).
+                continue
             needed = measurement["text_width_pt"]
             room = measurement["usable_width_pt"]
             findings.append(_finding(
@@ -1049,11 +1142,11 @@ def _overlap(slide_index, shapes, layout):
     findings, hits, seen = [], {}, set()
     for a in shapes:
         a_text = text_box(a) if a.get("visible", True) else None
-        if a_text is None or _turned(a):
+        if a_text is None or _turned(a) or a.get("moves"):
             continue
         for b in shapes:
             # Text spilling out of its own box is the overflow check's.
-            if b is a or _turned(b):
+            if b is a or _turned(b) or b.get("moves") or not _together(a, b):
                 continue
             b_ink = ink_box(b)
             if b_ink is None:
@@ -1336,6 +1429,87 @@ def _template_collisions(slide_index, shapes, template, layout, area=()):
     return findings
 
 
+# A template graphic this thin is a rule: a line under the title, a line over
+# the footer.
+_RULE = 3.0
+
+
+def _template_rules(slide_index, shapes, template, layout):
+    """Text, or a card, drawn across one of the template's rules.
+
+    A rule under the title is drawn on every slide; a title that wraps onto a
+    second line runs its words across it, and a card set over it cuts it. A
+    rule is too thin to share an area with anything, so it is judged by
+    whether it crosses what the shape draws. A placeholder's frame often
+    reaches over its layout's rule by design, so for one it is the words that
+    count, and only where they cross.
+    """
+    rules = []
+    for graphic in template or ():
+        if not graphic.get("visible", True) or _turned(graphic):
+            continue
+        box = shape_box(graphic)
+        # Thin one way: a slanting line's box says nothing about where it is.
+        thin = min(_width(box), _height(box))
+        if thin > _RULE or not (_is_line(graphic) or paints_box(graphic)):
+            continue
+        if max(_width(box), _height(box)) < 4 * _RULE:
+            continue
+        rules.append((graphic, box, _width(box) >= _height(box)))
+    if not rules:
+        return []
+    slide_w, slide_h = layout.get("slide_width"), layout.get("slide_height")
+    obstacles = [(g, shape_box(g)) for g in template if g.get("visible", True)
+                 and not _turned(g) and not _is_backdrop(g, slide_w, slide_h)]
+    findings = []
+    for a in shapes:
+        if not a.get("visible", True) or _is_line(a) or _turned(a):
+            continue
+        words_only = a.get("placeholder_type") is not None or not paints_box(a)
+        ink = text_box(a) if words_only else shape_box(a)
+        if ink is None:
+            continue
+        for graphic, box, across in rules:
+            if across:
+                line = (box[1] + box[3]) / 2
+                crosses = (ink[1] + _MIN_OVERLAP < line < ink[3] - _MIN_OVERLAP
+                           and _shared(ink, (box[0], ink[1], box[2], ink[3]))[0] > _MIN_OVERLAP)
+            else:
+                line = (box[0] + box[2]) / 2
+                crosses = (ink[0] + _MIN_OVERLAP < line < ink[2] - _MIN_OVERLAP
+                           and _shared(ink, (ink[0], box[1], ink[2], box[3]))[1] > _MIN_OVERLAP)
+            if not crosses:
+                continue
+            name = a["name"]
+            what = f"The text of '{name}'" if words_only else f"'{name}'"
+            source = _FROM.get(graphic.get("source"))
+            drawn = f", drawn by {source}" if source else ""
+            named = f"'{graphic['name']}'"
+            if words_only and across and (ink[1] + ink[3]) / 2 < line:
+                # Words above the rule that grew down across it: a title that
+                # wrapped.
+                fix = (f"Keep '{name}' to the room above the line: shorten the words "
+                       f"or make the font smaller until they end above "
+                       f"{_pt(line - _MIN_OVERLAP)} (ppt_format_text font_size=...).")
+            else:
+                # A card takes back the side that crossed, or moves the
+                # shorter way that leaves it on the slide and clear of the rest.
+                fix = (_template_resize(a, box, named, layout)
+                       or _template_shrink(a, box, named, keep=0.8)
+                       or _template_move(a, ink, box, named, shapes, obstacles, layout)
+                       or _template_shrink(a, box, named, keep=0.5)
+                       or (f"Move '{name}' clear of {named}, or make it smaller: "
+                           "nothing on the slide is meant to cross it."))
+            findings.append(_finding(
+                slide_index, "overlap", [name, graphic["name"]],
+                f"{what} runs across '{graphic['name']}', a line the template draws"
+                f"{drawn}.",
+                fix, template_graphics=[graphic["name"]],
+            ))
+            break
+    return findings
+
+
 def _template_collision_finding(slide_index, a, a_ink, hits, shapes, graphics, layout,
                                 carved=False):
     a_name = a["name"]
@@ -1437,12 +1611,13 @@ def _template_resize(a, union, named, layout):
     return None
 
 
-def _fit_row(mates, layout, low, start, end, kind, named):
+def _fit_row(mates, layout, low, start, end, kind, named, lead=None, grow=False):
     """Narrow a row (or column) of like shapes evenly to fit between ``start`` and ``end``.
 
     Either bound may be None, and then that end of the row stays where it is.
     The gaps stay as they are, every card takes one new size, and each card
-    moves with what is on it.
+    moves with what is on it. With ``grow`` the row may also widen to reach
+    the bounds.
     """
     boxes = layout["boxes"]
     high = low + 2
@@ -1455,7 +1630,7 @@ def _fit_row(mates, layout, low, start, end, kind, named):
     begin = first if start is None else start
     finish = last if end is None else end
     size = (finish - begin - gap * (len(members) - 1)) / len(members)
-    if gap < 0 or size < 0.5 * min(sizes) or size >= min(sizes):
+    if gap < 0 or size < 0.5 * min(sizes) or (size >= min(sizes) and not grow):
         return None
     field, position = ("width", "left") if low == 0 else ("height", "top")
     moves = []
@@ -1470,8 +1645,8 @@ def _fit_row(mates, layout, low, start, end, kind, named):
         way = ("right" if by > 0 else "left") if low == 0 else ("down" if by > 0 else "up")
         moves.append(f"'{name}'{with_it} {way} by {_pt(abs(by))} (ppt_update_shape shape_names="
                      f"{[name] + carried} d{position}={_num(by)})")
-    fix = (f"Make the {kind} fit before {named}: ppt_update_shape shape_names={members} "
-           f"{field}={_num(size)}")
+    fix = (f"{lead or f'Make the {kind} fit before {named}'}: ppt_update_shape "
+           f"shape_names={members} {field}={_num(size)}")
     if moves:
         fix += f", then move {', and '.join(moves)}"
     return fix + f". The gaps stay {_pt(gap)}."
@@ -1481,7 +1656,8 @@ def _template_shrink(a, union, named, keep):
     """Take back the side of a shape that crosses a template graphic.
 
     Only for a shape that paints, since a text frame made smaller keeps its
-    text by wrapping it, and only when at least ``keep`` of it is left.
+    text by wrapping it, and only when at least ``keep`` of it is left and its
+    words still fit.
     """
     if not paints_box(a):
         return None
@@ -1492,21 +1668,40 @@ def _template_shrink(a, union, named, keep):
         size = box[high] - box[low]
         if size <= 0:
             continue
+        def fits(target, low=low, size=size):
+            return target >= keep * size and not _spills_at(
+                a, target if low == 0 else _width(box), target if low == 1 else _height(box))
+
         if union[low] >= (box[low] + box[high]) / 2:
             target = union[low] - _CLEARANCE - box[low]
-            if target >= keep * size:
+            if fits(target):
                 options.append((size - target, (
                     f"Make '{a['name']}' {_pt(target)} {word} (ppt_update_shape "
                     f"{field}={_num(target)}), which leaves it {_pt(_CLEARANCE)} clear of {named}.")))
         elif union[high] <= (box[low] + box[high]) / 2:
             start = union[high] + _CLEARANCE
             target = box[high] - start
-            if target >= keep * size:
+            if fits(target):
                 options.append((size - target, (
                     f"Make '{a['name']}' {_pt(target)} {word}, keeping its far edge "
                     f"(ppt_update_shape {position}={_num(start)} {field}={_num(target)}), "
                     f"which leaves it {_pt(_CLEARANCE)} clear of {named}.")))
     return min(options)[1] if options else None
+
+
+def _kept_edges(shape):
+    """The sides of its frame a shape is seen to keep: what lining up with it means.
+
+    A shape that paints its box keeps both. Text alone keeps only the side it
+    is set to: a centred title's frame edges are nowhere a reader can see, and
+    the far edge of left-set text is wherever its longest line ends.
+    """
+    if paints_box(shape):
+        return {"left", "right"}
+    anchor = _text_anchor(shape)
+    if anchor is None:
+        return {"left", "right"}
+    return {"full": {"left", "right"}, "left": {"left"}, "right": {"right"}}.get(anchor[0], set())
 
 
 def _template_move(a, a_ink, union, named, shapes, graphics, layout):
@@ -1587,21 +1782,34 @@ def _template_move(a, a_ink, union, named, shapes, graphics, layout):
     field, by, words = chosen
     where = ""
     if field == "left":
-        lines = [(s["left"], s["left"] + s["width"], f"in line with '{s['name']}'")
-                 for s in layout["arranged"] if s["name"] not in skip]
+        lines = []
+        for s in layout["arranged"]:
+            if s["name"] in skip:
+                continue
+            kept = _kept_edges(s)
+            lines.append((s["left"] if "left" in kept else None,
+                          s["left"] + s["width"] if "right" in kept else None,
+                          f"in line with '{s['name']}'"))
         margin = (layout.get("margins") or {}).get("horizontal")
         if margin is not None and slide_w:
             lines.append((margin, slide_w - margin, "on the slide's margin"))
         right_edge = a["left"] + a["width"]
         if by > 0:
             options = sorted((left - a["left"], f", {label}") for left, _, label in lines
-                             if left - a["left"] >= by - _EDGE_TOLERANCE)
+                             if left is not None and left - a["left"] >= by - _EDGE_TOLERANCE)
+            if _reads_right_to_left(shapes):
+                # A right-to-left slide keeps its right edges; the left
+                # ones are wherever its lines happen to end.
+                options = sorted((right - right_edge, f", {label}") for _, right, label in lines
+                                 if right is not None
+                                 and right - right_edge >= by - _EDGE_TOLERANCE) + options
         else:
             options = sorted((right - right_edge, f", {label}") for _, right, label in lines
-                             if right - right_edge <= by + _EDGE_TOLERANCE)[::-1]
+                             if right is not None
+                             and right - right_edge <= by + _EDGE_TOLERANCE)[::-1]
         for aligned, label in options:
             if abs(aligned - by) > max(40.0, abs(by)):
-                break
+                continue
             if lands_clear(field, aligned):
                 by, where = aligned, label
                 break
@@ -1731,10 +1939,16 @@ def _low_contrast(slide_index, shapes, background_hex, template=(), follows_back
             continue
         backdrop, painted_by, painter = _backdrop(shape, shapes, background_hex, template,
                                                   background_gradient, slide_box)
+        if backdrop is None and painter is not None and painter.get("photo"):
+            found = _photo_contrast(slide_index, shape, painter, theme_colors)
+            if found is not None:
+                findings.append(found)
+            continue
         if not backdrop or (trust and _as_designed(shape, painted_by, follows_background)):
             continue
         if isinstance(backdrop, dict):
-            found = _gradient_contrast(slide_index, shape, shapes, backdrop, painted_by, painter)
+            found = _gradient_contrast(slide_index, shape, shapes, backdrop, painted_by, painter,
+                                       theme_colors)
             if found is not None:
                 findings.append(found)
             continue
@@ -1757,8 +1971,11 @@ def _low_contrast(slide_index, shapes, background_hex, template=(), follows_back
         # one slide; black or white is the answer when none of them is enough.
         ours = [c for c in _text_colours(shapes, shape, size)
                 if _contrast_ratio(c, backdrop) >= needed]
+        themed = _theme_text_colours(theme_colors, lambda c, b=backdrop: _contrast_ratio(c, b), needed)
         if ours:
             suggestion, source = ours[0], ", the colour of the other text on the slide"
+        elif themed:
+            suggestion, source = themed[0], ", the theme's text colour"
         else:
             dark, light = _contrast_ratio("#000000", backdrop), _contrast_ratio("#FFFFFF", backdrop)
             suggestion, source = ("#000000" if dark >= light else "#FFFFFF"), ""
@@ -1795,6 +2012,111 @@ def _low_contrast(slide_index, shapes, background_hex, template=(), follows_back
             contrast=round(ratio, 2), minimum=needed,
         ))
     return findings
+
+
+# Text on a photo is hard to read when this share of what is behind it, or
+# more, falls short of the contrast its size needs. A colour that reads on all
+# but this share of it is good enough to suggest.
+_PHOTO_SHORT = 0.2
+_PHOTO_GOOD = 0.05
+
+
+def _photo_contrast(slide_index, shape, picture, theme_colors=None):
+    """Text drawn on a photo, judged against the photo's own pixels under it.
+
+    A photo is light in one place and dark in another, so no one colour
+    stands for it: the text is held to every sampled pixel behind it, and
+    reported when a fifth of them or more fall short.
+    """
+    from ppt_com.themes import _contrast_ratio
+
+    words = text_box(shape)
+    photo = picture["photo"]
+    box = shape_box(picture)
+    if words is None or _width(box) <= 0 or _height(box) <= 0:
+        return None
+    columns, rows = photo["columns"], photo["rows"]
+    behind = []
+    for r in range(rows):
+        y = box[1] + (r + 0.5) * _height(box) / rows
+        if not words[1] <= y <= words[3]:
+            continue
+        for c in range(columns):
+            x = box[0] + (c + 0.5) * _width(box) / columns
+            # A see-through pixel shows what is under the picture, which the
+            # sample does not hold.
+            if words[0] <= x <= words[2] and photo["colours"][r * columns + c]:
+                behind.append(photo["colours"][r * columns + c])
+    if len(behind) < 4:
+        return None
+    worst = None
+    for run in (shape.get("text") or {}).get("runs") or []:
+        colour = run.get("color_hex")
+        if not colour:
+            continue
+        size = run.get("size") or 0.0
+        large = size >= _LARGE_TEXT or (run.get("bold") and size >= _LARGE_BOLD_TEXT)
+        needed = _CONTRAST_LARGE if large else _CONTRAST_TEXT
+        ratios = sorted(_contrast_ratio(colour, b) for b in behind)
+        short = sum(1 for r in ratios if r < needed) / len(ratios)
+        if short >= _PHOTO_SHORT and (worst is None or short > worst[0]):
+            worst = (short, ratios[0], needed, colour)
+    if worst is None:
+        return None
+    short, least, needed, colour = worst
+    name = shape["name"]
+
+    def fails(candidate):
+        return sum(1 for b in behind if _contrast_ratio(candidate, b) < needed) / len(behind)
+
+    candidates = [c for key in ("dark1", "light1") if (c := (theme_colors or {}).get(key))]
+    candidates += ["#000000", "#FFFFFF"]
+    best = min(dict.fromkeys(candidates), key=fails)
+    if fails(best) <= _PHOTO_GOOD:
+        fix = (f"Make the text {best} (ppt_format_text color='{best}'), which reads on "
+               f"{round(100 * (1 - fails(best)))}% of the photo behind it")
+    else:
+        light = sum(_luminance(b) for b in behind) / len(behind) > 0.5
+        scrim = "#FFFFFF" if light else "#000000"
+        pad = 8.0
+        # A side that lands within a few points of the text box's own edge
+        # goes on it: a card just off the box reads as a slip.
+        frame = shape_box(shape)
+        card = [words[0] - pad, words[1] - pad, words[2] + pad, words[3] + pad]
+        for side in range(4):
+            if abs(card[side] - frame[side]) <= pad:
+                card[side] = frame[side]
+        fix = (f"Put a see-through card behind the text: ppt_add_shape shape_type='rectangle' "
+               f"left={_num(card[0])} top={_num(card[1])} "
+               f"width={_num(card[2] - card[0])} height={_num(card[3] - card[1])} "
+               f"fill_color='{scrim}' fill_transparency=0.35 line_visible=false, "
+               f"bring the text back in front of it (ppt_set_shape_zorder shape_name='{name}' "
+               f"command='bring_to_front'), and make the text {'#000000' if light else '#FFFFFF'}")
+    return _finding(
+        slide_index, "low_contrast", [name, picture["name"]],
+        f"Text in '{name}' is {colour} on the photo '{picture['name']}': "
+        f"{round(100 * short)}% of the photo behind it falls short of {needed:g}:1 "
+        f"against it, as little as {least:.1f}:1.",
+        f"{fix}. Or move the text to a calmer part of the photo.",
+        contrast_ratio=round(least, 2), required_ratio=needed, on_photo=True,
+    )
+
+
+def _luminance(colour):
+    red, green, blue = (int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _theme_text_colours(theme_colors, ratio, needed):
+    """The theme's text colours that read on a backdrop, best first.
+
+    A write reads only the shape it touched, so the slide's other text
+    colours are not known to it; the theme's are, and keep the slide in its
+    palette where black or white would not.
+    """
+    found = [colour for key in ("dark1", "light1", "dark2", "light2")
+             if (colour := (theme_colors or {}).get(key)) and ratio(colour) >= needed]
+    return sorted(dict.fromkeys(found), key=ratio, reverse=True)
 
 
 def _text_colours(shapes, exclude, size=None):
@@ -1834,7 +2156,7 @@ def _theme_trouble(colours):
     return None
 
 
-def _gradient_contrast(slide_index, shape, shapes, paint, painted_by, painter):
+def _gradient_contrast(slide_index, shape, shapes, paint, painted_by, painter, theme_colors=None):
     """Text too faint on some of the gradient behind it, or None.
 
     Where a linear gradient's angle is known, the colours behind the text are
@@ -1885,9 +2207,12 @@ def _gradient_contrast(slide_index, shape, shapes, paint, painted_by, painter):
     everywhere = [c for colours in blends for c in colours]
     ours = [c for c in _text_colours(shapes, shape, size)
             if min(_contrast_ratio(c, b) for b in everywhere) >= needed]
-    choices = [(c, ", the colour of the other text on the slide") for c in ours[:1]] + [
+    themed = _theme_text_colours(theme_colors, lambda c: min(_contrast_ratio(c, b) for b in everywhere),
+                                 needed)
+    choices = ([(c, ", the colour of the other text on the slide") for c in ours[:1]]
+               + [(c, ", the theme's text colour") for c in themed[:1]] + [
         (c, "") for c in ("#000000", "#FFFFFF")
-        if min(_contrast_ratio(c, b) for b in everywhere) >= needed]
+        if min(_contrast_ratio(c, b) for b in everywhere) >= needed])
     if choices:
         suggestion, source = choices[0]
         least = min(_contrast_ratio(suggestion, b) for b in everywhere)
@@ -2233,6 +2558,114 @@ def _misaligned_finding(slide_index, slip, placed):
     )
 
 
+# A title whose letters start this far from the edge the slide's body keeps,
+# and no further, was meant to line up with it: further is a layout that sets
+# the title apart on purpose, an indented band or a side column.
+_TITLE_BODY_MIN = 2.0
+_TITLE_BODY_MAX = 12.0
+
+
+def _title_body_edge(slide_index, shapes, layout):
+    """A title whose letters do not start where the body below it does.
+
+    A title box set at the same left as the cards under it starts its words
+    one inset further in, 7.2 pt by default, and the eye reads the title and
+    the body as two edges a little apart. A right-set title, a Hebrew deck's,
+    is held to the body's right edge. The template's own title over its own
+    body placeholder is its design and left alone.
+    """
+    slide_w, slide_h = layout["slide_width"], layout["slide_height"]
+    title = find_title({"shapes": shapes}, slide_h) if slide_h else None
+    if title is None:
+        return []
+    # A write reads only what it touched; a shape above whose words were not
+    # read may be the real title, and the one found only the first line under it.
+    if any(s.get("unread") and s["top"] <= title["top"] + _EDGE_TOLERANCE for s in shapes):
+        return []
+    side = _title_side(title)
+    words = text_box(title)
+    if side == "center" or words is None:
+        return []
+    right = side == "right"
+    body = []
+    for shape in layout["arranged"]:
+        if (shape is title or layout["depth"].get(shape["name"]) != 0
+                or shape.get("placeholder_type") in _LAYOUT_PLACEHOLDERS):
+            continue
+        ink = ink_box(shape)
+        if ink is None or ink[1] < words[3] - _EDGE_TOLERANCE:
+            continue
+        # A shape run off an edge is a bleed, not part of the column.
+        if ink[0] <= _EDGE_TOLERANCE or (slide_w and ink[2] >= slide_w - _EDGE_TOLERANCE):
+            continue
+        # Centred text, or text set to the other side, keeps no edge on this
+        # one: where its words start moves with their length, and with half
+        # of any change made to its frame.
+        if ("right" if right else "left") not in _kept_edges(shape):
+            continue
+        body.append((shape, ink))
+    if not body:
+        return []
+    edge = max(ink[2] for _, ink in body) if right else min(ink[0] for _, ink in body)
+    keepers = [s for s, ink in body if abs((ink[2] if right else ink[0]) - edge) <= _ALIGNED]
+    delta = (words[2] if right else words[0]) - edge
+    if not _TITLE_BODY_MIN < abs(delta) <= _TITLE_BODY_MAX:
+        return []
+    if title.get("placeholder_type") is not None and all(
+            k.get("placeholder_type") is not None for k in keepers):
+        return []
+    name = title["name"]
+    others = ", ".join(f"'{k['name']}'" for k in keepers)
+    where = "right" if right else "left"
+    if delta > 0:
+        direction = "left of" if right else "right of"
+    else:
+        direction = "right of" if right else "left of"
+    return [_finding(
+        slide_index, "title_edge", [name] + [k["name"] for k in keepers],
+        f"The {where} end of the title's words in '{name}' is {_pt(abs(delta))} "
+        f"{direction} the {where} edge of {others} below it, so the title and "
+        "the body read as two edges a little apart.",
+        _body_to_title(keepers, delta, right, layout),
+        severity="warning", edge=where, off_by_pt=round(abs(delta), 2),
+    )]
+
+
+def _body_to_title(keepers, delta, right, layout):
+    """Bring the body's edge to the title's words, keeping its other edge.
+
+    The body moves rather than the title, since where a deck's titles sit is
+    held from slide to slide. A row of cards is fitted again with its gaps
+    kept, and each card carries what is on it.
+    """
+    boxes = layout["boxes"]
+    side = "right" if right else "left"
+    lead = f"Bring the body's {side} edge to the title's words"
+    row = layout["rows"].get(keepers[0]["name"])
+    if row and len(row) > 1:
+        edge = boxes[keepers[0]["name"]][2 if right else 0] + delta
+        # The whole row widens with its first card, so that it stays one
+        # width: one card made wider is the odd one out.
+        fix = _fit_row(row, layout, 0, None if right else edge, edge if right else None,
+                       "row", "", lead=lead, grow=True)
+        if fix:
+            return fix
+    calls = []
+    for keeper in keepers:
+        carried = [s["name"] for s in layout["arranged"]
+                   if s is not keeper and s["name"] in boxes and _belongs_to(s, keeper, boxes)]
+        if right:
+            calls.append(f"ppt_update_shape shape_name='{keeper['name']}' dwidth={_num(delta)}")
+        elif carried:
+            calls.append(f"ppt_update_shape shape_names={[keeper['name']] + carried} "
+                         f"dleft={_num(delta)}, then ppt_update_shape shape_name="
+                         f"'{keeper['name']}' dwidth={_num(-delta)}")
+        else:
+            calls.append(f"ppt_update_shape shape_name='{keeper['name']}' "
+                         f"dleft={_num(delta)} dwidth={_num(-delta)}")
+    return f"{lead}, keeping its {'left' if right else 'right'} edge: {'; '.join(calls)}."
+
+
 def _connected(members, joined):
     """Split members into groups, two sharing a group when ``joined`` says so,
     directly or through others."""
@@ -2557,6 +2990,145 @@ def _narrow_margins(slide_index, layout, slide_w):
     return findings
 
 
+# A picture smaller than this share of the slide is a logo or an icon, set in
+# a corner on purpose. Text less tall than this share of the slide is a
+# footnote or a page number, set low on purpose.
+_LOGO_SHARE = 0.03
+_BLOCK_SHARE = 0.10
+
+# The most room the top and bottom are held to: the edge is crowded within
+# half of it.
+_VERTICAL_ROOM = 40.0
+
+
+def _vertical_margins(slide_index, layout, slide_h):
+    """Content run almost to the top or the bottom edge of the slide.
+
+    The side margins say how much room a slide keeps; a card, a chart or a
+    block of text that stops a few points short of the bottom edge looks
+    pushed against it. Touching the edge is a bleed and is left alone, and so
+    are a footnote or a logo set low, which are placed there. A row of cards
+    is one finding, moved or shortened together.
+    """
+    margins = layout["margins"]
+    slide_w = layout["slide_width"]
+    if not margins or not slide_h or not slide_w:
+        return []
+    # A slide with nothing near its top, a quote set in the middle, says
+    # little about how close to the edge it means things to go.
+    want = min(margins["vertical"], _VERTICAL_ROOM)
+    crowded = {}
+    for shape in layout["arranged"]:
+        if layout["depth"][shape["name"]] or shape.get("placeholder_type") in _LAYOUT_PLACEHOLDERS:
+            continue
+        ink = ink_box(shape)
+        if ink is None:
+            continue
+        if paints_box(shape):
+            if (shape.get("type") in _PICTURES
+                    and _width(ink) * _height(ink) < _LOGO_SHARE * slide_w * slide_h):
+                continue
+        elif _height(ink) < _BLOCK_SHARE * slide_h:
+            continue
+        for edge, distance in (("top", ink[1]), ("bottom", slide_h - ink[3])):
+            if _EDGE_TOLERANCE < distance < want / 2:
+                crowded[shape["name"]] = (shape, ink, edge, distance)
+                break
+    findings, done = [], set()
+    for name, (_, ink, edge, distance) in crowded.items():
+        if name in done:
+            continue
+        row = [m for m in layout["rows"].get(name) or [name] if m in crowded
+               and crowded[m][2] == edge] or [name]
+        done.update(row)
+        by = want - min(crowded[m][3] for m in row)
+        inks = [crowded[m][1] for m in row]
+        # Moving away from the edge runs into whatever is on the other side.
+        if edge == "bottom":
+            near = min(ink[1] for ink in inks)
+            others = [ink_box(s) for s in layout["arranged"] if s["name"] not in row
+                      and not layout["depth"][s["name"]]]
+            room = min([near - o[3] for o in others if o and o[3] <= near + _EDGE_TOLERANCE
+                        and _shared((o[0], 0, o[2], 1), (min(i[0] for i in inks), 0,
+                                                         max(i[2] for i in inks), 1))[0] > 0],
+                       default=near)
+        else:
+            far = max(ink[3] for ink in inks)
+            others = [ink_box(s) for s in layout["arranged"] if s["name"] not in row
+                      and not layout["depth"][s["name"]]]
+            room = min([o[1] - far for o in others if o and o[1] >= far - _EDGE_TOLERANCE
+                        and _shared((o[0], 0, o[2], 1), (min(i[0] for i in inks), 0,
+                                                         max(i[2] for i in inks), 1))[0] > 0],
+                       default=slide_h - far)
+        names = row
+        target = f"shape_names={names}" if len(names) > 1 else f"shape_name='{names[0]}'"
+        quoted = [f"'{n}'" for n in names]
+        which = quoted[0] if len(names) == 1 else ", ".join(quoted[:-1]) + " and " + quoted[-1]
+        if room - _CLEARANCE >= by:
+            fix = (f"Move {which} {'down' if edge == 'top' else 'up'} by {_pt(by)} "
+                   f"(ppt_update_shape {target} dtop={_num(by if edge == 'top' else -by)}).")
+        elif not all(_shortens(crowded[m][0], by, edge) for m in row):
+            # The words are what is near the edge, or a shorter box would
+            # spill them: a smaller frame only moves the problem.
+            fix = (f"Cut the text in {which} or make the font smaller, so "
+                   f"{'they' if len(names) > 1 else 'it'} "
+                   f"{'start' if edge == 'top' else 'end'}{'' if len(names) > 1 else 's'} "
+                   f"{_pt(by)} further from the edge: there is no room to move "
+                   f"{'them' if len(names) > 1 else 'it'} {'down' if edge == 'top' else 'up'}, "
+                   "and a shorter box would leave the words where they are or spill them.")
+        else:
+            keep = "bottom" if edge == "top" else "top"
+            extra = f" dtop={_num(by)}" if edge == "top" else ""
+            fix = (f"Make {which} {_pt(by)} shorter, keeping {'their' if len(names) > 1 else 'its'} "
+                   f"{keep} (ppt_update_shape {target} dheight={_num(-by)}{extra}): there is no "
+                   f"room to move {'them' if len(names) > 1 else 'it'} "
+                   f"{'down' if edge == 'top' else 'up'}.")
+        findings.append(_finding(
+            slide_index, "narrow_margin", names,
+            f"{which[0].upper()}{which[1:]} {'come' if len(names) > 1 else 'comes'} within "
+            f"{_pt(distance)} of the {edge} edge of the slide, where the slide keeps "
+            f"{_pt(want)}, so {'they look' if len(names) > 1 else 'it looks'} pushed "
+            "against the edge.",
+            fix, severity="warning", edge=edge, distance_pt=round(distance, 1),
+            margin_pt=want,
+        ))
+    return findings
+
+
+def _shortens(shape, by, edge):
+    """Whether making ``shape`` ``by`` shorter, from ``edge``, moves the edge
+    the check sees.
+
+    A box that paints its frame is measured by the frame. For bare text the
+    words are, and they move only when they are set to that edge of the box:
+    words set to the top stay where they are when the bottom comes up. A box
+    whose text would no longer fit trades the margin for an overflow.
+    """
+    if not paints_box(shape) and (_text_anchor(shape) or (None, None))[1] != edge:
+        return False
+    return not _spills_at(shape, shape["width"], shape["height"] - by)
+
+
+def _spills_at(shape, width, height):
+    """Whether the text in ``shape`` would spill out of a box this size.
+
+    A box narrower than its words wraps them onto lines it was never measured
+    with, so it counts as spilling: how many more lines is not known here.
+    """
+    text = shape.get("text")
+    if not text or not text.get("chars"):
+        return False
+    margins = text.get("margins") or _DEFAULT_MARGINS
+    if text.get("width") and text["width"] > width - margins["left"] - margins["right"] + 0.5:
+        return True
+    from ppt_com.text import build_measurement
+
+    return build_measurement(
+        [], text.get("width"), text.get("height"), width, height, text.get("margins"),
+        text.get("word_wrap"), text.get("autofit"), text.get("orientation"),
+    )["overflows"]
+
+
 # Text a template or a draft leaves for someone to replace. The words in any
 # case. "Your title" and its kind only as a line of their own, and a bracketed
 # stand-in only when it is nothing but the stand-in, so that "Grow your
@@ -2604,6 +3176,786 @@ def _sample_text(slide_index, shapes):
     return findings
 
 
+# The bidi classes of letters: a paragraph takes its direction from its first
+# one. Digits have none of their own.
+_LEFT_TO_RIGHT = frozenset({"L"})
+_RIGHT_TO_LEFT = frozenset({"R", "AL"})
+_DIGITS = frozenset({"EN", "AN"})
+# A single one of these between two digits keeps them one number, "1948-1967",
+# "19.10.2026" or "1,000", in either direction.
+_JOINERS = frozenset({"ES", "CS"})
+
+# The word that makes a range read right to left, by script.
+_RANGE_WORDS = {"Hebrew": "{a} עד {b}", "Arabic": "من {a} إلى {b}"}
+# What stands between the two ends of a range.
+_DASHES = "-–—−~"
+
+
+def _as_range(line, numbers, gaps):
+    """The two ends of a range, "10% – 20%", with their signs, or None.
+
+    A range is two numbers with a dash between them and nothing else but
+    spaces and the signs of the numbers, rising: "3 - 1" is a score, and
+    "2020: 5" is a label and its figure.
+    """
+    if len(numbers) != 2:
+        return None
+    gap = gaps[0]
+    dashes = [i for i, ch in enumerate(gap) if ch in _DASHES]
+    if len(dashes) != 1 or not all(ch.isspace() or ch in _DASHES or unicodedata.bidirectional(ch) == "ET"
+                                   for ch in gap):
+        return None
+    start = line.index(numbers[0])
+    # A minus right before the first number is its sign; one before the
+    # second would be a second dash, and the line is not a range.
+    sign = -1 if line[:start].rstrip()[-1:] in ("-", "−") else 1
+    try:
+        if sign * float(numbers[0].replace(",", "")) >= float(numbers[1].replace(",", "")):
+            return None
+    except ValueError:
+        pass
+    at = start + len(numbers[0]) + dashes[0]
+    return line[:at].strip(), line[at + 1:].strip()
+
+
+def _numbers_only(line):
+    """The separate numbers in a line with no letter in it, and the text
+    between them, or None when a letter sets the line's direction.
+
+    Numbers are told apart as the bidi algorithm tells them apart: digits
+    joined by one sign or separator, "1948-1967", are one number.
+    """
+    numbers, gaps, gap = [], [], ""
+    in_number = False
+    for ch in line:
+        kind = unicodedata.bidirectional(ch)
+        if kind in _LEFT_TO_RIGHT or kind in _RIGHT_TO_LEFT:
+            return None
+        if kind in _DIGITS:
+            if in_number:
+                numbers[-1] += ch
+            elif numbers and len(gap) == 1 and unicodedata.bidirectional(gap) in _JOINERS:
+                numbers[-1] += gap + ch
+            else:
+                if numbers:
+                    gaps.append(gap)
+                numbers.append(ch)
+            in_number, gap = True, ""
+        else:
+            in_number = False
+            gap += ch
+    return numbers, gaps
+
+
+def _script(text):
+    """'Hebrew' or 'Arabic' when the text reads right to left, 'Latin' when it
+    reads left to right, None with no letters."""
+    rtl = {"Hebrew": 0, "Arabic": 0}
+    ltr = 0
+    for ch in text:
+        kind = unicodedata.bidirectional(ch)
+        if kind in _RIGHT_TO_LEFT:
+            rtl["Hebrew" if "֐" <= ch <= "׿" or "יִ" <= ch <= "ﭏ"
+                else "Arabic"] += 1
+        elif kind in _LEFT_TO_RIGHT:
+            ltr += 1
+    if not ltr and not any(rtl.values()):
+        return None
+    script = max(rtl, key=rtl.get)
+    return script if rtl[script] > ltr else "Latin"
+
+
+def _reads_right_to_left(shapes):
+    """Whether most of the letters on a slide read right to left."""
+    content = " ".join((s.get("text") or {}).get("content") or "" for s in shapes
+                       if s.get("visible", True))
+    return _script(content) in _RANGE_WORDS
+
+
+def _paragraphs(content):
+    """A shape's paragraphs, in the order PowerPoint numbers them."""
+    return re.split(r"\r\n|[\r\n]", content)
+
+
+def _direction_call(paragraphs, indices):
+    """The ppt_set_paragraph_format call that sets these paragraphs right to left."""
+    if len(indices) == 1 and len([p for p in paragraphs if p.strip()]) > 1:
+        return f"ppt_set_paragraph_format paragraph_index={indices[0]} direction='rtl'"
+    if len(indices) > 1 and len(indices) < len([p for p in paragraphs if p.strip()]):
+        return ("ppt_set_paragraph_format direction='rtl' with paragraph_index "
+                + ", ".join(str(i) for i in indices))
+    return "ppt_set_paragraph_format direction='rtl'"
+
+
+def _number_order(slide_index, shapes):
+    """A line of numbers only, on a slide that reads right to left.
+
+    "1516 – 1917" on a Hebrew slide is drawn left to right, so the start year
+    is on the left and a reader starting on the right reads the range
+    backwards; a list of years comes out the same. Digits are not letters, so
+    nothing in the line says otherwise, and PowerPoint draws it that way on
+    Windows and on the Mac even with the paragraph set right to left. A word
+    in the line, in a paragraph set right to left, reads right: "1516 עד 1917".
+    """
+    findings = []
+    slide_text = " ".join((s.get("text") or {}).get("content") or "" for s in shapes)
+    for shape in shapes:
+        text = shape.get("text") or {}
+        content = text.get("content") or ""
+        if not content or not shape.get("visible", True):
+            continue
+        script = _script(content) or _script(slide_text)
+        if script not in _RANGE_WORDS:
+            continue
+        paragraphs = _paragraphs(content)
+        directions = text.get("directions") or []
+        for index, paragraph in enumerate(paragraphs, start=1):
+            line = paragraph.strip()
+            parts = _numbers_only(line)
+            if not parts:
+                continue
+            numbers, gaps = parts
+            # Numbers set apart by spaces and brackets alone, a phone number,
+            # are read left to right in any language.
+            if len(numbers) < 2 or not any(gap.strip(" ()[]") for gap in gaps):
+                continue
+            # Arabic-Indic digits are drawn from the right by themselves.
+            if any(unicodedata.bidirectional(ch) == "AN" for number in numbers for ch in number):
+                continue
+            name = shape["name"]
+            where = f"slide_indices=[{slide_index}] shape_name='{name}' "
+            set_rtl = (index <= len(directions) and directions[index - 1] == "rtl")
+            then = "" if set_rtl else (
+                f", then set the line right to left "
+                f"({_direction_call(paragraphs, [index])}), which PowerPoint for "
+                "Windows needs to draw it from the right")
+            ends = _as_range(line, numbers, gaps)
+            if ends:
+                example = _RANGE_WORDS[script].format(a=ends[0], b=ends[1])
+                how = (f"replace it with \"{example}\" (ppt_find_replace_text {where}"
+                       f"find_text=\"{line}\" replace_text=\"{example}\"){then}")
+            else:
+                how = (f"start it with a {script} word, the label it belongs to "
+                       f"(ppt_find_replace_text {where}find_text=\"{line}\"){then}")
+            findings.append(_finding(
+                slide_index, "number_order", [name],
+                f"'{name}' has a line of numbers only, \"{line}\", on a slide "
+                f"that reads right to left. With no letter in it, PowerPoint "
+                f"draws the line left to right, so \"{numbers[0]}\" is on the "
+                f"left and a {script} reader reads \"{numbers[-1]}\" first.",
+                f"Put a word in the line: {how}.",
+                line=line,
+            ))
+    return findings
+
+
+def _drawn_order(line, right_to_left, digits_as_letters=False):
+    """The characters of one paragraph in the order they are drawn, left to
+    right, in a paragraph of the given direction.
+
+    The Unicode bidirectional algorithm for a line with no embeddings: weak
+    types resolved (W1-W7), neutrals (N1-N2), levels (I1-I2), then each run
+    from the highest level down reversed (L2). Enough to tell whether a
+    paragraph draws the same both ways, which is all it is asked.
+
+    PowerPoint for Mac follows it. PowerPoint for Windows was seen drawing
+    digits as if they were Latin letters: "1516 עד 1917", set left to right,
+    as 1516, the word, 1917, where the algorithm puts both numbers on the
+    left. ``digits_as_letters`` draws them that way.
+    """
+    base = "R" if right_to_left else "L"
+    kinds = []
+    for ch in line:
+        kind = unicodedata.bidirectional(ch) or "L"
+        if digits_as_letters and kind == "EN":
+            kind = "L"
+        if kind in ("LRE", "RLE", "LRO", "RLO", "PDF", "LRI", "RLI", "FSI", "PDI", "BN"):
+            kind = "ON"
+        kinds.append(kind)
+    # W1: a combining mark takes the type of what it marks.
+    for i, kind in enumerate(kinds):
+        if kind == "NSM":
+            kinds[i] = kinds[i - 1] if i else base
+    # W2, W3: a European number after Arabic letters is an Arabic number.
+    strong = base
+    for i, kind in enumerate(kinds):
+        if kind in ("L", "R", "AL"):
+            strong = kind
+        elif kind == "EN" and strong == "AL":
+            kinds[i] = "AN"
+    kinds = ["R" if kind == "AL" else kind for kind in kinds]
+    # W4: one separator between two numbers of a kind joins them.
+    for i in range(1, len(kinds) - 1):
+        before, after = kinds[i - 1], kinds[i + 1]
+        if kinds[i] == "ES" and before == after == "EN":
+            kinds[i] = "EN"
+        elif kinds[i] == "CS" and before == after and before in ("EN", "AN"):
+            kinds[i] = "EN" if before == "EN" else "AN"
+    # W5: currency and percent signs beside a European number belong to it.
+    for i, kind in enumerate(kinds):
+        if kind != "ET":
+            continue
+        j = i
+        while j < len(kinds) and kinds[j] == "ET":
+            j += 1
+        k = i
+        while k > 0 and kinds[k - 1] == "ET":
+            k -= 1
+        if (j < len(kinds) and kinds[j] == "EN") or (k > 0 and kinds[k - 1] == "EN"):
+            for m in range(k, j):
+                kinds[m] = "EN"
+    # W6, W7.
+    kinds = ["ON" if kind in ("ES", "ET", "CS") else kind for kind in kinds]
+    strong = base
+    for i, kind in enumerate(kinds):
+        if kind in ("L", "R"):
+            strong = kind
+        elif kind == "EN" and strong == "L":
+            kinds[i] = "L"
+    # N1, N2: neutrals between two of a direction take it, numbers counting
+    # as right to left; the rest take the paragraph's.
+    def direction(kind):
+        return "L" if kind == "L" else "R" if kind in ("R", "EN", "AN") else None
+    i = 0
+    while i < len(kinds):
+        if direction(kinds[i]) is not None:
+            i += 1
+            continue
+        j = i
+        while j < len(kinds) and direction(kinds[j]) is None:
+            j += 1
+        before = direction(kinds[i - 1]) if i else base
+        after = direction(kinds[j]) if j < len(kinds) else base
+        for m in range(i, j):
+            kinds[m] = before if before == after else base
+        i = j
+    # I1, I2.
+    level = 1 if right_to_left else 0
+    levels = []
+    for kind in kinds:
+        if level == 0:
+            levels.append(1 if kind == "R" else 2 if kind in ("EN", "AN") else 0)
+        else:
+            levels.append(2 if kind in ("L", "EN", "AN") else 1)
+    # L2.
+    order = list(range(len(line)))
+    for top in range(max(levels, default=0), 0, -1):
+        i = 0
+        while i < len(order):
+            if levels[order[i]] < top:
+                i += 1
+                continue
+            j = i
+            while j < len(order) and levels[order[j]] >= top:
+                j += 1
+            order[i:j] = order[i:j][::-1]
+            i = j
+    return "".join(line[i] for i in order)
+
+
+def _hebrew_and_arabic(line):
+    """Whether a line has both Hebrew and Arabic letters in it.
+
+    By the bidirectional algorithm such a line draws the same in either
+    direction, both scripts reading right to left. PowerPoint for Mac does not
+    draw it so: it splits the line into a Hebrew run and an Arabic run, and in
+    a paragraph set left to right the spaces and the dot between them,
+    "תודה · شكرا", land against the Arabic word on the far side.
+    """
+    hebrew = arabic = False
+    for ch in line:
+        if unicodedata.bidirectional(ch) not in _RIGHT_TO_LEFT:
+            continue
+        if "\u0590" <= ch <= "\u05ff" or "\ufb1d" <= ch <= "\ufb4f":
+            hebrew = True
+        else:
+            arabic = True
+    return hebrew and arabic
+
+
+def _text_direction(slide_index, shapes):
+    """Hebrew or Arabic paragraphs left set left to right.
+
+    PowerPoint for Windows draws a paragraph in the direction it is set,
+    whatever its letters, and a paragraph is left to right until it is set
+    otherwise: the text keeps to the left of the paragraph, a full stop or a
+    question mark ends up on the left of the line, and a number in it is
+    read in the wrong place, "1516 עד 1917" as 1917 to 1516. PowerPoint for
+    Mac draws by the first letter instead, so the slide looks right there and
+    reads wrong once it is opened on Windows. A paragraph that draws the same
+    either way, words alone, is not reported.
+    """
+    findings = []
+    for shape in shapes:
+        text = shape.get("text") or {}
+        directions = text.get("directions")
+        content = text.get("content") or ""
+        if not directions or not content or not shape.get("visible", True):
+            continue
+        paragraphs = _paragraphs(content)
+        wrong, mixed = [], []
+        for index, (paragraph, direction) in enumerate(zip(paragraphs, directions), start=1):
+            # The Mac answers None for a paragraph not set right to left, and
+            # draws it by its first letter, which reads right but for one case:
+            # Hebrew and Arabic in one line, drawn there as on Windows.
+            if direction == "rtl" or _script(paragraph) not in _RANGE_WORDS:
+                continue
+            if direction is None and not _hebrew_and_arabic(paragraph):
+                continue
+            first = next((ch for ch in paragraph
+                          if unicodedata.bidirectional(ch) in _LEFT_TO_RIGHT | _RIGHT_TO_LEFT), "")
+            if unicodedata.bidirectional(first) not in _RIGHT_TO_LEFT:
+                continue
+            wrong.append(index)
+            line = paragraph.strip()
+            if any(_drawn_order(line, False, digits) != _drawn_order(line, True, digits)
+                   for digits in (False, True)) or _hebrew_and_arabic(line):
+                mixed.append(line)
+        if not mixed:
+            continue
+        name = shape["name"]
+        sample = mixed[0] if len(mixed[0]) <= 40 else mixed[0][:40] + "…"
+        lines = "a paragraph" if len(wrong) == 1 else f"{len(wrong)} paragraphs"
+        findings.append(_finding(
+            slide_index, "text_direction", [name],
+            f"'{name}' has {lines} of {_script(content)} set left to right and not "
+            f"tagged as {_script(content)}, such as \"{sample}\". PowerPoint for "
+            "Windows draws them left to right: the punctuation and numbers in them "
+            "land on the wrong side. PowerPoint for Mac goes by the first letter "
+            "instead, so the slide reads right there and wrong on Windows.",
+            f"Set them right to left ({_direction_call(paragraphs, wrong)}).",
+            paragraphs=wrong,
+        ))
+    return findings
+
+
+# Latin words, run together by spaces or hyphens: "F1", "PowerPoint",
+# "Claude Code". Then what follows them up to the next letter.
+_LATIN_RUN = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:[ \-][A-Za-z0-9]+)*")
+_AFTER_LATIN = re.compile(r"[^\sA-Za-z0-9\u0590-\u08FF\uFB1D-\uFEFF\u200f]*\s?")
+_RLM = "\u200f"
+
+
+def _mixed_direction(slide_index, shapes):
+    """Latin words in a right-to-left paragraph, with a space or a mark after.
+
+    PowerPoint splits the text into runs by script as it is written, and the
+    space or punctuation after a Latin word goes into the Latin run.
+    In a paragraph drawn right to left that run is drawn as one block, so
+    "בדור F1 ההורים" comes out with two spaces on one side of F1 and none
+    on the other, and the colon of "F1: שי טצו" is drawn before F1. A
+    right-to-left mark (U+200F) after the word, and after its punctuation,
+    puts them in the Hebrew run, where they are drawn in their place. Seen
+    the same on Windows and on the Mac.
+    """
+    findings = []
+    for shape in shapes:
+        text = shape.get("text") or {}
+        content = text.get("content") or ""
+        if not content or not shape.get("visible", True):
+            continue
+        directions = text.get("directions") or []
+        paragraphs = _paragraphs(content)
+        hits = []
+        for index, paragraph in enumerate(paragraphs, start=1):
+            if _script(paragraph) not in _RANGE_WORDS:
+                continue
+            first = next((ch for ch in paragraph
+                          if unicodedata.bidirectional(ch) in _LEFT_TO_RIGHT | _RIGHT_TO_LEFT), "")
+            set_rtl = index <= len(directions) and directions[index - 1] == "rtl"
+            if not set_rtl and unicodedata.bidirectional(first) not in _RIGHT_TO_LEFT:
+                continue
+            for match in _LATIN_RUN.finditer(paragraph):
+                after = _AFTER_LATIN.match(paragraph, match.end()).group(0)
+                if not after:
+                    continue
+                marks = after.rstrip()
+                rest = paragraph[match.end() + len(after):]
+                if not marks and not rest:
+                    continue
+                hits.append((match.group(0), after, marks))
+        if not hits:
+            continue
+        name = shape["name"]
+        word, after, marks = hits[0]
+        find = word + after
+        fixed = word + _RLM + (marks + _RLM if marks else "") + after[len(marks):]
+        shown = fixed.replace(_RLM, "\\u200f")
+        more = "" if len(hits) == 1 else f", and {len(hits) - 1} more like it"
+        findings.append(_finding(
+            slide_index, "mixed_direction", [name],
+            f"'{name}' has Latin text in a right-to-left paragraph, \"{find.strip()}\"{more}. "
+            "PowerPoint puts the space or punctuation after it in the Latin run and "
+            "draws it on the wrong side of the word.",
+            f"Put a right-to-left mark (U+200F) after the word"
+            f"{' and after its punctuation' if marks else ''}: ppt_find_replace_text "
+            f"slide_indices=[{slide_index}] shape_name='{name}' find_text=\"{find}\" "
+            f"replace_text=\"{shown}\". The mark is invisible.",
+            severity="warning", examples=[h[0] for h in hits],
+        ))
+    return findings
+
+
+_PICTURES = frozenset({msoPicture, msoLinkedPicture})
+
+
+def _stretched(slide_index, shapes, slide_area=None):
+    """A picture drawn in other proportions than its image's.
+
+    A photo or a logo given both a width and a height that do not match it is
+    squeezed or stretched, and faces and lettering show it at once. The fix
+    keeps the side that was meant and fits the other to it, about the same
+    centre, so the picture stays where it was put.
+    """
+    findings = []
+    for shape in shapes:
+        natural = shape.get("natural_aspect")
+        if (not natural or shape.get("type") not in _PICTURES
+                or not shape.get("visible", True) or shape["height"] <= 0):
+            continue
+        drawn = shape["width"] / shape["height"]
+        ratio = drawn / natural
+        if abs(ratio - 1) <= _STRETCH:
+            continue
+        name = shape["name"]
+        if ratio > 1:
+            width = shape["height"] * natural
+            left = shape["left"] + (shape["width"] - width) / 2
+            how = "wider"
+            fix = (f"Make it {_pt(shape['width'] - width)} narrower to fit its image, "
+                   f"keeping its height and centre (ppt_update_shape width={_num(width)} "
+                   f"left={_num(left)})")
+        else:
+            height = shape["width"] / natural
+            top = shape["top"] + (shape["height"] - height) / 2
+            how = "taller"
+            fix = (f"Make it {_pt(shape['height'] - height)} shorter to fit its image, "
+                   f"keeping its width and centre (ppt_update_shape height={_num(height)} "
+                   f"top={_num(top)})")
+        if shape.get("lock_aspect"):
+            # A locked picture keeps whatever proportions it has, the wrong
+            # ones too: given a new width, its height follows.
+            fix = (f"Unlock its proportions first (ppt_lock_aspect_ratio "
+                   f"locked=false), then {fix[0].lower()}{fix[1:]}")
+        crop = (f"Crop the image to the proportions it is drawn at, keeping its size "
+                f"(ppt_crop_picture shape_name_or_index='{name}' crop_fit='shape')")
+        stretch = round(abs(ratio - 1) * 100) if ratio > 1 else round(abs(1 / ratio - 1) * 100)
+        # A photo was given its box on purpose, and cropping keeps the box and
+        # the slide around it; a logo cropped loses part of its mark.
+        small = slide_area and shape["width"] * shape["height"] < _LOGO_SHARE * slide_area
+        if small:
+            fix = f"{fix}, or {crop[0].lower()}{crop[1:]}"
+        else:
+            fix = f"{crop}, or {fix[0].lower()}{fix[1:]}"
+        findings.append(_finding(
+            slide_index, "stretched_picture", [name],
+            f"'{name}' is stretched: it is drawn {_pt(shape['width'])} by "
+            f"{_pt(shape['height'])}, {stretch}% {how} for its size than its "
+            f"image, so what is in it looks squeezed.",
+            f"{fix}.",
+            stretch_pct=stretch,
+        ))
+    return findings
+
+
+# Text smaller than this is hard to read when the slide is projected. A
+# designed deck sets its labels and source lines in 10 or 11 pt; below that is
+# text squeezed to fit.
+_SMALLEST_TEXT = 10.0
+
+# What PowerPoint puts in a slide's corners itself, set small on purpose.
+_SMALL_BY_DESIGN = frozenset({ppPlaceholderDate, ppPlaceholderFooter, ppPlaceholderSlideNumber})
+
+
+def _small_text(slide_index, shapes):
+    """Text set too small to read when the slide is projected.
+
+    Judged by the smallest size in the shape: a line in 9 pt under a heading
+    in 24 is the line the back of the room cannot read. The date, footer and
+    slide number are left alone; they are small by design.
+    """
+    findings = []
+    for shape in shapes:
+        text = shape.get("text") or {}
+        if (not shape.get("visible", True) or not text.get("chars")
+                or shape.get("placeholder_type") in _SMALL_BY_DESIGN):
+            continue
+        sizes = [run["size"] for run in text.get("runs") or [] if run.get("size")]
+        # Text set to shrink to fit is judged by the saved file: how far
+        # PowerPoint shrank it, and the size it is set in when the file says.
+        # Read live, both platforms give the size already shrunk (18 pt at
+        # 70% reads as 13), and PowerPoint for Mac cannot say it shrinks.
+        shrunk = shape.get("shrunk") or {}
+        scale = shrunk.get("scale") or 1.0
+        set_in = shrunk.get("smallest")
+        if set_in is None and sizes:
+            set_in = min(sizes) / scale
+        if set_in is None or set_in * scale >= _SMALLEST_TEXT - 0.05:
+            continue
+        name, smallest = shape["name"], round(set_in * scale, 1)
+        if scale < 1.0:
+            drawn = (f"set in {_pt(round(set_in, 1))} and shrunk by PowerPoint to "
+                     f"{_pt(smallest)} to fit its box")
+            fix = (f"Give it the room its words need at {_num(_SMALLEST_TEXT)} pt or more: a "
+                   f"bigger box (ppt_update_shape), fewer words, or both")
+        else:
+            drawn = f"set in {_pt(smallest)}"
+            fix = (f"Set it to at least {_num(_SMALLEST_TEXT)} pt (ppt_format_text "
+                   f"shape_name_or_index='{name}' font_size={_num(_SMALLEST_TEXT)})")
+            if text.get("autofit") == "shrink_to_fit":
+                fix += (". PowerPoint shrinks it to fit its box, so give it the room as well "
+                        "(ppt_update_shape), or say less")
+        findings.append(_finding(
+            slide_index, "small_text", [name],
+            f"Text in '{name}' is {drawn}, too small to read when the slide is "
+            f"projected; {_pt(_SMALLEST_TEXT)} is about the smallest that is.",
+            f"{fix}.", severity="warning", size=smallest,
+        ))
+    return findings
+
+
+# A picture drawn larger than one of its image's pixels to a point is spread
+# thin, and soft on a projector.
+_PIXELS_PER_POINT = 1.0
+
+
+def _blurry(slide_index, shapes):
+    """A picture drawn larger than its image has pixels for."""
+    findings = []
+    for shape in shapes:
+        pixels = shape.get("pixels")
+        if (not pixels or shape.get("type") not in _PICTURES or not shape.get("visible", True)
+                or shape["width"] <= 0 or shape["height"] <= 0):
+            continue
+        across, down = pixels
+        density = min(across / shape["width"], down / shape["height"])
+        if density >= _PIXELS_PER_POINT:
+            continue
+        name = shape["name"]
+        width = shape["width"] * density / _PIXELS_PER_POINT
+        height = shape["height"] * density / _PIXELS_PER_POINT
+        left = shape["left"] + (shape["width"] - width) / 2
+        top = shape["top"] + (shape["height"] - height) / 2
+        findings.append(_finding(
+            slide_index, "blurry_picture", [name],
+            f"'{name}' is drawn {_pt(shape['width'])} by {_pt(shape['height'])} from an "
+            f"image {round(across)} by {round(down)} pixels, so it looks soft when the "
+            f"slide is projected.",
+            f"Use a larger image, at least {math.ceil(shape['width'] * _PIXELS_PER_POINT)} "
+            f"pixels across, or draw it at most {_pt(width)} by {_pt(height)}, keeping "
+            f"its centre (ppt_update_shape width={_num(width)} height={_num(height)} "
+            f"left={_num(left)} top={_num(top)}).",
+            severity="warning", pixels_per_point=round(density, 2),
+        ))
+    return findings
+
+
+def _missing_alt_text(slide_index, shapes):
+    """A picture, chart or SmartArt with no alt text for a screen reader.
+
+    Known only from the saved file; one whose file says nothing is left
+    alone. A picture marked as decoration needs none, and alt text that is
+    only the image's file name says nothing.
+    """
+    findings = []
+    for shape in shapes:
+        if shape.get("described") is not False or not shape.get("visible", True):
+            continue
+        name = shape["name"]
+        if IS_MACOS:
+            fix = (f"Describe what it shows in PowerPoint: right-click '{name}', View Alt "
+                   "Text. PowerPoint for Mac does not let a tool set it; on Windows, "
+                   f"ppt_update_shape shape_name='{name}' alt_text='...' does.")
+        else:
+            fix = (f"Describe what it shows, in a sentence: ppt_update_shape "
+                   f"shape_name='{name}' alt_text='...'.")
+        findings.append(_finding(
+            slide_index, "missing_alt_text", [name],
+            f"'{name}' has no alt text, so a screen reader cannot say what it shows.",
+            fix, severity="warning",
+        ))
+    return findings
+
+
+# Chart parts sharing less than this, either way, only touch.
+_CHART_TOUCH = 2.0
+
+
+def _chart_overlaps(slide_index, shapes):
+    """Parts of a chart drawn over each other: data labels, the legend, the
+    title and the plot.
+
+    PowerPoint lays a chart out itself, and with small slices or many points
+    its labels land on each other; a legend or title moved by hand can sit
+    on the bars. Read on Windows only: PowerPoint for Mac has no chart
+    object to ask.
+    """
+    def meet(a, b):
+        width, height = _shared(a, b)
+        return width > _CHART_TOUCH and height > _CHART_TOUCH
+
+    findings = []
+    for shape in shapes:
+        parts = shape.get("chart_parts")
+        if not parts or not shape.get("visible", True):
+            continue
+        name, problems, fixes = shape["name"], [], []
+        labels = parts.get("labels") or []
+        crowded = {i for i, a in enumerate(labels) for j, b in enumerate(labels)
+                   if i < j and meet(a, b)} | {j for i, a in enumerate(labels)
+                                               for j, b in enumerate(labels)
+                                               if i < j and meet(a, b)}
+        if crowded:
+            problems.append(f"{len(crowded)} of its {len(labels)} data labels run into each other")
+            fixes.append("make the chart larger, show labels on fewer series "
+                         "(ppt_set_chart_series show_data_labels=false), or put the small "
+                         "values together")
+        legend, plot, title = parts.get("legend"), parts.get("plot"), parts.get("title")
+        if legend and plot and meet(legend, plot):
+            problems.append("its legend lies on the plot")
+            fixes.append(f"put the legend beside the plot (ppt_format_chart "
+                         f"shape_name_or_index='{name}' legend_position='bottom')")
+        if title and (plot and meet(title, plot) or legend and meet(title, legend)):
+            problems.append("its title lies on the plot or the legend")
+            fixes.append(f"put the title back above the plot (ppt_format_chart "
+                         f"shape_name_or_index='{name}' title_position='top')")
+        if not problems:
+            continue
+        findings.append(_finding(
+            slide_index, "chart_overlap", [name],
+            f"In '{name}', {'; '.join(problems)}.",
+            f"{'; '.join(fixes)[0].upper()}{'; '.join(fixes)[1:]}.",
+            severity="warning",
+        ))
+    return findings
+
+
+# The names PowerPoint gives a new chart's categories and series.
+_SAMPLE_CATEGORY = re.compile(r"^Category \d+$")
+# The pie's sample quarters are also what a real quarterly chart is called, so
+# they count only beside sample series or numbers.
+_SAMPLE_QUARTER = re.compile(r"^[1-4](?:st|nd|rd|th) Qtr$")
+_SAMPLE_SERIES = re.compile(r"^(?:Series \d+|Y Values)$")
+
+
+def _sample_values():
+    from gvml.charts import (
+        DEFAULT_BUBBLE_SERIES, DEFAULT_PIE_SERIES, DEFAULT_SERIES, DEFAULT_XY_SERIES,
+    )
+    return [tuple(s["values"]) for s in
+            DEFAULT_SERIES + DEFAULT_PIE_SERIES + DEFAULT_XY_SERIES + DEFAULT_BUBBLE_SERIES]
+
+
+def _chart_sample_data(slide_index, shapes):
+    """A chart still showing the data PowerPoint put in it.
+
+    A new chart comes with four categories named "Category 1" to 4, series
+    named "Series 1" to 3, and made-up numbers. A model fills in the series
+    and forgets the names, or adds a chart and moves on; either way the
+    chart reads as a placeholder.
+    """
+    findings = []
+    samples = None
+    for shape in shapes:
+        chart = shape.get("chart")
+        if not chart or not shape.get("visible", True):
+            continue
+        if samples is None:
+            samples = _sample_values()
+        left = []
+        series = chart.get("series") or []
+        names = [s.get("name") for s in series if _SAMPLE_SERIES.match(s.get("name") or "")]
+        numbers = [s.get("name") for s in series
+                   if tuple(round(v, 4) for v in s.get("values") or [] if v is not None) in samples]
+        categories = [c for c in chart.get("categories") or [] if _SAMPLE_CATEGORY.match(c or "")
+                      or ((names or numbers) and _SAMPLE_QUARTER.match(c or ""))]
+        if categories:
+            left.append("categories named " + ", ".join(f"'{c}'" for c in categories[:4]))
+        if names:
+            left.append("series named " + ", ".join(f"'{n}'" for n in names[:3]))
+        if numbers:
+            left.append("PowerPoint's sample numbers")
+        if not left:
+            continue
+        name = shape["name"]
+        findings.append(_finding(
+            slide_index, "chart_sample_data", [name],
+            f"The chart '{name}' still has the data PowerPoint puts in a new "
+            f"chart: {'; '.join(left)}.",
+            f"Put the real data in it (ppt_set_chart_data on '{name}', with "
+            "the categories and every series named), or delete the chart.",
+        ))
+    return findings
+
+
+def _fonts(slide_index, shapes, theme_fonts=None):
+    """Text set in a font this computer does not have, or drawn in another.
+
+    PowerPoint draws a font it cannot find in a stand-in, and says nothing:
+    the deck looks right where it was made and different here. Hebrew and
+    Arabic are drawn in the run's right-to-left font, which setting a font
+    by name left as it was, so a title asked for in David showed in the
+    theme's font. That one is known only on Windows, where it can be read.
+    """
+    findings = []
+    usual = {}
+    for shape in shapes:
+        text = shape.get("text") or {}
+        missing = set(text.get("missing_fonts") or [])
+        for run in text.get("runs") or []:
+            if run.get("font") and run["font"] not in missing and not run["font"].startswith("+"):
+                usual[run["font"]] = usual.get(run["font"], 0) + 1
+    for shape in shapes:
+        text = shape.get("text") or {}
+        if not shape.get("visible", True) or not text.get("chars"):
+            continue
+        name = shape["name"]
+        missing = text.get("missing_fonts") or []
+        if missing:
+            listed = ", ".join(f"'{f}'" for f in missing)
+            instead = max(usual, key=usual.get) if usual else None
+            use = (f"ppt_format_text font_name='{instead}', the slide's own font"
+                   if instead else "ppt_format_text font_name= one the rest of the deck uses")
+            findings.append(_finding(
+                slide_index, "font_missing", [name],
+                f"'{name}' asks for {listed}, which this computer does not have, "
+                "so PowerPoint draws it in a stand-in font here, as it will on "
+                "any computer without it.",
+                f"Set it in a font that is installed ({use}), or install {listed} "
+                "on every computer that will show the deck.",
+                severity="warning", fonts=missing,
+            ))
+            continue
+        fonts = {run.get("font") for run in text.get("runs") or [] if run.get("font")}
+        drawn = text.get("script_font")
+        themed = theme_fonts or {}
+        asked = next(iter(fonts)) if len(fonts) == 1 else None
+        # The theme's Latin font was not asked for by name, so a right-to-left
+        # font beside it is no sign of one set only halfway. A right-to-left
+        # font other than the theme's was chosen; the one left behind when a
+        # font is set by name is the theme's, or with a theme that names none,
+        # PowerPoint's default, which cannot be told from a choice.
+        by_name = asked and not asked.startswith("+") and asked not in set(themed.get("latin") or ())
+        left_behind = not themed.get("script") or drawn in set(themed["script"])
+        if (by_name and left_behind and drawn and not drawn.startswith("+")
+                and drawn.lower() != asked.lower()):
+            script = _script(text.get("content") or "") or "right-to-left"
+            findings.append(_finding(
+                slide_index, "font_missing", [name],
+                f"The {script} in '{name}' is drawn in '{drawn}', not '{asked}': "
+                f"PowerPoint draws right-to-left letters in a font of their own, "
+                f"and only the Latin one was set to '{asked}'.",
+                (f"Set the font again (ppt_format_text font_name='{asked}'), which "
+                 "sets it for right-to-left letters too."
+                 if text.get("script_font_settable", True) else
+                 f"Set the right-to-left font to '{asked}' in PowerPoint's Font dialog: "
+                 "PowerPoint for Mac does not let it be set through its scripting, and "
+                 "PowerPoint for Windows sets it with ppt_format_text font_name."),
+                severity="warning", fonts=[asked],
+            ))
+    return findings
+
+
 def _empty_placeholders(slide_index, shapes):
     findings = []
     for shape in shapes:
@@ -2633,7 +3985,7 @@ def slide_findings(slide, slide_w, slide_h, only=None, trust_template=True):
     other: see ``_as_designed``.
     """
     index = slide["slide_index"]
-    shapes = _settled(slide["shapes"])
+    shapes = _animated(slide, _settled(slide["shapes"]))
     template = slide.get("template") or []
     layout = _layout(shapes, slide_w, slide_h)
     findings = (
@@ -2641,16 +3993,30 @@ def slide_findings(slide, slide_w, slide_h, only=None, trust_template=True):
         + _overflow(index, shapes, layout)
         + _overlap(index, shapes, layout)
         + _template_collisions(index, shapes, template, layout, slide.get("template_area"))
+        + _template_rules(index, shapes, template, layout)
         + _low_contrast(index, shapes, slide.get("background_hex"), template,
                         slide.get("follows_background"), layout, trust_template,
                         slide.get("background_gradient"), slide.get("theme_colors"))
         + _cramped_text(index, layout)
         + _narrow_margins(index, layout, slide_w)
+        + _vertical_margins(index, layout, slide_h)
         + _misaligned(index, layout, only=only)
+        + _title_body_edge(index, shapes, layout)
         + _off_centre_labels(index, layout)
         + _uneven_sizes(index, layout)
         + _sample_text(index, shapes)
+        + _chart_sample_data(index, shapes)
+        + _fonts(index, shapes, slide.get("theme_fonts"))
+        + _stretched(index, shapes, slide_w * slide_h)
+        + _blurry(index, shapes)
+        + _small_text(index, shapes)
+        + _missing_alt_text(index, shapes)
+        + _chart_overlaps(index, shapes)
+        + _number_order(index, shapes)
+        + _text_direction(index, shapes)
+        + _mixed_direction(index, shapes)
     )
+    findings += _inside_groups(index, slide, slide_w, slide_h, trust_template)
     if only is not None:
         # Text on a touched card is drawn on its fill, so whether it can still
         # be read is that write's to report as well: a card filled dark under
@@ -2663,13 +4029,13 @@ def slide_findings(slide, slide_w, slide_h, only=None, trust_template=True):
         # Two like shapes of two sizes may be a row or a chart a model is still
         # drawing, the third bar not yet added; the slide's own check judges
         # the finished set.
-        return _sorted([
+        return _on_hidden(slide, _sorted([
             f for f in findings
             if f["type"] in SHAPE_FINDINGS and (
                 any(name in only for name in f["shapes"])
                 or (f["type"] == "low_contrast" and f["shapes"][0] in drawn_on))
             and not (f["type"] == "uneven_sizes" and len(f["shapes"]) == 2)
-        ])
+        ]))
     spacing = _uneven_spacing(index, layout, slide_w)
     # A row whose gaps are reported is put back between the margins by that
     # finding's fix, so its cards are not told about the margin as well.
@@ -2677,7 +4043,80 @@ def slide_findings(slide, slide_w, slide_h, only=None, trust_template=True):
     findings = [f for f in findings
                 if not (f["type"] == "narrow_margin" and f["shapes"][0] in spaced)]
     findings += spacing + _empty_placeholders(index, shapes)
-    return _sorted(findings)
+    return _on_hidden(slide, _sorted(findings))
+
+
+def _animated(slide, shapes):
+    """The shapes, each with when it is on the screen and whether it moves.
+
+    See ``on_screen``. A slide with no animations and no Morph next to it
+    keeps its shapes as they are.
+    """
+    animations = slide.get("animations") or []
+    shown, moves = on_screen(animations), moving(animations)
+    if not (shown or moves or slide.get("morph")):
+        return shapes
+    return [{**shape, "shown": shown.get(shape["name"]),
+             "moves": shape["name"] in moves, "morph": bool(slide.get("morph"))}
+            for shape in shapes]
+
+
+def _on_hidden(slide, findings):
+    """Say so in each finding on a hidden slide.
+
+    It is still part of the deck, and shown once unhidden, so it is checked
+    like any other; the reader decides whether it matters now.
+    """
+    if not slide.get("hidden"):
+        return findings
+    for finding in findings:
+        finding["hidden_slide"] = True
+        finding["message"] += f" Slide {slide['slide_index']} is hidden in the slide show."
+    return findings
+
+
+def _inside_groups(index, slide, slide_w, slide_h, trust_template=True):
+    """The checks on a shape's own text, for the shapes inside groups.
+
+    A group is laid out as one box; what is inside it is placed by whoever
+    drew it. Its text is still text: it can spill out of its box, be left as
+    stand-in words, read backwards or be set in a font that is not there. Its
+    colour is judged against what is under it inside the group, or the slide.
+    """
+    inner = _settled(slide.get("inner") or [])
+    if not inner:
+        return []
+    layout = _layout(inner, slide_w, slide_h)
+    # What is under a group shows through it, so the slide's own shapes are
+    # backdrops too; only the findings on what is inside are this check's.
+    names = {s["name"] for s in inner}
+    around = [s for s in _settled(slide["shapes"]) if s.get("type") not in (msoGroup, msoSmartArt)]
+    contrast = [f for f in _low_contrast(
+                    index, around + inner, slide.get("background_hex"), slide.get("template") or (),
+                    slide.get("follows_background"), _layout(around + inner, slide_w, slide_h),
+                    trust_template, slide.get("background_gradient"), slide.get("theme_colors"))
+                if f["shapes"][0] in names]
+    findings = (_overflow(index, inner, layout)
+                + contrast
+                + _sample_text(index, inner)
+                + _number_order(index, inner)
+                + _text_direction(index, inner)
+                + _mixed_direction(index, inner)
+                + _fonts(index, inner, slide.get("theme_fonts"))
+                + _small_text(index, inner))
+    unreachable = {s["name"]: s for s in inner if s.get("reachable") is False}
+    for finding in findings:
+        member = unreachable.get(finding["shapes"][0])
+        if member is None:
+            continue
+        groups, own = member.get("groups") or [member["in_group"]], member["name"].rsplit("/", 1)[-1]
+        # A group in a group is still one after the outer is ungrouped.
+        calls = ", then ".join(f"ppt_ungroup_shapes shape_name_or_index='{g}'" for g in groups)
+        named = " and then ".join(f"'{g}'" for g in groups)
+        finding["fix"] = (f"Ungroup {named} first ({calls}): PowerPoint for Mac does not "
+                          f"reach inside a group. Then, with '{own}' as the shape: "
+                          + finding["fix"].replace(member["name"], own))
+    return findings
 
 
 def _settled(shapes):
@@ -2775,7 +4214,26 @@ def _slides(numbers):
     return ("slide " if len(numbers) == 1 else "slides ") + ", ".join(str(n) for n in numbers)
 
 
-def deck_findings(slides, slide_h, slide_w=None):
+def _bookends(slides):
+    """Slides dressed like the cover, which are not held to the content titles.
+
+    A closing slide or a section divider often wears the cover's backdrop,
+    one most slides do not have, with its words set large near the top: a
+    "Thank you" in 44 pt was reported as a title out of size among 32 pt
+    ones. Slides with the first slide's background, when that is not the
+    deck's usual one, are left out of the comparison like the cover itself.
+    """
+    backgrounds = [slide.get("background_hex") for slide in slides]
+    if len(slides) < 3 or not backgrounds[0]:
+        return set()
+    usual = max(set(backgrounds), key=backgrounds.count)
+    if backgrounds[0] == usual:
+        return set()
+    return {slide["slide_index"] for slide in slides[1:]
+            if slide.get("background_hex") == backgrounds[0]}
+
+
+def _title_findings(slides, slide_h, slide_w=None):
     """Titles that differ between slides.
 
     Flipping from one slide to the next, a title that is a size larger, a few
@@ -2788,8 +4246,11 @@ def deck_findings(slides, slide_h, slide_w=None):
     light title on a dark slide is meant.
     """
     by_index = {slide["slide_index"]: slide for slide in slides}
+    bookends = _bookends(slides)
     titled = []
     for slide in slides:
+        if slide["slide_index"] in bookends:
+            continue
         title = find_title(slide, slide_h)
         if title is not None:
             titled.append((slide["slide_index"], title))
@@ -2903,6 +4364,16 @@ def deck_findings(slides, slide_h, slide_w=None):
         lambda value: f"to {value} alignment",
         lambda value: f"alignment='{value}'", held, tool="ppt_set_paragraph_format",
     )
+    # Capitals the template sets by formatting are its style, and the words
+    # under them are typed as they please, so only typed capitals are held.
+    if not any((title.get("text") or {}).get("all_caps") for _, title in titled):
+        findings += _title_differences(
+            "capitals", [(index, title, _title_case(title)) for index, title in titled],
+            lambda value: "in capitals" if value == "capitals" else "in normal case",
+            lambda value: "with the title retyped " + (
+                "in capitals" if value == "capitals" else "in normal case"),
+            held, tool="ppt_set_text",
+        )
     findings += _title_differences(
         "weight", [(index, title, _title_weight(title)) for index, title in titled],
         lambda value: f"in {value}" if value == "bold" else "in regular weight",
@@ -2927,6 +4398,243 @@ def deck_findings(slides, slide_h, slide_w=None):
             "colour", entries, lambda value: f"to {value}",
             lambda value: f"color='{value}'", held,
         )
+    return findings
+
+
+def deck_findings(slides, slide_h, slide_w=None):
+    """What differs between slides that should not: titles and body text."""
+    findings = (_title_findings(slides, slide_h, slide_w) + _body_sizes(slides, slide_w, slide_h)
+                + _titles_off_their_layout(slides) + _missing_titles(slides, slide_h)
+                + _duplicate_titles(slides, slide_h))
+    hidden = {slide["slide_index"] for slide in slides if slide.get("hidden")}
+    for finding in findings:
+        odd = sorted(hidden & set(finding.get("slides") or [finding.get("slide_index")]))
+        if odd:
+            finding["hidden_slides"] = odd
+            finding["message"] += (f" {_slides(odd).capitalize()} "
+                                   f"{'is' if len(odd) == 1 else 'are'} hidden in the slide show.")
+    return findings
+
+
+def _slide_heading(slide, slide_h):
+    """The text that heads a slide, wherever it is: its title placeholder,
+    the title ``find_title`` finds, or a cover's big words lower down."""
+    for shape in slide["shapes"]:
+        if (shape.get("placeholder_type") in _TITLE_PLACEHOLDERS
+                and (shape.get("text") or {}).get("chars")):
+            return shape
+    title = find_title(slide, slide_h)
+    if title is not None:
+        return title
+    big = [s for s in slide["shapes"] if s.get("visible", True)
+           and (s.get("text") or {}).get("chars") and (_largest_size(s) or 0) >= _MIN_TITLE_SIZE]
+    return max(big, key=_largest_size, default=None)
+
+
+def _missing_titles(slides, slide_h):
+    """Slides with nothing to head them.
+
+    A screen reader, the outline and the list of slides PowerPoint shows
+    when presenting all go by a slide's title; a slide without one is a
+    number. Only slides whose text was read are judged.
+    """
+    findings = []
+    for slide in slides:
+        if not slide["shapes"] or any(s.get("unread") for s in slide["shapes"]):
+            continue
+        if _slide_heading(slide, slide_h) is not None:
+            continue
+        index = slide["slide_index"]
+        empty = next((s["name"] for s in slide["shapes"]
+                      if s.get("placeholder_type") in _TITLE_PLACEHOLDERS), None)
+        if empty:
+            fix = (f"Type the slide's title in '{empty}' (ppt_set_text slide_index={index} "
+                   f"shape_name_or_index='{empty}').")
+        else:
+            fix = ("Add a title that says what the slide shows, placed and set like the "
+                   "deck's other titles (ppt_add_textbox).")
+        findings.append(_finding(
+            index, "missing_title", [empty] if empty else [],
+            f"Slide {index} has no title, so a screen reader, the outline and the list "
+            "of slides show it only by its number.",
+            fix, severity="warning",
+        ))
+    return findings
+
+
+def _duplicate_titles(slides, slide_h):
+    """Slides with the same title, which read as one slide in any list of them."""
+    by_words = {}
+    for slide in slides:
+        title = _slide_heading(slide, slide_h)
+        words = " ".join(((title or {}).get("text") or {}).get("content", "").split())
+        if words:
+            by_words.setdefault(words.casefold(), []).append((slide["slide_index"], title, words))
+    findings = []
+    for same in by_words.values():
+        if len(same) < 2:
+            continue
+        numbers = [index for index, _, _ in same]
+        words = same[0][2]
+        findings.append(_finding(
+            None, "duplicate_titles", [title["name"] for _, title, _ in same],
+            f"{_slides(numbers).capitalize()} have the same title, '{words}', so they "
+            "read as one slide in the outline and to a screen reader.",
+            f"Make each say what its slide adds, such as '{words}: costs' and "
+            f"'{words}: sales' (ppt_set_text).",
+            severity="warning", slides=numbers,
+        ))
+    return findings
+
+
+# A title placeholder this far from where its layout puts it, and no further,
+# was nudged or resized by hand: further is a decision, a cover title moved
+# up for a photo.
+_LAYOUT_SLIP = 12.0
+
+
+def _titles_off_their_layout(slides):
+    """A title placeholder a little off where its layout puts it, on a layout
+    no other slide uses.
+
+    The titles of slides on one layout are compared with each other. One on
+    a layout used once has nothing to be compared with but the layout, and a
+    title dragged a few points or resized by hand shows as a jump when the
+    deck is flipped through.
+    """
+    uses = {}
+    for slide in slides:
+        uses[(slide.get("design"), slide.get("layout"))] = uses.get(
+            (slide.get("design"), slide.get("layout")), 0) + 1
+    findings = []
+    for slide in slides:
+        home = slide.get("layout_title")
+        if not home or uses[(slide.get("design"), slide.get("layout"))] != 1:
+            continue
+        title = next((s for s in slide["shapes"]
+                      if s.get("placeholder_type") in _TITLE_PLACEHOLDERS
+                      and s.get("visible", True)), None)
+        if title is None:
+            continue
+        now = [title["left"], title["top"], title["width"], title["height"]]
+        home = list(home)
+        if title["height"] > home[3] and _spills_at(title, home[2], home[3]):
+            # Grown to hold its words: the layout's box would spill them, and
+            # putting it back undoes the overflow fix.
+            home[3] = title["height"]
+        off = [abs(a - b) for a, b in zip(now, home, strict=True)]
+        if max(off) <= _ALIGNED or max(off) > _LAYOUT_SLIP:
+            continue
+        name = title["name"]
+        words = []
+        for field, a, b in zip(("left", "top", "width", "height"), now, home, strict=True):
+            if abs(a - b) > _ALIGNED:
+                words.append(f"{field} {_pt(a)} where the layout has {_pt(b)}")
+        index = slide["slide_index"]
+        findings.append(_finding(
+            index, "inconsistent_titles", [name],
+            f"The title on slide {index} is not where its layout '{slide.get('layout')}' "
+            f"puts it: {'; '.join(words)}. No other slide is on that layout, so "
+            "nothing else shows it, but it jumps when the deck is flipped through.",
+            f"Put it back (ppt_update_shape shape_name='{name}' left={_num(home[0])} "
+            f"top={_num(home[1])} width={_num(home[2])} height={_num(home[3])}).",
+            severity="warning", slides=[index],
+        ))
+    return findings
+
+
+# A text box is a slide's copy, rather than a label, a card's words or a
+# source line, when it has at least this many characters in two paragraphs or
+# more, across at least this share of the slide's width.
+_BODY_CHARS = 80
+_BODY_WIDTH = 0.6
+
+# Body text this far from the usual size, and no further, was made smaller or
+# larger to fit: further is a different kind of text, a quote set large or a
+# dense appendix.
+_BODY_SIZE_TOLERANCE = 1.0
+_BODY_SIZE_SLIP = 6.0
+
+_BODY_PLACEHOLDERS = frozenset({ppPlaceholderBody, ppPlaceholderObject})
+
+
+def _body_text(slide, slide_w, slide_h):
+    """The shape that carries a slide's copy, its size, and what it is
+    compared with: its layout for a body placeholder, the deck's other
+    copy for a text box. None when the slide has no copy that is clearly
+    that, in one size.
+    """
+    title = find_title(slide, slide_h)
+    if title is None:
+        return None
+    best = None
+    for shape in slide["shapes"]:
+        text = shape.get("text") or {}
+        if (shape is title or not shape.get("visible", True)
+                or text.get("autofit") == "shrink_to_fit"):
+            continue
+        placeholder = shape.get("placeholder_type")
+        if placeholder in _BODY_PLACEHOLDERS:
+            kind = ("layout", slide.get("design"), slide.get("layout"))
+        elif placeholder is None and shape.get("type") == msoTextBox:
+            paragraphs = [p for p in _paragraphs(text.get("content") or "") if p.strip()]
+            if ((text.get("chars") or 0) < _BODY_CHARS or len(paragraphs) < 2
+                    or not slide_w or shape["width"] < _BODY_WIDTH * slide_w):
+                continue
+            kind = ("copy",)
+        else:
+            continue
+        sizes = {run.get("size") for run in text.get("runs") or [] if run.get("size")}
+        if len(sizes) != 1:
+            continue
+        if best is None or text["chars"] > best[0]["text"]["chars"]:
+            best = (shape, sizes.pop(), kind)
+    return best
+
+
+def _body_sizes(slides, slide_w, slide_h):
+    """Body text a size or two off the rest of the deck's.
+
+    A slide that held too much had its text made smaller to fit, and flipping
+    from one slide to the next the text jumps in size. Only like is compared
+    with like: a body placeholder with those on the same layout, which gives
+    them all one size, and a slide's main copy in a text box with the others.
+    """
+    by_kind = {}
+    for slide in slides:
+        found = _body_text(slide, slide_w, slide_h)
+        if found:
+            shape, size, kind = found
+            by_kind.setdefault(kind, {})[slide["slide_index"]] = (shape, size)
+    findings = []
+    for bodies in by_kind.values():
+        if len(bodies) < _MIN_TITLED_SLIDES:
+            continue
+        usual, rest = _usual_group([(i, size) for i, (_, size) in bodies.items()],
+                                   _BODY_SIZE_TOLERANCE)
+        if len(usual) < 2:
+            continue
+        usual_size = sorted(v for _, v in usual)[len(usual) // 2]
+        odd = [(i, v) for i, v in rest if abs(v - usual_size) <= _BODY_SIZE_SLIP]
+        if not odd:
+            continue
+        groups = [usual] + _clusters(odd, _BODY_SIZE_TOLERANCE)
+        described = "; ".join(
+            f"{round(sorted(v for _, v in g)[len(g) // 2], 1):g} pt on {_slides(i for i, _ in g)}"
+            for g in groups)
+        names = [bodies[i][0]["name"] for i, _ in odd]
+        calls = "; ".join(f"'{bodies[i][0]['name']}' on slide {i}" for i, _ in sorted(odd))
+        size = f"{round(usual_size, 1):g}"
+        smaller = any(v < usual_size for _, v in odd)
+        findings.append(_finding(
+            None, "inconsistent_body_text", names,
+            f"Body text differs in size between slides: {described}.",
+            f"Set the body text to {size} pt (ppt_format_text font_size={size}) "
+            f"on {calls}."
+            + (" Where it then no longer fits, cut the text or split the slide "
+               "rather than make it smaller." if smaller else ""),
+            severity="warning", slides=sorted(i for i, _ in odd),
+        ))
     return findings
 
 
@@ -3003,6 +4711,17 @@ def _title_edge(title, field):
     box = text_box(title) or shape_box(title)
     return {"left": box[0], "top": box[1], "right": box[2],
             "center": (box[0] + box[2]) / 2}[field]
+
+
+def _title_case(title):
+    """'capitals' for a title typed all in capitals, 'normal' for one with
+    small letters, None for one with too few letters to tell, or none with
+    a case at all, Hebrew or Arabic."""
+    letters = [ch for ch in (title.get("text") or {}).get("content") or "" if ch.isalpha()]
+    cased = [ch for ch in letters if ch.isupper() or ch.islower()]
+    if len(cased) < 4:
+        return None
+    return "capitals" if all(ch.isupper() for ch in cased) else "normal"
 
 
 def _title_weight(title):
@@ -3279,7 +4998,60 @@ def _text_facts(shape, full):
         {"color_hex": colour, "size": size, "bold": bold, "font": name, "theme": theme}
         for colour, size, bold, name, theme in sorted(styles, key=lambda s: (s[0] or "", s[1] or 0))
     ]
+    try:
+        caps = shape.TextFrame2.TextRange.Font.Allcaps
+        facts["all_caps"] = {msoTrue: True, 0: False}.get(caps)
+    except Exception:
+        pass
+    if has_right_to_left(content):
+        facts["directions"] = _directions(tr)
+        try:
+            # The font Hebrew and Arabic are drawn in; "" when the runs differ.
+            facts["script_font"] = tr.Font.NameComplexScript or None
+        except Exception:
+            pass
     return facts
+
+
+def has_right_to_left(content) -> bool:
+    """Whether the text has a Hebrew or Arabic letter, so its paragraphs'
+    direction is worth reading."""
+    return any(unicodedata.bidirectional(ch) in _RIGHT_TO_LEFT for ch in content)
+
+
+# Languages written right to left, by their primary language id: Arabic,
+# Hebrew, Urdu, Farsi, Syriac, Divehi, Yiddish's in Windows' numbering.
+_RTL_LANGUAGES = frozenset({0x01, 0x0D, 0x20, 0x29, 0x5A, 0x65, 0x3D})
+
+
+def _directions(tr):
+    """Each paragraph's direction as PowerPoint draws it, 'rtl' or 'ltr',
+    None where unread.
+
+    A paragraph is drawn right to left when it is set so, and also when its
+    text is in a right-to-left language: PowerPoint tags Hebrew typed or set
+    through it as Hebrew, and draws it from the right without being told. A
+    file written by another program leaves the language out, and then only
+    the setting counts.
+    """
+    try:
+        count = tr.Paragraphs().Count
+    except Exception:
+        return None
+    directions = []
+    for i in range(1, count + 1):
+        try:
+            paragraph = tr.Paragraphs(i)
+            if paragraph.ParagraphFormat.TextDirection == ppDirectionRightToLeft:
+                directions.append("rtl")
+                continue
+            language = paragraph.LanguageID
+            if language < 0:
+                language = paragraph.Runs(1).LanguageID
+            directions.append("rtl" if (language & 0x3FF) in _RTL_LANGUAGES else "ltr")
+        except Exception:
+            directions.append(None)
+    return directions
 
 
 def _geometry_facts(shape, z):
@@ -3315,6 +5087,11 @@ def _geometry_facts(shape, z):
     if facts["type"] == msoPlaceholder:
         try:
             facts["placeholder_type"] = shape.PlaceholderFormat.Type
+        except Exception:
+            pass
+    if facts["type"] in (msoPicture, msoLinkedPicture):
+        try:
+            facts["lock_aspect"] = shape.LockAspectRatio == msoTrue
         except Exception:
             pass
     return facts
@@ -3391,6 +5168,9 @@ def read_shapes(refs, geometry, appearance, detail):
             # The colours of text on a touched card are read too, since they
             # are drawn on its fill.
             appearance(facts, ref, _on_touched(facts, touched))
+        elif facts["name"] not in detail:
+            # Its words are not known: no text is not the same as none read.
+            facts["unread"] = True
     return shapes
 
 
@@ -3552,6 +5332,120 @@ def _template_area(slide, graphics, cache=None):
     return area
 
 
+def _members_of(shape):
+    """The shapes inside a group or a SmartArt graphic, with their paths."""
+    from ppt_com.shape_lookup import PATH_SEPARATOR, walk_group_children
+
+    prefix = shape.Name + PATH_SEPARATOR
+    if shape.Type == msoGroup:
+        yield from walk_group_children(shape, prefix)
+        return
+    try:
+        items = shape.GroupItems
+        count = items.Count
+    except Exception:
+        return
+    for i in range(1, count + 1):
+        try:
+            child = items(i)
+            yield child, prefix + child.Name
+        except Exception:
+            continue
+
+
+def _inner_facts(shapes, refs):
+    """The shapes inside the slide's groups and SmartArt graphics, read in full
+    and named by the path the tools take: "Group 4/TextBox 2".
+
+    The checks judge a group by its box; what is inside it has text that can
+    still spill, read wrong or be left as stand-in words.
+    """
+    inner = []
+    for facts, ref in zip(shapes, refs, strict=True):
+        if facts["type"] not in (msoGroup, msoSmartArt):
+            continue
+        try:
+            members = list(_members_of(ref))
+        except Exception:
+            logger.debug("Cannot read inside '%s'", facts["name"], exc_info=True)
+            continue
+        for order, (child, path) in enumerate(members, start=1):
+            try:
+                # Drawn in order over whatever is under the group.
+                child_facts = _geometry_facts(child, facts["z"] + order / 1000)
+                _read_appearance(child_facts, child, True)
+            except Exception:
+                logger.debug("Cannot read '%s'", path, exc_info=True)
+                continue
+            if child_facts["type"] in (msoGroup, msoSmartArt):
+                continue
+            child_facts["name"] = path
+            child_facts["in_group"] = facts["name"]
+            inner.append(child_facts)
+    return inner
+
+
+def _theme_fonts(slide, cache=None):
+    """The theme's heading and body fonts, Latin and right to left."""
+    key = None
+    if cache is not None:
+        try:
+            key = ("theme fonts", slide.Design.Index)
+        except Exception:
+            key = None
+        if key in cache:
+            return cache[key]
+    fonts = {"latin": [], "script": []}
+    try:
+        scheme = slide.Design.SlideMaster.Theme.ThemeFontScheme
+    except Exception:
+        scheme = None
+    if scheme is not None:
+        for part in ("MajorFont", "MinorFont"):
+            for kind, index in (("latin", 1), ("script", 3)):   # msoThemeLatin, ComplexScript
+                try:
+                    name = getattr(scheme, part)(index).Name
+                except Exception:
+                    continue
+                if name:
+                    fonts[kind].append(name)
+    if key is not None:
+        cache[key] = fonts
+    return fonts
+
+
+def _layout_title(slide, cache=None):
+    """Where the slide's layout puts its title, as a box, or None."""
+    key = None
+    if cache is not None:
+        try:
+            key = ("layout title", slide.Design.Index, slide.CustomLayout.Index)
+        except Exception:
+            key = None
+        if key in cache:
+            return cache[key]
+    box = None
+    try:
+        shapes = slide.CustomLayout.Shapes
+        for i in range(1, shapes.Count + 1):
+            shape = shapes(i)
+            if shape.Type != msoPlaceholder:
+                continue
+            try:
+                if shape.PlaceholderFormat.Type not in _TITLE_PLACEHOLDERS:
+                    continue
+            except Exception:
+                continue
+            box = [round(shape.Left, 2), round(shape.Top, 2),
+                   round(shape.Width, 2), round(shape.Height, 2)]
+            break
+    except Exception:
+        logger.debug("Cannot read the layout's title", exc_info=True)
+    if key is not None:
+        cache[key] = box
+    return box
+
+
 def _slide_facts_impl(slide_indices, navigate, detail, template_cache=None):
     """Read the slides into the plain dicts the checks work on.
 
@@ -3591,6 +5485,8 @@ def _slide_facts_impl(slide_indices, navigate, detail, template_cache=None):
             design = None
         refs = [slide.Shapes(z) for z in range(1, slide.Shapes.Count + 1)]
         shapes = read_shapes(refs, _geometry_facts, _read_appearance, detail)
+        if detail is None:
+            _with_chart_parts(shapes, refs)
         touched = None if detail is None else [s for s in shapes if s["name"] in detail]
         try:
             follows = slide.FollowMasterBackground == msoTrue
@@ -3599,8 +5495,16 @@ def _slide_facts_impl(slide_indices, navigate, detail, template_cache=None):
         template = _template_facts(slide, touched, template_cache)
         background_hex, background_gradient = (
             _background(slide) if needs_background(shapes, detail) else (None, None))
+        try:
+            hidden = slide.SlideShowTransition.Hidden == msoTrue
+        except Exception:
+            hidden = False
         facts["slides"].append({
             "slide_index": slide_index,
+            "hidden": hidden,
+            "animations": _animations(slide),
+            # A Morph moves shapes onto this slide, or off it onto the next.
+            "morph": _morph(slide) or (slide_index < total and _morph(pres.Slides(slide_index + 1))),
             "design": design,
             "layout": layout,
             "background_hex": background_hex,
@@ -3609,9 +5513,328 @@ def _slide_facts_impl(slide_indices, navigate, detail, template_cache=None):
             "follows_background": follows,
             "template": template,
             "template_area": _template_area(slide, template, template_cache),
+            "layout_title": _layout_title(slide, template_cache) if detail is None else None,
+            "theme_fonts": _theme_fonts(slide, template_cache),
             "shapes": shapes,
+            "inner": _inner_facts(shapes, refs) if detail is None else [],
         })
     return facts
+
+
+# The most data labels of one chart that are read; a chart with more is not
+# one whose labels can be read anyway, and each costs a call.
+_MOST_LABELS = 120
+
+
+def _with_chart_parts(shapes, refs):
+    """Give each chart where its title, legend, plot and data labels are,
+    in points within the chart. See ``_chart_overlaps``."""
+    charts = {s["name"] for s in shapes if s.get("type") == msoChart}
+    if not charts:
+        return
+    for ref in refs:
+        try:
+            if ref.Name not in charts or not ref.HasChart:
+                continue
+            parts = _chart_parts(ref.Chart)
+        except Exception:
+            logger.debug("Cannot read the parts of a chart", exc_info=True)
+            continue
+        for shape in shapes:
+            if shape["name"] == ref.Name:
+                shape["chart_parts"] = parts
+
+
+def _chart_parts(chart):
+    def box(part, inside=False):
+        if inside:
+            return _box(part.InsideLeft, part.InsideTop, part.InsideWidth, part.InsideHeight)
+        return _box(part.Left, part.Top, part.Width, part.Height)
+
+    parts = {"plot": box(chart.PlotArea, inside=True), "labels": []}
+    if chart.HasTitle:
+        parts["title"] = box(chart.ChartTitle)
+    if chart.HasLegend:
+        parts["legend"] = box(chart.Legend)
+    collection = chart.SeriesCollection()
+    for i in range(1, collection.Count + 1):
+        points = collection.Item(i).Points()
+        for j in range(1, points.Count + 1):
+            if len(parts["labels"]) >= _MOST_LABELS:
+                return parts
+            point = points.Item(j)
+            if not point.HasDataLabel:
+                continue
+            label = point.DataLabel
+            if label.Width > 0 and label.Height > 0 and label.Text:
+                parts["labels"].append(box(label))
+    return parts
+
+
+def _animations(slide):
+    """The slide's main sequence, as ``on_screen`` takes it.
+
+    None of it rather than part: a step left out would put the effects after
+    it on the wrong click. Without it the slide is checked as it is drawn.
+    """
+    from ppt_com.animation import _get_animation_category
+
+    effects = []
+    try:
+        sequence = slide.TimeLine.MainSequence
+        for i in range(1, sequence.Count + 1):
+            effect = sequence(i)
+            effects.append({
+                "shape": effect.Shape.Name,
+                "category": _get_animation_category(effect.EffectType, bool(effect.Exit)),
+                "trigger": effect.Timing.TriggerType,
+            })
+    except Exception:
+        logger.debug("Cannot read the animations of a slide", exc_info=True)
+        return []
+    return effects
+
+
+def _morph(slide) -> bool:
+    """Whether the slide is entered with a Morph transition."""
+    try:
+        return slide.SlideShowTransition.EntryEffect in MORPH_EFFECTS
+    except Exception:
+        return False
+
+
+def _package_facts_impl(slide_indices, charts=False):
+    """``package_facts`` for the slides, from a copy of the deck saved aside.
+
+    ``SaveCopyAs`` leaves the open deck as it was: not marked as changed,
+    nothing to undo. ``charts`` is for the macOS reader, which reads them
+    another way when the file cannot be used.
+    """
+    pres = ppt._get_pres_impl()
+    try:
+        suffix = os.path.splitext(pres.FullName)[1] or ".pptx"
+    except Exception:
+        suffix = ".pptx"
+    if suffix.lower() not in (".pptx", ".pptm", ".potx", ".potm", ".ppsx", ".ppsm"):
+        suffix = ".pptx"
+    handle, path = tempfile.mkstemp(suffix=suffix)
+    os.close(handle)
+    os.remove(path)
+    try:
+        pres.SaveCopyAs(path)
+        return package_facts(path, slide_indices)
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
+
+
+_FONTS = {}
+
+
+def _installed_fonts_impl():
+    """The names of the fonts PowerPoint can draw with on this computer.
+
+    The fonts Windows has, by family, and the Office cloud fonts already
+    downloaded. Read once: fonts installed later are seen after a restart.
+    """
+    if "installed" in _FONTS:
+        return _FONTS["installed"]
+    import win32gui
+    from utils.fonts import names_in_folder
+
+    names = set()
+
+    def add(font, *_):
+        names.add(font.lfFaceName)
+        return 1
+
+    hdc = win32gui.GetDC(0)
+    try:
+        win32gui.EnumFontFamilies(hdc, None, add)
+    finally:
+        win32gui.ReleaseDC(0, hdc)
+    cloud = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "FontCache",
+                         "4", "CloudFonts")
+    if os.path.isdir(cloud):
+        for family in os.listdir(cloud):
+            names.add(family)
+            names |= names_in_folder(os.path.join(cloud, family))
+    # Windows lists a family by the name of its own language only: 游ゴシック is
+    # "Yu Gothic" on an English Windows, and a deck made in Japan asks for the
+    # first. The files hold both.
+    _FONTS["installed"] = FontNames(names, (
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts")))
+    return _FONTS["installed"]
+
+
+class FontNames(frozenset):
+    """The installed fonts' names, lower case. One not among them is looked
+    for in the font files of ``folders``, read once and only then."""
+
+    def __new__(cls, names, folders=()):
+        found = super().__new__(cls, (n.lower() for n in names if n))
+        found.folders = tuple(folders)
+        found.other_names = None
+        return found
+
+    def __contains__(self, name):
+        if frozenset.__contains__(self, name):
+            return True
+        if self.other_names is None:
+            from utils import fonts
+
+            read = set()
+            for folder in self.folders:
+                read |= fonts.names_in_folder(folder)
+            self.other_names = frozenset(n.lower() for n in read if n)
+        return name in self.other_names
+
+
+def _with_fonts(slides, installed):
+    """Name the fonts each shape asks for that this computer does not have.
+
+    ``installed`` is called for the list only when some text names a font.
+    """
+    if not any(run.get("font") for slide in slides
+               for shape in slide["shapes"] + (slide.get("inner") or [])
+               for run in (shape.get("text") or {}).get("runs") or []):
+        return
+    installed = installed()
+    if not installed:
+        return
+    for slide in slides:
+        for shape in slide["shapes"] + (slide.get("inner") or []):
+            text = shape.get("text") or {}
+            asked = {run.get("font") for run in text.get("runs") or [] if run.get("font")}
+            missing = sorted(f for f in asked
+                             if not f.startswith("+") and f.lower() not in installed)
+            if missing:
+                text["missing_fonts"] = missing
+
+
+def _read_fonts():
+    try:
+        return ppt.execute(_installed_fonts_impl)
+    except Exception:
+        logger.debug("Cannot list the installed fonts", exc_info=True)
+        return None
+
+
+# The most pixels across a picture is exported at to judge text on it.
+_PHOTO_PIXELS = 480
+
+
+def _photo_samples_impl(slide_index, names):
+    """The colours of each named picture, sampled from an export of it alone.
+
+    The picture is written as a BMP the size it is drawn, at most
+    _PHOTO_PIXELS across, without the text over it: the text's own pixels
+    would otherwise count as its background. Exporting a shape changes
+    nothing on the slide.
+    """
+    from ppt_com.constants import ppShapeFormatBMP
+    from utils.bitmap import sample_bmp
+
+    slide = ppt._get_pres_impl().Slides(slide_index)
+    found = {}
+    for name in names:
+        handle, path = tempfile.mkstemp(suffix=".bmp")
+        os.close(handle)
+        try:
+            shape = slide.Shapes(name)
+            scale = min(1.0, _PHOTO_PIXELS / max(shape.Width, 1))
+            shape.Export(path, ppShapeFormatBMP, round(shape.Width * scale),
+                         round(shape.Height * scale))
+            with open(path, "rb") as image:
+                sampled = sample_bmp(image.read())
+            if sampled:
+                found[name] = sampled
+        except Exception:
+            logger.debug("Cannot export '%s'", name, exc_info=True)
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+    return found
+
+
+def _with_photos(slides):
+    """Give each picture that has text drawn on it the colours it has.
+
+    Only for a whole check: exporting a picture is the slowest read there is.
+    """
+    for slide in slides:
+        shapes = slide["shapes"]
+        wanted = set()
+        for shape in shapes:
+            if not (shape.get("text") or {}).get("chars"):
+                continue
+            _, source, painter = _backdrop(shape, shapes, slide.get("background_hex"))
+            if (source == "shape" and painter is not None and painter.get("type") in _PICTURES
+                    and not _turned(painter)):
+                wanted.add(painter["name"])
+        if not wanted:
+            continue
+        try:
+            found = ppt.execute(_photo_samples_impl, slide["slide_index"], sorted(wanted))
+        except Exception:
+            logger.debug("Cannot sample the pictures", exc_info=True)
+            continue
+        for shape in shapes:
+            if shape["name"] in found:
+                shape["photo"] = found[shape["name"]]
+
+
+def _has_pictures(slides, names=None):
+    return any(s.get("type") in _PICTURES and (names is None or s["name"] in names)
+               for slide in slides for s in slide["shapes"])
+
+
+def _needs_package(slides):
+    """Whether the saved file has anything to add: pictures, charts and
+    SmartArt, and text PowerPoint shrinks to fit. PowerPoint for Mac cannot
+    say which text shrinks, and its file is read in place rather than saved
+    aside, so there any text is reason enough."""
+    return any(s.get("type") in (*_PICTURES, msoChart, msoSmartArt)
+               or (s.get("text") or {}).get("autofit") == "shrink_to_fit"
+               or (IS_MACOS and (s.get("text") or {}).get("chars"))
+               for slide in slides for s in slide["shapes"])
+
+
+def _has_charts(slides):
+    return any(s.get("type") == msoChart for slide in slides for s in slide["shapes"])
+
+
+def _with_package(slides, facts):
+    """Give each picture its image's proportions and each chart its data,
+    where they are known."""
+    for slide in slides:
+        index = slide["slide_index"]
+        aspects = (facts.get("pictures") or {}).get(index) or {}
+        pixels = (facts.get("pixels") or {}).get(index) or {}
+        charts = (facts.get("charts") or {}).get(index) or {}
+        described = (facts.get("described") or {}).get(index) or {}
+        scales = (facts.get("text_scale") or {}).get(index) or {}
+        for shape in slide["shapes"]:
+            if shape["name"] in described:
+                shape["described"] = described[shape["name"]]
+            if shape["name"] in scales and shape.get("text"):
+                shape["shrunk"] = scales[shape["name"]]
+            if shape.get("type") in _PICTURES and shape["name"] in pixels:
+                shape["pixels"] = pixels[shape["name"]]
+            if shape.get("type") in _PICTURES and shape["name"] in aspects:
+                shape["natural_aspect"] = aspects[shape["name"]]
+            elif shape.get("type") == msoChart and shape["name"] in charts:
+                shape["chart"] = charts[shape["name"]]
+
+
+def _read_package(indices, charts=False):
+    """``_package_facts_impl`` for the slides, or nothing when it fails."""
+    try:
+        return ppt.execute(_package_facts_impl, indices, charts) or {}
+    except Exception:
+        logger.debug("Cannot read the saved deck", exc_info=True)
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -3637,6 +5860,10 @@ def check_layout(params: CheckLayoutInput) -> str:
         if facts is None:  # a deck with no slides
             return json.dumps({"issues": [], "total": 0, "slides_checked": 0})
         slide_w, slide_h = facts["slide_width"], facts["slide_height"]
+        if _needs_package(slides):
+            _with_package(slides, _read_package(indices, charts=_has_charts(slides)))
+        _with_fonts(slides, _read_fonts)
+        _with_photos(slides)
         findings = []
         for slide in slides:
             findings += slide_findings(slide, slide_w, slide_h)
@@ -3652,11 +5879,13 @@ def check_layout(params: CheckLayoutInput) -> str:
         return json.dumps({"error": str(e)})
 
 
-def _issues_for(slide_index, shapes):
+def _issues_for(slide_index, shapes, aspects=None, pixels=None):
     """The per-shape findings on one slide for the shapes a write touched.
 
     ``shapes`` are names, or 1-based positions for a tool that was given one;
     a position is turned into its name from a read of the slide's geometry.
+    ``aspects`` are pictures' own proportions the write already knows, and
+    ``pixels`` their images' sizes.
     """
     names = {s for s in shapes if isinstance(s, str) and s}
     positions = {s for s in shapes if isinstance(s, int) and not isinstance(s, bool)}
@@ -3666,7 +5895,16 @@ def _issues_for(slide_index, shapes):
     if not names:
         return []
     facts = ppt.execute(_slide_facts_impl, [slide_index], False, sorted(names), None)
-    return slide_findings(facts["slides"][0], facts["slide_width"], facts["slide_height"],
+    slides = facts["slides"]
+    known, sizes = dict(aspects or {}), dict(pixels or {})
+    unknown = {n for n in names if n not in known}
+    if _has_pictures(slides, unknown):
+        read = _read_package([slide_index])
+        known = {**(read.get("pictures") or {}).get(slide_index, {}), **known}
+        sizes = {**(read.get("pixels") or {}).get(slide_index, {}), **sizes}
+    _with_package(slides, {"pictures": {slide_index: known}, "pixels": {slide_index: sizes}})
+    _with_fonts(slides, _read_fonts)
+    return slide_findings(slides[0], facts["slide_width"], facts["slide_height"],
                           only=names)
 
 
@@ -3687,6 +5925,9 @@ def report_layouts(result: dict, touched) -> dict:
 
     ``touched`` maps each slide index to the shapes touched on it.
     """
+    # What a write hands the check is not for its caller, checked or not.
+    natural = result.pop("_natural_aspect", None) if isinstance(result, dict) else None
+    size = result.pop("_pixels", None) if isinstance(result, dict) else None
     if not CHECK_EACH_WRITE:
         return result
     touched = {index: [s for s in shapes if s not in (None, "")]
@@ -3694,10 +5935,12 @@ def report_layouts(result: dict, touched) -> dict:
     touched = {index: shapes for index, shapes in touched.items() if shapes}
     if not touched or not isinstance(result, dict) or "error" in result:
         return result
+    aspects = {result["shape_name"]: natural} if natural and result.get("shape_name") else None
+    pixels = {result["shape_name"]: size} if size and result.get("shape_name") else None
     issues = []
     try:
         for slide_index in sorted(touched):
-            issues += _issues_for(slide_index, touched[slide_index])
+            issues += _issues_for(slide_index, touched[slide_index], aspects, pixels)
     except Exception as e:  # noqa: BLE001 - the write itself already succeeded
         logger.debug("Layout check after a write failed", exc_info=True)
         result["layout_check_failed"] = str(e)
@@ -3851,6 +6094,16 @@ def register_tools(mcp):
         - empty_placeholder: a placeholder left without text
         - sample_text: text a template or a draft left to be replaced, such
           as lorem ipsum, "Your title here", "[Company name]" or "XX%"
+        - small_text: text under 10 pt, at the size it is drawn
+        - blurry_picture: a picture drawn larger than its image's pixels
+        - chart_overlap: data labels on each other, or a legend or title on
+          the plot (Windows only)
+        - missing_alt_text: a picture, chart or SmartArt with no alt text
+        - missing_title, duplicate_titles (whole deck only): a slide with no
+          title, or slides with the same one
+        A slide is judged as the slide show draws it: lines shown one at a
+        time in one place, shapes a motion path moves, a sound's icon off the
+        slide and shapes parked for a Morph are not reported.
         - inconsistent_titles (whole deck only): titles that differ in size,
           position, alignment, weight, typeface or colour from slide to slide;
           a right-set title is placed by its right edge, and the title each
@@ -3874,7 +6127,7 @@ def register_tools(mcp):
 
 # On macOS the slide is read over Apple Events. Only _slide_facts_impl is
 # swapped; the checks, and what decides how much of a slide to read, are shared.
-from backend import IS_MACOS, use_mac_impls  # noqa: E402
+from backend import use_mac_impls  # noqa: E402
 
 if IS_MACOS:  # pragma: no cover - platform specific
     from ppt_mac import layout_check as _mac_layout_check

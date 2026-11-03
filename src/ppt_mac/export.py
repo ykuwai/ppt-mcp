@@ -73,6 +73,46 @@ def _save_pdf(pres, destination: str) -> None:
         )
 
 
+def _save_pdf_of(pres, destination, numbers):
+    """Save the deck as a PDF holding the given slides, and say on which page
+    each one is.
+
+    PowerPoint leaves hidden slides out of the PDF, and its print option to
+    keep them does not reach the export, so each page after a hidden slide
+    is a slide further on. A hidden slide asked for is shown for the export
+    and hidden again; the others are counted out.
+    """
+    hidden = _hidden_slides(pres)
+    wanted = [number for number in hidden if number in numbers]
+    for number in wanted:
+        pres.slides[number].slide_show_transition.hidden.set(False)
+    try:
+        _save_pdf(pres, destination)
+    finally:
+        for number in wanted:
+            pres.slides[number].slide_show_transition.hidden.set(True)
+    left_out = [number for number in hidden if number not in wanted]
+    return _pages(numbers, left_out)
+
+
+def _hidden_slides(pres) -> list:
+    """The numbers of the deck's hidden slides, which its PDF leaves out."""
+    hidden = []
+    for number in range(1, count(pres.slides) + 1):
+        try:
+            if pres.slides[number].slide_show_transition.hidden():
+                hidden.append(number)
+        except Exception:
+            # Read as shown; at worst the page is the one it was before.
+            logger.debug("Cannot read whether slide %d is hidden", number, exc_info=True)
+    return hidden
+
+
+def _pages(numbers, left_out) -> list:
+    """The PDF page of each slide, with the slides ``left_out`` not in it."""
+    return [number - sum(1 for h in left_out if h < number) for number in numbers]
+
+
 def _render_pdf_pages(pdf_path, pages, width=None, height=None,
                       uti="public.png", suffix=".png"):
     """Render chosen PDF pages to image files with Quartz.
@@ -108,7 +148,7 @@ def _render_pdf_pages(pdf_path, pages, width=None, height=None,
     rendered = []
     for number in pages:
         if number < 1 or number > total:
-            raise ValueError(f"Slide {number} is not in the exported PDF (1-{total})")
+            raise ValueError(f"Page {number} is not in the exported PDF (1-{total})")
         page = Quartz.CGPDFDocumentGetPage(document, number)
         if page is None:
             # Answering None rather than raising is how Quartz declines a page
@@ -192,7 +232,18 @@ def _export_pdf_impl(
             # exported and the wanted pages are copied into a new document.
             # Quartz is already here for slide images, and this keeps the tool
             # behaving the same on both platforms.
-            _write_pdf_range(staged, abs_path, slide_range_start, slide_range_end)
+            # A hidden slide is not in it, as on Windows, and moves the
+            # pages after it up one.
+            hidden = _hidden_slides(pres)
+            shown = [n for n in range(slide_range_start, slide_range_end + 1)
+                     if n not in hidden]
+            if not shown:
+                raise ValueError(
+                    f"Every slide from {slide_range_start} to {slide_range_end} is "
+                    "hidden, and a PDF leaves hidden slides out. Show one with "
+                    "ppt_set_slide_hidden first."
+                )
+            _write_pdf_range(staged, abs_path, _pages(shown, hidden))
         else:
             shutil.move(staged, abs_path)
     finally:
@@ -217,8 +268,8 @@ def _export_pdf_impl(
     }
 
 
-def _write_pdf_range(source: str, destination: str, start: int, end: int) -> None:
-    """Copy a page range out of one PDF into another, and count what landed.
+def _write_pdf_range(source: str, destination: str, pages: list) -> None:
+    """Copy pages out of one PDF into another, and count what landed.
 
     ``CGPDFDocumentGetPage`` answers None for a page it will not give, and
     drawing None draws nothing, so a range that quietly lost pages used to come
@@ -246,11 +297,11 @@ def _write_pdf_range(source: str, destination: str, start: int, end: int) -> Non
 
     context = Quartz.CGPDFContextCreateWithURL(_url(destination), None, None)
     try:
-        for number in range(start, end + 1):
+        for number in pages:
             page = Quartz.CGPDFDocumentGetPage(document, number)
             if page is None:
                 raise RuntimeError(
-                    f"Slide {number} is missing from the deck's PDF export, so "
+                    f"Page {number} is missing from the deck's PDF export, so "
                     "the range could not be written."
                 )
             box = Quartz.CGPDFPageGetBoxRect(page, Quartz.kCGPDFMediaBox)
@@ -260,18 +311,18 @@ def _write_pdf_range(source: str, destination: str, start: int, end: int) -> Non
     finally:
         Quartz.CGPDFContextClose(context)
 
-    wanted = end - start + 1
+    wanted = len(pages)
     written = Quartz.CGPDFDocumentCreateWithURL(_url(destination))
     if written is None:
         raise RuntimeError(
             "The slide range was written and the file cannot be read back as a "
             "PDF, so nothing usable came out of it."
         )
-    pages = Quartz.CGPDFDocumentGetNumberOfPages(written)
-    if pages != wanted:
+    landed = Quartz.CGPDFDocumentGetNumberOfPages(written)
+    if landed != wanted:
         raise RuntimeError(
             f"The slide range should hold {wanted} page(s) and the file holds "
-            f"{pages}. Quartz reported no error for the difference."
+            f"{landed}. Quartz reported no error for the difference."
         )
 
 
@@ -324,11 +375,11 @@ def _export_images_impl(
     staged_pdf = _staging_path(".pdf")
     exported = []
     try:
-        _save_pdf(pres, staged_pdf)
+        pages = _save_pdf_of(pres, staged_pdf, targets)
         rendered = _render_pdf_pages(
-            staged_pdf, targets, width, height, uti, "." + fmt_key
+            staged_pdf, pages, width, height, uti, "." + fmt_key
         )
-        for (number, temp_image, out_w, out_h) in rendered:
+        for number, (_, temp_image, out_w, out_h) in zip(targets, rendered, strict=True):
             if file_name and len(targets) == 1:
                 name = file_name
             elif file_name:
@@ -405,8 +456,8 @@ def render_slide_png(slide_index: int, width: Optional[int] = None) -> bytes:
     staged_pdf = _staging_path(".pdf")
     png_path = None
     try:
-        _save_pdf(pres, staged_pdf)
-        (_, png_path, _, _) = _render_pdf_pages(staged_pdf, [slide_index], width)[0]
+        pages = _save_pdf_of(pres, staged_pdf, [slide_index])
+        (_, png_path, _, _) = _render_pdf_pages(staged_pdf, pages, width)[0]
         with open(png_path, "rb") as handle:
             return handle.read()
     finally:

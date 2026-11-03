@@ -418,6 +418,43 @@ class TestAnimationAdding:
         assert deck.effects[0].timing.repeat_count() == 2
         assert deck.effects[0].exit_animation() is True
 
+    def test_a_motion_path_is_added_without_being_told_it_is_no_exit(self, monkeypatch):
+        # Live: PowerPoint refused exit=False on a motion path (-1708) after
+        # adding it, so the tool reported a failure and a retry added another.
+        from appscript.reference import CommandError
+
+        from ppt_mac.animation import _add_animation_impl
+
+        def refuses(_value):
+            raise CommandError(None, None, RuntimeError("-1708"), None)
+
+        def add_path(sequence, **kwargs):
+            sequence._deck.added.append(kwargs)
+            path = _FakeEffect(kwargs["for_"])
+            path.exit_animation = _FakeProperty(refuses, None)
+            sequence._deck.effects.append(path)
+
+        monkeypatch.setattr(_FakeSequence, "add_effect", add_path)
+        with _fake_deck([], shape_names=["Ball"]) as deck:
+            result = _add_animation_impl(
+                1, "Ball", "path_left", "on_click", None, None, False,
+                None, None, None, None, None, None,
+                None, None, None,
+                None, None, None, None,
+            )
+            assert result["success"] is True
+            assert "warnings" not in result
+            assert len(deck.effects) == 1
+
+            result = _add_animation_impl(
+                1, "Ball", "path_left", "on_click", None, None, True,
+                None, None, None, None, None, None,
+                None, None, None,
+                None, None, None, None,
+            )
+            assert result["success"] is True
+            assert any("no exit form" in w for w in result["warnings"])
+
     def test_the_trigger_goes_in_at_the_add_because_nothing_else_takes_one(self):
         from appscript import k
 
@@ -1287,3 +1324,14 @@ class TestParagraphsAndLines:
 
         with pytest.raises(ValueError, match=r"out of range \(1-2\)"):
             _target_range(self.Range(["a\r", "b"]), 3)
+
+
+@macos_only
+class TestAltTextOnTheMac:
+    def test_it_is_refused_before_anything_is_written(self):
+        # PowerPoint for Mac's scripting dictionary has no alt text property.
+        from ppt_mac.shapes import _update_shape_impl
+
+        with pytest.raises(ValueError, match="View Alt Text"):
+            _update_shape_impl(1, "Photo", None, 10, None, None, None, None, None, None,
+                               alt_text="Our team")

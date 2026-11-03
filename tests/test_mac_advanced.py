@@ -1541,3 +1541,72 @@ class TestShapesThatWalkOffTheSlide:
         from ppt_mac.text import _off_slide_edges
 
         assert _off_slide_edges(self._Shape(0, 0, 9999, 9999), None, None) == []
+
+
+@macos_only
+class TestPictureProportions:
+    """PowerPoint for Mac places every picture 25 pt square, so both sides are
+    set from the image. The picture stays locked to its proportions unless
+    the caller gave both sides, as on Windows."""
+
+    @pytest.fixture
+    def placed(self, tmp_path, monkeypatch):
+        import struct
+
+        from ppt_mac import shapes
+
+        image = tmp_path / "wide.png"
+        image.write_bytes(b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR"
+                          + struct.pack(">II", 1600, 900) + b"\x08\x02\x00\x00\x00")
+        pic = _bag(name="Picture 1", z_order_position=1)
+        pic.lock_aspect_ratio, pic.width, pic.height = _Prop(True), _Prop(25.0), _Prop(25.0)
+        app = _bag()
+        app.make = lambda **_: pic
+        monkeypatch.setattr(shapes.ppt, "_get_app_impl", lambda: app)
+        monkeypatch.setattr(shapes.ppt, "_get_pres_impl", lambda: None)
+        monkeypatch.setattr(shapes, "goto_slide", lambda *_: None)
+        monkeypatch.setattr(shapes, "_slide", lambda *_: _bag(end=None))
+        monkeypatch.setattr(shapes, "stage_into_container", lambda path: path)
+        monkeypatch.setattr(shapes, "_verify_created", lambda *_, **__: None)
+        monkeypatch.setattr(shapes, "place_in_zorder", lambda *_: {})
+
+        def add(width, height):
+            result = shapes._add_picture_impl(1, str(image), 10, 20, width, height)
+            return result, pic
+        return add
+
+    @pytest.mark.parametrize("width, height", [(None, None), (320, None), (None, 180)])
+    def test_a_picture_sized_from_its_image_stays_locked(self, placed, width, height):
+        result, pic = placed(width, height)
+        assert pic.lock_aspect_ratio() is True
+        assert result["width"] / result["height"] == pytest.approx(16 / 9)
+
+    def test_both_sides_given_are_the_callers_proportions(self, placed):
+        result, pic = placed(300, 300)
+        assert pic.lock_aspect_ratio() is False
+        assert (result["width"], result["height"]) == (300, 300)
+
+
+def _rgba_png(width, height, pixel):
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF))
+    rows = b"".join(b"\x00" + b"".join(bytes(pixel(x, y)) for x in range(width))
+                    for y in range(height))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+
+
+@macos_only
+class TestPhotoSamples:
+    def test_a_see_through_part_is_not_black(self):
+        # It was judged as black, so dark text on a logo's clear ground on a
+        # white slide was reported as unreadable.
+        from ppt_mac.layout_check import _sample_image
+
+        image = _rgba_png(4, 2, lambda x, y: (200, 30, 30, 255) if x < 2 else (0, 0, 0, 0))
+        grid = _sample_image(image, 2.0, columns=4)
+        assert grid["colours"][:4] == ["#C81E1E", "#C81E1E", None, None]

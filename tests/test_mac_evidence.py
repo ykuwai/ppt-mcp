@@ -24,6 +24,7 @@ than letting an echo pass for evidence.
 
 import os
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -715,6 +716,53 @@ class TestExportEvidence:
                     str(tmp_path / "out"), "png", 1, None, None, None,
                     None, None, None,
                 )
+
+
+    def test_pages_after_a_hidden_slide_are_one_slide_further_on(self, monkeypatch):
+        # Live: with slide 6 of 7 hidden, the preview of slide 6 showed slide
+        # 7, and slide 7 had no page at all.
+        from ppt_mac import export as mac_export
+
+        deck = _HiddenDeck(7, hidden={6})
+        monkeypatch.setattr(mac_export, "count", lambda slides: len(slides.items))
+        monkeypatch.setattr(mac_export, "_save_pdf", deck.save)
+        assert mac_export._save_pdf_of(deck, "out.pdf", [5, 7]) == [5, 6]
+        assert deck.saved_hidden == {6}
+
+    def test_a_hidden_slide_asked_for_is_shown_for_the_export_only(self, monkeypatch):
+        from ppt_mac import export as mac_export
+
+        deck = _HiddenDeck(7, hidden={2, 6})
+        monkeypatch.setattr(mac_export, "count", lambda slides: len(slides.items))
+        monkeypatch.setattr(mac_export, "_save_pdf", deck.save)
+        assert mac_export._save_pdf_of(deck, "out.pdf", [6, 7]) == [5, 6]
+        assert deck.saved_hidden == {2}
+        assert deck.hidden() == {2, 6}
+
+
+class _HiddenDeck:
+    """Slides of which some are hidden, and what was hidden when it was saved."""
+
+    class _Slides:
+        def __init__(self, items):
+            self.items = items
+
+        def __getitem__(self, number):
+            return self.items[number - 1]
+
+    def __init__(self, total, hidden):
+        self.slides = self._Slides([
+            SimpleNamespace(slide_show_transition=SimpleNamespace(
+                hidden=_Prop(number in hidden)))
+            for number in range(1, total + 1)])
+        self.saved_hidden = None
+
+    def hidden(self):
+        return {n for n, s in enumerate(self.slides.items, start=1)
+                if s.slide_show_transition.hidden()}
+
+    def save(self, pres, destination):
+        self.saved_hidden = self.hidden()
 
 
 # ---------------------------------------------------------------------------
