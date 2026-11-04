@@ -899,6 +899,13 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
                 result["warning"] = " ".join(warnings)
             return result
 
+    if (shape.Chart.ChartType in chart_file.BUBBLE_TYPES
+            and any("sizes" in entry for entry in series)):
+        # The Excel way writes names and values only, so the sizes would be
+        # dropped without a word.
+        raise RuntimeError(
+            f"Bubble sizes can only be set without Excel, and this chart has to go "
+            f"through Excel, since {reason}. Nothing was changed.")
     try:
         result = _set_chart_data_through_excel(slide, shape, categories, series)
     except Exception as e:

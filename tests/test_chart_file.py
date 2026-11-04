@@ -204,3 +204,31 @@ def test_swapped_values_are_formatted_general(tmp_path):
     chart_file.replace_data(path, ["A"], [{"name": "S", "values": [0.25]}])
     xml = pptx.Presentation(path).slides[0].shapes[0].chart._chartSpace.xml
     assert "<c:formatCode>General</c:formatCode>" in xml
+
+
+@pytest.mark.parametrize("chart_type", [51, 65, -4169, 15])
+def test_a_series_added_does_not_take_the_last_one_s_colour(tmp_path, chart_type):
+    from pptx.dml.color import RGBColor
+
+    path = str(tmp_path / "chart.pptx")
+    chart_file.write(path, chart_type, 960, 540, 0, 0, 400, 300, "en")
+    deck = pptx.Presentation(path)
+    chart = deck.slides[0].shapes[0].chart
+    kept = len(chart.plots[0].series)
+    for series in chart.plots[0].series:
+        series.format.fill.solid()
+        series.format.fill.fore_color.rgb = RGBColor(0xFF, 0, 0)
+        if hasattr(series, "marker"):
+            series.marker.format.fill.solid()
+            series.marker.format.fill.fore_color.rgb = RGBColor(0xFF, 0, 0)
+    deck.save(path)
+
+    names = [f"S{i}" for i in range(kept + 2)]
+    chart_file.replace_data(path, ["1", "2"], [
+        {"name": n, "values": [1, 2], "sizes": [3, 4]} for n in names])
+    sers = pptx.Presentation(path).slides[0].shapes[0].chart._chartSpace.plotArea.sers
+    assert len(sers) == kept + 2
+    for ser in sers[:kept]:
+        assert "FF0000" in ser.xml, "the series that were there keep their colour"
+    for ser in sers[kept:]:
+        assert "FF0000" not in ser.xml, "an added series takes the next colour"

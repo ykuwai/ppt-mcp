@@ -243,5 +243,25 @@ def replace_data(path: str, categories: list, series: list[dict]) -> None:
         data.categories = categories
         for entry in series:
             data.add_series(entry["name"], entry["values"])
+    plot = frame.chart._chartSpace.plotArea
+    kept = len(plot.sers)
     frame.chart.replace_data(data)
+    for ser in plot.sers[kept:]:
+        _clear_colours(ser)
     deck.save(path)
+
+
+def _clear_colours(ser) -> None:
+    """Let a series python-pptx added take the chart's next colour.
+
+    python-pptx makes each series past the old count as a copy of the last
+    one, colours and all, so they would all draw in the last series' colour.
+    Without colours of their own they take the next one, as in PowerPoint.
+    """
+    from pptx.oxml.ns import qn
+
+    for child in ser.findall(qn("c:spPr")) + ser.findall(qn("c:dPt")):
+        ser.remove(child)
+    for marker in ser.findall(qn("c:marker")):
+        for child in marker.findall(qn("c:spPr")):
+            marker.remove(child)

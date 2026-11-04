@@ -439,3 +439,15 @@ class TestTheResultSaysWhatWasDone:
         monkeypatch.setattr(charts, "_set_chart_data_through_excel", fail)
         with pytest.raises(RuntimeError, match=r"since it is animated"):
             charts._set_chart_data_impl(1, "Chart 1", CATS, SERIES)
+
+    def test_bubble_sizes_are_refused_rather_than_dropped_through_excel(self, charts, monkeypatch):
+        shape = chart_shape(chart_type=15)
+        self.deck(charts, monkeypatch, shape)
+        monkeypatch.setattr(charts, "_excel_needed", lambda slide, s: "it is animated")
+        written = []
+        monkeypatch.setattr(charts, "_set_chart_data_through_excel",
+                            lambda *a: written.append(a) or {"success": True})
+        with pytest.raises(RuntimeError, match=r"Bubble sizes .* since it is animated"):
+            charts._set_chart_data_impl(
+                1, "Chart 1", ["1", "2"], [{"name": "S", "values": [1, 2], "sizes": [3, 4]}])
+        assert written == [], "nothing was written"
