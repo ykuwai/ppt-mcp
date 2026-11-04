@@ -2546,10 +2546,23 @@ class TestSmartArtEnglishAliases:
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/process1"] == "Basic Process"
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/orgChart1"] == "Organization Chart"
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/venn1"] == "Basic Venn"
-        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/matrix1"] == "Basic Matrix"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/matrix3"] == "Basic Matrix"
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/pyramid1"] == "Basic Pyramid"
-        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/cycle1"] == "Basic Cycle"
+        assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/cycle2"] == "Basic Cycle"
         assert SMARTART_ENGLISH_ALIASES["urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1"] == "Hierarchy"
+
+    def test_ids_name_the_layout_windows_names(self):
+        """Ids the table once gave another layout's name, as PowerPoint for
+        Windows names them (Application.SmartArtLayouts, 16.0.20326)."""
+        base = "urn:microsoft.com/office/officeart/2005/8/layout/"
+        assert SMARTART_ENGLISH_ALIASES[base + "default"] == "Basic Block List"
+        assert SMARTART_ENGLISH_ALIASES[base + "vList2"] == "Vertical Bullet List"
+        assert SMARTART_ENGLISH_ALIASES[base + "cycle1"] == "Text Cycle"
+        assert SMARTART_ENGLISH_ALIASES[base + "chevron1"] == "Basic Chevron Process"
+        assert SMARTART_ENGLISH_ALIASES[base + "process2"] == "Vertical Process"
+        assert SMARTART_ENGLISH_ALIASES[base + "matrix1"] == "Titled Matrix"
+        assert _ENGLISH_NAME_TO_ID["basic cycle"] == base + "cycle2"
+        assert _ENGLISH_NAME_TO_ID["basic block list"] == base + "default"
 
     def test_reverse_lookup(self):
         """Reverse mapping should return the correct Id for English names."""
@@ -2565,9 +2578,10 @@ class TestSmartArtEnglishAliases:
         assert SMARTART_ENGLISH_ALIASES.get("urn:unknown/layout") is None
 
     def test_all_ids_are_urns(self):
-        """All layout Ids should start with 'urn:microsoft.com/'."""
+        """All layout Ids are URNs; three of Windows' own are urn:diagrams.loki3.com."""
         for layout_id in SMARTART_ENGLISH_ALIASES:
-            assert layout_id.startswith("urn:microsoft.com/"), f"Invalid URN: {layout_id}"
+            assert layout_id.startswith(("urn:microsoft.com/", "urn:diagrams.loki3.com/")), \
+                f"Invalid URN: {layout_id}"
 
     def test_all_english_names_non_empty(self):
         """All English names should be non-empty strings."""

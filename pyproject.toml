@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ppt-mcp"
-version = "2.4.0"
+version = "2.5.0"
 description = "Real-time PowerPoint control on Windows and macOS — an MCP server with 157 tools for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"

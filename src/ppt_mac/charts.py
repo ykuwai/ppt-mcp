@@ -114,7 +114,6 @@ _FORMAT_CHART_UNMAPPED = {
         "chart's colour and effect parts, and `c:style` in the XML does not "
         "restyle a chart that already has them"
     ),
-    "legend_font_size": "the legend's text properties are a whole `c:txPr` block, not one attribute",
     "legend_top": "a legend's coordinates are a manual layout PowerPoint computes from the rendered size",
     "legend_left": "a legend's coordinates are a manual layout PowerPoint computes from the rendered size",
     "title_position": "the title's placement is computed from its rendered size, which the XML does not carry",
@@ -138,11 +137,6 @@ _NOTHING_ASKED = (
     "animations, and a call that asks for nothing is not worth that. The "
     "chart is the object it was."
 )
-
-_FORMAT_AXIS_UNMAPPED = {
-    "tick_label_font_size": "the tick labels' text properties are a whole `c:txPr` block, not one attribute",
-}
-
 
 def _chart_shape(slide, name_or_index):
     """Find a shape on a slide and verify it is a chart.
@@ -414,7 +408,7 @@ def _format_chart_impl(
     call that cannot be honoured.
     """
     refused = _refuse_arguments("ppt_format_chart", {
-        "chart_style": chart_style, "legend_font_size": legend_font_size,
+        "chart_style": chart_style,
         "legend_top": legend_top, "legend_left": legend_left,
         "title_position": title_position, "title_top": title_top,
         "title_left": title_left,
@@ -443,7 +437,8 @@ def _format_chart_impl(
             )
 
     def edit(chart_bytes):
-        new = _gvml_charts.format_chart(chart_bytes, title, has_legend, legend_position)
+        new = _gvml_charts.format_chart(chart_bytes, title, has_legend, legend_position,
+                                        legend_font_size)
         return new, _gvml_charts.chart_summary(new)
 
     def verify(readback, wanted):
@@ -454,18 +449,21 @@ def _format_chart_impl(
             return f"has_legend read back as {got['has_legend']}"
         if legend_position is not None and got["legend_position"] != wanted["legend_position"]:
             return f"the legend position read back as {got['legend_position']!r}"
+        if legend_font_size is not None and got["legend_font_size"] != wanted["legend_font_size"]:
+            return f"the legend font size read back as {got['legend_font_size']!r}"
         return None
 
     def describe(readback, _wanted):
         got = _gvml_charts.chart_summary(readback)
         return {"has_title": got["has_title"], "has_legend": got["has_legend"]}
 
-    # The three arguments below are every one this tool writes; the rest are
+    # The four arguments below are every one this tool writes; the rest are
     # refused by name above. An argument added to `edit` belongs here too, or
     # a call carrying it would be taken for a call that asked for nothing.
     return _edit_chart(
         "ppt_format_chart", slide_index, shape_name_or_index, edit, verify, describe,
-        requested=any(v is not None for v in (title, has_legend, legend_position)),
+        requested=any(v is not None for v in (title, has_legend, legend_position,
+                                              legend_font_size)),
     )
 
 
@@ -506,19 +504,13 @@ def _format_chart_axis_impl(
             raise ValueError("log_scale is only valid for value axes.")
     if log_base is not None and log_scale is not True:
         raise ValueError("log_base requires log_scale=true.")
-    refused = _refuse_arguments(
-        "ppt_format_chart_axis", {"tick_label_font_size": tick_label_font_size}, _FORMAT_AXIS_UNMAPPED,
-    )
-    if refused is not None:
-        return refused
-
     fields = {
         "title": title, "min_scale": min_scale, "max_scale": max_scale,
         "major_unit": major_unit, "minor_unit": minor_unit,
         "tick_label_spacing": tick_label_spacing, "tick_mark_spacing": tick_mark_spacing,
         "major_tick_mark": major_tick_mark, "minor_tick_mark": minor_tick_mark,
         "reverse_order": reverse_order, "log_scale": log_scale, "log_base": log_base,
-        "number_format": number_format,
+        "number_format": number_format, "tick_label_font_size": tick_label_font_size,
     }
 
     def edit(chart_bytes):
