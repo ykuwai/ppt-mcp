@@ -12,10 +12,19 @@ So the references are handed to ``held`` instead, with the id of the process
 they lead to, and the tool returns at once. Before each item the worker runs,
 ``let_go_of_ended`` lets go of those whose process has ended, on the thread
 that holds them, since a COM reference belongs to the thread it was made on.
+
+Not waiting at all went too far. A chart's workbook is opened in an Excel of
+its own, and an Excel started while the one before it is still ending crashes,
+measured straight through pywin32 too. Waiting for each Excel as its last
+reference went had kept them one at a time. A new chart is now written without
+Excel where python-pptx can write it (ppt_com/chart_file.py); for the types it
+cannot, ``wait_until_ended`` waits, before ``AddChart2``, for the Excel behind
+every held set to end, for ``WAIT_LIMIT`` seconds at most.
 """
 
 import logging
 import threading
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +36,22 @@ _ERROR_INVALID_PARAMETER = 87
 
 # Past this many sets held by one worker, something keeps an Excel from ending.
 _MANY = 16
+
+# How long AddChart2 waits for the Excel before it to end, in seconds. An
+# Excel ends from two seconds to about a minute after its workbook is closed,
+# so this waits out the short ones and lets a slow one overlap.
+WAIT_LIMIT = 15.0
+
+
+def _pause(seconds: float) -> None:
+    """Wait on the STA thread while still answering COM calls into it."""
+    try:
+        import pythoncom
+
+        pythoncom.PumpWaitingMessages()
+    except Exception:  # noqa: BLE001 - then only sleep
+        pass
+    time.sleep(seconds)
 
 
 def process_ended(pid: int) -> bool:
@@ -67,8 +92,10 @@ def window_process(hwnd) -> int | None:
 class HeldUntilEnded:
     """COM references, each kept until its process has ended."""
 
-    def __init__(self, ended=process_ended):
+    def __init__(self, ended=process_ended, pause=_pause, clock=time.monotonic):
         self._ended = ended
+        self._pause = pause
+        self._clock = clock
         self._lock = threading.Lock()
         # (thread that holds them, process id, the references). The thread
         # object itself, not its ident: the system hands an ended thread's
@@ -129,6 +156,42 @@ class HeldUntilEnded:
         for _thread, _pid, references in done:
             references.clear()
         return len(done)
+
+    def wait_until_ended(self, limit: float = WAIT_LIMIT) -> float:
+        """Wait for the Excel behind every held set to end, then let go.
+
+        Called before ``AddChart2``, so that its Excel does not start while
+        another is still ending. Sets held by any thread count,
+        an abandoned worker's included, since their Excel overlaps all the
+        same; only this thread's are let go of. After ``limit`` seconds the
+        chart goes ahead, and that is logged. A process that cannot be asked
+        about is not waited for. Answers the seconds waited.
+        """
+        start = self._clock()
+        while True:
+            with self._lock:
+                pids = {entry[1] for entry in self._held}
+            waiting = []
+            for pid in sorted(pids):
+                try:
+                    if not self._ended(pid):
+                        waiting.append(pid)
+                except Exception:  # noqa: BLE001 - not waited for
+                    logger.debug("Could not tell whether process %s has ended", pid, exc_info=True)
+            waited = self._clock() - start
+            if not waiting:
+                break
+            if waited >= limit:
+                logger.warning(
+                    "Excel %s has not ended %.0f s after its chart was done; "
+                    "opening the next chart's workbook anyway", waiting, waited,
+                )
+                break
+            self._pause(0.1)
+        self.let_go_of_ended()
+        if waited >= 0.05:
+            logger.debug("Waited %.1f s for the last chart's Excel to end", waited)
+        return waited
 
     def still_held(self) -> int:
         """How many sets of references are held, by any thread."""

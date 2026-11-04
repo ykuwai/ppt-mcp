@@ -4,14 +4,18 @@ Handles creating charts, setting chart data via Excel workbook interaction,
 formatting charts (title, legend, style), formatting individual series,
 reading chart data back, and changing chart types.
 
-CRITICAL: Every chart.ChartData.Activate() opens an Excel workbook process.
+A new chart of a type python-pptx can write is written without Excel and
+brought in from a file (ppt_com/chart_file.py, #299). Every other way in,
+AddChart2 and chart.ChartData.Activate(), opens an Excel workbook process.
 You MUST close it with wb.Close(False) in a finally block to prevent leaked
 Excel processes.
 """
 
 import json
 import logging
+import os
 import sys
+import tempfile
 import time
 from typing import Literal, Optional, Union
 
@@ -27,6 +31,7 @@ else:
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.clipboard import kept_clipboard
 from utils.held_refs import held, window_process
 from utils.offload import run_offloaded
 from backend import ppt
@@ -35,6 +40,7 @@ from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from ppt_com.shape_lookup import resolve_shape
 from ppt_com.constants import msoChart
+from ppt_com import chart_file
 
 logger = logging.getLogger(__name__)
 
@@ -442,6 +448,76 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5, keep=None)
     return False
 
 
+def _office_language(app) -> str:
+    """The language the sample data of a new chart is in, from Office's UI."""
+    try:
+        return chart_file.language(app.LanguageSettings.LanguageID(2))  # msoLanguageIDUI
+    except Exception:  # noqa: BLE001 - English then
+        return "en"
+
+
+def _paste_from(source, slide, attempts=10, wait=0.1):
+    """Copy ``source`` onto ``slide`` through the clipboard, and answer the
+    pasted shape. Right after Copy the clipboard can still be empty."""
+    source.Copy()
+    last = None
+    for attempt in range(attempts):
+        if attempt:
+            _wait_pumping(wait)
+        try:
+            return slide.Shapes.Paste()(1)
+        except Exception as e:  # noqa: BLE001 - tried again, then raised
+            last = e
+    raise RuntimeError(f"Could not paste the new chart: {last}")
+
+
+def _unique_name(slide, shape) -> None:
+    """Rename a pasted chart that took the name of a shape already there."""
+    names = [slide.Shapes(i).Name for i in range(1, slide.Shapes.Count + 1)]
+    if names.count(shape.Name) < 2:
+        return
+    number = 1
+    while f"Chart {number}" in names:
+        number += 1
+    shape.Name = f"Chart {number}"
+
+
+def _add_chart_from_file(app, pres, slide, type_int, left, top, width, height):
+    """Add a chart written by python-pptx, so that no Excel starts (#299).
+
+    The chart is written to a temporary pptx, which is opened without a
+    window, and the chart is copied onto the slide with the user's clipboard
+    put back afterwards. Answers the shape and the clipboard formats that
+    could not be put back.
+    """
+    fd, path = tempfile.mkstemp(suffix=".pptx", prefix="ppt-mcp-chart-")
+    os.close(fd)
+    try:
+        chart_file.write(
+            path, type_int, pres.PageSetup.SlideWidth, pres.PageSetup.SlideHeight,
+            left, top, width, height, _office_language(app),
+        )
+        source = app.Presentations.Open(path, -1, 0, 0)  # ReadOnly, not Untitled, no window
+        try:
+            with kept_clipboard() as lost:
+                shape = _paste_from(source.Slides(1).Shapes(1), slide)
+        finally:
+            source.Close()
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            logger.debug("Could not remove %s", path, exc_info=True)
+    shape.Left, shape.Top, shape.Width, shape.Height = left, top, width, height
+    chart = shape.Chart
+    style = chart_file.STYLES.get(type_int)
+    if style:
+        chart.ChartStyle = style
+        chart.ClearToMatchStyle()
+    _unique_name(slide, shape)
+    return shape, lost
+
+
 def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -449,6 +525,26 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     slide = pres.Slides(slide_index)
 
     type_int = _resolve_chart_type(chart_type)
+    type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
+    if type_int in chart_file.CHART_TYPES and chart_file.available():
+        chart_shape, lost = _add_chart_from_file(
+            app, pres, slide, type_int, left, top, width, height)
+        result = {
+            "success": True,
+            "shape_name": chart_shape.Name,
+            "shape_index": chart_shape.ZOrderPosition,
+            "chart_type": type_name,
+            "chart_type_int": type_int,
+        }
+        if lost:
+            result["warning"] = (
+                "The chart went through the clipboard, and what was on it before "
+                f"was put back without these formats: {', '.join(lost)}.")
+        return result
+
+    # The types python-pptx cannot write still go through AddChart2, which
+    # starts an Excel; not while the last chart's is ending (#299).
+    held.wait_until_ended()
     chart_shape = slide.Shapes.AddChart2(-1, type_int, left, top, width, height)
     chart = chart_shape.Chart
 
@@ -461,7 +557,6 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     finally:
         refs.hand_over()
 
-    type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
     result = {
         "success": True,
         "shape_name": chart_shape.Name,
@@ -1024,7 +1119,7 @@ def set_chart_data(params: SetChartDataInput) -> str:
 
 
 def get_chart_data(params: GetChartDataInput) -> str:
-    """Read chart data from the underlying Excel workbook.
+    """Read the data a chart shows, from the chart itself, without Excel.
 
     Args:
         params: Slide index and chart shape identifier.
@@ -1194,7 +1289,7 @@ def register_tools(mcp):
         },
     )
     async def tool_get_chart_data(params: GetChartDataInput) -> str:
-        """Read chart data from the underlying Excel workbook.
+        """Read the data a chart shows, from the chart itself, without Excel.
 
         Returns the category labels and all series (name + values).
         Identify the chart by shape name or 1-based shape index.

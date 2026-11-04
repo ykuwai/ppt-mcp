@@ -132,6 +132,83 @@ def test_at_the_end_what_has_not_ended_stays_held():
     assert held.still_held() == 1
 
 
+class Clock:
+    """A clock that moves only when the waiting pauses."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.pauses = []
+
+    def __call__(self):
+        return self.now
+
+    def pause(self, seconds):
+        self.pauses.append(seconds)
+        self.now += seconds
+
+
+def test_the_next_chart_waits_until_the_last_excel_has_ended():
+    processes, gone, clock = Processes(), [], Clock()
+    held = HeldUntilEnded(processes, pause=clock.pause, clock=clock)
+    held.hold([Reference(gone)], 5)
+
+    def end_after_a_second(seconds):
+        clock.pause(seconds)
+        if clock.now >= 1.0:
+            processes.ended.add(5)
+
+    held._pause = end_after_a_second
+    waited = held.wait_until_ended(limit=15)
+    assert 1.0 <= waited < 1.2
+    assert len(gone) == 1 and held.still_held() == 0
+
+
+def test_nothing_held_means_no_wait():
+    clock = Clock()
+    held = HeldUntilEnded(Processes(), pause=clock.pause, clock=clock)
+    assert held.wait_until_ended() == 0
+    assert clock.pauses == []
+
+
+def test_an_excel_that_does_not_end_is_waited_for_only_so_long(caplog):
+    gone, clock = [], Clock()
+    held = HeldUntilEnded(Processes(), pause=clock.pause, clock=clock)
+    held.hold([Reference(gone)], 5)
+    with caplog.at_level("WARNING"):
+        waited = held.wait_until_ended(limit=2)
+    assert 2 <= waited < 2.2
+    assert not gone and held.still_held() == 1
+    assert "has not ended" in caplog.text
+
+
+def test_another_threads_excel_is_waited_for_but_not_let_go_of():
+    processes, gone, clock = Processes(), [], Clock()
+    held = HeldUntilEnded(processes, pause=clock.pause, clock=clock)
+    thread = threading.Thread(target=lambda: held.hold([Reference(gone)], 7))
+    thread.start()
+    thread.join()
+
+    def end_soon(seconds):
+        clock.pause(seconds)
+        if clock.now >= 0.5:
+            processes.ended.add(7)
+
+    held._pause = end_soon
+    assert held.wait_until_ended(limit=15) >= 0.5
+    assert not gone and held.still_held() == 1
+
+
+def test_a_process_that_cannot_be_asked_about_is_not_waited_for():
+    def ended(pid):
+        raise OSError("access denied")
+
+    clock = Clock()
+    held = HeldUntilEnded(ended, pause=clock.pause, clock=clock)
+    held.hold([object()], 9)
+    assert held.wait_until_ended(limit=15) == 0
+    assert held.still_held() == 1
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="asks Windows about a process")
 def test_this_process_has_not_ended_and_a_made_up_one_has():
     import os

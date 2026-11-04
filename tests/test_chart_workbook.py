@@ -7,6 +7,7 @@ call times out. Runs anywhere, against stand-ins for the chart and workbook.
 """
 
 import sys
+from pathlib import Path
 
 sys.path.insert(0, "src")
 
@@ -116,9 +117,9 @@ class TestTheToolsSayWhenItWasLeftOpen:
 
     def test_add_chart(self, monkeypatch):
         charts = self.deck(monkeypatch, Workbook(failures=99))
-        assert "warning" in charts._add_chart_impl(1, "column", 0, 0, 100, 100)
+        assert "warning" in charts._add_chart_impl(1, "3d_column", 0, 0, 100, 100)
         charts = self.deck(monkeypatch, Workbook(failures=0))
-        assert "warning" not in charts._add_chart_impl(1, "column", 0, 0, 100, 100)
+        assert "warning" not in charts._add_chart_impl(1, "3d_column", 0, 0, 100, 100)
 
     def test_set_chart_data(self, monkeypatch):
         charts = self.deck(monkeypatch, Workbook(failures=99))
@@ -238,14 +239,15 @@ class TestExcelIsLetGoOfOnceItHasEnded:
         handed = []
         monkeypatch.setattr(charts, "window_process", lambda hwnd: {555: 4321}.get(hwnd))
         monkeypatch.setattr(charts, "held", SimpleNamespace(
-            hold=lambda objects, pid: handed.append((list(objects), pid))))
+            hold=lambda objects, pid: handed.append((list(objects), pid)),
+            wait_until_ended=lambda: handed.append("waited")))
         return charts, workbook, handed
 
     def test_add_chart_hands_over_the_closed_workbook(self, monkeypatch):
         charts, workbook, handed = self.deck(monkeypatch)
-        charts._add_chart_impl(1, "column", 0, 0, 100, 100)
+        charts._add_chart_impl(1, "3d_column", 0, 0, 100, 100)
         assert workbook.closed
-        assert handed == [([workbook], 4321)]
+        assert handed == ["waited", ([workbook], 4321)]
 
     def test_set_chart_data_hands_over_workbook_sheet_and_range(self, monkeypatch):
         charts, workbook, handed = self.deck(monkeypatch)
@@ -258,5 +260,155 @@ class TestExcelIsLetGoOfOnceItHasEnded:
     def test_with_no_excel_window_there_is_no_process(self, monkeypatch):
         charts, workbook, handed = self.deck(monkeypatch)
         del workbook.Application
-        charts._add_chart_impl(1, "column", 0, 0, 100, 100)
-        assert handed == [([workbook], None)]
+        charts._add_chart_impl(1, "3d_column", 0, 0, 100, 100)
+        assert handed == ["waited", ([workbook], None)]
+
+
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="drives the COM impls, which macOS replaces with its own")
+class TestANewChartStartsNoExcel:
+    """A type python-pptx writes is brought in from a file, and AddChart2,
+    which starts an Excel, is left for the rest (#299)."""
+
+    def deck(self, monkeypatch):
+        from types import SimpleNamespace
+
+        from ppt_com import charts
+
+        calls = []
+
+        def add_chart2(*a):
+            calls.append(("AddChart2",) + a)
+            raise AssertionError("AddChart2 starts an Excel")
+
+        slide = SimpleNamespace(Shapes=SimpleNamespace(AddChart2=add_chart2))
+        pres = SimpleNamespace(Slides=lambda i: slide)
+        monkeypatch.setattr(charts.ppt, "_get_app_impl", lambda *a, **k: "app", raising=False)
+        monkeypatch.setattr(charts.ppt, "_get_pres_impl", lambda *a, **k: pres, raising=False)
+        monkeypatch.setattr(charts, "goto_slide", lambda *a: None)
+        shape = SimpleNamespace(Name="Chart 1", ZOrderPosition=3)
+
+        def from_file(app, p, s, type_int, left, top, width, height):
+            calls.append(("from file", type_int, left, top, width, height))
+            return shape, []
+
+        monkeypatch.setattr(charts, "_add_chart_from_file", from_file)
+        return charts, calls
+
+    @pytest.mark.parametrize("chart_type, type_int", [
+        ("column", 51), ("bar", 57), ("line", 4), ("pie", 5), ("scatter", -4169),
+        ("area", 1), ("doughnut", -4120), ("radar", -4151), ("bubble", 15), (74, 74),
+    ])
+    def test_these_come_from_a_file(self, monkeypatch, chart_type, type_int):
+        charts, calls = self.deck(monkeypatch)
+        result = charts._add_chart_impl(1, chart_type, 10, 20, 300, 200)
+        assert calls == [("from file", type_int, 10, 20, 300, 200)]
+        assert result["shape_name"] == "Chart 1" and result["shape_index"] == 3
+        assert result["chart_type_int"] == type_int
+        assert "warning" not in result
+
+    def test_without_python_pptx_addchart2_is_used(self, monkeypatch):
+        charts, calls = self.deck(monkeypatch)
+        monkeypatch.setattr(charts.chart_file, "available", lambda: False)
+        monkeypatch.setattr(charts.held, "wait_until_ended", lambda: calls.append("waited"))
+        with pytest.raises(AssertionError, match="starts an Excel"):
+            charts._add_chart_impl(1, "column", 0, 0, 100, 100)
+        assert calls[0] == "waited" and calls[1][0] == "AddChart2"
+
+    def test_clipboard_formats_that_were_lost_are_said(self, monkeypatch):
+        from types import SimpleNamespace
+
+        charts, _ = self.deck(monkeypatch)
+        monkeypatch.setattr(charts, "_add_chart_from_file", lambda *a: (
+            SimpleNamespace(Name="Chart 1", ZOrderPosition=1), ["CF_OWNERDISPLAY"]))
+        result = charts._add_chart_impl(1, "column", 0, 0, 100, 100)
+        assert "CF_OWNERDISPLAY" in result["warning"]
+
+    def test_three_d_waits_for_the_last_excel_and_uses_addchart2(self, monkeypatch):
+        from types import SimpleNamespace
+
+        charts, calls = self.deck(monkeypatch)
+        monkeypatch.setattr(charts, "held", SimpleNamespace(
+            wait_until_ended=lambda: calls.append("waited"),
+            hold=lambda objects, pid: None))
+        with pytest.raises(AssertionError, match="starts an Excel"):
+            charts._add_chart_impl(1, "3d_column", 0, 0, 100, 100)
+        assert calls[0] == "waited" and calls[1][0] == "AddChart2"
+
+
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="drives the COM impls, which macOS replaces with its own")
+class TestTheChartIsBroughtInFromItsFile:
+    def run(self, monkeypatch, paste_fails=False, names=("Title 1",), seen=None):
+        import contextlib
+        import os
+        from types import SimpleNamespace
+
+        from ppt_com import charts
+
+        seen = {} if seen is None else seen
+        seen.update(closed=False, written=None, kept=False)
+        chart = SimpleNamespace(ChartStyle=None, cleared=False)
+        chart.ClearToMatchStyle = lambda: setattr(chart, "cleared", True)
+        pasted = SimpleNamespace(Name="Chart 1", Chart=chart, Left=0, Top=0, Width=0, Height=0)
+        shapes_on_slide = [SimpleNamespace(Name=n) for n in names] + [pasted]
+
+        def paste():
+            if paste_fails:
+                raise RuntimeError("nothing to paste")
+            return lambda i: pasted
+
+        slide = SimpleNamespace()
+        slide.Shapes = type("Shapes", (), {
+            "Paste": staticmethod(paste),
+            "Count": len(shapes_on_slide),
+            "__call__": lambda self, i: shapes_on_slide[i - 1],
+        })()
+        source_shape = SimpleNamespace(Copy=lambda: None)
+        source = SimpleNamespace(
+            Slides=lambda i: SimpleNamespace(Shapes=lambda j: source_shape),
+            Close=lambda: seen.__setitem__("closed", True))
+
+        def open_(path, *a):
+            seen["opened"] = (path, a)
+            assert os.path.exists(path)
+            return source
+
+        app = SimpleNamespace(Presentations=SimpleNamespace(Open=open_))
+        pres = SimpleNamespace(PageSetup=SimpleNamespace(SlideWidth=960, SlideHeight=540))
+
+        def write(path, *args):
+            seen["written"] = args
+
+        @contextlib.contextmanager
+        def kept():
+            seen["kept"] = True
+            yield ["CF_PALETTE"]
+
+        monkeypatch.setattr(charts.chart_file, "write", write)
+        monkeypatch.setattr(charts, "kept_clipboard", kept)
+        monkeypatch.setattr(charts, "_wait_pumping", lambda s: None)
+        monkeypatch.setattr(charts, "_office_language", lambda app: "ja")
+        result = charts._add_chart_from_file(app, pres, slide, 51, 10, 20, 300, 200)
+        return result, seen, pasted, chart
+
+    def test_it_lands_where_asked_in_its_style(self, monkeypatch):
+        (shape, lost), seen, pasted, chart = self.run(monkeypatch)
+        assert shape is pasted and lost == ["CF_PALETTE"]
+        assert (pasted.Left, pasted.Top, pasted.Width, pasted.Height) == (10, 20, 300, 200)
+        assert chart.ChartStyle == 201 and chart.cleared
+        assert seen["written"] == (51, 960, 540, 10, 20, 300, 200, "ja")
+        assert seen["opened"][1] == (-1, 0, 0), "read only, without a window"
+        assert seen["closed"] and seen["kept"]
+        assert not Path(seen["opened"][0]).exists(), "the file is removed"
+
+    def test_a_name_already_on_the_slide_is_not_repeated(self, monkeypatch):
+        (shape, _), *_ = self.run(monkeypatch, names=("Chart 1", "Chart 2"))
+        assert shape.Name == "Chart 3"
+
+    def test_a_failed_paste_still_closes_and_removes_the_file(self, monkeypatch):
+        seen = {}
+        with pytest.raises(RuntimeError, match="Could not paste"):
+            self.run(monkeypatch, paste_fails=True, seen=seen)
+        assert seen["closed"] and seen["kept"]
+        assert not Path(seen["opened"][0]).exists()
