@@ -113,6 +113,7 @@ class TestTheToolsSayWhenItWasLeftOpen:
         monkeypatch.setattr(charts, "goto_slide", lambda *a: None)
         monkeypatch.setattr(charts, "_get_chart_shape", lambda slide, ref: shape, raising=False)
         monkeypatch.setattr(charts, "_wait_pumping", lambda s: None)
+        monkeypatch.setattr(charts, "_excel_needed", lambda slide, shape: "the Excel route is under test")
         return charts
 
     def test_add_chart(self, monkeypatch):
@@ -251,9 +252,11 @@ class TestExcelIsLetGoOfOnceItHasEnded:
 
     def test_set_chart_data_hands_over_workbook_sheet_and_range(self, monkeypatch):
         charts, workbook, handed = self.deck(monkeypatch)
-        charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
+        result = charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
         assert workbook.closed
-        [(objects, pid)] = handed
+        assert handed[0] == "waited", "the last chart's Excel is waited for before Activate"
+        [(objects, pid)] = handed[1:]
+        assert result["method"] == "Excel" and result["reason"] == "the Excel route is under test"
         assert pid == 4321
         assert objects[0] is workbook and len(objects) == 3
 
@@ -453,6 +456,7 @@ class TestTheChartIsBroughtInFromItsFile:
         monkeypatch.setattr(charts.chart_file, "write", write)
         monkeypatch.setattr(charts, "kept_clipboard", kept)
         monkeypatch.setattr(charts, "_wait_pumping", lambda s: None)
+        monkeypatch.setattr(charts.clipboard, "empty", lambda: seen.__setitem__("emptied", True))
         monkeypatch.setattr(charts, "_office_language", lambda app: "ja")
         result = charts._add_chart_from_file(app, pres, slide, 51, 10, 20, 300, 200)
         return result, seen, pasted, chart
@@ -466,6 +470,7 @@ class TestTheChartIsBroughtInFromItsFile:
         assert seen["written"] == (51, 960, 540, 10, 20, 300, 200, "ja")
         assert seen["opened"][1] == (-1, 0, 0), "read only, without a window"
         assert seen["closed"] and seen["kept"]
+        assert seen["emptied"], "a paste never finds what was there before the copy"
         assert not Path(seen["opened"][0]).exists(), "the file is removed"
 
     def test_a_name_already_on_the_slide_is_not_repeated(self, monkeypatch):
@@ -538,5 +543,6 @@ class TestTheChartIsBroughtInFromItsFile:
 
         slide = SimpleNamespace(Shapes=Shapes())
         monkeypatch.setattr(charts, "_wait_pumping", lambda s: None)
+        monkeypatch.setattr(charts.clipboard, "empty", lambda: None)
         assert charts._paste_from(SimpleNamespace(Copy=lambda: None), slide) == "chart"
         assert len(tries) == 3
