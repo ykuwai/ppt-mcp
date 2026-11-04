@@ -127,7 +127,9 @@ class SetChartDataInput(BaseModel):
         ...,
         description=(
             "List of series dicts, each with 'name' (str) and 'values' (list[float]). "
-            "Example: [{'name': 'Sales', 'values': [100, 200, 150, 300]}]"
+            "Example: [{'name': 'Sales', 'values': [100, 200, 150, 300]}]. "
+            "For a scatter or bubble chart the categories are the x values, and "
+            "on Windows a bubble chart's series also take 'sizes' (list[float])."
         ),
     )
 
@@ -897,6 +899,13 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
                 result["warning"] = " ".join(warnings)
             return result
 
+    if (any("sizes" in entry for entry in series)
+            and shape.Chart.ChartType in chart_file.BUBBLE_TYPES):
+        # The Excel way writes names and values only, so the sizes would be
+        # dropped without a word.
+        raise RuntimeError(
+            f"Bubble sizes can only be set without Excel, and this chart has to go "
+            f"through Excel, since {reason}. Nothing was changed.")
     try:
         result = _set_chart_data_through_excel(slide, shape, categories, series)
     except Exception as e:
@@ -904,6 +913,9 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     result["method"] = "Excel"
     result["reason"] = reason
     return result
+
+
+XL_COLUMNS = 2  # XlRowCol.xlColumns
 
 
 def _set_chart_data_through_excel(slide, shape, categories, series):
@@ -947,10 +959,12 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
         last_col = len(series) + 1
         data_range = refs.add(ws.Range(ws.Cells(1, 1), ws.Cells(last_row, last_col)))
         addr = "Sheet1!" + data_range.Address
+        # PlotBy xlColumns: a series per column, as written. Left to Excel, it
+        # takes rows when there are more series than categories.
         chart._oleobj_.InvokeTypes(
             1413, 0, 1, (24, 0),
             ((8, 1), (12, 49)),
-            addr, pythoncom.Empty,
+            addr, XL_COLUMNS,
         )
     finally:
         try:
@@ -1617,8 +1631,10 @@ def register_tools(mcp):
         new shape id, given as `shape_id` (the old one as `previous_shape_id`).
         A chart that is animated or starts an animation, grouped, in a
         placeholder, has a connector attached, sits on a slide with comments,
-        or is a scatter, bubble or 3-D chart, is written through Excel as
-        before. `method` says which was used, and `reason` why Excel was.
+        or is a 3-D chart, is written through Excel as before, and so is a
+        scatter chart whose categories are not numbers or a bubble chart whose
+        series have no 'sizes'. `method` says which was used, and `reason` why
+        Excel was.
         Either way the values' number format goes back to General.
         """
         return await run_offloaded(set_chart_data, params)
