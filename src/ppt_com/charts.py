@@ -27,6 +27,7 @@ else:
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils.held_refs import held, window_process
 from utils.offload import run_offloaded
 from backend import ppt
 from ppt_com.layout_check import report_layout, touched_names
@@ -379,7 +380,32 @@ def _wait_pumping(seconds) -> None:
         time.sleep(min(0.05, left))
 
 
-def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5) -> bool:
+class _ExcelRefs:
+    """The Excel objects one tool call got, and the Excel process behind them.
+
+    Handed to ``held`` once the workbook is closed, so that letting go of them
+    waits for nothing (#299). The process is looked up while the workbook is
+    still open, from its Excel's main window.
+    """
+
+    def __init__(self):
+        self.objects, self.pid = [], None
+
+    def add(self, obj):
+        self.objects.append(obj)
+        if self.pid is None:
+            try:
+                self.pid = window_process(obj.Application.Hwnd)
+            except Exception:  # noqa: BLE001 - then they are let go of at once
+                logger.debug("Could not find the Excel behind a chart's workbook", exc_info=True)
+        return obj
+
+    def hand_over(self):
+        held.hold(self.objects, self.pid)
+        self.objects = []
+
+
+def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5, keep=None) -> bool:
     """Close a chart's data workbook, and say whether it closed.
 
     A workbook left open keeps the chart in edit mode: the next chart PowerPoint
@@ -393,7 +419,8 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5) -> bool:
     even then, so a failure to get it is retried rather than taken as closed.
 
     ``workbook`` is the one the caller holds, or None to open it first, as
-    ``ChartData.Activate`` does for a chart just added.
+    ``ChartData.Activate`` does for a chart just added. Each workbook got here
+    goes into ``keep``, an ``_ExcelRefs``, when one is given.
     """
     last = None
     for attempt in range(attempts):
@@ -404,10 +431,13 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5) -> bool:
                 if workbook is None and not attempt:
                     chart.ChartData.Activate()
                 workbook = chart.ChartData.Workbook
+                if keep is not None:
+                    keep.add(workbook)
             workbook.Close(False)
             return True
         except Exception as e:  # noqa: BLE001 - retried, then reported
-            last = e
+            # Only its text: the error's frames would hold the workbook.
+            last = f"{type(e).__name__}: {e}"
     logger.warning("Could not close a chart's data workbook after %d tries: %s", attempts, last)
     return False
 
@@ -424,8 +454,12 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
 
     # CRITICAL: AddChart2 auto-opens an Excel workbook. MUST close it to
     # prevent leaked Excel processes, and a chart left in edit mode stops the
-    # next one being added.
-    closed = _close_chart_workbook(chart)
+    # next one being added. Its Excel is let go of once it has ended.
+    refs = _ExcelRefs()
+    try:
+        closed = _close_chart_workbook(chart, keep=refs)
+    finally:
+        refs.hand_over()
 
     type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
     result = {
@@ -448,15 +482,21 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     shape = _get_chart_shape(slide, shape_name_or_index)
     chart = shape.Chart
 
+    # Every Excel object kept here is handed to ``held`` once the workbook is
+    # closed, and let go of after its Excel has ended (#299).
+    refs = _ExcelRefs()
     chart.ChartData.Activate()
     try:
-        wb = chart.ChartData.Workbook
+        wb = refs.add(chart.ChartData.Workbook)
     except Exception:
         # Activate opened it; do not leave it open on the way out.
-        _close_chart_workbook(chart)
+        try:
+            _close_chart_workbook(chart, keep=refs)
+        finally:
+            refs.hand_over()
         raise
     try:
-        ws = wb.Worksheets(1)
+        ws = refs.add(wb.Worksheets(1))
         ws.Cells.Clear()
 
         # Write categories in column A starting at row 2
@@ -476,7 +516,7 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
         # type flags (12, 49) instead of (12, 17) for PlotBy.
         last_row = len(categories) + 1
         last_col = len(series) + 1
-        data_range = ws.Range(ws.Cells(1, 1), ws.Cells(last_row, last_col))
+        data_range = refs.add(ws.Range(ws.Cells(1, 1), ws.Cells(last_row, last_col)))
         addr = "Sheet1!" + data_range.Address
         chart._oleobj_.InvokeTypes(
             1413, 0, 1, (24, 0),
@@ -484,7 +524,10 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
             addr, pythoncom.Empty,
         )
     finally:
-        closed = _close_chart_workbook(chart, wb)
+        try:
+            closed = _close_chart_workbook(chart, wb, keep=refs)
+        finally:
+            refs.hand_over()
 
     # Excel can stop while the data is being written and every call still
     # succeed, leaving the chart empty (#315). So the chart is read back, and

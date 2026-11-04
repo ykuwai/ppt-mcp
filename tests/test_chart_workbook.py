@@ -221,3 +221,42 @@ class TestSetChartDataFailsWhenTheChartStaysEmpty:
         charts._get_chart_shape(None, "Chart 1").Chart.SeriesCollection = series
         result = charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
         assert result["success"] and "warning" not in result
+
+
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="drives the COM impls, which macOS replaces with its own")
+class TestExcelIsLetGoOfOnceItHasEnded:
+    """The tools hand the Excel objects they got to ``held``, with the Excel
+    process behind them, rather than letting go of them on return (#299)."""
+
+    def deck(self, monkeypatch):
+        from types import SimpleNamespace
+
+        workbook = Workbook(failures=0)
+        workbook.Application = SimpleNamespace(Hwnd=555)
+        charts = TestTheToolsSayWhenItWasLeftOpen().deck(monkeypatch, workbook)
+        handed = []
+        monkeypatch.setattr(charts, "window_process", lambda hwnd: {555: 4321}.get(hwnd))
+        monkeypatch.setattr(charts, "held", SimpleNamespace(
+            hold=lambda objects, pid: handed.append((list(objects), pid))))
+        return charts, workbook, handed
+
+    def test_add_chart_hands_over_the_closed_workbook(self, monkeypatch):
+        charts, workbook, handed = self.deck(monkeypatch)
+        charts._add_chart_impl(1, "column", 0, 0, 100, 100)
+        assert workbook.closed
+        assert handed == [([workbook], 4321)]
+
+    def test_set_chart_data_hands_over_workbook_sheet_and_range(self, monkeypatch):
+        charts, workbook, handed = self.deck(monkeypatch)
+        charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
+        assert workbook.closed
+        [(objects, pid)] = handed
+        assert pid == 4321
+        assert objects[0] is workbook and len(objects) == 3
+
+    def test_with_no_excel_window_there_is_no_process(self, monkeypatch):
+        charts, workbook, handed = self.deck(monkeypatch)
+        del workbook.Application
+        charts._add_chart_impl(1, "column", 0, 0, 100, 100)
+        assert handed == [([workbook], None)]
