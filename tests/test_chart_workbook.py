@@ -165,6 +165,15 @@ class TestTheDataIsReadBack:
                                   ["Q1", "Q2"], [{"name": "S", "values": [1.0, 3.0]}])
         assert problem == "series 1 value 2 reads 3.0, not 2"
 
+    def test_a_tiny_value_read_as_zero_is_a_problem(self):
+        problem, _ = self.compare(["Q1"], [{"name": "S", "values": [1e-10]}],
+                                  ["Q1"], [{"name": "S", "values": [0.0]}])
+        assert problem == "series 1 value 1 reads 0.0, not 1e-10"
+
+    def test_rounding_in_the_last_digits_is_fine(self):
+        assert self.compare(["Q1"], [{"name": "S", "values": [0.1 + 0.2]}],
+                            ["Q1"], [{"name": "S", "values": [0.3]}]) == (None, None)
+
     def test_short_values_show_as_empty_points(self):
         assert self.compare(["Q1", "Q2"], [{"name": "S", "values": [1]}],
                             ["Q1", "Q2"], [{"name": "S", "values": [1.0, None]}]) == (None, None)

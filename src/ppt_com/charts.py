@@ -536,7 +536,9 @@ def _same_number(written, read) -> bool:
     import math
 
     try:
-        return math.isclose(float(written), float(read), rel_tol=1e-9, abs_tol=1e-9)
+        # Relative for ordinary values, and a floor far below any value a
+        # chart shows, so that 1e-10 written and 0.0 read is still a difference.
+        return math.isclose(float(written), float(read), rel_tol=1e-9, abs_tol=1e-15)
     except (TypeError, ValueError):
         return False
 
@@ -565,7 +567,8 @@ def _compare_chart_data(categories, series, read_categories, read_series):
         if categories and len(shown) != len(categories):
             return (f"series {number} has {len(shown)} values, not {len(categories)}"), None
         for place, (value, seen) in enumerate(zip(values, shown), 1):
-            if isinstance(value, (int, float)) and not isinstance(value, bool)                     and not _same_number(value, seen):
+            if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                    and not _same_number(value, seen)):
                 return f"series {number} value {place} reads {seen!r}, not {value!r}", None
     renamed = [f"category {place} reads {seen!r}"
                for place, (label, seen) in enumerate(zip(categories, read_categories), 1)
