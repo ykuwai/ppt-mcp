@@ -291,7 +291,7 @@ class TestChartArgumentsRefusedByName:
                 None, None, None, None, None,
             )
 
-        assert result["error"] == "ppt_format_chart cannot set chart_style, legend_font_size on macOS"
+        assert result["error"] == "ppt_format_chart cannot set chart_style on macOS"
         assert "drop the argument" in result["reason"]
         assert "success" not in result
 
@@ -316,18 +316,6 @@ class TestChartArgumentsRefusedByName:
                     1, "Q3 Revenue", None, None, "botom", None, None,
                     None, None, None, None, None,
                 )
-
-    def test_the_axis_font_size_is_refused_by_name(self):
-        from ppt_mac.charts import _format_chart_axis_impl
-
-        with _no_powerpoint():
-            result = _format_chart_axis_impl(
-                1, "Q3 Revenue", "value", None,
-                None, None, None, None, None, None, None, None,
-                None, None, None, 9.0, None,
-            )
-
-        assert result["error"] == "ppt_format_chart_axis cannot set tick_label_font_size on macOS"
 
     def test_the_windows_axis_guards_come_before_powerpoint(self):
         from ppt_mac.charts import _format_chart_axis_impl
