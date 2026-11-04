@@ -585,12 +585,13 @@ def _close_presentation_impl(
 
 
 def protected_view_windows(app):
-    """Every Protected View window, or none when they cannot be read."""
+    """Every Protected View window. A PowerPoint without the collection has
+    none; any other failure to read them is raised, not taken for none."""
     try:
-        return [app.ProtectedViewWindows(i)
-                for i in range(1, app.ProtectedViewWindows.Count + 1)]
-    except Exception:  # noqa: BLE001 - an old PowerPoint, or none to read
+        windows = app.ProtectedViewWindows
+    except AttributeError:
         return []
+    return [windows(i) for i in range(1, windows.Count + 1)]
 
 
 def _protected_view_named(app, name):

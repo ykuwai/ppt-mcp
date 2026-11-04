@@ -332,6 +332,19 @@ class TestProtectedViewByName:
         ordinary.Close.assert_called_once_with()
         window.Close.assert_not_called()
 
+    def test_windows_that_cannot_be_read_are_not_taken_for_none(self, monkeypatch):
+        from ppt_com import app as app_module
+        from ppt_com import presentation
+
+        app, window, _ = self._app(monkeypatch)
+        type(app.ProtectedViewWindows).Count = property(
+            lambda self: (_ for _ in ()).throw(RuntimeError("RPC server unavailable")))
+        with pytest.raises(RuntimeError, match="RPC server unavailable"):
+            presentation._close_presentation_impl(False, None, "pv.pptx", True)
+        result = app_module._list_presentations_impl()
+        assert "RPC server unavailable" in result["protected_view_unknown"]
+        assert "protected_view" not in result
+
     def test_the_list_shows_it(self, monkeypatch):
         from ppt_com import app as app_module
 

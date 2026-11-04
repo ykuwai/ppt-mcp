@@ -149,12 +149,14 @@ def _list_presentations_impl() -> dict:
     from ppt_com.presentation import protected_view_windows
 
     read_only = []
-    for window in protected_view_windows(app):
-        try:
+    try:
+        for window in protected_view_windows(app):
             deck = window.Presentation
             read_only.append({"name": deck.Name, "full_name": deck.FullName})
-        except Exception:  # noqa: BLE001 - a window closing as it is read
-            continue
+    except Exception as e:  # noqa: BLE001 - said in the result, not taken for none
+        result["protected_view_unknown"] = (
+            f"Could not read the files open in Protected View ({e}), so any "
+            "there are not listed.")
     if read_only:
         result["protected_view"] = read_only
     return result
