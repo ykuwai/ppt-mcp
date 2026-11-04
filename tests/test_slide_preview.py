@@ -53,6 +53,29 @@ def test_a_slide_size_that_could_not_be_read_leaves_out_the_scale():
     assert "pixels_per_point" not in said and said["image_width_px"] == 1920
 
 
+@pytest.mark.parametrize("points, pixels", [
+    ((960.0, 540.0), (1920, 1080)),   # 16:9
+    ((720.0, 540.0), (1440, 1080)),   # 4:3
+    ((612.0, 792.0), (1224, 1584)),   # letter, portrait
+])
+def test_windows_asks_for_two_pixels_per_point(points, pixels):
+    """Slide.Export with no size follows the display's DPI, 1280 px across
+    for a 960 pt slide at 96 DPI; the preview asks for the Mac's 2 px/pt."""
+    import server
+
+    calls = []
+
+    class Slide:
+        def Export(self, *args):
+            calls.append(args)
+
+    class PageSetup:
+        SlideWidth, SlideHeight = points
+
+    server.export_preview_png(Slide(), PageSetup(), "out.png")
+    assert calls == [("out.png", "PNG") + pixels]
+
+
 def test_the_tool_answers_the_image_and_then_its_scale():
     import server
     from backend import ppt

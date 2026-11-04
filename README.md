@@ -452,8 +452,8 @@ Smaller differences:
   on a slide that already has animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.
-- Slide images come from a PDF render rather than PNG export, which is sharper
-  than the Windows route.
+- Slide images are rendered from a PDF rather than exported as PNG. A preview
+  is 2 pixels per point on both platforms.
 - Automation consent belongs to whichever application launched the server, so
   running it from a different terminal or editor raises the prompt again.
 - Save the deck early and at each break. It costs nothing, and PowerPoint has
