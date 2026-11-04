@@ -486,25 +486,33 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     finally:
         closed = _close_chart_workbook(chart, wb)
 
+    # Excel can stop while the data is being written and every call still
+    # succeed, leaving the chart empty (#315). So the chart is read back, and
+    # what it shows has to be what was written.
+    problem, renamed = _check_chart_data(chart, categories, series)
+    if problem:
+        left_open = f" {WORKBOOK_LEFT_OPEN}" if not closed else ""
+        raise RuntimeError(
+            f"The chart did not take the data: {problem}. Excel may have stopped "
+            f"while it was written; call ppt_set_chart_data again.{left_open}")
+
     result = {
         "success": True,
         "shape_name": shape.Name,
         "categories_count": len(categories),
         "series_count": len(series),
     }
-    if not closed:
-        result["warning"] = WORKBOOK_LEFT_OPEN
+    warnings = [w for w in (renamed, None if closed else WORKBOOK_LEFT_OPEN) if w]
+    if warnings:
+        result["warning"] = " ".join(warnings)
     return result
 
 
-def _get_chart_data_impl(slide_index, shape_name_or_index):
-    app = ppt._get_app_impl()
-    pres = ppt._get_pres_impl()
-    slide = pres.Slides(slide_index)
-    shape = _get_chart_shape(slide, shape_name_or_index)
-    chart = shape.Chart
+def _read_chart_data(chart):
+    """The categories and series a chart shows, read from the chart itself.
 
-    # Read data directly from SeriesCollection (avoids opening Excel workbook)
+    Read from SeriesCollection rather than the workbook, so Excel is not opened.
+    """
     categories = []
     series_list = []
     sc_count = chart.SeriesCollection().Count
@@ -521,7 +529,82 @@ def _get_chart_data_impl(slide_index, shape_name_or_index):
                 categories = [str(x) for x in ser.XValues]
             except Exception:
                 pass
+    return categories, series_list
 
+
+def _same_number(written, read) -> bool:
+    import math
+
+    try:
+        # Relative for ordinary values, and a floor far below any value a
+        # chart shows, so that 1e-10 written and 0.0 read is still a difference.
+        return math.isclose(float(written), float(read), rel_tol=1e-9, abs_tol=1e-15)
+    except (TypeError, ValueError):
+        return False
+
+
+def _same_label(written, read) -> bool:
+    """Whether a label reads back as written, a number in either spelling included."""
+    return str(written) == str(read) or _same_number(written, read)
+
+
+def _compare_chart_data(categories, series, read_categories, read_series):
+    """Compare what was written with what the chart shows.
+
+    Answers ``(problem, renamed)``. ``problem`` says how the data did not land:
+    a different number of categories, series or values, or a value that differs.
+    ``renamed`` says which labels Excel read differently, since it turns some
+    text into numbers or dates; that is worth a warning, not a failure.
+    """
+    if len(read_series) != len(series):
+        return f"it has {len(read_series)} series, not {len(series)}", None
+    if categories and len(read_categories) != len(categories):
+        return f"it has {len(read_categories)} categories, not {len(categories)}", None
+    for number, (wrote, read) in enumerate(zip(series, read_series), 1):
+        # The data range has a row per category, so each series shows that
+        # many points; values past them are not on the chart.
+        values, shown = list(wrote.get("values", [])), list(read["values"])
+        if categories and len(shown) != len(categories):
+            return (f"series {number} has {len(shown)} values, not {len(categories)}"), None
+        for place, (value, seen) in enumerate(zip(values, shown), 1):
+            if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                    and not _same_number(value, seen)):
+                return f"series {number} value {place} reads {seen!r}, not {value!r}", None
+    renamed = [f"category {place} reads {seen!r}"
+               for place, (label, seen) in enumerate(zip(categories, read_categories), 1)
+               if not _same_label(label, seen)]
+    renamed += [f"series {number} is named {read['name']!r}"
+                for number, (wrote, read) in enumerate(zip(series, read_series), 1)
+                if wrote.get("name") is not None and not _same_label(wrote["name"], read["name"])]
+    if renamed:
+        return None, ("Excel read some labels differently: " + "; ".join(renamed[:5]) + ".")
+    return None, None
+
+
+def _check_chart_data(chart, categories, series, attempts=3, wait=0.5):
+    """Read the chart back until it shows what was written, a few times at most."""
+    for attempt in range(attempts):
+        if attempt:
+            _wait_pumping(wait)
+        try:
+            read_categories, read_series = _read_chart_data(chart)
+        except Exception as e:  # noqa: BLE001 - reported as the problem
+            problem, renamed = f"reading it back failed ({e})", None
+            continue
+        problem, renamed = _compare_chart_data(categories, series, read_categories, read_series)
+        if not problem:
+            break
+    return problem, renamed
+
+
+def _get_chart_data_impl(slide_index, shape_name_or_index):
+    app = ppt._get_app_impl()
+    pres = ppt._get_pres_impl()
+    slide = pres.Slides(slide_index)
+    shape = _get_chart_shape(slide, shape_name_or_index)
+    chart = shape.Chart
+
+    categories, series_list = _read_chart_data(chart)
     return {
         "success": True,
         "shape_name": shape.Name,
@@ -1051,6 +1134,9 @@ def register_tools(mcp):
         numeric values. The number of values in each series should match the
         number of categories.
         Example series: [{"name": "Revenue", "values": [100, 200, 150, 300]}]
+        On Windows the chart is read back afterwards, and the call fails when
+        it does not show the data written. Labels Excel reads differently, such
+        as text it takes for a date, come back in `warning`.
         """
         return await run_offloaded(set_chart_data, params)
 
