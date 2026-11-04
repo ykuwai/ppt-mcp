@@ -899,8 +899,8 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
                 result["warning"] = " ".join(warnings)
             return result
 
-    if (shape.Chart.ChartType in chart_file.BUBBLE_TYPES
-            and any("sizes" in entry for entry in series)):
+    if (any("sizes" in entry for entry in series)
+            and shape.Chart.ChartType in chart_file.BUBBLE_TYPES):
         # The Excel way writes names and values only, so the sizes would be
         # dropped without a word.
         raise RuntimeError(
