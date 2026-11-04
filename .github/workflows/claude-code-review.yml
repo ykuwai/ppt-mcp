@@ -1,8 +1,11 @@
 name: Claude Code Review
 
+# Once per pull request, when it is opened or made ready, not on every push:
+# a review per push filled the owner's notifications. For another review
+# after changes, comment "@claude review this pull request" (claude.yml).
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    types: [opened, ready_for_review, reopened]
     # Optional: Only run on specific file changes
     # paths:
     #   - "src/**/*.ts"
@@ -13,7 +16,7 @@ on:
   # pull_request, so the review of one runs here instead, as this repository,
   # in the claude-review-fork job below.
   pull_request_target:
-    types: [opened, synchronize, ready_for_review, reopened]
+    types: [opened, ready_for_review, reopened]
 
 jobs:
   claude-review:
