@@ -915,6 +915,9 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     return result
 
 
+XL_COLUMNS = 2  # XlRowCol.xlColumns
+
+
 def _set_chart_data_through_excel(slide, shape, categories, series):
     chart = shape.Chart
 
@@ -956,10 +959,12 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
         last_col = len(series) + 1
         data_range = refs.add(ws.Range(ws.Cells(1, 1), ws.Cells(last_row, last_col)))
         addr = "Sheet1!" + data_range.Address
+        # PlotBy xlColumns: a series per column, as written. Left to Excel, it
+        # takes rows when there are more series than categories.
         chart._oleobj_.InvokeTypes(
             1413, 0, 1, (24, 0),
             ((8, 1), (12, 49)),
-            addr, pythoncom.Empty,
+            addr, XL_COLUMNS,
         )
     finally:
         try:

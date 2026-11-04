@@ -247,21 +247,27 @@ def replace_data(path: str, categories: list, series: list[dict]) -> None:
     kept = len(plot.sers)
     frame.chart.replace_data(data)
     for ser in plot.sers[kept:]:
-        _clear_colours(ser)
+        _next_colour(ser)
     deck.save(path)
 
 
-def _clear_colours(ser) -> None:
-    """Let a series python-pptx added take the chart's next colour.
+def _next_colour(ser) -> None:
+    """Give a series python-pptx added the chart's next theme colour.
 
     python-pptx makes each series past the old count as a copy of the last
-    one, colours and all, so they would all draw in the last series' colour.
-    Without colours of their own they take the next one, as in PowerPoint.
+    one, so they would all draw in the last series' colour. Only the colours
+    are changed: a line or border left out stays left out.
     """
+    from lxml import etree
     from pptx.oxml.ns import qn
 
-    for child in ser.findall(qn("c:spPr")) + ser.findall(qn("c:dPt")):
-        ser.remove(child)
-    for marker in ser.findall(qn("c:marker")):
-        for child in marker.findall(qn("c:spPr")):
-            marker.remove(child)
+    accent = f"accent{ser.idx.val % 6 + 1}"
+    trees = ser.findall(qn("c:spPr")) + [
+        spPr for marker in ser.findall(qn("c:marker")) for spPr in marker.findall(qn("c:spPr"))]
+    for tree in trees:
+        for fill in tree.iter(qn("a:solidFill")):
+            for colour in list(fill):
+                fill.remove(colour)
+            etree.SubElement(fill, qn("a:schemeClr")).set("val", accent)
+    for point in ser.findall(qn("c:dPt")):
+        ser.remove(point)

@@ -232,3 +232,23 @@ def test_a_series_added_does_not_take_the_last_one_s_colour(tmp_path, chart_type
         assert "FF0000" in ser.xml, "the series that were there keep their colour"
     for ser in sers[kept:]:
         assert "FF0000" not in ser.xml, "an added series takes the next colour"
+        assert f'<a:schemeClr val="accent{ser.idx.val % 6 + 1}"/>' in ser.xml
+
+
+def test_an_added_series_keeps_what_the_last_one_leaves_out(tmp_path):
+    """A scatter chart of markers only: the line stays switched off."""
+    path = str(tmp_path / "chart.pptx")
+    chart_file.write(path, -4169, 960, 540, 0, 0, 400, 300, "en")
+    deck = pptx.Presentation(path)
+    [series] = deck.slides[0].shapes[0].chart.plots[0].series
+    series.format.line.fill.background()
+    series.marker.format.fill.solid()
+    series.marker.format.fill.fore_color.rgb = pptx.dml.color.RGBColor(0xFF, 0, 0)
+    deck.save(path)
+
+    chart_file.replace_data(path, ["1", "2"], [
+        {"name": "A", "values": [1, 2]}, {"name": "B", "values": [3, 4]}])
+    added = pptx.Presentation(path).slides[0].shapes[0].chart._chartSpace.plotArea.sers[1]
+    line = added.find(pptx.oxml.ns.qn("c:spPr")).find(pptx.oxml.ns.qn("a:ln"))
+    assert line.find(pptx.oxml.ns.qn("a:noFill")) is not None, "no line, as on the first"
+    assert '<a:schemeClr val="accent2"/>' in added.xml
