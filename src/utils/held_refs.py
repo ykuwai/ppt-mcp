@@ -19,22 +19,34 @@ import threading
 
 logger = logging.getLogger(__name__)
 
-# OpenProcess access to wait on a process, and WaitForSingleObject's answer
-# when it has ended.
+# OpenProcess access to wait on a process, WaitForSingleObject's answer when
+# it has ended, and OpenProcess's error for a process that is not there.
 _SYNCHRONIZE = 0x00100000
 _WAIT_OBJECT_0 = 0
+_ERROR_INVALID_PARAMETER = 87
+
+# Past this many sets held by one worker, something keeps an Excel from ending.
+_MANY = 16
 
 
 def process_ended(pid: int) -> bool:
-    """Whether the process ``pid`` has ended, or never was."""
+    """Whether the process ``pid`` has ended, or never was.
+
+    Any other failure to open it, such as an Excel running elevated that this
+    process may not wait on, raises, and the question is asked again before
+    the next item: taking it for ended would let go while Excel is still on its
+    way out, which is the wait this module is here to avoid.
+    """
     import pywintypes
     import win32api
     import win32event
 
     try:
         handle = win32api.OpenProcess(_SYNCHRONIZE, False, pid)
-    except pywintypes.error:
-        return True
+    except pywintypes.error as e:
+        if e.winerror == _ERROR_INVALID_PARAMETER:
+            return True
+        raise
     try:
         return win32event.WaitForSingleObject(handle, 0) == _WAIT_OBJECT_0
     finally:
@@ -58,8 +70,12 @@ class HeldUntilEnded:
     def __init__(self, ended=process_ended):
         self._ended = ended
         self._lock = threading.Lock()
-        # (thread that holds them, process id, the references)
+        # (thread that holds them, process id, the references). The thread
+        # object itself, not its ident: the system hands an ended thread's
+        # ident to a new one, and that worker must not let go of references
+        # made in another apartment.
         self._held = []
+        self._warned = False
 
     def hold(self, references, pid) -> None:
         """Keep ``references`` until process ``pid`` has ended.
@@ -72,19 +88,31 @@ class HeldUntilEnded:
         if not pid:
             references.clear()
             return
+        here = threading.current_thread()
         with self._lock:
-            self._held.append((threading.get_ident(), pid, references))
+            self._held.append((here, pid, references))
+            many = sum(1 for entry in self._held if entry[0] is here)
+        if many > _MANY and not self._warned:
+            self._warned = True
+            logger.warning(
+                "%d sets of Excel references are waiting for their Excel to end; "
+                "an Excel is not ending", many,
+            )
 
     def let_go_of_ended(self) -> int:
         """Let go of what this thread holds for processes that have ended.
+
+        They are let go of before the worker's next item, so after a quiet
+        spell they stay held until the next call; Excel ends without waiting
+        for that.
 
         Answers how many sets of references were let go of. Those another
         thread holds are left alone: a worker abandoned after a wedge keeps
         them, and they are let go of with its apartment.
         """
-        here = threading.get_ident()
+        here = threading.current_thread()
         with self._lock:
-            mine = [entry for entry in self._held if entry[0] == here]
+            mine = [entry for entry in self._held if entry[0] is here]
         if not mine:
             return 0
         done = []
@@ -115,9 +143,9 @@ class HeldUntilEnded:
         out.
         """
         self.let_go_of_ended()
-        here = threading.get_ident()
+        here = threading.current_thread()
         with self._lock:
-            left = sum(1 for entry in self._held if entry[0] == here)
+            left = sum(1 for entry in self._held if entry[0] is here)
         if left:
             logger.info("Leaving %d Excel reference set(s) to the end of the COM apartment", left)
         return left

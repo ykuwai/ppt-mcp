@@ -82,6 +82,29 @@ def test_another_threads_references_are_left_alone():
     assert not gone and held.still_held() == 1
 
 
+def test_a_new_thread_with_a_reused_ident_still_leaves_them_alone(monkeypatch):
+    """The system hands an ended thread's ident to a new one; the references
+    are tied to the thread itself."""
+    processes, gone = Processes(), []
+    held = HeldUntilEnded(processes)
+    monkeypatch.setattr(threading, "get_ident", lambda: 42)
+    thread = threading.Thread(target=lambda: held.hold([Reference(gone)], 7))
+    thread.start()
+    thread.join()
+    processes.ended.add(7)
+    assert held.let_go_of_ended() == 0
+    assert not gone and held.still_held() == 1
+
+
+def test_too_many_waiting_is_warned_about_once(caplog):
+    held = HeldUntilEnded(Processes())
+    with caplog.at_level("WARNING", logger="utils.held_refs"):
+        for _ in range(20):
+            held.hold([object()], 5)
+    assert held.still_held() == 20
+    assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 1
+
+
 def test_a_failure_to_ask_is_asked_again_later():
     gone, answers = [], iter([OSError("no handle"), True])
 
@@ -147,3 +170,34 @@ def test_the_worker_lets_go_before_each_item_and_leaves_the_rest_at_its_end(monk
     worker = calls[0][1]
     assert calls == [("let go", worker), ("item", worker), ("leave", worker)]
     assert worker != threading.get_ident()
+
+
+class _WinError(Exception):
+    def __init__(self, winerror):
+        self.winerror = winerror
+
+
+def _fake_windows(monkeypatch, error):
+    def open_process(access, inherit, pid):
+        raise _WinError(error)
+
+    monkeypatch.setitem(sys.modules, "pywintypes", SimpleNamespace(error=_WinError))
+    monkeypatch.setitem(sys.modules, "win32api", SimpleNamespace(OpenProcess=open_process))
+    monkeypatch.setitem(sys.modules, "win32event", SimpleNamespace())
+
+
+def test_a_process_that_is_not_there_has_ended(monkeypatch):
+    from utils.held_refs import process_ended
+
+    _fake_windows(monkeypatch, 87)
+    assert process_ended(1234) is True
+
+
+def test_a_process_it_may_not_wait_on_is_not_taken_for_ended(monkeypatch):
+    """Access denied (an elevated Excel) is asked again, not let go of while
+    Excel may still be on its way out."""
+    from utils.held_refs import process_ended
+
+    _fake_windows(monkeypatch, 5)
+    with pytest.raises(_WinError):
+        process_ended(1234)
