@@ -223,8 +223,9 @@ ppDirectionMixed = -2
 msoTextOrientationHorizontal = 1
 msoTextOrientationUpward = 2
 msoTextOrientationDownward = 3
+msoTextOrientationVerticalFarEast = 4
 msoTextOrientationVertical = 5
-msoTextOrientationVerticalFarEast = 6
+msoTextOrientationHorizontalRotatedFarEast = 6
 
 # ==============================================================================
 # PpAutoSize
@@ -638,16 +639,16 @@ ppEffectDissolve = 1537
 # ==============================================================================
 # PpTransitionSpeed
 # ==============================================================================
-ppTransitionSpeedFast = 1
+ppTransitionSpeedSlow = 1
 ppTransitionSpeedMedium = 2
-ppTransitionSpeedSlow = 3
+ppTransitionSpeedFast = 3
 
 # ==============================================================================
 # PpMediaType
 # ==============================================================================
 ppMediaTypeMixed = -2
-ppMediaTypeOther = 0
-ppMediaTypeSound = 1
+ppMediaTypeOther = 1
+ppMediaTypeSound = 2
 ppMediaTypeMovie = 3
 
 # ==============================================================================
@@ -660,11 +661,12 @@ ppDateTimeMMMMdyyyy = 4
 ppDateTimedMMMyy = 5
 ppDateTimeMMMMyy = 6
 ppDateTimeMMyy = 7
-ppDateTimeMddyy = 8
-ppDateTimeHmm = 9
-ppDateTimeHmmss = 10
-ppDateTimehmmAMPM = 11
-ppDateTimehmmssAMPM = 12
+ppDateTimeMMddyyHmm = 8
+ppDateTimeMMddyyhmmAMPM = 9
+ppDateTimeHmm = 10
+ppDateTimeHmmss = 11
+ppDateTimehmmAMPM = 12
+ppDateTimehmmssAMPM = 13
 
 # ==============================================================================
 # Name lookup maps for Phase 3
@@ -753,9 +755,15 @@ ppSlideSize35MM = 4
 ppSlideSizeOverhead = 5
 ppSlideSizeBanner = 6
 ppSlideSizeCustom = 7
-ppSlideSizeOnScreen16x9 = 8
-ppSlideSizeOnScreen16x10 = 9
-ppSlideSizeWidescreen = 10
+ppSlideSizeLedgerPaper = 8
+ppSlideSizeA3Paper = 9
+ppSlideSizeB4ISOPaper = 10
+ppSlideSizeB5ISOPaper = 11
+ppSlideSizeB4JISPaper = 12
+ppSlideSizeB5JISPaper = 13
+ppSlideSizeHagakiCard = 14
+ppSlideSizeOnScreen16x9 = 15
+ppSlideSizeOnScreen16x10 = 16
 
 # MsoOrientation
 msoOrientationHorizontal = 1
@@ -821,7 +829,7 @@ MERGE_CMD_MAP = {
 SLIDE_SIZE_MAP = {
     "4:3": 1, "letter": 2, "a4": 3, "35mm": 4,
     "overhead": 5, "banner": 6, "custom": 7,
-    "a3": 8, "16:9": 9, "16:10": 10, "widescreen": 9,
+    "a3": 9, "16:9": 15, "16:10": 16, "widescreen": 15,
 }
 
 GRADIENT_STYLE_MAP = {

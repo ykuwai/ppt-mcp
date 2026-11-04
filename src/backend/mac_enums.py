@@ -21,16 +21,16 @@ used to send, are no transitions on macOS and the wrong ones on Windows:
     MsoAnimateByLevel: msoAnimateLevelNone
     MsoLineDashStyle: msoLineLongDashDotDot, msoLineSysDash, msoLineSysDot, msoLineSysDashDot
     MsoShapeType: msoEmbeddedOLEObject, msoOLEControlObject, msoTextEffect
-    MsoTextOrientation: msoTextOrientationVerticalFarEast
+    MsoTextOrientation: msoTextOrientationVerticalFarEast, msoTextOrientationHorizontalRotatedFarEast
     MsoTriState: msoTriStateMixed
     MsoVerticalAnchor: msoVerticalAnchorMixed
-    PpDateTimeFormat: ppDateTimeddddMMMMddyyyy, ppDateTimedMMMMyyyy, ppDateTimedMMMyy, ppDateTimeMddyy, ppDateTimehmmAMPM, ppDateTimehmmssAMPM
+    PpDateTimeFormat: ppDateTimeddddMMMMddyyyy, ppDateTimedMMMMyyyy, ppDateTimedMMMyy, ppDateTimeMMddyyhmmAMPM, ppDateTimehmmAMPM, ppDateTimehmmssAMPM
     PpMediaType: ppMediaTypeMixed
     PpNumberedBulletStyle: ppBulletArabicDBPeriod
     PpPlaceholderType: ppPlaceholderMixed
     PpSaveAsFileType: ppSaveAsOpenXMLAddin, ppSaveAsXPS, ppSaveAsOpenDocumentPresentation, ppSaveAsWMV, ppSaveAsMP4
     PpSlideLayout: ppLayoutTextAndMediaClip, ppLayoutMixed
-    PpTransitionSpeed: ppTransitionSpeedFast, ppTransitionSpeedMedium, ppTransitionSpeedSlow
+    PpTransitionSpeed: ppTransitionSpeedSlow, ppTransitionSpeedMedium, ppTransitionSpeedFast
     PpViewType: ppViewSlideMaster, ppViewNotesPage, ppViewThumbnails, ppViewMasterThumbnails
     PpWindowState: ppWindowMaximized
 
@@ -38,6 +38,13 @@ Edited by hand once since the last run (issue #242), to be confirmed by the
 next one. constants.py had MsoLineDashStyle 2 and 3 swapped, so 2 and 3 below
 are swapped to match the fixed names. Its 9 to 12 were added after the last run
 and have never been matched against the dictionary.
+
+Edited by hand a second time, also to be confirmed by the next run. Some
+numbers in constants.py did not match PowerPoint's type library, on Windows or
+on the Mac: the date formats from 8 on, the media types and text orientation
+4 and 6. The keys of PpDateTimeFormat and PpMediaType below are moved to the
+corrected numbers; the macOS words they map to are unchanged, and 8 is paired
+with `MMddyyHmm` as the generator pairs it.
 """
 
 from appscript import k
@@ -435,8 +442,9 @@ PpDateTimeFormat: dict = {
     4: k.MMMMdyyyy,  # ppDateTimeMMMMdyyyy
     6: k.MMMMyy,  # ppDateTimeMMMMyy
     7: k.MMyy,  # ppDateTimeMMyy
-    9: k.Hmm,  # ppDateTimeHmm
-    10: k.Hmmss,  # ppDateTimeHmmss
+    8: k.MMddyyHmm,  # ppDateTimeMMddyyHmm
+    10: k.Hmm,  # ppDateTimeHmm
+    11: k.Hmmss,  # ppDateTimeHmmss
 }
 
 
@@ -471,8 +479,8 @@ PpEntryEffect: dict = {
 
 
 PpMediaType: dict = {
-    0: k.media_type_other,  # ppMediaTypeOther
-    1: k.media_type_sound,  # ppMediaTypeSound
+    1: k.media_type_other,  # ppMediaTypeOther
+    2: k.media_type_sound,  # ppMediaTypeSound
     3: k.media_type_movie,  # ppMediaTypeMovie
 }
 

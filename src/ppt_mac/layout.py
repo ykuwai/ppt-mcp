@@ -55,11 +55,10 @@ _NO_SHAPE_RANGE = (
     "to act on them."
 )
 
-# macOS names its slide sizes and Windows numbers them. The numbers agree, but
-# the project's own SLIDE_SIZE_MAP does not agree with either (it has A3 at 8
-# and 16:9 at 9), so the reverse lookup the Windows code does through that map
-# is not repeated here. This table carries both answers instead, the
-# PpSlideSizeType constant and the preset name the tool takes as input.
+# macOS names its slide sizes and Windows numbers them, and the numbers agree.
+# Rather than a reverse lookup through SLIDE_SIZE_MAP, as the Windows code
+# does, this table carries both answers, the PpSlideSizeType constant and the
+# preset name the tool takes as input.
 _SLIDE_SIZES = {
     k.slide_size_on_screen: (1, "4:3"),
     k.slide_size_letter_paper: (2, "letter"),
