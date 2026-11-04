@@ -161,10 +161,10 @@ class HeldUntilEnded:
         """Wait for the Excel behind every held set to end, then let go.
 
         Called before ``AddChart2``, so that its Excel does not start while
-        another is still ending. Sets held by any thread count,
-        an abandoned worker's included, since their Excel overlaps all the
-        same; only this thread's are let go of. After ``limit`` seconds the
-        chart goes ahead, and that is logged. A process that cannot be asked
+        another is still ending. The sets of every thread are waited for, an
+        abandoned worker's too, since their Excel overlaps all the same, but
+        only this thread's are let go of. After ``limit`` seconds the chart
+        goes ahead, and that is logged. A process that cannot be asked
         about is not waited for. Answers the seconds waited.
         """
         start = self._clock()

@@ -458,8 +458,11 @@ def _office_language(app) -> str:
 
 def _paste_from(source, slide, attempts=10, wait=0.1):
     """Copy ``source`` onto ``slide`` through the clipboard, and answer the
-    pasted shape. Right after Copy the clipboard can still be empty."""
+    pasted shape. Right after Copy the clipboard can still be empty, so the
+    paste is tried again; but PowerPoint can also raise after the shape has
+    landed, so a slide that gained a shape is not pasted on twice."""
     source.Copy()
+    count = slide.Shapes.Count
     last = None
     for attempt in range(attempts):
         if attempt:
@@ -468,6 +471,8 @@ def _paste_from(source, slide, attempts=10, wait=0.1):
             return slide.Shapes.Paste()(1)
         except Exception as e:  # noqa: BLE001 - tried again, then raised
             last = e
+            if slide.Shapes.Count > count:
+                return slide.Shapes(slide.Shapes.Count)
     raise RuntimeError(f"Could not paste the new chart: {last}")
 
 
@@ -487,8 +492,8 @@ def _add_chart_from_file(app, pres, slide, type_int, left, top, width, height):
 
     The chart is written to a temporary pptx, which is opened without a
     window, and the chart is copied onto the slide with the user's clipboard
-    put back afterwards. Answers the shape and the clipboard formats that
-    could not be put back.
+    put back afterwards. Answers the shape and any warnings: clipboard formats
+    that could not be put back, or a style that did not take.
     """
     fd, path = tempfile.mkstemp(suffix=".pptx", prefix="ppt-mcp-chart-")
     os.close(fd)
@@ -508,14 +513,35 @@ def _add_chart_from_file(app, pres, slide, type_int, left, top, width, height):
             os.remove(path)
         except OSError:
             logger.debug("Could not remove %s", path, exc_info=True)
-    shape.Left, shape.Top, shape.Width, shape.Height = left, top, width, height
-    chart = shape.Chart
     style = chart_file.STYLES.get(type_int)
-    if style:
-        chart.ChartStyle = style
-        chart.ClearToMatchStyle()
-    _unique_name(slide, shape)
-    return shape, lost
+    try:
+        shape.Left, shape.Top, shape.Width, shape.Height = left, top, width, height
+        chart = shape.Chart
+        if style:
+            chart.ChartStyle = style
+            chart.ClearToMatchStyle()
+        _unique_name(slide, shape)
+        style_now = chart.ChartStyle
+    except Exception as e:
+        # A half made chart is not left behind, where a retry would add a
+        # second one.
+        name = None
+        try:
+            name = shape.Name
+            shape.Delete()
+        except Exception:  # noqa: BLE001 - then the error names it
+            raise RuntimeError(
+                f"The chart was pasted but could not be finished ({e}), and "
+                f"could not be removed either: delete the shape '{name}'.") from e
+        raise RuntimeError(f"The chart was pasted but could not be finished: {e}") from e
+    warnings = []
+    if lost:
+        warnings.append(
+            "The chart went through the clipboard, and what was on it before "
+            f"was put back without these formats: {', '.join(lost)}.")
+    if style and style_now != style:
+        warnings.append(f"The chart has style {style_now}, not {style} as AddChart2 gives it.")
+    return shape, warnings
 
 
 def _add_chart_impl(slide_index, chart_type, left, top, width, height):
@@ -527,7 +553,7 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     type_int = _resolve_chart_type(chart_type)
     type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
     if type_int in chart_file.CHART_TYPES and chart_file.available():
-        chart_shape, lost = _add_chart_from_file(
+        chart_shape, warnings = _add_chart_from_file(
             app, pres, slide, type_int, left, top, width, height)
         result = {
             "success": True,
@@ -536,10 +562,8 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
             "chart_type": type_name,
             "chart_type_int": type_int,
         }
-        if lost:
-            result["warning"] = (
-                "The chart went through the clipboard, and what was on it before "
-                f"was put back without these formats: {', '.join(lost)}.")
+        if warnings:
+            result["warning"] = " ".join(warnings)
         return result
 
     # The types python-pptx cannot write still go through AddChart2, which
@@ -1252,6 +1276,8 @@ def register_tools(mcp):
         bubble, 3d_column, 3d_pie, 3d_line, and variants (e.g. column_stacked,
         line_markers, pie_exploded). You can also pass an XlChartType integer.
         All positions and sizes are in points (72 points = 1 inch).
+        On Windows a 3-D chart, and the other types that still open Excel,
+        can first wait up to 15 s for the previous chart's Excel to close.
         """
         return await run_offloaded(add_chart, params)
 

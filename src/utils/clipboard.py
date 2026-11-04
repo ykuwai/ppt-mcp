@@ -230,6 +230,12 @@ def restore(saved: SavedClipboard) -> list[str]:
     """
     lost = list(saved.lost)
     with opened():
+        # Opened without a window, EmptyClipboard leaves the clipboard with no
+        # owner, and Microsoft documents SetClipboardData as failing then.
+        # That is about delayed rendering, which needs an owner to ask; data
+        # handed over in full is taken. Checked on Windows 11 with Microsoft 365:
+        # text, HTML, a DIB and an enhanced metafile all came back byte for
+        # byte, and a format refused would be reported, not lost in silence.
         EmptyClipboard()
         for fmt, kind, data in saved.entries:
             if kind == "emf":

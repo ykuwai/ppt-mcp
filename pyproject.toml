@@ -59,7 +59,7 @@ dependencies = [
     # A new chart is written with python-pptx and brought in from a file,
     # because one added with AddChart2 starts an Excel, and Excels started
     # one after another crash (#299). Windows only: the Mac adds charts
-    # through its clipboard (src/gvml).
+    # through its clipboard (ppt_mac/gvml_paste.py).
     "python-pptx>=1.0.2; sys_platform == 'win32'",
 ]
 

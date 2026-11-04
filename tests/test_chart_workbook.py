@@ -293,6 +293,9 @@ class TestANewChartStartsNoExcel:
             return shape, []
 
         monkeypatch.setattr(charts, "_add_chart_from_file", from_file)
+        # Whether python-pptx is installed is beside the point here; its
+        # absence has a test of its own.
+        monkeypatch.setattr(charts.chart_file, "available", lambda: True)
         return charts, calls
 
     @pytest.mark.parametrize("chart_type, type_int", [
@@ -320,9 +323,10 @@ class TestANewChartStartsNoExcel:
 
         charts, _ = self.deck(monkeypatch)
         monkeypatch.setattr(charts, "_add_chart_from_file", lambda *a: (
-            SimpleNamespace(Name="Chart 1", ZOrderPosition=1), ["CF_OWNERDISPLAY"]))
+            SimpleNamespace(Name="Chart 1", ZOrderPosition=1),
+            ["put back without these formats: CF_OWNERDISPLAY.", "The chart has style 2."]))
         result = charts._add_chart_impl(1, "column", 0, 0, 100, 100)
-        assert "CF_OWNERDISPLAY" in result["warning"]
+        assert "CF_OWNERDISPLAY" in result["warning"] and "style 2" in result["warning"]
 
     def test_three_d_waits_for_the_last_excel_and_uses_addchart2(self, monkeypatch):
         from types import SimpleNamespace
@@ -336,10 +340,49 @@ class TestANewChartStartsNoExcel:
         assert calls[0] == "waited" and calls[1][0] == "AddChart2"
 
 
+class FakeSlide:
+    """A slide whose Paste lands a chart, or fails, or does both."""
+
+    def __init__(self, names, chart_shape, paste="lands"):
+        from types import SimpleNamespace
+
+        self.shapes = [SimpleNamespace(Name=n) for n in names]
+        self.chart_shape = chart_shape
+        self.paste = paste
+        self.pastes = 0
+        slide = self
+
+        class Shapes:
+            @property
+            def Count(self):
+                return len(slide.shapes)
+
+            def __call__(self, i):
+                return slide.shapes[i - 1]
+
+            def Paste(self):
+                slide.pastes += 1
+                if slide.paste == "fails":
+                    raise RuntimeError("nothing to paste")
+                slide.shapes.append(slide.chart_shape)
+                if slide.paste == "lands but raises":
+                    raise RuntimeError("the call was rejected")
+                return lambda i: slide.chart_shape
+
+        self.Shapes = Shapes()
+
+        def delete():
+            slide.shapes.remove(chart_shape)
+            chart_shape.deleted = True
+
+        chart_shape.Delete = delete
+
+
 @pytest.mark.skipif(sys.platform != "win32",
                     reason="drives the COM impls, which macOS replaces with its own")
 class TestTheChartIsBroughtInFromItsFile:
-    def run(self, monkeypatch, paste_fails=False, names=("Title 1",), seen=None):
+    def run(self, monkeypatch, paste="lands", names=("Title 1",), seen=None,
+            style_sticks=True, finishing_fails=False, delete_fails=False):
         import contextlib
         import os
         from types import SimpleNamespace
@@ -348,22 +391,33 @@ class TestTheChartIsBroughtInFromItsFile:
 
         seen = {} if seen is None else seen
         seen.update(closed=False, written=None, kept=False)
-        chart = SimpleNamespace(ChartStyle=None, cleared=False)
-        chart.ClearToMatchStyle = lambda: setattr(chart, "cleared", True)
-        pasted = SimpleNamespace(Name="Chart 1", Chart=chart, Left=0, Top=0, Width=0, Height=0)
-        shapes_on_slide = [SimpleNamespace(Name=n) for n in names] + [pasted]
 
-        def paste():
-            if paste_fails:
-                raise RuntimeError("nothing to paste")
-            return lambda i: pasted
+        class Chart:
+            cleared = False
+            _style = None
 
-        slide = SimpleNamespace()
-        slide.Shapes = type("Shapes", (), {
-            "Paste": staticmethod(paste),
-            "Count": len(shapes_on_slide),
-            "__call__": lambda self, i: shapes_on_slide[i - 1],
-        })()
+            @property
+            def ChartStyle(self):
+                return self._style
+
+            @ChartStyle.setter
+            def ChartStyle(self, value):
+                if finishing_fails:
+                    raise RuntimeError("style refused")
+                self._style = value if style_sticks else 2
+
+            def ClearToMatchStyle(self):
+                self.cleared = True
+
+        chart = Chart()
+        pasted = SimpleNamespace(Name="Chart 1", Chart=chart, Left=0, Top=0, Width=0, Height=0,
+                                 deleted=False)
+        slide = FakeSlide(names, pasted, paste)
+        if delete_fails:
+            def refuse():
+                raise RuntimeError("cannot delete")
+            pasted.Delete = refuse
+        seen["slide"] = slide
         source_shape = SimpleNamespace(Copy=lambda: None)
         source = SimpleNamespace(
             Slides=lambda i: SimpleNamespace(Shapes=lambda j: source_shape),
@@ -393,8 +447,9 @@ class TestTheChartIsBroughtInFromItsFile:
         return result, seen, pasted, chart
 
     def test_it_lands_where_asked_in_its_style(self, monkeypatch):
-        (shape, lost), seen, pasted, chart = self.run(monkeypatch)
-        assert shape is pasted and lost == ["CF_PALETTE"]
+        (shape, warnings), seen, pasted, chart = self.run(monkeypatch)
+        assert shape is pasted
+        assert len(warnings) == 1 and "CF_PALETTE" in warnings[0]
         assert (pasted.Left, pasted.Top, pasted.Width, pasted.Height) == (10, 20, 300, 200)
         assert chart.ChartStyle == 201 and chart.cleared
         assert seen["written"] == (51, 960, 540, 10, 20, 300, 200, "ja")
@@ -409,6 +464,27 @@ class TestTheChartIsBroughtInFromItsFile:
     def test_a_failed_paste_still_closes_and_removes_the_file(self, monkeypatch):
         seen = {}
         with pytest.raises(RuntimeError, match="Could not paste"):
-            self.run(monkeypatch, paste_fails=True, seen=seen)
+            self.run(monkeypatch, paste="fails", seen=seen)
         assert seen["closed"] and seen["kept"]
         assert not Path(seen["opened"][0]).exists()
+        assert seen["slide"].pastes == 10
+
+    def test_a_paste_that_lands_but_raises_is_not_pasted_again(self, monkeypatch):
+        (shape, _), seen, pasted, _ = self.run(monkeypatch, paste="lands but raises")
+        assert shape is pasted
+        assert seen["slide"].pastes == 1
+        assert seen["slide"].shapes.count(pasted) == 1
+
+    def test_a_chart_that_cannot_be_finished_is_removed(self, monkeypatch):
+        seen = {}
+        with pytest.raises(RuntimeError, match="could not be finished: style refused"):
+            self.run(monkeypatch, finishing_fails=True, seen=seen)
+        assert all(s.Name != "Chart 1" for s in seen["slide"].shapes)
+
+    def test_one_that_cannot_be_removed_either_is_named(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="delete the shape 'Chart 1'"):
+            self.run(monkeypatch, finishing_fails=True, delete_fails=True)
+
+    def test_a_style_that_did_not_take_is_a_warning(self, monkeypatch):
+        (_, warnings), *_ = self.run(monkeypatch, style_sticks=False)
+        assert any("style 2, not 201" in w for w in warnings)
