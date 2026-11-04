@@ -40,7 +40,7 @@ from ppt_com.layout_check import report_layout, touched_names
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from ppt_com.shape_lookup import resolve_shape
-from ppt_com.constants import msoChart, msoPlaceholder
+from ppt_com.constants import msoChart, msoGroup, msoPlaceholder
 from ppt_com import chart_file
 
 logger = logging.getLogger(__name__)
@@ -621,10 +621,28 @@ def _excel_needed(slide, shape) -> Optional[str]:
 
     Its data is otherwise swapped by replacing the chart with a copy, and a
     copy is a new shape: what points at the old one by its id, or what a
-    copy does not take along, would be lost.
+    copy does not take along, would be lost. A check that cannot be made
+    counts as a reason, since then nothing says the copy would be safe.
     """
     if not chart_file.available():
         return "python-pptx is not installed"
+    try:
+        return _why_excel(slide, shape)
+    except Exception as e:  # noqa: BLE001 - Excel then, as before
+        return f"it could not be checked whether it can be replaced ({e})"
+
+
+def _connectors(shapes):
+    """Every connector among ``shapes``, those inside groups too."""
+    for i in range(1, shapes.Count + 1):
+        shape = shapes(i)
+        if shape.Type == msoGroup:
+            yield from _connectors(shape.GroupItems)
+        elif shape.Connector == -1:
+            yield shape
+
+
+def _why_excel(slide, shape) -> Optional[str]:
     chart = shape.Chart
     if chart.ChartType not in chart_file.REPLACEABLE_TYPES:
         return f"its type ({CHART_TYPE_NAMES.get(chart.ChartType, chart.ChartType)}) is not swapped without Excel"
@@ -643,13 +661,17 @@ def _excel_needed(slide, shape) -> Optional[str]:
     sequences += [interactive(i) for i in range(1, interactive.Count + 1)]
     for sequence in sequences:
         for i in range(1, sequence.Count + 1):
-            if sequence(i).Shape.Id == shape_id:
+            effect = sequence(i)
+            if effect.Shape.Id == shape_id:
                 return "it is animated"
-    for i in range(1, slide.Shapes.Count + 1):
-        other = slide.Shapes(i)
-        if other.Connector != -1:
-            continue
-        ends = other.ConnectorFormat
+            try:
+                trigger = effect.Timing.TriggerShape
+            except Exception:  # noqa: BLE001 - an effect with no trigger shape
+                trigger = None
+            if trigger is not None and trigger.Id == shape_id:
+                return "clicking it starts an animation"
+    for connector in _connectors(slide.Shapes):
+        ends = connector.ConnectorFormat
         if ((ends.BeginConnected == -1 and ends.BeginConnectedShape.Id == shape_id)
                 or (ends.EndConnected == -1 and ends.EndConnectedShape.Id == shape_id)):
             return "a connector is attached to it"
@@ -718,6 +740,34 @@ def _carry_over(state, shape) -> list:
     return failed
 
 
+def _match_theme(scratch, slide) -> None:
+    """Give the scratch deck the theme colours and fonts of ``slide``.
+
+    A chart pasted into a deck takes that deck's theme, so a chart coloured
+    by its own deck's theme would come back in the default Office colours.
+    """
+    colours = slide.ThemeColorScheme
+    target = scratch.SlideMaster.Theme.ThemeColorScheme
+    for i in range(1, 13):  # msoThemeDark1 to msoThemeFollowedHyperlink
+        target(i).RGB = colours(i).RGB
+    fonts = slide.Design.SlideMaster.Theme.ThemeFontScheme
+    target_fonts = scratch.SlideMaster.Theme.ThemeFontScheme
+    for kind in ("MajorFont", "MinorFont"):
+        for script in (1, 2, 3):  # Latin, East Asian, complex script
+            name = getattr(fonts, kind)(script).Name
+            if name:
+                getattr(target_fonts, kind)(script).Name = name
+
+
+def _series_colours(chart) -> list:
+    """The fill and line colour of each series, as shown."""
+    out = []
+    for i in range(1, chart.SeriesCollection().Count + 1):
+        series = chart.SeriesCollection(i).Format
+        out.append((series.Fill.ForeColor.RGB, series.Line.ForeColor.RGB))
+    return out
+
+
 def _shape_state_tags(shape) -> list:
     return [(shape.Tags.Name(i), shape.Tags.Value(i)) for i in range(1, shape.Tags.Count + 1)]
 
@@ -729,12 +779,17 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
     saved, python-pptx swaps its data and workbook, and the copy is pasted
     back. It takes the old chart's name, place, size, stacking order,
     alternative text, tags and click actions before the old chart is
-    deleted, and it has to show the new data. Anything short of that
+    deleted, and it has to show the new data in the same series colours.
+    The scratch presentation gets the slide's theme for that. Anything short of that
     removes the copy, leaves the old chart as it was, and raises
     ``_NotCarried``. Answers the new shape.
     """
-    state = _shape_state(shape)
-    old_z = shape.ZOrderPosition
+    try:
+        state = _shape_state(shape)
+        old_z = shape.ZOrderPosition
+        colours = _series_colours(shape.Chart)
+    except Exception as e:  # noqa: BLE001 - then it is not carried over
+        raise _NotCarried(f"could not read what it has to take over ({e})") from e
     fd, path = tempfile.mkstemp(suffix=".pptx", prefix="ppt-mcp-chart-")
     os.close(fd)
     os.remove(path)  # SaveAs makes it
@@ -745,6 +800,7 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
             try:
                 scratch.PageSetup.SlideWidth = pres.PageSetup.SlideWidth
                 scratch.PageSetup.SlideHeight = pres.PageSetup.SlideHeight
+                _match_theme(scratch, slide)
                 _paste_from(shape, scratch.Slides.Add(1, 12))  # ppLayoutBlank
                 scratch.SaveAs(path)
             finally:
@@ -760,12 +816,19 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
         problem, renamed = _check_chart_data(new.Chart, categories, series)
         if problem:
             raise _NotCarried(f"the copy does not show the data ({problem})")
+        now = _series_colours(new.Chart)
+        if now[:len(colours)] != colours[:len(now)]:
+            raise _NotCarried("its series came back in other colours")
         failed = _carry_over(state, new)
         if failed:
             raise _NotCarried(f"could not carry over {', '.join(failed)}")
-        # Just above the old chart, which then leaves its place to it.
+        # Just above the old chart, which then leaves its place to it. A step
+        # that does not move it ends the loop, rather than looping for good.
         while new.ZOrderPosition > old_z + 1:
+            before = new.ZOrderPosition
             new.ZOrder(3)  # msoSendBackward
+            if new.ZOrderPosition >= before:
+                break
         if new.ZOrderPosition != old_z + 1:
             raise _NotCarried("could not put it back in its stacking order")
     except Exception as e:
@@ -787,7 +850,12 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
     try:
         shape.Delete()
     except Exception as e:
-        new.Delete()
+        try:
+            new.Delete()
+        except Exception:  # noqa: BLE001 - named in the error instead
+            raise RuntimeError(
+                f"The old chart could not be removed ({e}), nor its copy: delete the "
+                f"shape '{new.Name}' (id {new.Id}), which is the copy.") from e
         raise _NotCarried(f"the old chart could not be removed ({e})") from e
     warnings = [w for w in (renamed,) if w]
     if new.ZOrderPosition != old_z:
@@ -1547,10 +1615,11 @@ def register_tools(mcp):
         the chart is replaced by a copy holding the new data, with the old
         one's formatting, name, place, size and stacking order. The copy has a
         new shape id, given as `shape_id` (the old one as `previous_shape_id`).
-        A chart that is animated, grouped, in a placeholder, has a connector
-        attached, sits on a slide with comments, or is a scatter, bubble or
-        3-D chart, is written through Excel as before. `method` says which was
-        used, and `reason` why Excel was.
+        A chart that is animated or starts an animation, grouped, in a
+        placeholder, has a connector attached, sits on a slide with comments,
+        or is a scatter, bubble or 3-D chart, is written through Excel as
+        before. `method` says which was used, and `reason` why Excel was.
+        Either way the values' number format goes back to General.
         """
         return await run_offloaded(set_chart_data, params)
 

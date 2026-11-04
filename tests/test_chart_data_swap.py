@@ -60,7 +60,8 @@ def chart_shape(name="Chart 1", shape_id=3, z=2, chart_type=51, **extra):
 
 class Sequence:
     def __init__(self, shapes=()):
-        self.effects = [SimpleNamespace(Shape=s) for s in shapes]
+        self.effects = [SimpleNamespace(Shape=s, Timing=SimpleNamespace(TriggerShape=None))
+                        for s in shapes]
 
     @property
     def Count(self):
@@ -135,8 +136,49 @@ class TestWhenExcelIsStillNeeded:
         ends = SimpleNamespace(BeginConnected=0, EndConnected=0)
         setattr(ends, f"{end}Connected", -1)
         setattr(ends, f"{end}ConnectedShape", shape)
-        connector = SimpleNamespace(Connector=-1, ConnectorFormat=ends)
+        connector = SimpleNamespace(Type=1, Connector=-1, ConnectorFormat=ends)
         assert "connector" in charts._excel_needed(slide_with([shape, connector]), shape)
+
+    def test_a_check_that_cannot_be_made_means_excel(self, charts):
+        class Broken:
+            Name = "Chart 1"
+
+            @property
+            def Chart(self):
+                raise RuntimeError("busy")
+
+        shape = Broken()
+        reason = charts._excel_needed(slide_with([]), shape)
+        assert reason.startswith("it could not be checked") and "busy" in reason
+
+    def test_a_chart_that_triggers_an_animation(self, charts):
+        shape = chart_shape()
+        other = chart_shape(shape_id=9)
+        slide = slide_with([shape, other], interactive=[other])
+        slide.TimeLine.InteractiveSequences(1).effects[0].Timing = SimpleNamespace(TriggerShape=shape)
+        assert "starts an animation" in charts._excel_needed(slide, shape)
+
+    def test_an_effect_without_a_trigger_shape_is_fine(self, charts):
+        shape = chart_shape()
+        other = chart_shape(shape_id=9)
+        slide = slide_with([shape, other], animated=[other])
+
+        class NoTrigger:
+            @property
+            def TriggerShape(self):
+                raise RuntimeError("no trigger shape")
+
+        slide.TimeLine.MainSequence.effects[0].Timing = NoTrigger()
+        assert charts._excel_needed(slide, shape) is None
+
+    def test_a_connector_inside_a_group(self, charts):
+        shape = chart_shape()
+        ends = SimpleNamespace(BeginConnected=-1, BeginConnectedShape=shape, EndConnected=0)
+        connector = SimpleNamespace(Type=1, Connector=-1, ConnectorFormat=ends)
+        items = [SimpleNamespace(Type=1, Connector=0), connector]
+        group = SimpleNamespace(Type=6, Connector=0, GroupItems=type("G", (), {
+            "Count": len(items), "__call__": lambda self, i: items[i - 1]})())
+        assert "connector" in charts._excel_needed(slide_with([shape, group]), shape)
 
     def test_comments_on_the_slide(self, charts):
         shape = chart_shape()
@@ -196,7 +238,8 @@ class FakePowerPoint:
             Open=lambda path, *a: source))
 
 
-def replace(charts, monkeypatch, *, check=None, carry=None, fail_at=None, copy_z=4):
+def replace(charts, monkeypatch, *, check=None, carry=None, fail_at=None, copy_z=4,
+            colours=None, stuck=False, state=None):
     import contextlib
 
     old = chart_shape(z=2)
@@ -211,8 +254,14 @@ def replace(charts, monkeypatch, *, check=None, carry=None, fail_at=None, copy_z
 
     old.Delete = delete_old
 
+    steps = []
+
     def send_backward(how):
-        copy.ZOrderPosition -= 1
+        steps.append(how)
+        if len(steps) > 50:
+            raise AssertionError("the stacking loop does not end")
+        if not stuck:
+            copy.ZOrderPosition -= 1
 
     copy.ZOrder = send_backward
     slide = slide_with([old, copy])
@@ -235,6 +284,13 @@ def replace(charts, monkeypatch, *, check=None, carry=None, fail_at=None, copy_z
     monkeypatch.setattr(charts, "_check_chart_data", check or (lambda chart, c, s: (None, None)))
     if carry is not None:
         monkeypatch.setattr(charts, "_carry_over", carry)
+    if state is not None:
+        monkeypatch.setattr(charts, "_shape_state", state)
+    matched = []
+    monkeypatch.setattr(charts, "_match_theme", lambda scratch, s: matched.append(s))
+    shown = iter(colours or [[(1, 2)], [(1, 2)]])
+    monkeypatch.setattr(charts, "_series_colours", lambda chart: next(shown))
+    pp.matched = matched
     pres = SimpleNamespace(PageSetup=SimpleNamespace(SlideWidth=960, SlideHeight=540))
     return old, copy, pp, (lambda: charts._replace_chart_data(pp.app, pres, slide, old, CATS, SERIES))
 
@@ -270,6 +326,48 @@ class TestReplacing:
         assert not old.deleted
         assert copy.deleted is (how in ("check", "carry"))
         assert "scratch" in pp.closed
+
+    def test_the_scratch_deck_gets_the_slide_s_theme(self, charts, monkeypatch):
+        old, copy, pp, run = replace(charts, monkeypatch)
+        run()
+        assert len(pp.matched) == 1
+
+    def test_series_that_come_back_in_other_colours_are_not_kept(self, charts, monkeypatch):
+        old, copy, pp, run = replace(charts, monkeypatch, colours=[[(1, 2), (3, 4)], [(1, 2), (9, 9)]])
+        with pytest.raises(charts._NotCarried, match="other colours"):
+            run()
+        assert copy.deleted and not old.deleted
+
+    def test_a_series_more_or_fewer_is_no_colour_change(self, charts, monkeypatch):
+        old, copy, pp, run = replace(charts, monkeypatch, colours=[[(1, 2)], [(1, 2), (5, 6)]])
+        run()
+        assert old.deleted
+
+    def test_a_stacking_step_that_does_not_move_ends_the_loop(self, charts, monkeypatch):
+        old, copy, pp, run = replace(charts, monkeypatch, stuck=True)
+        with pytest.raises(charts._NotCarried, match="stacking order"):
+            run()
+        assert copy.deleted and not old.deleted
+
+    def test_what_cannot_be_read_off_the_old_chart_is_not_carried(self, charts, monkeypatch):
+        def no_title(shape):
+            raise AttributeError("Title")
+
+        old, copy, pp, run = replace(charts, monkeypatch, state=no_title)
+        with pytest.raises(charts._NotCarried, match="could not read what it has to take over"):
+            run()
+        assert not old.deleted and pp.closed == []
+
+    def test_an_old_chart_and_copy_that_both_stay_name_the_copy(self, charts, monkeypatch):
+        old, copy, pp, run = replace(charts, monkeypatch)
+
+        def refuse():
+            raise RuntimeError("cannot delete")
+
+        old.Delete = refuse
+        copy.Delete = refuse
+        with pytest.raises(RuntimeError, match=r"delete the shape 'Chart 1' \(id 7\), which is the copy"):
+            run()
 
     def test_a_copy_that_cannot_be_removed_is_named(self, charts, monkeypatch):
         old, copy, pp, run = replace(

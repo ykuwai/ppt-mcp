@@ -150,3 +150,12 @@ def test_replace_data_swaps_the_data_and_keeps_the_rest(tmp_path, chart_type):
 def test_only_category_charts_have_their_data_swapped():
     assert chart_file.REPLACEABLE_TYPES == chart_file.CATEGORY_TYPES | chart_file.PIE_TYPES
     assert not chart_file.REPLACEABLE_TYPES & (chart_file.XY_TYPES | chart_file.BUBBLE_TYPES)
+
+
+def test_swapped_values_are_formatted_general(tmp_path):
+    """As through Excel, whose Cells.Clear took the formats with the values."""
+    path = str(tmp_path / "chart.pptx")
+    chart_file.write(path, 51, 960, 540, 0, 0, 400, 300, "en")
+    chart_file.replace_data(path, ["A"], [{"name": "S", "values": [0.25]}])
+    xml = pptx.Presentation(path).slides[0].shapes[0].chart._chartSpace.xml
+    assert "<c:formatCode>General</c:formatCode>" in xml
