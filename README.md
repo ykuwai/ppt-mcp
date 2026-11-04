@@ -147,7 +147,7 @@ uv sync
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
 | **Export** | 4 | PDF, images, slide preview, clipboard copy |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
-| **Charts** | 7 | Add charts, set/get data (on Windows, setting it reads the chart back, and data that did not land is an error while a label Excel read differently is a warning), format, format axis, series, change type |
+| **Charts** | 7 | Add charts (on Windows, all but the 3-D and a few rarer types without starting Excel), set/get data (on Windows, setting it reads the chart back, and data that did not land is an error while a label Excel read differently is a warning), format, format axis, series, change type |
 | **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
 | **Themes** | 4 | Apply themes, get/set theme colors, headers/footers |
 | **Groups** | 3 | Group, ungroup, get group items |
