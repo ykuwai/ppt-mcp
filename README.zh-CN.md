@@ -359,7 +359,7 @@ ESC 只是取消而不会提交，所以没有破坏性的副作用。在无人�
 
 如果某个工具需要 PowerPoint（`ppt_create_presentation`、`ppt_open_presentation`、`ppt_connect`）时它没有在运行，服务器会启动它。在 macOS 上它在后台启动，不会抢走你正在使用的应用的前台位置。
 
-当关闭操作使服务器启动的 PowerPoint 中不再有打开的演示文稿时，`ppt_close_presentation` 会一并退出 PowerPoint，并在结果中注明（`powerpoint_quit`）。你自己启动的 PowerPoint 永远不会被退出，仍有演示文稿打开着的也不会（在 Windows 上，包括在受保护的视图中打开的文件）。传入 `keep_powerpoint_open=true` 可以让它保持运行，比如想紧接着打开另一个演示文稿时。在某个工具再次启动 PowerPoint 之前，需要它的工具会回复 PowerPoint 未运行，而不是返回一个空列表。
+当关闭操作使服务器启动的 PowerPoint 中不再有打开的演示文稿时，`ppt_close_presentation` 会一并退出 PowerPoint，并在结果中注明（`powerpoint_quit`）。你自己启动的 PowerPoint 永远不会被退出，仍有演示文稿打开着的也不会（在 Windows 上，包括在受保护的视图中打开的文件）。传入 `keep_powerpoint_open=true` 可以让它保持运行，比如想紧接着打开另一个演示文稿时。在某个工具再次启动 PowerPoint 之前，需要它的工具会回复 PowerPoint 未运行，而不是返回一个空列表。在 Windows 上，以受保护的视图打开的文件会列在 `ppt_list_presentations` 的 `protected_view` 下，`ppt_close_presentation` 可按名称关闭它，不会保存。
 
 ### 与模型在同一个演示文稿中工作
 

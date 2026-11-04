@@ -545,12 +545,22 @@ def _close_presentation_impl(
     keep_powerpoint_open: bool = False,
 ) -> dict:
     app = ppt._get_app_impl()
-    pres = _resolve_presentation(
-        app, presentation_index=presentation_index, presentation_name=presentation_name
-    )
+    # A deck in Protected View is not in Presentations, so it is found by
+    # its window, when no ordinary deck has the name.
+    window = None
+    if presentation_name is not None and presentation_index is None:
+        if not any(app.Presentations(i).Name == presentation_name
+                   for i in range(1, app.Presentations.Count + 1)):
+            window = _protected_view_named(app, presentation_name)
+    if window is not None:
+        pres = window.Presentation
+    else:
+        pres = _resolve_presentation(
+            app, presentation_index=presentation_index, presentation_name=presentation_name
+        )
+        window = _protected_view_window(app, pres)
     name = pres.Name
 
-    window = _protected_view_window(app, pres)
     if window is not None:
         # Read-only: it takes neither a save nor being marked as saved, and
         # it is closed through its window.
@@ -572,6 +582,29 @@ def _close_presentation_impl(
     if not keep_powerpoint_open and _nothing_is_open(app):
         result.update(quit_if_ours(lambda: app.Quit()))
     return result
+
+
+def protected_view_windows(app):
+    """Every Protected View window. A PowerPoint without the collection has
+    none; any other failure to read them is raised, not taken for none."""
+    try:
+        windows = app.ProtectedViewWindows
+    except AttributeError:
+        return []
+    return [windows(i) for i in range(1, windows.Count + 1)]
+
+
+def _protected_view_named(app, name):
+    """The Protected View window showing the deck ``name`` (file name or full
+    name), or None."""
+    for window in protected_view_windows(app):
+        try:
+            deck = window.Presentation
+            if name in (deck.Name, deck.FullName):
+                return window
+        except Exception:  # noqa: BLE001 - a window closing as it is read
+            continue
+    return None
 
 
 def _protected_view_window(app, pres):
@@ -1026,6 +1059,9 @@ def register_tools(mcp):
 
         Closing the last presentation of a PowerPoint this server started
         quits PowerPoint too; keep_powerpoint_open=true keeps it running.
+
+        On Windows a file open in Protected View is closed by its
+        presentation_name (file name or full name), without saving.
         """
         return await run_offloaded(close_presentation, params)
 

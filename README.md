@@ -361,7 +361,7 @@ ESC cancels without committing, so there are no destructive side effects. This i
 
 If no PowerPoint is running when a tool needs one (`ppt_create_presentation`, `ppt_open_presentation`, `ppt_connect`), the server starts it. On macOS it starts in the background and does not take the front from the app you are working in.
 
-When a close leaves no presentation open in a PowerPoint the server started, `ppt_close_presentation` quits PowerPoint too and says so (`powerpoint_quit`). A PowerPoint you started yourself is never quit, and neither is one that still has a presentation open (on Windows, or a file open in Protected View). Pass `keep_powerpoint_open=true` to keep it running, for example to open another presentation straight away. Until a tool starts PowerPoint again, tools that need it answer that PowerPoint is not running, where they would otherwise have reported an empty list.
+When a close leaves no presentation open in a PowerPoint the server started, `ppt_close_presentation` quits PowerPoint too and says so (`powerpoint_quit`). A PowerPoint you started yourself is never quit, and neither is one that still has a presentation open (on Windows, or a file open in Protected View). Pass `keep_powerpoint_open=true` to keep it running, for example to open another presentation straight away. Until a tool starts PowerPoint again, tools that need it answer that PowerPoint is not running, where they would otherwise have reported an empty list. On Windows, a file open in Protected View is listed by `ppt_list_presentations` under `protected_view`, and `ppt_close_presentation` closes it by its name, without saving.
 
 ### Working in the same deck as the model
 

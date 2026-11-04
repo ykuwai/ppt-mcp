@@ -361,7 +361,7 @@ ESCは変更を確定せずにキャンセルするため、意図しない操�
 
 PowerPointが起動していないときにツールが必要とすると（`ppt_create_presentation`、`ppt_open_presentation`、`ppt_connect`）、サーバーがPowerPointを起動します。macOSではバックグラウンドで起動し、作業中のアプリから前面を奪いません。
 
-サーバーが起動したPowerPointで、閉じた結果プレゼンテーションが1つも残らないとき、`ppt_close_presentation` はPowerPointも終了し、その旨（`powerpoint_quit`）を返します。自分で起動したPowerPointは終了されません。プレゼンテーションが開いたままのもの（Windowsでは保護ビューで開いているファイルも含む）も終了されません。続けて別のプレゼンテーションを開くときなどは、`keep_powerpoint_open=true` で起動したままにできます。ツールがPowerPointを再び起動するまでは、PowerPointを必要とするツールは、空の一覧ではなく「PowerPointが起動していない」と答えます。
+サーバーが起動したPowerPointで、閉じた結果プレゼンテーションが1つも残らないとき、`ppt_close_presentation` はPowerPointも終了し、その旨（`powerpoint_quit`）を返します。自分で起動したPowerPointは終了されません。プレゼンテーションが開いたままのもの（Windowsでは保護ビューで開いているファイルも含む）も終了されません。続けて別のプレゼンテーションを開くときなどは、`keep_powerpoint_open=true` で起動したままにできます。ツールがPowerPointを再び起動するまでは、PowerPointを必要とするツールは、空の一覧ではなく「PowerPointが起動していない」と答えます。 Windows では、保護ビューで開いているファイルは `ppt_list_presentations` の `protected_view` に並び、`ppt_close_presentation` に名前を渡すと保存せずに閉じます。
 
 ### モデルと同じデッキで作業する
 
