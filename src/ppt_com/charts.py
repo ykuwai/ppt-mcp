@@ -31,6 +31,7 @@ else:
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from utils import clipboard
 from utils.clipboard import kept_clipboard
 from utils.held_refs import held, window_process
 from utils.offload import run_offloaded
@@ -39,7 +40,7 @@ from ppt_com.layout_check import report_layout, touched_names
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from ppt_com.shape_lookup import resolve_shape
-from ppt_com.constants import msoChart
+from ppt_com.constants import msoChart, msoGroup, msoPlaceholder
 from ppt_com import chart_file
 
 logger = logging.getLogger(__name__)
@@ -460,7 +461,12 @@ def _paste_from(source, slide, attempts=10, wait=0.1):
     """Copy ``source`` onto ``slide`` through the clipboard, and answer the
     pasted shape. Right after Copy the clipboard can still be empty, so the
     paste is tried again; but PowerPoint can also raise after the shape has
-    landed, so a slide that gained a shape is not pasted on twice."""
+    landed, so a slide that gained a shape is not pasted on twice. The
+    clipboard is emptied first: a paste that comes before the copy has landed
+    then finds nothing, rather than what was on the clipboard before, which
+    it would paste as a shape of its own. The caller puts the user's
+    clipboard back."""
+    clipboard.empty()
     source.Copy()
     count = slide.Shapes.Count
     last = None
@@ -606,14 +612,305 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     return result
 
 
+class _NotCarried(Exception):
+    """The new chart could not be made to stand in for the old one."""
+
+
+def _excel_needed(slide, shape) -> Optional[str]:
+    """Why a chart's data has to go through Excel, or None when it need not.
+
+    Its data is otherwise swapped by replacing the chart with a copy, and a
+    copy is a new shape: what points at the old one by its id, or what a
+    copy does not take along, would be lost. A check that cannot be made
+    counts as a reason, since then nothing says the copy would be safe.
+    """
+    if not chart_file.available():
+        return "python-pptx is not installed"
+    try:
+        return _why_excel(slide, shape)
+    except Exception as e:  # noqa: BLE001 - Excel then, as before
+        return f"it could not be checked whether it can be replaced ({e})"
+
+
+def _connectors(shapes):
+    """Every connector among ``shapes``, those inside groups too."""
+    for i in range(1, shapes.Count + 1):
+        shape = shapes(i)
+        if shape.Type == msoGroup:
+            yield from _connectors(shape.GroupItems)
+        elif shape.Connector == -1:
+            yield shape
+
+
+def _why_excel(slide, shape) -> Optional[str]:
+    chart = shape.Chart
+    if chart.ChartType not in chart_file.REPLACEABLE_TYPES:
+        return f"its type ({CHART_TYPE_NAMES.get(chart.ChartType, chart.ChartType)}) is not swapped without Excel"
+    try:
+        if chart.ChartData.IsLinked:
+            return "its data is linked to a workbook"
+    except Exception:  # noqa: BLE001 - not linked as far as can be told
+        pass
+    if shape.Type == msoPlaceholder:
+        return "it fills a placeholder"
+    if shape.Child == -1:  # msoTrue
+        return "it is in a group"
+    shape_id = shape.Id
+    sequences = [slide.TimeLine.MainSequence]
+    interactive = slide.TimeLine.InteractiveSequences
+    sequences += [interactive(i) for i in range(1, interactive.Count + 1)]
+    for sequence in sequences:
+        for i in range(1, sequence.Count + 1):
+            effect = sequence(i)
+            if effect.Shape.Id == shape_id:
+                return "it is animated"
+            try:
+                trigger = effect.Timing.TriggerShape
+            except Exception:  # noqa: BLE001 - an effect with no trigger shape
+                trigger = None
+            if trigger is not None and trigger.Id == shape_id:
+                return "clicking it starts an animation"
+    for connector in _connectors(slide.Shapes):
+        ends = connector.ConnectorFormat
+        if ((ends.BeginConnected == -1 and ends.BeginConnectedShape.Id == shape_id)
+                or (ends.EndConnected == -1 and ends.EndConnectedShape.Id == shape_id)):
+            return "a connector is attached to it"
+    if slide.Comments.Count:
+        # Which shape a comment is anchored to cannot be read through COM.
+        return "the slide has comments, which may be anchored to it"
+    return None
+
+
+# What a chart's replacement takes over from it, read and set by name.
+_CARRIED = ("Left", "Top", "Width", "Height", "Rotation", "Visible",
+            "LockAspectRatio", "AlternativeText", "Title")
+
+
+def _shape_state(shape) -> dict:
+    """What ``_carry_over`` gives the replacement, read off ``shape``."""
+    state = {name: getattr(shape, name) for name in _CARRIED}
+    state["Name"] = shape.Name
+    state["Tags"] = [(shape.Tags.Name(i), shape.Tags.Value(i))
+                     for i in range(1, shape.Tags.Count + 1)]
+    actions = []
+    for when in (1, 2):  # ppMouseClick, ppMouseOver
+        action = shape.ActionSettings(when)
+        link = action.Hyperlink
+        actions.append((action.Action, link.Address, link.SubAddress))
+    state["Actions"] = actions
+    return state
+
+
+def _carry_over(state, shape) -> list:
+    """Give ``shape`` what ``state`` holds, and answer what did not take."""
+    failed = []
+    for name in _CARRIED:
+        try:
+            if getattr(shape, name) != state[name]:
+                setattr(shape, name, state[name])
+            if getattr(shape, name) != state[name]:
+                failed.append(name)
+        except Exception:  # noqa: BLE001 - reported
+            failed.append(name)
+    try:
+        shape.Name = state["Name"]
+        if shape.Name != state["Name"]:
+            failed.append("Name")
+    except Exception:  # noqa: BLE001 - reported
+        failed.append("Name")
+    try:
+        for name, value in state["Tags"]:
+            shape.Tags.Add(name, value)
+        if sorted(_shape_state_tags(shape)) != sorted(state["Tags"]):
+            failed.append("Tags")
+    except Exception:  # noqa: BLE001 - reported
+        failed.append("Tags")
+    try:
+        for when, (action, address, sub_address) in zip((1, 2), state["Actions"]):
+            setting = shape.ActionSettings(when)
+            if (setting.Hyperlink.Address, setting.Hyperlink.SubAddress) != (address, sub_address):
+                setting.Hyperlink.Address = address
+                setting.Hyperlink.SubAddress = sub_address
+            if setting.Action != action:
+                setting.Action = action
+        if _shape_state(shape)["Actions"] != state["Actions"]:
+            failed.append("ActionSettings")
+    except Exception:  # noqa: BLE001 - reported
+        failed.append("ActionSettings")
+    return failed
+
+
+def _match_theme(scratch, slide) -> None:
+    """Give the scratch deck the theme colours and fonts of ``slide``.
+
+    A chart pasted into a deck takes that deck's theme, so a chart coloured
+    by its own deck's theme would come back in the default Office colours.
+    """
+    colours = slide.ThemeColorScheme
+    target = scratch.SlideMaster.Theme.ThemeColorScheme
+    for i in range(1, 13):  # msoThemeDark1 to msoThemeFollowedHyperlink
+        target(i).RGB = colours(i).RGB
+    fonts = slide.Design.SlideMaster.Theme.ThemeFontScheme
+    target_fonts = scratch.SlideMaster.Theme.ThemeFontScheme
+    for kind in ("MajorFont", "MinorFont"):
+        for script in (1, 2, 3):  # Latin, East Asian, complex script
+            name = getattr(fonts, kind)(script).Name
+            if name:
+                getattr(target_fonts, kind)(script).Name = name
+
+
+def _series_colours(chart) -> list:
+    """The fill and line colour of each series, as shown."""
+    out = []
+    for i in range(1, chart.SeriesCollection().Count + 1):
+        series = chart.SeriesCollection(i).Format
+        out.append((series.Fill.ForeColor.RGB, series.Line.ForeColor.RGB))
+    return out
+
+
+def _shape_state_tags(shape) -> list:
+    return [(shape.Tags.Name(i), shape.Tags.Value(i)) for i in range(1, shape.Tags.Count + 1)]
+
+
+def _replace_chart_data(app, pres, slide, shape, categories, series):
+    """Swap a chart's data without Excel, by replacing the chart (#299).
+
+    The chart is copied into a scratch presentation without a window and
+    saved, python-pptx swaps its data and workbook, and the copy is pasted
+    back. It takes the old chart's name, place, size, stacking order,
+    alternative text, tags and click actions before the old chart is
+    deleted, and it has to show the new data in the same series colours.
+    The scratch presentation gets the slide's theme for that. Anything short of that
+    removes the copy, leaves the old chart as it was, and raises
+    ``_NotCarried``. Answers the new shape.
+    """
+    try:
+        state = _shape_state(shape)
+        old_z = shape.ZOrderPosition
+        colours = _series_colours(shape.Chart)
+    except Exception as e:  # noqa: BLE001 - then it is not carried over
+        raise _NotCarried(f"could not read what it has to take over ({e})") from e
+    fd, path = tempfile.mkstemp(suffix=".pptx", prefix="ppt-mcp-chart-")
+    os.close(fd)
+    os.remove(path)  # SaveAs makes it
+    new = None
+    try:
+        with kept_clipboard() as lost:
+            scratch = app.Presentations.Add(0)  # no window
+            try:
+                scratch.PageSetup.SlideWidth = pres.PageSetup.SlideWidth
+                scratch.PageSetup.SlideHeight = pres.PageSetup.SlideHeight
+                _match_theme(scratch, slide)
+                _paste_from(shape, scratch.Slides.Add(1, 12))  # ppLayoutBlank
+                scratch.SaveAs(path)
+            finally:
+                scratch.Close()
+            chart_file.replace_data(path, categories, series)
+            source = app.Presentations.Open(path, -1, 0, 0)  # ReadOnly, not Untitled, no window
+            try:
+                new = _paste_from(source.Slides(1).Shapes(1), slide)
+            finally:
+                source.Close()
+        if not new.HasChart:
+            raise _NotCarried("what was pasted back is not a chart")
+        problem, renamed = _check_chart_data(new.Chart, categories, series)
+        if problem:
+            raise _NotCarried(f"the copy does not show the data ({problem})")
+        now = _series_colours(new.Chart)
+        if now[:len(colours)] != colours[:len(now)]:
+            raise _NotCarried("its series came back in other colours")
+        failed = _carry_over(state, new)
+        if failed:
+            raise _NotCarried(f"could not carry over {', '.join(failed)}")
+        # Just above the old chart, which then leaves its place to it. A step
+        # that does not move it ends the loop, rather than looping for good.
+        while new.ZOrderPosition > old_z + 1:
+            before = new.ZOrderPosition
+            new.ZOrder(3)  # msoSendBackward
+            if new.ZOrderPosition >= before:
+                break
+        if new.ZOrderPosition != old_z + 1:
+            raise _NotCarried("could not put it back in its stacking order")
+    except Exception as e:
+        if new is not None:
+            try:
+                new.Delete()
+            except Exception:  # noqa: BLE001 - named in the error instead
+                raise RuntimeError(
+                    f"The chart's copy could not be finished ({e}) and could not be "
+                    f"removed either: delete the shape '{new.Name}' (id {new.Id}).") from e
+        if isinstance(e, _NotCarried):
+            raise
+        raise _NotCarried(str(e)) from e
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            logger.debug("Could not remove %s", path, exc_info=True)
+    try:
+        shape.Delete()
+    except Exception as e:
+        try:
+            new.Delete()
+        except Exception:  # noqa: BLE001 - named in the error instead
+            raise RuntimeError(
+                f"The old chart could not be removed ({e}), nor its copy: delete the "
+                f"shape '{new.Name}' (id {new.Id}), which is the copy.") from e
+        raise _NotCarried(f"the old chart could not be removed ({e})") from e
+    warnings = [w for w in (renamed,) if w]
+    if new.ZOrderPosition != old_z:
+        warnings.append(f"The chart is at stacking position {new.ZOrderPosition}, not {old_z}.")
+    if lost:
+        warnings.append(
+            "The chart went through the clipboard, and what was on it before "
+            f"was put back without these formats: {', '.join(lost)}.")
+    return new, warnings
+
+
 def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
+
+    reason = _excel_needed(slide, shape)
+    if reason is None:
+        old_id = shape.Id
+        try:
+            new, warnings = _replace_chart_data(app, pres, slide, shape, categories, series)
+        except _NotCarried as e:
+            reason = f"swapping it without Excel failed: {e}"
+            logger.warning("Setting chart data through Excel, since %s", reason)
+        else:
+            result = {
+                "success": True,
+                "shape_name": new.Name,
+                "categories_count": len(categories),
+                "series_count": len(series),
+                "method": "replaced without Excel",
+                "replaced": True,
+                "shape_id": new.Id,
+                "previous_shape_id": old_id,
+            }
+            if warnings:
+                result["warning"] = " ".join(warnings)
+            return result
+
+    try:
+        result = _set_chart_data_through_excel(slide, shape, categories, series)
+    except Exception as e:
+        raise RuntimeError(f"{e} (Written through Excel, since {reason}.)") from e
+    result["method"] = "Excel"
+    result["reason"] = reason
+    return result
+
+
+def _set_chart_data_through_excel(slide, shape, categories, series):
     chart = shape.Chart
 
+    # Activate starts an Excel; not while the last chart's is ending (#299).
+    held.wait_until_ended()
     # Every Excel object kept here is handed to ``held`` once the workbook is
     # closed, and let go of after its Excel has ended (#299).
     refs = _ExcelRefs()
@@ -1305,7 +1602,7 @@ def register_tools(mcp):
         },
     )
     async def tool_set_chart_data(params: SetChartDataInput) -> str:
-        """Set chart data by writing categories and series to the Excel workbook.
+        """Set a chart's categories and series.
 
         Provide category labels and one or more series, each with a name and
         numeric values. The number of values in each series should match the
@@ -1314,6 +1611,15 @@ def register_tools(mcp):
         On Windows the chart is read back afterwards, and the call fails when
         it does not show the data written. Labels Excel reads differently, such
         as text it takes for a date, come back in `warning`.
+        On Windows the data is swapped without starting Excel where it can be:
+        the chart is replaced by a copy holding the new data, with the old
+        one's formatting, name, place, size and stacking order. The copy has a
+        new shape id, given as `shape_id` (the old one as `previous_shape_id`).
+        A chart that is animated or starts an animation, grouped, in a
+        placeholder, has a connector attached, sits on a slide with comments,
+        or is a scatter, bubble or 3-D chart, is written through Excel as
+        before. `method` says which was used, and `reason` why Excel was.
+        Either way the values' number format goes back to General.
         """
         return await run_offloaded(set_chart_data, params)
 

@@ -148,7 +148,7 @@ uv sync
 | **Tabelas** | 13 | Adicionar tabelas, obter/definir células, definir dados em lote, mesclar/dividir células, adicionar/excluir linhas/colunas, estilos, layout, bordas |
 | **Exportação** | 4 | PDF, imagens, prévia do slide, cópia para a área de transferência |
 | **Apresentação de slides** | 6 | Iniciar, parar, próximo, anterior, ir para um slide, status |
-| **Gráficos** | 7 | Adicionar gráficos (no Windows, exceto os 3D e alguns tipos menos comuns, sem abrir o Excel), definir/obter dados (no Windows, ao definir, o gráfico é lido de volta; dados que não entraram são um erro, e um rótulo que o Excel leu de outro jeito é um aviso), formatar, formatar eixo, séries, trocar o tipo |
+| **Gráficos** | 7 | Adicionar gráficos (no Windows, exceto os 3D e alguns tipos menos comuns, sem abrir o Excel), definir/obter dados (no Windows, ao definir, o gráfico é trocado por uma cópia com outro id de forma, sem abrir o Excel quando dá, e lido de volta; dados que não entraram são um erro, e um rótulo que o Excel leu de outro jeito é um aviso), formatar, formatar eixo, séries, trocar o tipo |
 | **Animação** | 6 | Transições, adicionar/listar/atualizar/remover/limpar animações (entrada, saída, ênfase, trajetória de movimento, sequências interativas) |
 | **Temas** | 4 | Aplicar temas, obter/definir cores do tema, cabeçalhos/rodapés |
 | **Grupos** | 3 | Agrupar, desagrupar, obter os itens do grupo |

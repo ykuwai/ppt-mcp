@@ -107,7 +107,9 @@ if sys.platform == "win32":
     DeleteEnhMetaFile = gdi32.DeleteEnhMetaFile
     DeleteEnhMetaFile.argtypes = [wt.HANDLE]
 
-    CreateWindowEx = user32.CreateWindowExW
+    # From its own WinDLL with use_last_error, so that the error it leaves is
+    # kept for ctypes.get_last_error before Python makes another Win32 call.
+    CreateWindowEx = ctypes.WinDLL("user32", use_last_error=True).CreateWindowExW
     CreateWindowEx.argtypes = [wt.DWORD, wt.LPCWSTR, wt.LPCWSTR, wt.DWORD,
                                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                wt.HWND, wt.HMENU, wt.HINSTANCE, wt.LPVOID]
@@ -124,14 +126,17 @@ if sys.platform == "win32":
 # The parent that makes a window message only: never shown, never enumerated.
 HWND_MESSAGE = -3
 
-_owner = None
+_owner = None        # the window, once made
+_pending = None      # (ready, box) of a window still being made
 _owner_lock = threading.Lock()
+# How long a call waits for the window to be made, in seconds.
+OWNER_WAIT = 5.0
 
 
 def _run_owner(ready: threading.Event, box: list) -> None:
     hwnd = CreateWindowEx(0, "STATIC", "ppt-mcp clipboard", 0, 0, 0, 0, 0,
                           wt.HWND(HWND_MESSAGE), None, None, None)
-    box.append(hwnd)
+    box.append((hwnd, 0 if hwnd else ctypes.get_last_error()))
     ready.set()
     if not hwnd:
         return
@@ -149,20 +154,37 @@ def owner_window():
     that keeps answering messages: Windows sends the owner WM_DESTROYCLIPBOARD
     when another program empties the clipboard, and waits for the answer, so
     an owner on a thread that stopped answering would hang that program.
-    Answers None when no window could be made, and the clipboard is then
-    opened without one, as before.
+
+    Answers None when there is no window this time, and the clipboard is then
+    opened without one, as before. That is logged, saying whether the window
+    could not be made or was not made in time, and the next call tries again:
+    a window still being made is waited for once more rather than made twice.
     """
-    global _owner
+    global _owner, _pending
     with _owner_lock:
-        if _owner is None:
+        if _owner and IsWindow(_owner):
+            return _owner
+        _owner = None
+        if _pending is None:
             ready, box = threading.Event(), []
             threading.Thread(target=_run_owner, args=(ready, box), daemon=True,
                              name="clipboard-owner").start()
-            ready.wait(5)
-            _owner = (box[0] if box else None) or False
-            if not _owner:
-                logger.warning("No window to own the clipboard; opening it without one")
-        return _owner or None
+            _pending = (ready, box)
+        ready, box = _pending
+        if not ready.wait(OWNER_WAIT):
+            logger.warning(
+                "The window to own the clipboard was not made within %.0f s; "
+                "opening the clipboard without one this time", OWNER_WAIT)
+            return None
+        _pending = None
+        hwnd, error = box[0]
+        if not hwnd:
+            logger.warning(
+                "The window to own the clipboard could not be made (Windows error %s); "
+                "opening the clipboard without one this time", error)
+            return None
+        _owner = hwnd
+        return _owner
 
 
 def format_name(fmt: int) -> str:
@@ -280,6 +302,12 @@ def save() -> SavedClipboard:
                 logger.debug("Could not copy clipboard format %s", fmt, exc_info=True)
                 saved.lost.append(format_name(fmt))
     return saved
+
+
+def empty() -> None:
+    """Empty the clipboard, so that a paste finds nothing older than the copy."""
+    with opened():
+        EmptyClipboard()
 
 
 def restore(saved: SavedClipboard) -> list[str]:

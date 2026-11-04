@@ -7,6 +7,9 @@ so charts added one after another kept overlapping. python-pptx writes a chart
 and its data workbook straight into a pptx, with no Excel at all, and
 ``ppt_add_chart`` brings the chart in from there.
 
+``replace_data`` swaps the data of the chart in such a file, keeping its
+formatting, for ``ppt_set_chart_data``.
+
 ``write`` makes a one slide pptx holding the chart, with the sample data and
 the look ``AddChart2`` gives a chart of that type, read off PowerPoint for
 each type in ``CHART_TYPES``. The types python-pptx cannot write, the 3-D,
@@ -184,4 +187,27 @@ def write(path: str, chart_type: int, slide_width: float, slide_height: float,
     chart.legend.position = (
         XL_LEGEND_POSITION.TOP if chart_type in RADAR_TYPES else XL_LEGEND_POSITION.BOTTOM)
     chart.legend.include_in_layout = False
+    deck.save(path)
+
+
+# The types whose data replace_data swaps: categories and series of values.
+REPLACEABLE_TYPES = CATEGORY_TYPES | PIE_TYPES
+
+
+def replace_data(path: str, categories: list, series: list[dict]) -> None:
+    """Swap the data of the one chart in the pptx at ``path``.
+
+    python-pptx rewrites the series and the embedded workbook and keeps the
+    chart's formatting, its series colours among it.
+    """
+    from pptx import Presentation
+    from pptx.chart.data import CategoryChartData
+
+    deck = Presentation(path)
+    [frame] = [shape for shape in deck.slides[0].shapes if shape.has_chart]
+    data = CategoryChartData()
+    data.categories = categories
+    for entry in series:
+        data.add_series(entry["name"], entry["values"])
+    frame.chart.replace_data(data)
     deck.save(path)

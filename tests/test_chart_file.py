@@ -121,3 +121,41 @@ def test_scatter_and_bubble_points(tmp_path):
 def test_a_type_not_written_is_refused(tmp_path):
     with pytest.raises(ValueError, match="not written without Excel"):
         chart_file.write(str(tmp_path / "x.pptx"), 54, 960, 540, 0, 0, 100, 100)
+
+
+@pytest.mark.parametrize("chart_type", [51, 5, 4, 1, -4151])
+def test_replace_data_swaps_the_data_and_keeps_the_rest(tmp_path, chart_type):
+    from pptx.dml.color import RGBColor
+
+    path = str(tmp_path / "chart.pptx")
+    chart_file.write(path, chart_type, 960, 540, 100, 50, 400, 300, "en")
+    deck = pptx.Presentation(path)
+    chart = deck.slides[0].shapes[0].chart
+    fill = chart.plots[0].series[0].format.fill
+    fill.solid()
+    fill.fore_color.rgb = RGBColor(0xFF, 0, 0)
+    deck.save(path)
+
+    chart_file.replace_data(path, ["A", "B", "C"], [
+        {"name": "North", "values": [1, 2, 3]}, {"name": "South", "values": [4, 5, 6.5]}])
+    chart = pptx.Presentation(path).slides[0].shapes[0].chart
+    plot = chart.plots[0]
+    assert list(plot.categories) == ["A", "B", "C"]
+    assert [(s.name, list(s.values)) for s in plot.series] == [
+        ("North", [1, 2, 3]), ("South", [4, 5, 6.5])]
+    assert plot.series[0].format.fill.fore_color.rgb == RGBColor(0xFF, 0, 0), "formatting is kept"
+    assert int(chart.chart_type) == chart_type
+
+
+def test_only_category_charts_have_their_data_swapped():
+    assert chart_file.REPLACEABLE_TYPES == chart_file.CATEGORY_TYPES | chart_file.PIE_TYPES
+    assert not chart_file.REPLACEABLE_TYPES & (chart_file.XY_TYPES | chart_file.BUBBLE_TYPES)
+
+
+def test_swapped_values_are_formatted_general(tmp_path):
+    """As through Excel, whose Cells.Clear took the formats with the values."""
+    path = str(tmp_path / "chart.pptx")
+    chart_file.write(path, 51, 960, 540, 0, 0, 400, 300, "en")
+    chart_file.replace_data(path, ["A"], [{"name": "S", "values": [0.25]}])
+    xml = pptx.Presentation(path).slides[0].shapes[0].chart._chartSpace.xml
+    assert "<c:formatCode>General</c:formatCode>" in xml

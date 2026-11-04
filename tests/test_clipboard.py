@@ -103,3 +103,53 @@ def test_the_clipboard_is_opened_with_a_window_of_its_own(monkeypatch):
     with clipboard.opened():
         pass
     assert opened_with == [hwnd]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="makes a Windows window")
+class TestTheOwnerWindow:
+    @pytest.fixture(autouse=True)
+    def fresh(self, monkeypatch):
+        monkeypatch.setattr(clipboard, "_owner", None)
+        monkeypatch.setattr(clipboard, "_pending", None)
+
+    def test_a_window_that_could_not_be_made_is_tried_again(self, monkeypatch, caplog):
+        real = clipboard.CreateWindowEx
+        monkeypatch.setattr(clipboard, "CreateWindowEx", lambda *a: None)
+        with caplog.at_level("WARNING"):
+            assert clipboard.owner_window() is None
+        assert "could not be made" in caplog.text
+        monkeypatch.setattr(clipboard, "CreateWindowEx", real)
+        hwnd = clipboard.owner_window()
+        assert hwnd and clipboard.IsWindow(hwnd)
+
+    def test_without_a_window_the_clipboard_is_opened_without_one(self, monkeypatch):
+        monkeypatch.setattr(clipboard, "owner_window", lambda: None)
+        opened_with = []
+        monkeypatch.setattr(clipboard, "OpenClipboard", lambda h: opened_with.append(h) or True)
+        monkeypatch.setattr(clipboard, "CloseClipboard", lambda: True)
+        with clipboard.opened():
+            pass
+        assert opened_with == [None]
+
+    def test_a_window_not_made_in_time_is_waited_for_again_not_made_twice(self, monkeypatch, caplog):
+        import threading
+
+        go = threading.Event()
+        made = []
+        real = clipboard._run_owner
+
+        def slow(ready, box):
+            go.wait(5)
+            made.append(1)
+            real(ready, box)
+
+        monkeypatch.setattr(clipboard, "_run_owner", slow)
+        monkeypatch.setattr(clipboard, "OWNER_WAIT", 0.05)
+        with caplog.at_level("WARNING"):
+            assert clipboard.owner_window() is None
+        assert "not made within" in caplog.text
+        go.set()
+        monkeypatch.setattr(clipboard, "OWNER_WAIT", 5.0)
+        hwnd = clipboard.owner_window()
+        assert hwnd and clipboard.IsWindow(hwnd)
+        assert made == [1], "the window being made was waited for, not made again"
