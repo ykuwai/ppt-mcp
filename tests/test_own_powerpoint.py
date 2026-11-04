@@ -275,6 +275,73 @@ class TestWindowsClose:
             self._protected(monkeypatch, save=True)
 
 
+@windows_only
+class TestProtectedViewByName:
+    """#328: a deck in Protected View is not in Presentations, so naming it
+    found nothing to close."""
+
+    def _app(self, monkeypatch, decks=()):
+        from ppt_com import app as app_module
+        from ppt_com import presentation
+
+        app = MagicMock()
+        window = MagicMock()
+        window.Presentation.Name = "pv.pptx"
+        window.Presentation.FullName = r"C:\Downloads\pv.pptx"
+        app.ProtectedViewWindows.Count = 1
+        app.ProtectedViewWindows.side_effect = lambda i: window
+        ordinary = [MagicMock(Name=name, FullName=rf"C:\{name}") for name in decks]
+        app.Presentations.Count = len(ordinary)
+        app.Presentations.side_effect = lambda i: ordinary[i - 1]
+        for module in (presentation, app_module):
+            monkeypatch.setattr(module.ppt, "_get_app_impl", lambda allow_launch=False: app)
+        return app, window, ordinary
+
+    @pytest.mark.parametrize("name", ["pv.pptx", r"C:\Downloads\pv.pptx"])
+    def test_it_is_closed_by_its_name_with_nothing_else_open(self, monkeypatch, name):
+        from ppt_com import presentation
+
+        app, window, _ = self._app(monkeypatch)
+        result = presentation._close_presentation_impl(False, None, name, True)
+        window.Close.assert_called_once_with()
+        assert result["closed"] == "pv.pptx"
+
+    def test_and_beside_another_deck(self, monkeypatch):
+        from ppt_com import presentation
+
+        app, window, [other] = self._app(monkeypatch, decks=["work.pptx"])
+        presentation._close_presentation_impl(False, None, "pv.pptx", True)
+        window.Close.assert_called_once_with()
+        other.Close.assert_not_called()
+
+    def test_saving_it_is_refused(self, monkeypatch):
+        from ppt_com import presentation
+
+        app, window, _ = self._app(monkeypatch)
+        with pytest.raises(ValueError, match="Protected View, which is read-only"):
+            presentation._close_presentation_impl(True, None, "pv.pptx", True)
+        window.Close.assert_not_called()
+
+    def test_an_ordinary_deck_of_that_name_comes_first(self, monkeypatch):
+        from ppt_com import presentation
+
+        app, window, [ordinary] = self._app(monkeypatch, decks=["pv.pptx"])
+        app.ProtectedViewWindows.side_effect = lambda i: MagicMock(
+            Presentation=MagicMock(FullName=r"C:\elsewhere\pv.pptx"))
+        presentation._close_presentation_impl(False, None, "pv.pptx", True)
+        ordinary.Close.assert_called_once_with()
+        window.Close.assert_not_called()
+
+    def test_the_list_shows_it(self, monkeypatch):
+        from ppt_com import app as app_module
+
+        self._app(monkeypatch, decks=[])
+        result = app_module._list_presentations_impl()
+        assert result["count"] == 0
+        assert result["protected_view"] == [
+            {"name": "pv.pptx", "full_name": r"C:\Downloads\pv.pptx"}]
+
+
 def _refuse(self, value):
     raise RuntimeError("Presentation.Saved : Invalid request.")
 

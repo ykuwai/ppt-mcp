@@ -335,7 +335,7 @@ ESC מבטל בלי לאשר דבר, כך שאין לו תופעות לוואי 
 
 אם PowerPoint לא רץ כשכלי צריך אותו (`ppt_create_presentation`, `ppt_open_presentation`, `ppt_connect`), השרת מפעיל אותו. ב־macOS הוא נפתח ברקע ולא לוקח את החזית מהיישום שבו אתם עובדים.
 
-כשסגירה משאירה את PowerPoint שהשרת הפעיל בלי אף מצגת פתוחה, `ppt_close_presentation` סוגר גם את PowerPoint ואומר זאת (`powerpoint_quit`). PowerPoint שהפעלתם בעצמכם לעולם לא נסגר, וגם לא כזה שעדיין יש בו מצגת פתוחה (ב־Windows, גם קובץ שפתוח בתצוגה מוגנת). העבירו `keep_powerpoint_open=true` כדי להשאיר אותו פתוח, למשל כדי לפתוח מיד מצגת אחרת. עד שכלי יפעיל את PowerPoint שוב, כלים שצריכים אותו עונים ש־PowerPoint לא רץ, במקום לדווח על רשימה ריקה.
+כשסגירה משאירה את PowerPoint שהשרת הפעיל בלי אף מצגת פתוחה, `ppt_close_presentation` סוגר גם את PowerPoint ואומר זאת (`powerpoint_quit`). PowerPoint שהפעלתם בעצמכם לעולם לא נסגר, וגם לא כזה שעדיין יש בו מצגת פתוחה (ב־Windows, גם קובץ שפתוח בתצוגה מוגנת). העבירו `keep_powerpoint_open=true` כדי להשאיר אותו פתוח, למשל כדי לפתוח מיד מצגת אחרת. עד שכלי יפעיל את PowerPoint שוב, כלים שצריכים אותו עונים ש־PowerPoint לא רץ, במקום לדווח על רשימה ריקה. ב-Windows, קובץ שפתוח בתצוגה מוגנת מופיע ב-`ppt_list_presentations` תחת `protected_view`, ו-`ppt_close_presentation` סוגר אותו לפי שמו, בלי לשמור.
 
 ### עבודה באותה מצגת עם המודל
 

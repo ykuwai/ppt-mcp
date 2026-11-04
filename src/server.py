@@ -582,7 +582,9 @@ async def tool_ppt_get_active_window() -> str:
 async def tool_ppt_list_presentations() -> str:
     """List all currently open presentations in PowerPoint.
 
-    Returns name, path, slide count, and status for each.
+    Returns name, path, slide count, and status for each. On Windows, files
+    open in Protected View are listed apart under `protected_view`; they are
+    read-only, and ppt_close_presentation closes one by its name.
     """
     return await run_offloaded(list_presentations)
 

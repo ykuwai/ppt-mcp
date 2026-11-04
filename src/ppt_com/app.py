@@ -143,7 +143,21 @@ def _list_presentations_impl() -> dict:
             state = None
         if state is not None:
             presentations[-1]["pending_updates"] = state["pending_updates"]
-    return {"presentations": presentations, "count": len(presentations)}
+    result = {"presentations": presentations, "count": len(presentations)}
+    # Decks in Protected View are not in Presentations; they can be closed
+    # by name, and nothing else is done to them.
+    from ppt_com.presentation import protected_view_windows
+
+    read_only = []
+    for window in protected_view_windows(app):
+        try:
+            deck = window.Presentation
+            read_only.append({"name": deck.Name, "full_name": deck.FullName})
+        except Exception:  # noqa: BLE001 - a window closing as it is read
+            continue
+    if read_only:
+        result["protected_view"] = read_only
+    return result
 
 
 @shows_powerpoint
