@@ -90,3 +90,16 @@ def test_global_memory_round_trips():
         assert clipboard.global_bytes(handle)[: len(data)] == data
     finally:
         clipboard.GlobalFree(handle)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="uses the Windows clipboard")
+def test_the_clipboard_is_opened_with_a_window_of_its_own(monkeypatch):
+    hwnd = clipboard.owner_window()
+    assert hwnd and clipboard.IsWindow(hwnd)
+    assert clipboard.owner_window() == hwnd, "made once"
+    opened_with = []
+    monkeypatch.setattr(clipboard, "OpenClipboard", lambda h: opened_with.append(h) or True)
+    monkeypatch.setattr(clipboard, "CloseClipboard", lambda: True)
+    with clipboard.opened():
+        pass
+    assert opened_with == [hwnd]

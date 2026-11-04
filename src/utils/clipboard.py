@@ -19,6 +19,7 @@ module off Windows gives the constants and nothing that touches the system.
 import ctypes
 import logging
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -106,6 +107,63 @@ if sys.platform == "win32":
     DeleteEnhMetaFile = gdi32.DeleteEnhMetaFile
     DeleteEnhMetaFile.argtypes = [wt.HANDLE]
 
+    CreateWindowEx = user32.CreateWindowExW
+    CreateWindowEx.argtypes = [wt.DWORD, wt.LPCWSTR, wt.LPCWSTR, wt.DWORD,
+                               ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                               wt.HWND, wt.HMENU, wt.HINSTANCE, wt.LPVOID]
+    CreateWindowEx.restype = wt.HWND
+    GetMessage = user32.GetMessageW
+    GetMessage.argtypes = [ctypes.POINTER(wt.MSG), wt.HWND, wt.UINT, wt.UINT]
+    GetMessage.restype = wt.BOOL
+    DispatchMessage = user32.DispatchMessageW
+    DispatchMessage.argtypes = [ctypes.POINTER(wt.MSG)]
+    IsWindow = user32.IsWindow
+    IsWindow.argtypes = [wt.HWND]
+    IsWindow.restype = wt.BOOL
+
+# The parent that makes a window message only: never shown, never enumerated.
+HWND_MESSAGE = -3
+
+_owner = None
+_owner_lock = threading.Lock()
+
+
+def _run_owner(ready: threading.Event, box: list) -> None:
+    hwnd = CreateWindowEx(0, "STATIC", "ppt-mcp clipboard", 0, 0, 0, 0, 0,
+                          wt.HWND(HWND_MESSAGE), None, None, None)
+    box.append(hwnd)
+    ready.set()
+    if not hwnd:
+        return
+    msg = wt.MSG()
+    while GetMessage(ctypes.byref(msg), None, 0, 0) > 0:
+        DispatchMessage(ctypes.byref(msg))
+
+
+def owner_window():
+    """The window the clipboard is opened with, made once.
+
+    Microsoft documents that a clipboard emptied while opened with no window
+    has no owner, and that SetClipboardData then fails. So it is opened with a
+    message only window of its own. The window lives on a thread of its own
+    that keeps answering messages: Windows sends the owner WM_DESTROYCLIPBOARD
+    when another program empties the clipboard, and waits for the answer, so
+    an owner on a thread that stopped answering would hang that program.
+    Answers None when no window could be made, and the clipboard is then
+    opened without one, as before.
+    """
+    global _owner
+    with _owner_lock:
+        if _owner is None:
+            ready, box = threading.Event(), []
+            threading.Thread(target=_run_owner, args=(ready, box), daemon=True,
+                             name="clipboard-owner").start()
+            ready.wait(5)
+            _owner = (box[0] if box else None) or False
+            if not _owner:
+                logger.warning("No window to own the clipboard; opening it without one")
+        return _owner or None
+
 
 def format_name(fmt: int) -> str:
     """A clipboard format's name, for reports."""
@@ -121,8 +179,9 @@ def format_name(fmt: int) -> str:
 @contextmanager
 def opened(attempts: int = 20, wait: float = 0.05):
     """Hold the clipboard open. Another program may have it for a moment."""
+    owner = owner_window()
     for _ in range(attempts):
-        if OpenClipboard(None):
+        if OpenClipboard(owner):
             break
         time.sleep(wait)
     else:
@@ -230,12 +289,8 @@ def restore(saved: SavedClipboard) -> list[str]:
     """
     lost = list(saved.lost)
     with opened():
-        # Opened without a window, EmptyClipboard leaves the clipboard with no
-        # owner, and Microsoft documents SetClipboardData as failing then.
-        # That is about delayed rendering, which needs an owner to ask; data
-        # handed over in full is taken. Checked on Windows 11 with Microsoft 365:
-        # text, HTML, a DIB and an enhanced metafile all came back byte for
-        # byte, and a format refused would be reported, not lost in silence.
+        # Opened with owner_window(), so the clipboard has an owner once it is
+        # emptied and SetClipboardData takes what is handed to it.
         EmptyClipboard()
         for fmt, kind, data in saved.entries:
             if kind == "emf":

@@ -471,8 +471,13 @@ def _paste_from(source, slide, attempts=10, wait=0.1):
             return slide.Shapes.Paste()(1)
         except Exception as e:  # noqa: BLE001 - tried again, then raised
             last = e
-            if slide.Shapes.Count > count:
-                return slide.Shapes(slide.Shapes.Count)
+            try:
+                now = slide.Shapes.Count
+            except Exception:  # noqa: BLE001 - then the paste is tried again
+                logger.debug("Could not count the shapes after a failed paste", exc_info=True)
+                continue
+            if now > count:
+                return slide.Shapes(now)
     raise RuntimeError(f"Could not paste the new chart: {last}")
 
 
@@ -492,8 +497,10 @@ def _add_chart_from_file(app, pres, slide, type_int, left, top, width, height):
 
     The chart is written to a temporary pptx, which is opened without a
     window, and the chart is copied onto the slide with the user's clipboard
-    put back afterwards. Answers the shape and any warnings: clipboard formats
-    that could not be put back, or a style that did not take.
+    put back afterwards. The pasted shape is read back, and one that is no
+    chart or not of ``type_int`` is removed as a failure. Answers the shape,
+    its chart type as read back, and any warnings: clipboard formats that
+    could not be put back, or a style that did not take.
     """
     fd, path = tempfile.mkstemp(suffix=".pptx", prefix="ppt-mcp-chart-")
     os.close(fd)
@@ -515,8 +522,14 @@ def _add_chart_from_file(app, pres, slide, type_int, left, top, width, height):
             logger.debug("Could not remove %s", path, exc_info=True)
     style = chart_file.STYLES.get(type_int)
     try:
-        shape.Left, shape.Top, shape.Width, shape.Height = left, top, width, height
+        # What landed is read back before anything else is done to it.
+        if not shape.HasChart:
+            raise RuntimeError("what was pasted is not a chart")
         chart = shape.Chart
+        type_now = chart.ChartType
+        if type_now != type_int:
+            raise RuntimeError(f"the chart came in as type {type_now}, not {type_int}")
+        shape.Left, shape.Top, shape.Width, shape.Height = left, top, width, height
         if style:
             chart.ChartStyle = style
             chart.ClearToMatchStyle()
@@ -541,7 +554,7 @@ def _add_chart_from_file(app, pres, slide, type_int, left, top, width, height):
             f"was put back without these formats: {', '.join(lost)}.")
     if style and style_now != style:
         warnings.append(f"The chart has style {style_now}, not {style} as AddChart2 gives it.")
-    return shape, warnings
+    return shape, type_now, warnings
 
 
 def _add_chart_impl(slide_index, chart_type, left, top, width, height):
@@ -553,14 +566,14 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     type_int = _resolve_chart_type(chart_type)
     type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
     if type_int in chart_file.CHART_TYPES and chart_file.available():
-        chart_shape, warnings = _add_chart_from_file(
+        chart_shape, type_now, warnings = _add_chart_from_file(
             app, pres, slide, type_int, left, top, width, height)
         result = {
             "success": True,
             "shape_name": chart_shape.Name,
             "shape_index": chart_shape.ZOrderPosition,
-            "chart_type": type_name,
-            "chart_type_int": type_int,
+            "chart_type": CHART_TYPE_NAMES.get(type_now, str(type_now)),
+            "chart_type_int": type_now,
         }
         if warnings:
             result["warning"] = " ".join(warnings)
