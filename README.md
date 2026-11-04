@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="README_ja.md">日本語版はこちら</a> · <a href="README_he.md">עברית</a>
+  <strong>English (en)</strong> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Real-time PowerPoint control on Windows and macOS —<br>an MCP server with 157 tools for AI agents and developers.</strong>
+  <strong>Real-time PowerPoint control on Windows and macOS —<br>an MCP server with <!--tools-->157<!--/tools--> tools for AI agents and developers.</strong>
 </p>
 
 ---
@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
-- **157 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
+- **<!--tools-->157<!--/tools--> tools across <!--categories-->26<!--/categories--> categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Pass `accent1`, `accent2`, etc. wherever a fill, line, shadow, glow or text color is taken, instead of hardcoded RGB values; the shapes follow the theme when it changes
@@ -397,7 +397,7 @@ Each write moves the deck's window to the slide it works on, so you can see wher
 
 ### The tool list: catalog mode
 
-A client sends the description of every tool it lists with every request, and this server's 157 come to about 112k tokens, a large part of a 128k or 200k window before any work. With `PPT_TOOL_MODE=catalog` in the server's `env`, the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
+A client sends the description of every tool it lists with every request, and this server's <!--tools-->157<!--/tools--> come to about 112k tokens, a large part of a 128k or 200k window before any work. With `PPT_TOOL_MODE=catalog` in the server's `env`, the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
 
 | Tool | What it does |
 |---|---|
@@ -423,7 +423,7 @@ What catalog mode gives up is per-tool control in the client: approving or block
 
 ## 🍎 macOS support
 
-**11 tools refuse on macOS. The rest work.** The 11 are listed by name in
+**<!--mac-refusals-->11<!--/mac-refusals--> tools refuse on macOS. The rest work.** The <!--mac-refusals-->11<!--/mac-refusals--> are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what

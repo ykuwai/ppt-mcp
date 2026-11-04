@@ -1,19 +1,24 @@
-"""The three READMEs, English, Japanese and Hebrew, say the same things.
+"""The READMEs, English and its translations, say the same things.
 
 They are kept by hand, and a change made in one language is easily left out
-of the others: README_ja once said 21 tools refused on the Mac when the
-English one said 12. These pin what can be compared without reading the
-prose: the tool count, the settings, the catalog tools, the links between
-them, and that the Hebrew one reads right to left.
+of the others: the Japanese one once said 21 tools refused on the Mac when the
+English one said 12. The numbers are now written by ``scripts/sync_readmes.py``
+and checked here. The rest pins what can be compared without reading the
+prose: the settings, the catalog tools, the language bar, the sections, and
+that the Hebrew one reads right to left.
 """
 
+import importlib.util
 import re
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-READMES = {"en": "README.md", "ja": "README_ja.md", "he": "README_he.md"}
+_spec = importlib.util.spec_from_file_location("sync_readmes", ROOT / "scripts" / "sync_readmes.py")
+sync_readmes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(sync_readmes)
+READMES = sync_readmes.READMES
 TOOL_NAME_RE = re.compile(r'name="(ppt_\w+)"')
 CATALOG = {"ppt_describe", "ppt_run", "ppt_run_steps"}
 
@@ -45,7 +50,7 @@ def test_the_rows_of_the_tool_table_add_up_to_its_total(lang):
     assert sum(int(r) for r in rows) == total
 
 
-@pytest.mark.parametrize("lang", ["ja", "he"])
+@pytest.mark.parametrize("lang", [lang for lang in READMES if lang != "en"])
 def test_every_setting_in_the_english_readme_is_in_the_others(lang):
     english = set(re.findall(r"\bPPT_[A-Z_]+\b", text("en")))
     assert english, "the English README names no settings"
@@ -64,11 +69,36 @@ def test_each_describes_the_catalog_tools_and_how_to_list_every_tool(lang):
 
 
 @pytest.mark.parametrize("lang", sorted(READMES))
-def test_each_links_to_the_other_two(lang):
+def test_each_has_the_same_language_bar(lang):
+    """Every README opens with the same list of languages, each written in its
+    own script with its code, linking every other README and naming itself
+    in bold."""
     body = text(lang)
     for other, name in READMES.items():
-        if other != lang:
+        if other == lang:
+            assert "<strong>" in body and f"({other})</strong>" in body, f"{READMES[lang]} does not name itself in its language bar"
+        else:
             assert f'href="{name}"' in body, f"{READMES[lang]} does not link to {name}"
+            assert f"({other})</a>" in body, f"{READMES[lang]} does not give {name}'s code in its language bar"
+
+
+def test_the_numbers_are_up_to_date():
+    """The tool counts in every README match the code. If this fails, run
+    ``uv run python scripts/sync_readmes.py``."""
+    numbers = sync_readmes.counts()
+    refusals = sync_readmes.mac_refusals()
+    stale = [name for name in READMES.values()
+             if sync_readmes.synced((ROOT / name).read_text(encoding="utf-8"), numbers, name, refusals)
+             != (ROOT / name).read_text(encoding="utf-8")]
+    assert not stale, f"Stale numbers in {stale}. Run: uv run python scripts/sync_readmes.py"
+
+
+@pytest.mark.parametrize("lang", sorted(READMES))
+def test_each_marks_its_counts(lang):
+    """Each README states the tool count and the Mac's refusals through the
+    markers the sync script fills, so a number cannot be typed in by hand."""
+    body = text(lang)
+    assert "<!--tools-->" in body and "<!--mac-refusals-->" in body
 
 
 @pytest.mark.parametrize("lang", sorted(READMES))
@@ -99,4 +129,4 @@ def test_the_hebrew_readme_reads_right_to_left():
 def test_the_hebrew_readme_links_resolve_to_its_own_anchors():
     body = text("he")
     for anchor in re.findall(r"\]\(#([^)]+)\)", body):
-        assert f'id="{anchor}"' in body, f"README_he.md links to #{anchor}, which it does not have"
+        assert f'id="{anchor}"' in body, f"README.he.md links to #{anchor}, which it does not have"

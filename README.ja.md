@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English version</a> · <a href="README_he.md">עברית</a>
+  <a href="README.md">English (en)</a> · <strong>日本語 (ja)</strong> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>WindowsとmacOSで動くPowerPointのリアルタイム制御 —<br>AIエージェントと開発者のための157ツールを備えたMCPサーバー</strong>
+  <strong>WindowsとmacOSで動くPowerPointのリアルタイム制御 —<br>AIエージェントと開発者のための<!--tools-->157<!--/tools-->ツールを備えたMCPサーバー</strong>
 </p>
 
 ---
@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ 主な特徴
 
 - **リアルタイム制御** — 起動中のPowerPointを直接操作。変更がその場で画面に反映される
-- **26カテゴリ・157ツール** — スライド、シェイプ、テキスト、テーブル、グラフ、アニメーション、SmartArt、メディア、フリーフォームパスなど
+- **<!--categories-->26<!--/categories-->カテゴリ・<!--tools-->157<!--/tools-->ツール** — スライド、シェイプ、テキスト、テーブル、グラフ、アニメーション、SmartArt、メディア、フリーフォームパスなど
 - **AIエージェントに安全** — `ppt_activate_presentation` で操作対象ファイルを固定。誤って別のプレゼンを編集するミスを防止
 - **[Google Material Symbols](https://fonts.google.com/icons) アイコン** — 2,500以上のアイコンをキーワード検索し、テーマカラーでSVG挿入
 - **テーマカラー連携** — 塗りつぶし・線・影・光彩・文字の色を、RGB値のハードコードではなく `accent1`、`accent2` などのテーマカラー名で指定。テーマを変えると図形の色も追従
@@ -397,7 +397,7 @@ PowerPointが起動していないときにツールが必要とすると（`ppt
 
 ### ツール一覧：カタログモード
 
-クライアントは、一覧にあるすべてのツールの説明を毎回のリクエストで送ります。このサーバーの157個のツールは約112kトークンになり、128kや200kのウィンドウでは作業を始める前に大きな部分を占めます。サーバーの `env` に `PPT_TOOL_MODE=catalog` を設定すると、サーバーは次の3つのツールだけを一覧に載せ（約700トークン）、モデルはそれを通じて残りのツールを使います：
+クライアントは、一覧にあるすべてのツールの説明を毎回のリクエストで送ります。このサーバーの<!--tools-->157<!--/tools-->個のツールは約112kトークンになり、128kや200kのウィンドウでは作業を始める前に大きな部分を占めます。サーバーの `env` に `PPT_TOOL_MODE=catalog` を設定すると、サーバーは次の3つのツールだけを一覧に載せ（約700トークン）、モデルはそれを通じて残りのツールを使います：
 
 | ツール | 内容 |
 |---|---|
@@ -423,7 +423,7 @@ PowerPointが起動していないときにツールが必要とすると（`ppt
 
 ## 🍎 macOS 対応
 
-**macOS で断るツールは 11 です。残りは動きます。**その 11 は
+**macOS で断るツールは <!--mac-refusals-->11<!--/mac-refusals--> です。残りは動きます。**その <!--mac-refusals-->11<!--/mac-refusals--> は
 [MACOS_PORT.md](MACOS_PORT.md) の 6.1 に名前で並べてあり、
 その一覧が古びないようにテストで見張っています。
 
