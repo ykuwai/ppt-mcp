@@ -428,31 +428,22 @@ def _export_images_impl(
 # ---------------------------------------------------------------------------
 # Clipboard helpers (Windows only)
 # ---------------------------------------------------------------------------
-CF_DIB = 8
-CF_HDROP = 15
-GHND = 0x0042  # GMEM_MOVEABLE | GMEM_ZEROINIT
+# The bindings are shared with utils/clipboard.py, which keeps the user's
+# clipboard across a copy and paste.
+from utils.clipboard import CF_DIB, CF_HDROP, GHND  # noqa: E402
 
 if _WINDOWS:
-    user32 = ctypes.windll.user32
-    kernel32 = ctypes.windll.kernel32
-    ole32 = ctypes.windll.ole32
-
-    OpenClipboard = user32.OpenClipboard
-    CloseClipboard = user32.CloseClipboard
-    EmptyClipboard = user32.EmptyClipboard
-    SetClipboardData = user32.SetClipboardData
-    SetClipboardData.argtypes = [ctypes.wintypes.UINT, ctypes.wintypes.HANDLE]
-    SetClipboardData.restype = ctypes.wintypes.HANDLE
-    GlobalAlloc = kernel32.GlobalAlloc
-    GlobalAlloc.argtypes = [ctypes.wintypes.UINT, ctypes.c_size_t]
-    GlobalAlloc.restype = ctypes.wintypes.HGLOBAL
-    GlobalLock = kernel32.GlobalLock
-    GlobalLock.argtypes = [ctypes.wintypes.HGLOBAL]
-    GlobalLock.restype = ctypes.c_void_p
-    GlobalUnlock = kernel32.GlobalUnlock
-    GlobalUnlock.argtypes = [ctypes.wintypes.HGLOBAL]
-    GlobalFree = kernel32.GlobalFree
-    GlobalFree.argtypes = [ctypes.wintypes.HGLOBAL]
+    from utils.clipboard import (  # noqa: E402
+        CloseClipboard,
+        EmptyClipboard,
+        GlobalAlloc,
+        GlobalFree,
+        GlobalLock,
+        GlobalUnlock,
+        OpenClipboard,
+        SetClipboardData,
+        user32,
+    )
 
 
 def _png_to_dib(png_path: str) -> bytes:

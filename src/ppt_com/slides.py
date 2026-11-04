@@ -72,7 +72,8 @@ class AddSlideInput(BaseModel):
             "Alternatively use a friendly name: 'title', 'text', 'blank', "
             "'title_only', 'section_header', 'comparison', "
             "'content_with_caption', 'picture_with_caption'. "
-            "Overrides the layout parameter."
+            "Overrides the layout parameter. On macOS a custom layout is "
+            "found in the deck's saved file, so save a new deck first."
         ),
     )
     design_index: Optional[int] = Field(

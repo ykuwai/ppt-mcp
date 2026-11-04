@@ -142,6 +142,6 @@ class TestAnnotationKeys:
 class TestScriptsExist:
     """Required scripts must exist."""
 
-    def test_count_tools_script_exists(self):
-        script = SCRIPTS_DIR / "count_tools.sh"
+    def test_sync_readmes_script_exists(self):
+        script = SCRIPTS_DIR / "sync_readmes.py"
         assert script.exists(), f"{script} does not exist"

@@ -22,7 +22,7 @@ from queue import Empty, Queue
 from typing import Any, Callable, Optional
 from urllib.parse import unquote
 
-from utils import coauthoring
+from utils import coauthoring, held_refs
 from utils.foreground import Foreground, run_keeping_foreground
 
 logger = logging.getLogger(__name__)
@@ -888,6 +888,12 @@ class PowerPointCOMWrapper:
                     # arrived after _recover_from_wedge had drained it.
                     future.cancel()
                     break
+                # References to an Excel that has ended since go now, when
+                # letting go of them takes no time (#299).
+                try:
+                    held_refs.held.let_go_of_ended()
+                except Exception:  # noqa: BLE001 - never in the way of the item
+                    logger.debug("Letting go of held references failed", exc_info=True)
                 try:
                     self._run_item(func, args, kwargs, future, idempotent)
                 except BaseException:
@@ -900,6 +906,10 @@ class PowerPointCOMWrapper:
                             RuntimeError("The COM worker failed unexpectedly.")
                         )
         finally:
+            try:
+                held_refs.held.leave_behind()
+            except Exception:  # noqa: BLE001 - never in the way of stopping
+                logger.debug("Leaving held references behind failed", exc_info=True)
             # An abandoned worker shares self._app with the live one and must
             # not clear it on the way out.
             if generation == self._generation:

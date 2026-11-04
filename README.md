@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="README_ja.md">日本語版はこちら</a> · <a href="README_he.md">עברית</a>
+  <strong>English (en)</strong> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Real-time PowerPoint control on Windows and macOS —<br>an MCP server with 157 tools for AI agents and developers.</strong>
+  <strong>Real-time PowerPoint control on Windows and macOS —<br>an MCP server with <!--tools-->157<!--/tools--> tools for AI agents and developers.</strong>
 </p>
 
 ---
@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
-- **157 tools across 26 categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
+- **<!--tools-->157<!--/tools--> tools across <!--categories-->26<!--/categories--> categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Pass `accent1`, `accent2`, etc. wherever a fill, line, shadow, glow or text color is taken, instead of hardcoded RGB values; the shapes follow the theme when it changes
@@ -147,7 +147,7 @@ uv sync
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
 | **Export** | 4 | PDF, images, slide preview, clipboard copy |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
-| **Charts** | 7 | Add charts, set/get data, format, format axis, series, change type |
+| **Charts** | 7 | Add charts (on Windows, all but the 3-D and a few rarer types without starting Excel), set/get data (on Windows, setting it swaps in a copy of the chart under a new shape id without starting Excel where it can, then reads the chart back, and data that did not land is an error while a label Excel read differently is a warning), format, format axis, series, change type |
 | **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
 | **Themes** | 4 | Apply themes, get/set theme colors, headers/footers |
 | **Groups** | 3 | Group, ungroup, get group items |
@@ -397,7 +397,7 @@ Each write moves the deck's window to the slide it works on, so you can see wher
 
 ### The tool list: catalog mode
 
-A client sends the description of every tool it lists with every request, and this server's 157 come to about 112k tokens, a large part of a 128k or 200k window before any work. With `PPT_TOOL_MODE=catalog` in the server's `env`, the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
+A client sends the description of every tool it lists with every request, and this server's <!--tools-->157<!--/tools--> come to about 112k tokens, a large part of a 128k or 200k window before any work. With `PPT_TOOL_MODE=catalog` in the server's `env`, the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
 
 | Tool | What it does |
 |---|---|
@@ -423,7 +423,7 @@ What catalog mode gives up is per-tool control in the client: approving or block
 
 ## 🍎 macOS support
 
-**11 tools refuse on macOS. The rest work.** The 11 are listed by name in
+**<!--mac-refusals-->11<!--/mac-refusals--> tools refuse on macOS. The rest work.** The <!--mac-refusals-->11<!--/mac-refusals--> are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what
@@ -452,8 +452,12 @@ Smaller differences:
   on a slide that already has animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.
-- Slide images come from a PDF render rather than PNG export, which is sharper
-  than the Windows route.
+- **A template's own layouts are found by name in the deck's saved file**, so
+  save a new deck before asking `ppt_add_slide` for one by name. PowerPoint for
+  Mac names no layouts to a script, so the slide is pasted in on its layout,
+  which takes about a second.
+- Slide images are rendered from a PDF rather than exported as PNG. A preview
+  is 2 pixels per point on both platforms.
 - Automation consent belongs to whichever application launched the server, so
   running it from a different terminal or editor raises the prompt again.
 - Save the deck early and at each break. It costs nothing, and PowerPoint has
@@ -468,7 +472,7 @@ Smaller differences:
   position and z order are kept; animations on the shape are not, and the
   result says how many were lost. A few formatting arguments that depend on
   the chart's rendered size (`chart_style`, legend and title coordinates,
-  the 8-direction legend presets, `tick_label_font_size`) are refused by name.
+  the 8-direction legend presets) are refused by name.
 - **Text inside a group is edited the same way.** `ppt_set_text` (the whole
   text, or a span inside one line) and `ppt_format_text` reach a group's
   member by its name, or by its path (`"Group 4/TextBox 3"`); the group is

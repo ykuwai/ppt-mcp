@@ -223,7 +223,7 @@ round trip.
 | read every property of every shape on a slide, one event | 0.011 s |
 | read names and geometry of every shape in bulk | 0.007 s |
 | placeholders, their type and their text | works |
-| custom layouts of the slide master, 11 found | works |
+| custom layouts of the slide master | counted (11), but none names itself or can be given to a slide (-1708); `ppt_add_slide` finds a layout by name in the deck's saved file and pastes a slide on it from a one-slide copy of that file |
 | create a table with `make new shape table`, addressed with `get cell from` | works |
 | slide dimensions | width from `page setup`, height from `slide master` |
 | sections count through `section properties` | works |
@@ -547,17 +547,18 @@ checked against the code by a test, so it cannot quietly go stale.
 | No application window state, only each deck's window position and size | `ppt_set_window_state` |
 | No Boolean merge verbs (union, combine, intersect, subtract, fragment), and no shape range to merge | `ppt_merge_shapes` |
 
-A further **19 tools work and refuse one argument**, with `error` naming
+A further **18 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
 cannot take a `trigger_shape`, `ppt_set_reflection` cannot take the four
 numeric arguments, `ppt_add_video` and `ppt_add_audio` cannot take
 `link_to_file`, `ppt_set_media_settings` cannot take volume, mute, trim or
-fade, `ppt_format_chart` cannot take `chart_style`, `legend_font_size`, the
-legend and title coordinates or an 8-direction `legend_position` (they are
-computed from the chart's rendered size, which the XML does not carry),
-`ppt_format_chart_axis` cannot take `tick_label_font_size`, `ppt_set_textframe`
+fade, `ppt_format_chart` cannot take `chart_style` (choosing a style rewrites
+the chart's own formatting from the style's definition, which the clipboard
+route would have to redo), the legend and title coordinates or an
+8-direction `legend_position` (they are computed from the chart's rendered
+size, which the XML does not carry), `ppt_set_textframe`
 cannot take `auto_size='shrink_to_fit'` (PowerPoint for Mac refuses to set it
 from a script, under either of its names). `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
 checks that report a write which did not land rather than a capability that

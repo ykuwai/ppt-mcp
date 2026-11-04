@@ -806,6 +806,20 @@ except ImportError:
 # =============================================================================
 
 
+# The preview's resolution. The Mac renders the slide's PDF at twice its size
+# in points; Windows is asked for the same, because Slide.Export with no size
+# follows the display's DPI: 1280 px across for a 960 pt slide at 96 DPI,
+# which blurs small text, and 1920 on a display scaled to 150%.
+PREVIEW_PIXELS_PER_POINT = 2
+
+
+def export_preview_png(slide, page_setup, path: str) -> None:
+    """Export ``slide`` to ``path`` as a PNG at PREVIEW_PIXELS_PER_POINT."""
+    width = round(page_setup.SlideWidth * PREVIEW_PIXELS_PER_POINT)
+    height = round(page_setup.SlideHeight * PREVIEW_PIXELS_PER_POINT)
+    slide.Export(path, "PNG", width, height)
+
+
 class GetSlidePreviewInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
@@ -886,8 +900,7 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput):
         temp_file = os.path.join(temp_dir, f"ppt_slide_preview_{slide_idx}.png")
 
         try:
-            # Export slide as PNG
-            slide.Export(temp_file, "PNG")
+            export_preview_png(slide, pres.PageSetup, temp_file)
 
             # Read binary data
             with open(temp_file, "rb") as f:
@@ -909,9 +922,10 @@ def preview_scale(slide_index, image_data, slide_size):
     """What ppt_get_slide_preview says beside its image, to convert between
     the image's pixels and the slide's points.
 
-    The image of a 960 pt slide is 1920 px across on Windows, and a caller
-    measuring a chart in it took the pixels for points twice and concluded
-    the chart was ignoring its width (#194).
+    The image of a 960 pt slide is 1920 px across on both platforms
+    (PREVIEW_PIXELS_PER_POINT), and a caller measuring a chart in it took the
+    pixels for points twice and concluded the chart was ignoring its width
+    (#194).
     """
     said = {"slide_index": slide_index}
     size = png_size(image_data)
