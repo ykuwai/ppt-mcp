@@ -13,4 +13,4 @@
 - [ ] `uv run --frozen pytest -q` passes (counts: )
 - [ ] New or changed tests cover the change
 - [ ] Tried on a real PowerPoint: <!-- Windows / macOS, PowerPoint version, what was checked; or why not -->
-- [ ] READMEs (en, ja, he) updated, or nothing they describe changed
+- [ ] READMEs (en and every translation) updated, and `scripts/sync_readmes.py` run, or nothing they describe changed

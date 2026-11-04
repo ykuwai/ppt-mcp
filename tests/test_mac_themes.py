@@ -556,11 +556,11 @@ class TestEveryMacTestSaysItIsAMacTest:
         )
 
 
-class TestBothReadmesCountTheSame:
+class TestEveryReadmeCountsTheSame:
     """Runs everywhere. The number drifts, and only in one language.
 
     MACOS_PORT's headline is pinned against the code. The READMEs repeat it in
-    prose, in English and Japanese, and the Japanese one was left saying 21
+    prose, in every language, and the Japanese one was once left saying 21
     when the English one had moved to 12 — through three rounds of tools
     leaving the refusal list. Nobody reads both.
     """
@@ -577,32 +577,14 @@ class TestBothReadmesCountTheSame:
         assert stated, "the headline count is not in MACOS_PORT any more"
         return int(stated.group(3))
 
-    def test_the_english_readme_agrees(self):
+    def test_every_readme_agrees(self):
         import pathlib
         import re
 
         refusing = self._documented_refusals()
-        text = pathlib.Path("README.md").read_text(encoding="utf-8")
-        said = re.search(r"\*\*(\d+) tools refuse on macOS", text)
-        assert said, "README.md no longer says how many refuse"
-        assert int(said.group(1)) == refusing
-
-    def test_the_japanese_readme_agrees(self):
-        import pathlib
-        import re
-
-        refusing = self._documented_refusals()
-        text = pathlib.Path("README_ja.md").read_text(encoding="utf-8")
-        said = re.search(r"\*\*macOS で断るツールは (\d+) です", text)
-        assert said, "README_ja.md no longer says how many refuse"
-        assert int(said.group(1)) == refusing
-
-    def test_the_hebrew_readme_agrees(self):
-        import pathlib
-        import re
-
-        refusing = self._documented_refusals()
-        text = pathlib.Path("README_he.md").read_text(encoding="utf-8")
-        said = re.search(r"\*\*(\d+) כלים מסרבים ב־macOS", text)
-        assert said, "README_he.md no longer says how many refuse"
-        assert int(said.group(1)) == refusing
+        for name in ("README.md", "README.ja.md", "README.zh-CN.md",
+                     "README.es.md", "README.pt-BR.md", "README.he.md"):
+            text = pathlib.Path(name).read_text(encoding="utf-8")
+            said = re.findall(r"<!--mac-refusals-->(\d+)<!--/mac-refusals-->", text)
+            assert said, f"{name} no longer says how many refuse"
+            assert {int(n) for n in said} == {refusing}, name

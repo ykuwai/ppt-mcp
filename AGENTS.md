@@ -44,8 +44,10 @@ Most of what goes wrong shows on one of them only.
 
 - Read and write text files with `encoding="utf-8"`. On a Japanese Windows the
   default is cp932, and a bare `open()` or `read_text()` fails there only.
-- A change to what a tool does or takes goes into `README.md`, `README_ja.md`
-  and `README_he.md`; `tests/test_readmes.py` checks that they agree.
+- A change to what a tool does or takes goes into `README.md` and each
+  translation, `README.<language>.md` (ja, zh-CN, es, pt-BR, he). Do not type a
+  tool count by hand: `uv run python scripts/sync_readmes.py` writes them all,
+  and `tests/test_readmes.py` fails when one is stale.
 
 ## Tests
 
