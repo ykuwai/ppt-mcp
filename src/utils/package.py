@@ -131,6 +131,25 @@ def _slides(archive, slide_indices):
         yield index, ElementTree.fromstring(archive.read(part)), _rels(archive, part)
 
 
+def _keyed(found, props, value, seen):
+    """``_unique`` under the shape's name, and under its id in ``found.ids``."""
+    _unique(found, props.get("name"), value, seen)
+    try:
+        shape_id = int(props.get("id"))
+    except (TypeError, ValueError):
+        return
+    if value is not None:
+        found.ids[shape_id] = value
+
+
+class _Found(dict):
+    """Entries by shape name, with the same entries by shape id in ``ids``."""
+
+    def __init__(self):
+        super().__init__()
+        self.ids = {}
+
+
 def _unique(found, name, value, seen):
     """Keep ``value`` under ``name`` unless the name was seen before."""
     if name in seen:
@@ -197,37 +216,45 @@ def package_facts(path, slide_indices):
     far PowerPoint shrank it and the smallest size its runs are set in. A picture whose
     image cannot be measured, one filled as a tile, and names used twice on
     a slide are left out, so an absent entry always means unknown.
+
+    ``ids`` holds the same entries by shape id, as ``{kind: {slide: {id: value}}}``. PowerPoint for
+    Windows names a shape in English through COM ("Picture 5") but saves its
+    name in the UI's language ("図 5"), so a name alone may not match.
     """
-    pictures, pixels, charts, described, scales = {}, {}, {}, {}, {}
+    names = ("pictures", "pixels", "charts", "described", "text_scale")
+    kinds = {kind: {} for kind in names}
+    ids = {kind: {} for kind in names}
     with zipfile.ZipFile(path) as archive:
         for index, slide, parts in _slides(archive, slide_indices):
-            aspects, sizes, data, seen, measured = {}, {}, {}, set(), set()
-            alt, scale, named, scaled = {}, {}, set(), set()
+            aspects, sizes, data, seen, measured = _Found(), _Found(), _Found(), set(), set()
+            alt, scale, named, scaled = _Found(), _Found(), set(), set()
             for element in slide.iter():
                 if element.tag == "{%s}pic" % _NS["p"]:
                     props = element.find("p:nvPicPr/p:cNvPr", _NS)
                     if props is not None:
                         size = _picture_pixels(archive, element, parts)
-                        _unique(sizes, props.get("name"), size, measured)
-                        _unique(aspects, props.get("name"), size and size[0] / size[1], seen)
-                        _unique(alt, props.get("name"), _described(props), named)
+                        _keyed(sizes, props, size, measured)
+                        _keyed(aspects, props, size and size[0] / size[1], seen)
+                        _keyed(alt, props, _described(props), named)
                 elif element.tag == "{%s}graphicFrame" % _NS["p"]:
                     props = element.find("p:nvGraphicFramePr/p:cNvPr", _NS)
                     if props is not None:
-                        _unique(data, props.get("name"), _chart(archive, element, parts), seen)
+                        _keyed(data, props, _chart(archive, element, parts), seen)
                         holds = element.find("a:graphic/a:graphicData", _NS)
                         uri = holds.get("uri", "") if holds is not None else ""
                         if uri.endswith(_DESCRIBED_FRAMES):
-                            _unique(alt, props.get("name"), _described(props), named)
+                            _keyed(alt, props, _described(props), named)
                 elif element.tag == "{%s}sp" % _NS["p"]:
                     props = element.find("p:nvSpPr/p:cNvPr", _NS)
                     fit = element.find("p:txBody/a:bodyPr/a:normAutofit", _NS)
                     if props is not None and fit is not None:
-                        _unique(scale, props.get("name"), _shrunk(element, fit), scaled)
-            pictures[index], pixels[index], charts[index] = aspects, sizes, data
-            described[index], scales[index] = alt, scale
-    return {"pictures": pictures, "pixels": pixels, "charts": charts,
-            "described": described, "text_scale": scales}
+                        _keyed(scale, props, _shrunk(element, fit), scaled)
+            found = {"pictures": aspects, "pixels": sizes, "charts": data,
+                     "described": alt, "text_scale": scale}
+            for kind, entries in found.items():
+                kinds[kind][index] = dict(entries)
+                ids[kind][index] = entries.ids
+    return {**kinds, "ids": ids}
 
 
 def _shrunk(shape, fit):
