@@ -101,9 +101,9 @@ class TestWhenExcelIsStillNeeded:
 
     @pytest.mark.parametrize("chart_type, needed", [
         (51, False), (5, False), (-4120, False), (4, False), (1, False), (-4151, False),
-        (-4169, True), (15, True), (54, True), (-4102, True),
+        (-4169, False), (74, False), (15, False), (87, False), (54, True), (-4102, True),
     ])
-    def test_scatter_bubble_and_3d_charts_do(self, charts, chart_type, needed):
+    def test_3d_charts_do(self, charts, chart_type, needed):
         shape = chart_shape(chart_type=chart_type)
         assert (charts._excel_needed(slide_with([shape]), shape) is not None) is needed
 
@@ -326,6 +326,18 @@ class TestReplacing:
         assert not old.deleted
         assert copy.deleted is (how in ("check", "carry"))
         assert "scratch" in pp.closed
+
+    def test_data_that_does_not_fit_the_chart_leaves_it_as_it_was(self, charts, monkeypatch):
+        """A scatter chart given labels for x, say: Excel then, as before."""
+        old, copy, pp, run = replace(charts, monkeypatch)
+
+        def refuse(path, categories, series):
+            raise ValueError("the x value 'Q1' is not a number")
+
+        monkeypatch.setattr(charts.chart_file, "replace_data", refuse)
+        with pytest.raises(charts._NotCarried, match="'Q1' is not a number"):
+            run()
+        assert not old.deleted and not copy.deleted, "nothing was pasted back"
 
     def test_the_scratch_deck_gets_the_slide_s_theme(self, charts, monkeypatch):
         old, copy, pp, run = replace(charts, monkeypatch)

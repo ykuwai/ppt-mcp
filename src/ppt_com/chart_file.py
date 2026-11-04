@@ -190,24 +190,58 @@ def write(path: str, chart_type: int, slide_width: float, slide_height: float,
     deck.save(path)
 
 
-# The types whose data replace_data swaps: categories and series of values.
-REPLACEABLE_TYPES = CATEGORY_TYPES | PIE_TYPES
+# The types whose data replace_data swaps. A scatter chart takes its x values
+# from the categories, which then have to be numbers, and a bubble chart its
+# sizes from each series' "sizes" as well.
+REPLACEABLE_TYPES = CATEGORY_TYPES | PIE_TYPES | XY_TYPES | BUBBLE_TYPES
+
+
+def _number(label, what: str) -> float:
+    try:
+        return float(label)
+    except (TypeError, ValueError):
+        raise ValueError(f"{what} {label!r} is not a number") from None
+
+
+def _xy_data(chart_type: int, categories: list, series: list[dict]):
+    """XyChartData or BubbleChartData for ``series``, at x = ``categories``."""
+    from pptx.chart.data import BubbleChartData, XyChartData
+
+    xs = [_number(label, "the x value") for label in categories]
+    bubble = chart_type in BUBBLE_TYPES
+    data = BubbleChartData() if bubble else XyChartData()
+    for entry in series:
+        added = data.add_series(entry["name"])
+        if bubble:
+            if "sizes" not in entry:
+                raise ValueError(f"series {entry['name']!r} has no sizes for its bubbles")
+            for x, y, size in zip(xs, entry["values"], entry["sizes"]):
+                added.add_data_point(x, y, _number(size, "the bubble size"))
+        else:
+            for x, y in zip(xs, entry["values"]):
+                added.add_data_point(x, y)
+    return data
 
 
 def replace_data(path: str, categories: list, series: list[dict]) -> None:
     """Swap the data of the one chart in the pptx at ``path``.
 
     python-pptx rewrites the series and the embedded workbook and keeps the
-    chart's formatting, its series colours among it.
+    chart's formatting, its series colours among it. Raises ValueError when
+    the data does not fit a scatter or bubble chart.
     """
     from pptx import Presentation
     from pptx.chart.data import CategoryChartData
 
     deck = Presentation(path)
     [frame] = [shape for shape in deck.slides[0].shapes if shape.has_chart]
-    data = CategoryChartData()
-    data.categories = categories
-    for entry in series:
-        data.add_series(entry["name"], entry["values"])
+    chart_type = int(frame.chart.chart_type)
+    if chart_type in XY_TYPES or chart_type in BUBBLE_TYPES:
+        data = _xy_data(chart_type, categories, series)
+    else:
+        data = CategoryChartData()
+        data.categories = categories
+        for entry in series:
+            data.add_series(entry["name"], entry["values"])
     frame.chart.replace_data(data)
     deck.save(path)

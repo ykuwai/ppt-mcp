@@ -127,7 +127,9 @@ class SetChartDataInput(BaseModel):
         ...,
         description=(
             "List of series dicts, each with 'name' (str) and 'values' (list[float]). "
-            "Example: [{'name': 'Sales', 'values': [100, 200, 150, 300]}]"
+            "Example: [{'name': 'Sales', 'values': [100, 200, 150, 300]}]. "
+            "For a scatter or bubble chart the categories are the x values, and "
+            "on Windows a bubble chart's series also take 'sizes' (list[float])."
         ),
     )
 
@@ -1617,8 +1619,10 @@ def register_tools(mcp):
         new shape id, given as `shape_id` (the old one as `previous_shape_id`).
         A chart that is animated or starts an animation, grouped, in a
         placeholder, has a connector attached, sits on a slide with comments,
-        or is a scatter, bubble or 3-D chart, is written through Excel as
-        before. `method` says which was used, and `reason` why Excel was.
+        or is a 3-D chart, is written through Excel as before, and so is a
+        scatter chart whose categories are not numbers or a bubble chart whose
+        series have no 'sizes'. `method` says which was used, and `reason` why
+        Excel was.
         Either way the values' number format goes back to General.
         """
         return await run_offloaded(set_chart_data, params)
