@@ -149,7 +149,7 @@ uv sync
 | **Tablas** | 13 | Añadir tablas, leer/escribir celdas, escribir datos en bloque, combinar/dividir celdas, añadir/eliminar filas/columnas, estilos, diseño, bordes |
 | **Exportación** | 4 | PDF, imágenes, vista previa de diapositiva, copia al portapapeles |
 | **Presentación con diapositivas** | 6 | Iniciar, detener, siguiente, anterior, ir a diapositiva, estado |
-| **Gráficos** | 7 | Añadir gráficos, escribir/leer datos, formato, formato de ejes, series, cambiar tipo |
+| **Gráficos** | 7 | Añadir gráficos, escribir/leer datos (en Windows, al escribirlos se vuelve a leer el gráfico; los datos que no quedaron son un error y una etiqueta que Excel interpretó de otro modo es un aviso), formato, formato de ejes, series, cambiar tipo |
 | **Animación** | 6 | Transiciones, añadir/listar/actualizar/quitar/borrar animaciones (entrada, salida, énfasis, trayectoria de movimiento, secuencias interactivas) |
 | **Temas** | 4 | Aplicar temas, leer/escribir colores del tema, encabezados/pies de página |
 | **Grupos** | 3 | Agrupar, desagrupar, leer los elementos del grupo |
