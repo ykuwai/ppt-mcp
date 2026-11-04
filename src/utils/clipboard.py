@@ -107,7 +107,9 @@ if sys.platform == "win32":
     DeleteEnhMetaFile = gdi32.DeleteEnhMetaFile
     DeleteEnhMetaFile.argtypes = [wt.HANDLE]
 
-    CreateWindowEx = user32.CreateWindowExW
+    # From its own WinDLL with use_last_error, so that the error it leaves is
+    # kept for ctypes.get_last_error before Python makes another Win32 call.
+    CreateWindowEx = ctypes.WinDLL("user32", use_last_error=True).CreateWindowExW
     CreateWindowEx.argtypes = [wt.DWORD, wt.LPCWSTR, wt.LPCWSTR, wt.DWORD,
                                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                wt.HWND, wt.HMENU, wt.HINSTANCE, wt.LPVOID]
@@ -134,7 +136,7 @@ OWNER_WAIT = 5.0
 def _run_owner(ready: threading.Event, box: list) -> None:
     hwnd = CreateWindowEx(0, "STATIC", "ppt-mcp clipboard", 0, 0, 0, 0, 0,
                           wt.HWND(HWND_MESSAGE), None, None, None)
-    box.append((hwnd, 0 if hwnd else kernel32.GetLastError()))
+    box.append((hwnd, 0 if hwnd else ctypes.get_last_error()))
     ready.set()
     if not hwnd:
         return
