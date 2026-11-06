@@ -477,7 +477,10 @@ Diferencias menores:
 - **Los gráficos, los trazados de forma libre y la agrupación pasan por el
   portapapeles**, lo que significa que la operación lo ocupa un momento y luego
   restaura lo que había. Así es como esas tres operaciones llegan a un
-  diccionario que no tiene palabras para ellas.
+  diccionario que no tiene palabras para ellas. PowerPoint para Mac pega en su
+  ventana del frente, así que con dos presentaciones abiertas funcionan en la
+  del frente; para la otra, la herramienta lo dice y no cambia nada, y
+  `ppt_activate_presentation` la trae al frente.
 - **Editar un gráfico o un trazado existente vuelve a crear la forma.** Las
   herramientas de datos, tipo, título, leyenda, ejes y series del gráfico, y
   las de nodos, copian la forma, la reescriben, la vuelven a pegar y luego
