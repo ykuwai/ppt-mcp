@@ -127,8 +127,10 @@ def _execute(w, *args, **kwargs):
     execute() waits for the dequeue before the call budget starts, so that
     time spent queued behind other operations is not charged to the operation
     (issue #192).  These tests run no worker and are about what happens once
-    the operation has started.
+    the operation has started.  The wrapper is marked as started, since
+    execute() refuses a worker that never was.
     """
+    w._running = True
     with patch.object(threading.Event, "wait", return_value=True):
         return w.execute(*args, **kwargs)
 
