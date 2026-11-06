@@ -64,10 +64,25 @@ def use_mac_impls(namespace, module) -> None:
     time, so replacing the name is enough. A module only defines the ones it
     has ported; anything it leaves out keeps the COM version, which then fails
     loudly rather than silently doing the wrong thing.
+
+    A few implementations reach what the Apple Event dictionary cannot through
+    PowerPoint for Mac's VBA instead (``backend.vba``): those keep the COM
+    version too, behind a router that runs it through the VBA bridge when the
+    call needs it and the add-in loads, and the Apple Event version otherwise.
+    ``backend/vba/routes.py`` lists them.
     """
+    from backend.vba import routed
+    from backend.vba.routes import route_for
+
     for name in dir(module):
         if name.startswith("_") and name.endswith("_impl"):
-            namespace[name] = getattr(module, name)
+            mac_impl = getattr(module, name)
+            condition = route_for(namespace.get("__name__"), name)
+            com_impl = namespace.get(name)
+            if condition is not None and com_impl is not None:
+                namespace[name] = routed(com_impl, mac_impl, condition)
+            else:
+                namespace[name] = mac_impl
 
 
 def quit_if_ours(quit_app) -> dict:

@@ -1,0 +1,542 @@
+"""Run the Windows implementations on PowerPoint for Mac, through VBA.
+
+PowerPoint for Mac's Apple Event dictionary stops well short of its object
+model. Tags, shape ranges, table styles, a chart's own formatting, a
+freeform's nodes, removing one animation: none of them is in the dictionary,
+so the macOS backend either refuses them or rewrites the shape through the
+clipboard, which recreates it and loses its animations. The object model
+itself is all there, and VBA reaches it.
+
+So the macOS backend loads a small add-in, ``ppt-mcp-bridge.ppam``, into
+PowerPoint, and runs a tool's *Windows* implementation against it. The add-in
+does nothing on its own: it runs the calls it is sent (``run VB macro``) with
+``CallByName``, keeps the objects they hand back by handle, and writes the
+answers to a file in PowerPoint's container, the one place both sides can
+reach. On this side, ``Proxy`` makes those handles look like pywin32's COM
+objects, with the Windows type library (``com_members.json``) saying which
+names are properties and which are methods. The Windows code runs unchanged.
+
+PowerPoint for Mac loads an add-in without asking only when it carries
+compiled code, which only PowerPoint for Windows can produce; the add-in is
+built from the ``.bas`` sources next to it by ``scripts/build_mac_vba_addin.py``
+and ``com_members.json`` by ``scripts/dump_com_members.py``.
+
+Which tools take this route is in ``routes.py``. A routed tool falls back to
+its Apple Event implementation whenever the add-in cannot be loaded, and
+``PPT_MAC_VBA=off`` turns the route off altogether.
+"""
+
+import contextvars
+import functools
+import inspect
+import json
+import logging
+import os
+import shutil
+import threading
+import time
+import uuid
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+logger = logging.getLogger(__name__)
+
+HERE = Path(__file__).resolve().parent
+ADDIN_FILE = HERE / "ppt-mcp-bridge.ppam"
+ADDIN_NAME = "ppt-mcp-bridge"
+# Must match BRIDGE_VERSION in PptMcpBridge.bas; a test keeps them together.
+BRIDGE_VERSION = "1"
+DISPATCH = "PptMcpBridge.Dispatch"
+PING = "PptMcpBridge.Ping"
+# PowerPoint is sandboxed. Its ~/Documents is this folder, which is where the
+# add-in writes its answers and the one place it can load the add-in from
+# without asking.
+CONTAINER = Path.home() / "Library" / "Containers" / "com.microsoft.Powerpoint" / "Data" / "Documents"
+INSTALL_DIR = CONTAINER / "ppt-mcp"
+CALL_TIMEOUT = 60.0
+RETRY_AFTER = 30.0
+RS, US, GS = "\x1e", "\x1f", "\x1d"
+# PowerPoint's own event for `run VB macro`. appscript has no term for it.
+RUN_VB_MACRO = b"sPPTrVbM"
+# Sent without waiting for the reply (kAENoReply, plus kAECanInteract as the
+# default flags have): a hidden PowerPoint can run the macro to the end and
+# never answer the event. The answer file is what says the macro has finished.
+SEND_FLAGS = 64 | 1
+
+
+def _setting(value: str) -> bool:
+    value = value.strip().lower()
+    if value in ("", "on", "true", "1", "yes"):
+        return True
+    if value in ("off", "false", "0", "no"):
+        return False
+    logger.warning("PPT_MAC_VBA=%r is not a setting; use 'on' (the default) or 'off'. Using 'on'.", value)
+    return True
+
+
+ENABLED = _setting(os.getenv("PPT_MAC_VBA", "on"))
+
+
+class VbaUnavailable(RuntimeError):
+    """The add-in could not be loaded, so the call goes the Apple Event way."""
+
+
+class BridgeTimeout(RuntimeError):
+    pass
+
+
+class COMError(Exception):
+    """A PowerPoint failure, shaped as pywin32 raises ``pywintypes.com_error``."""
+
+    def __init__(self, number, source, description):
+        self.hresult = -2147352567
+        self.strerror = "Exception occurred."
+        self.excepinfo = (0, source or "Microsoft PowerPoint", description, "", 0, number)
+        self.argerror = None
+        super().__init__(self.hresult, self.strerror, self.excepinfo, None)
+
+
+class Missing:
+    """An optional argument left out."""
+
+
+# ---------------------------------------------------------------------------
+# The type library
+# ---------------------------------------------------------------------------
+_MEMBERS = None
+_PLUMBING = {"QueryInterface", "AddRef", "Release", "GetTypeInfoCount", "GetTypeInfo",
+             "GetIDsOfNames", "Invoke"}
+# Default members the type library does not mark (DISPID 0) on the interface
+# the add-in reports by TypeName.
+_DEFAULTS = {"ThemeColorScheme": "Colors"}
+
+
+def _members():
+    global _MEMBERS
+    if _MEMBERS is None:
+        _MEMBERS = json.loads((HERE / "com_members.json").read_text(encoding="utf-8"))
+    return _MEMBERS
+
+
+def _interface(typename):
+    """(members, default member) for a TypeName, as the type library has it."""
+    lib = _members()
+    for name in (typename, "_" + typename):
+        if name in lib:
+            entry = lib[name]
+            return entry["members"], entry["default"] or _DEFAULTS.get(typename)
+    return {}, _DEFAULTS.get(typename)
+
+
+def _find(members, name):
+    if name in members:
+        return name, members[name]
+    low = name.lower()
+    for key, info in members.items():
+        if key.lower() == low and key not in _PLUMBING:
+            return key, info
+    return None, None
+
+
+# ---------------------------------------------------------------------------
+# The bridge
+# ---------------------------------------------------------------------------
+class Bridge:
+    """Sends batches of calls to the add-in and reads its answers."""
+
+    def __init__(self, target, answers=CONTAINER, timeout=CALL_TIMEOUT):
+        self.target = target          # an aem.Application for PowerPoint
+        self.answers = Path(answers)
+        self.timeout = timeout
+        self.calls = 0
+
+    # -- transport ---------------------------------------------------------
+    def _send(self, macro, params):
+        # aem takes whole seconds.
+        self.target.event(RUN_VB_MACRO, {b"Str#": macro, b"tpAE": params}).send(
+            timeout=int(self.timeout), flags=SEND_FLAGS)
+
+    def _call(self, macro, params) -> str:
+        rid = uuid.uuid4().hex[:12]
+        path = self.answers / f"ppt-mcp-bridge-{rid}.txt"
+        start = time.monotonic()
+        self.calls += 1
+        self._send(macro, [rid] + list(params))
+        wait = 0.001
+        while not path.exists():
+            if time.monotonic() - start > self.timeout:
+                raise BridgeTimeout(
+                    f"PowerPoint did not answer the VBA bridge within {self.timeout:.0f}s. "
+                    "Close any dialog open in PowerPoint, then retry.")
+            time.sleep(wait)
+            wait = min(wait * 2, 0.05)
+        try:
+            return path.read_bytes().decode("utf-16-le")
+        finally:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
+    def ping(self):
+        """(bridge version, PowerPoint version) as the loaded add-in reports them."""
+        fields = self._call(PING, []).split(US)
+        if fields[0] != "ok" or len(fields) < 3:
+            raise VbaUnavailable(f"the add-in answered {fields!r}")
+        return fields[1], fields[2]
+
+    # -- calls -------------------------------------------------------------
+    @staticmethod
+    def _arg(value):
+        if isinstance(value, Proxy):
+            return "o:" + value._h
+        if value is Missing or value is None:
+            return "m:"
+        if isinstance(value, bool):
+            return "b:" + ("1" if value else "0")
+        if isinstance(value, int):
+            return f"i:{value}"
+        if isinstance(value, float):
+            return f"d:{value!r}"
+        if isinstance(value, (list, tuple)):
+            if value and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in value):
+                return "N:" + GS.join(repr(x) for x in value)
+            return "a:" + GS.join(str(x) for x in value)
+        return "s:" + str(value)
+
+    def run(self, requests):
+        """Run (handle, kind, member, *args) requests in order; answer their values.
+
+        kind is g (get), c (call), l (let) or s (set), and r releases every
+        handle. The first failure stops the batch and is raised.
+        """
+        body = RS.join(US.join([h, kind, member] + [self._arg(a) for a in args])
+                       for h, kind, member, *args in requests)
+        text = self._call(DISPATCH, [body.encode("utf-16-be").hex().upper()])
+        out = []
+        for record in filter(None, text.split(RS)):
+            f = record.split(US)
+            if f[0] == "err":
+                number, member = int(f[2]), requests[int(f[1]) - 1][2]
+                if number == 438:  # Object doesn't support this property or method
+                    raise AttributeError(f"<unknown>.{member}")
+                raise COMError(number, f[3], f[4])
+            out.append(self._value(f[1:]))
+        return out
+
+    def one(self, handle, kind, member, *args):
+        return self.run([(handle, kind, member, *args)])[0]
+
+    @staticmethod
+    def _cell(c):
+        if c.startswith("n"):
+            x = float(c[1:])
+            return int(x) if x.is_integer() and "." not in c and "E" not in c.upper() else x
+        if c == "o":
+            return None
+        return c[1:]
+
+    def _value(self, f):
+        kind = f[0]
+        if kind in ("empty", "null", "nothing"):
+            return None
+        if kind == "bool":
+            return f[1] == "1"
+        if kind == "num":
+            return float(f[2]) if f[1] in ("Single", "Double", "Currency", "Decimal") else int(f[2])
+        if kind == "obj":
+            return Proxy(self, f[2], f[1])
+        if kind == "array1":
+            return tuple(self._cell(c) for c in f[2:2 + int(f[1])])
+        if kind == "array2":
+            rows, cols = int(f[1]), int(f[2])
+            cells = [self._cell(x) for x in f[3:3 + rows * cols]]
+            return tuple(tuple(cells[i * cols:(i + 1) * cols]) for i in range(rows))
+        return f[2]
+
+    def application(self):
+        return Proxy(self, "app", "Application")
+
+    def release(self):
+        self.run([("app", "r", "")])
+
+
+class Proxy:
+    """An object the add-in holds, used the way pywin32's dynamic dispatch is.
+
+    A property is read when it is named, a method is handed back to be called,
+    and a method is never run by merely naming it.
+    """
+
+    def __init__(self, bridge, handle, typename):
+        object.__setattr__(self, "_b", bridge)
+        object.__setattr__(self, "_h", handle)
+        object.__setattr__(self, "_t", typename)
+
+    def __getattr__(self, name):
+        if name.startswith("__") or name.startswith("_oleobj"):
+            raise AttributeError(name)
+        members, _ = _interface(self._t)
+        real, info = _find(members, name)
+        if info is None:
+            try:
+                return self._b.one(self._h, "g", name)
+            except (AttributeError, COMError):
+                return self._b.one(self._h, "c", name)
+        kinds, params, nopt = info
+        required = max(0, len(params) - nopt)
+        if 2 in kinds and required == 0 and 1 not in kinds:
+            return self._b.one(self._h, "g", real)
+        return Method(self, real, info)
+
+    def __setattr__(self, name, value):
+        members, _ = _interface(self._t)
+        real, info = _find(members, name)
+        putref = isinstance(value, Proxy) and (info is None or 8 in info[0])
+        try:
+            self._b.one(self._h, "s" if putref else "l", real or name, value)
+        except (AttributeError, COMError):
+            if not isinstance(value, Proxy) or info is not None:
+                raise
+            self._b.one(self._h, "l", real or name, value)
+
+    def __call__(self, *args, **kw):
+        members, default = _interface(self._t)
+        name = default or "Item"
+        return Method(self, name, members.get(name))(*args, **kw)
+
+    def __iter__(self):
+        for i in range(1, self.Count + 1):
+            yield self(i)
+
+    def __len__(self):
+        return self.Count
+
+    def __bool__(self):
+        return True
+
+    def __eq__(self, other):
+        return isinstance(other, Proxy) and other._h == self._h
+
+    def __hash__(self):
+        return hash(self._h)
+
+    def __repr__(self):
+        return f"<{self._t} via VBA {self._h}>"
+
+
+class Method:
+    def __init__(self, owner, name, info):
+        self.owner, self.name, self.info = owner, name, info
+
+    def __call__(self, *args, **kw):
+        args = list(args)
+        if kw:
+            params = [p.lower() for p in (self.info[1] if self.info else [])]
+            for key, value in kw.items():
+                if key.lower() not in params:
+                    raise TypeError(f"{self.name}() got an unexpected keyword argument {key!r}")
+                i = params.index(key.lower())
+                while len(args) <= i:
+                    args.append(Missing)
+                args[i] = value
+        while args and args[-1] is Missing:
+            args.pop()
+        kind = "c" if (self.info is None or 1 in self.info[0]) else "g"
+        try:
+            return self.owner._b.one(self.owner._h, kind, self.name, *args)
+        except (AttributeError, COMError):
+            if self.info is not None:
+                raise
+            return self.owner._b.one(self.owner._h, "g", self.name, *args)
+
+
+# ---------------------------------------------------------------------------
+# Loading the add-in
+# ---------------------------------------------------------------------------
+class _Session:
+    """The add-in as loaded into the running PowerPoint, used from the worker."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._bridge: Optional[Bridge] = None
+        self._failed_at = None
+        self._reason = None
+
+    def bridge(self, app_ref) -> Bridge:
+        """A bridge to the add-in, loading it into PowerPoint first if needed.
+
+        Raises VbaUnavailable when it cannot be loaded; the caller then goes
+        the Apple Event way, having changed nothing.
+        """
+        with self._lock:
+            if self._failed_at is not None and time.monotonic() - self._failed_at < RETRY_AFTER:
+                raise VbaUnavailable(self._reason)
+            try:
+                bridge = self._load(app_ref)
+            except Exception as exc:  # noqa: BLE001 - every failure means the same here
+                reason = f"{type(exc).__name__}: {exc}" if not isinstance(exc, VbaUnavailable) else str(exc)
+                if reason != self._reason:
+                    logger.warning(
+                        "The VBA bridge could not be loaded into PowerPoint (%s). "
+                        "Tools that would use it take the Apple Event route.", reason)
+                self._failed_at, self._reason = time.monotonic(), reason
+                raise VbaUnavailable(reason) from exc
+            self._failed_at = self._reason = None
+            return bridge
+
+    def _load(self, app_ref) -> Bridge:
+        addin = app_ref.add_ins[ADDIN_NAME]
+        try:
+            loaded = addin.loaded.get()
+        except Exception:  # noqa: BLE001 - not registered in this PowerPoint yet
+            loaded = False
+        if loaded and self._bridge is not None:
+            return self._bridge
+        installed = self._install()
+        if not loaded:
+            # Registration lasts until PowerPoint quits, so this runs once per
+            # PowerPoint session. Setting `loaded` once is not always enough.
+            app_ref.register_add_in(str(installed))
+            for _ in range(2):
+                addin.loaded.set(True)
+        bridge = Bridge(app_ref.AS_appdata.target())
+        version, office = bridge.ping()
+        if version != BRIDGE_VERSION:
+            # An older add-in is loaded from an earlier run; load the new file.
+            addin.loaded.set(False)
+            for _ in range(2):
+                addin.loaded.set(True)
+            version, office = bridge.ping()
+            if version != BRIDGE_VERSION:
+                raise VbaUnavailable(
+                    f"PowerPoint has version {version} of the add-in loaded, not "
+                    f"{BRIDGE_VERSION}; quit PowerPoint so it can load the new one")
+        logger.info("VBA bridge %s loaded into PowerPoint %s", version, office)
+        self._bridge = bridge
+        return bridge
+
+    @staticmethod
+    def _install() -> Path:
+        """The add-in, copied into PowerPoint's container, where it may be read."""
+        INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+        target = INSTALL_DIR / ADDIN_FILE.name
+        data = ADDIN_FILE.read_bytes()
+        if not target.exists() or target.read_bytes() != data:
+            tmp = target.with_suffix(".tmp")
+            tmp.write_bytes(data)
+            os.replace(tmp, target)
+        return target
+
+
+_SESSION = _Session()
+
+
+# ---------------------------------------------------------------------------
+# Running a Windows implementation
+# ---------------------------------------------------------------------------
+class Call:
+    """What the Windows code reaches through ``ppt`` while it runs on VBA."""
+
+    def __init__(self, app, pres):
+        self.app = app
+        self.pres = pres
+
+    def window(self):
+        windows = self.pres.Windows
+        return windows(1) if windows.Count else None
+
+
+_CALL: contextvars.ContextVar = contextvars.ContextVar("ppt_mcp_vba_call", default=None)
+
+
+def current() -> Optional[Call]:
+    """The VBA call running on this thread, or None."""
+    return _CALL.get()
+
+
+def active() -> bool:
+    return _CALL.get() is not None
+
+
+def _same_deck(app, name, full_name):
+    """The bridge's presentation for the deck the Apple Event side resolved."""
+    matches = []
+    for i in range(1, app.Presentations.Count + 1):
+        pres = app.Presentations(i)
+        if pres.Name == name:
+            matches.append(pres)
+    if len(matches) > 1:
+        exact = [p for p in matches if p.FullName == full_name]
+        matches = exact or matches
+    if not matches:
+        raise RuntimeError(f"PowerPoint's VBA does not see the presentation '{name}'.")
+    return matches[0]
+
+
+def run(com_impl: Callable, *args, **kwargs) -> Any:
+    """Run a Windows implementation on PowerPoint for Mac through the add-in.
+
+    The deck is the one the Apple Event side resolves, so the session target
+    and a deck named by the call are honoured as for every other tool.
+    """
+    from backend import ppt
+
+    return _run(_SESSION.bridge(ppt._get_app_impl()), com_impl, args, kwargs)
+
+
+def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
+    from backend import ppt
+
+    mac_pres = ppt._get_pres_impl()
+    app = bridge.application()
+    try:
+        pres = _same_deck(app, mac_pres.name(), mac_pres.full_name())
+        token = _CALL.set(Call(app, pres))
+        try:
+            return com_impl(*args, **kwargs)
+        finally:
+            _CALL.reset(token)
+    finally:
+        try:
+            bridge.release()
+        except Exception:  # noqa: BLE001 - handles go with PowerPoint anyway
+            logger.debug("Could not release the VBA bridge's handles", exc_info=True)
+
+
+def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], bool]) -> Callable:
+    """An implementation that takes the VBA route when it can and should.
+
+    ``condition`` gets the call's arguments by name and says whether this call
+    needs the route; when it does not, when the route is off, or when the
+    add-in cannot be loaded, the Apple Event implementation runs instead.
+    """
+    signature = inspect.signature(com_impl)
+
+    @functools.wraps(mac_impl)
+    def impl(*args, **kwargs):
+        if not ENABLED or active():
+            return mac_impl(*args, **kwargs)
+        try:
+            bound = signature.bind(*args, **kwargs)
+        except TypeError:
+            return mac_impl(*args, **kwargs)
+        bound.apply_defaults()
+        if not condition(bound.arguments):
+            return mac_impl(*args, **kwargs)
+        from backend import ppt
+
+        try:
+            bridge = _SESSION.bridge(ppt._get_app_impl())
+        except VbaUnavailable:
+            return mac_impl(*args, **kwargs)
+        return _run(bridge, com_impl, args, kwargs)
+
+    impl.vba_route = (com_impl, condition)
+    return impl
+
+
+__all__ = [
+    "ENABLED", "VbaUnavailable", "BridgeTimeout", "COMError", "Bridge", "Proxy",
+    "current", "active", "run", "routed",
+]

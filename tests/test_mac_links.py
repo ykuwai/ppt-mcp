@@ -12,6 +12,7 @@ an element of nothing, so what is worth testing in all three is the refusal and
 the read back rather than the happy path alone.
 """
 
+import inspect
 import sys
 
 import pytest
@@ -809,7 +810,11 @@ class TestSwapIsWiredUp:
             names = [n for n in dir(com) if n.startswith("_") and n.endswith("_impl")]
             assert names
             for name in names:
-                assert getattr(com, name) is getattr(mac, name), name
+                impl = getattr(com, name)
+                # Behind the VBA router where the tool has a route.
+                if hasattr(impl, "vba_route"):
+                    impl = inspect.unwrap(impl)
+                assert impl is getattr(mac, name), name
 
 
 # ---------------------------------------------------------------------------

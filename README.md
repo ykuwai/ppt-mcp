@@ -430,13 +430,29 @@ The same tools, the same arguments, the same answers. What differs is what
 PowerPoint for Mac's scripting dictionary can reach, and where it cannot reach
 something the tool says so rather than doing something unexpected.
 
+**PowerPoint for Mac's VBA reaches further, and is used by default.** The
+server loads a small add-in, `ppt-mcp-bridge`, into PowerPoint and runs the
+Windows code through it for what the scripting dictionary has no words for:
+tags, `ppt_select_shapes`, `ppt_set_table_style`, removing and copying one
+animation, the chart formatting, axis, series and type tools, the freeform node
+tools and grouping, and the arguments the Mac otherwise refuses (a screen tip,
+a table row or column at a position, a click trigger on another shape,
+reflection sizes, glow, shadow and reflection on text, shrinking text to fit,
+volume, mute and fades, a chart style and the legend and title placement).
+Those edit the shape in place, so it keeps its animations, and the clipboard is
+not touched. The add-in only passes those calls on; its source is in
+`src/backend/vba`. PowerPoint loads it without a prompt, it lasts until
+PowerPoint quits, and nothing of it stays behind. Where it cannot be loaded,
+where macros are turned off by policy for instance, the tools work as described
+below. Set `PPT_MAC_VBA=off` in the server's `env` to leave it out.
+
 Not available on macOS:
 
 - **A freeform node's editing type.** Corner, smooth and symmetric are not
   stored anywhere a script can reach; move the node's handles instead.
-- **Removing one animation.** Clearing a slide's animations works.
-- **Tags, `ppt_select_shapes`, `ppt_set_table_style` and `ppt_execute_mso`.**
-  Nothing in the dictionary reaches any of them.
+- **`ppt_execute_mso`**, and without the add-in also **tags,
+  `ppt_select_shapes`, `ppt_set_table_style` and removing one animation**
+  (clearing a slide's animations works). Nothing in the dictionary reaches them.
 
 Smaller differences:
 
@@ -444,12 +460,13 @@ Smaller differences:
   request at a time reaches PowerPoint, so the rest queue behind it and come
   out in whatever order they arrived. A call left waiting too long is taken
   back and says so, having changed nothing.
-- A few tools accept an argument that has no counterpart, a screen tip on a
-  hyperlink for instance. Those refuse with a message naming the argument, so
-  dropping it and retrying works.
+- Without the add-in, a few tools accept an argument that has no counterpart,
+  a screen tip on a hyperlink for instance. Those refuse with a message naming
+  the argument, so dropping it and retrying works.
 - **Video and audio go in embedded, never linked**, and of the eight playback
-  settings only looping and hiding the frame exist. Hiding the frame is refused
-  on a slide that already has animations, because writing it rewrites them.
+  settings only looping and hiding the frame exist, and with the add-in volume,
+  mute and fades. Hiding the frame is refused on a slide that already has
+  animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.
 - **A template's own layouts are found by name in the deck's saved file**, so
@@ -463,16 +480,17 @@ Smaller differences:
 - Save the deck early and at each break. It costs nothing, and PowerPoint has
   been seen to close every open document and then exit when a sandbox prompt
   went up behind a script ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Charts, freeform paths and grouping go through the clipboard**, which
-  means the operation takes it for a moment and puts back what was there. This
-  is how those three reach a dictionary that has no words for them.
-- **Editing an existing chart or path recreates the shape.** The chart data,
-  type, title, legend, axis and series tools, and the node tools, copy the
-  shape, rewrite it and paste it back, then delete the original. The name,
+- **Adding a chart and setting its data go through the clipboard**, and
+  without the add-in so do the other chart tools, freeform paths and grouping.
+  The operation takes the clipboard for a moment and puts back what was there.
+  This is how they reach a dictionary that has no words for them.
+- **Without the add-in, editing an existing chart or path recreates the
+  shape**, and with it, setting a chart's data still does. The tool copies the
+  shape, rewrites it and pastes it back, then deletes the original. The name,
   position and z order are kept; animations on the shape are not, and the
-  result says how many were lost. A few formatting arguments that depend on
-  the chart's rendered size (`chart_style`, legend and title coordinates,
-  the 8-direction legend presets) are refused by name.
+  result says how many were lost. Without the add-in, a few formatting
+  arguments that depend on the chart's rendered size (`chart_style`, legend and
+  title coordinates, the 8-direction legend presets) are refused by name.
 - **Text inside a group is edited the same way.** `ppt_set_text` (the whole
   text, or a span inside one line) and `ppt_format_text` reach a group's
   member by its name, or by its path (`"Group 4/TextBox 3"`); the group is

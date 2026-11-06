@@ -1,0 +1,3 @@
+# The VBA sources keep their Windows line endings, which PowerPoint imports
+# them with; scripts/build_mac_vba_addin.py builds the add-in from them.
+src/backend/vba/*.bas -text
