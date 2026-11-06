@@ -262,6 +262,17 @@ def strip_creation_ids(element: ET.Element) -> ET.Element:
     return element
 
 
+def strip_package_ids(package) -> None:
+    """Drop the creation ids from every shape of a package about to be pasted
+    beside its original, in place. See ``strip_creation_ids``."""
+    from gvml import canvas as _canvas
+
+    root = ET.fromstring(package.drawing())
+    for element in _canvas.children(_canvas.canvas_of(root)):
+        strip_creation_ids(element)
+    package.parts[package.drawing_part()] = _canvas.serialize_drawing(root).encode("utf-8")
+
+
 def only_child(canvas_children: List[ET.Element], what: str) -> ET.Element:
     """The one shape a canvas copied off a slide holds, or a clear complaint."""
     if len(canvas_children) != 1:

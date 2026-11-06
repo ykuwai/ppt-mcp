@@ -4,18 +4,17 @@ Handles creating charts, setting chart data via Excel workbook interaction,
 formatting charts (title, legend, style), formatting individual series,
 reading chart data back, and changing chart types.
 
-A new chart of a type python-pptx can write is written without Excel and
-brought in from a file (ppt_com/chart_file.py, #299). Every other way in,
-AddChart2 and chart.ChartData.Activate(), opens an Excel workbook process.
+A new chart of a type gvml can write is written without Excel and pasted
+(ppt_com/chart_defaults.py, #299), and its data is swapped the same way where
+it can be. Every other way in, AddChart2 and chart.ChartData.Activate(),
+opens an Excel workbook process.
 You MUST close it with wb.Close(False) in a finally block to prevent leaked
 Excel processes.
 """
 
 import json
 import logging
-import os
 import sys
-import tempfile
 import time
 from typing import Literal, Optional, Union
 
@@ -41,7 +40,10 @@ from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from ppt_com.shape_lookup import resolve_shape
 from ppt_com.constants import msoChart, msoGroup, msoPlaceholder
-from ppt_com import chart_file
+from ppt_com import chart_defaults
+from gvml import charts as gvml_charts
+from gvml import package as gvml_package
+from gvml.shapes import strip_package_ids
 
 logger = logging.getLogger(__name__)
 
@@ -454,22 +456,26 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5, keep=None)
 def _office_language(app) -> str:
     """The language the sample data of a new chart is in, from Office's UI."""
     try:
-        return chart_file.language(app.LanguageSettings.LanguageID(2))  # msoLanguageIDUI
+        return chart_defaults.language(app.LanguageSettings.LanguageID(2))  # msoLanguageIDUI
     except Exception:  # noqa: BLE001 - English then
         return "en"
 
 
-def _paste_from(source, slide, attempts=10, wait=0.1):
-    """Copy ``source`` onto ``slide`` through the clipboard, and answer the
-    pasted shape. Right after Copy the clipboard can still be empty, so the
-    paste is tried again; but PowerPoint can also raise after the shape has
-    landed, so a slide that gained a shape is not pasted on twice. The
-    clipboard is emptied first: a paste that comes before the copy has landed
-    then finds nothing, rather than what was on the clipboard before, which
-    it would paste as a shape of its own. The caller puts the user's
-    clipboard back."""
+GVML_FORMAT = "Art::GVML ClipFormat"
+EMU_PER_POINT = 12700
+
+
+def _paste_from(copy, slide, attempts=10, wait=0.1):
+    """Put a shape on the clipboard with ``copy()`` and paste it onto
+    ``slide``, answering the pasted shape. Right after a copy the clipboard
+    can still be empty, so the paste is tried again; but PowerPoint can also
+    raise after the shape has landed, so a slide that gained a shape is not
+    pasted on twice. The clipboard is emptied first: a paste that comes
+    before the copy has landed then finds nothing, rather than what was on
+    the clipboard before, which it would paste as a shape of its own. The
+    caller puts the user's clipboard back."""
     clipboard.empty()
-    source.Copy()
+    copy()
     count = slide.Shapes.Count
     last = None
     for attempt in range(attempts):
@@ -486,7 +492,21 @@ def _paste_from(source, slide, attempts=10, wait=0.1):
                 continue
             if now > count:
                 return slide.Shapes(now)
-    raise RuntimeError(f"Could not paste the new chart: {last}")
+    raise RuntimeError(f"Could not paste the chart: {last}")
+
+
+def _copied_package(shape, attempts=10, wait=0.1):
+    """Copy ``shape`` and answer the GVML package PowerPoint puts on the
+    clipboard for it. The caller puts the user's clipboard back."""
+    clipboard.empty()
+    shape.Copy()
+    for attempt in range(attempts):
+        if attempt:
+            _wait_pumping(wait)
+        raw = clipboard.get(GVML_FORMAT)
+        if raw:
+            return gvml_package.read(raw)
+    raise RuntimeError(f"Copying the chart put no {GVML_FORMAT} on the clipboard")
 
 
 def _unique_name(slide, shape) -> None:
@@ -500,37 +520,37 @@ def _unique_name(slide, shape) -> None:
     shape.Name = f"Chart {number}"
 
 
-def _add_chart_from_file(app, pres, slide, type_int, left, top, width, height):
-    """Add a chart written by python-pptx, so that no Excel starts (#299).
+def _next_chart_name(slide) -> str:
+    names = {slide.Shapes(i).Name for i in range(1, slide.Shapes.Count + 1)}
+    number = 1
+    while f"Chart {number}" in names:
+        number += 1
+    return f"Chart {number}"
 
-    The chart is written to a temporary pptx, which is opened without a
-    window, and the chart is copied onto the slide with the user's clipboard
-    put back afterwards. The pasted shape is read back, and one that is no
-    chart or not of ``type_int`` is removed as a failure. Answers the shape,
-    its chart type as read back, and any warnings: clipboard formats that
-    could not be put back, or a style that did not take.
+
+def _add_chart_by_paste(app, slide, type_int, left, top, width, height):
+    """Add a chart written by gvml, so that no Excel starts (#299).
+
+    The chart's XML is written with the sample data AddChart2 gives the type
+    (``chart_defaults``) and pasted as ``Art::GVML ClipFormat``, with the
+    user's clipboard put back afterwards. The pasted shape is read back,
+    and one that is no chart or not of ``type_int`` is removed as a failure.
+    Answers the shape, its chart type as read back, and any warnings:
+    clipboard formats that could not be put back, or a style that did not
+    take.
     """
-    fd, path = tempfile.mkstemp(suffix=".pptx", prefix="ppt-mcp-chart-")
-    os.close(fd)
+    raw = gvml_charts.chart_package(
+        _next_chart_name(slide),
+        round(left * EMU_PER_POINT), round(top * EMU_PER_POINT),
+        round(width * EMU_PER_POINT), round(height * EMU_PER_POINT),
+        chart_defaults.chart_xml(type_int, _office_language(app)),
+    )
+    with kept_clipboard() as lost:
+        shape = _paste_from(lambda: clipboard.put(GVML_FORMAT, raw), slide)
+    style = chart_defaults.STYLES.get(type_int)
     try:
-        chart_file.write(
-            path, type_int, pres.PageSetup.SlideWidth, pres.PageSetup.SlideHeight,
-            left, top, width, height, _office_language(app),
-        )
-        source = app.Presentations.Open(path, -1, 0, 0)  # ReadOnly, not Untitled, no window
-        try:
-            with kept_clipboard() as lost:
-                shape = _paste_from(source.Slides(1).Shapes(1), slide)
-        finally:
-            source.Close()
-    finally:
-        try:
-            os.remove(path)
-        except OSError:
-            logger.debug("Could not remove %s", path, exc_info=True)
-    style = chart_file.STYLES.get(type_int)
-    try:
-        # What landed is read back before anything else is done to it.
+        # What landed is read back before anything else is done to it. A
+        # paste lands in the middle of the slide, so it is put in its place.
         if not shape.HasChart:
             raise RuntimeError("what was pasted is not a chart")
         chart = shape.Chart
@@ -573,9 +593,9 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
 
     type_int = _resolve_chart_type(chart_type)
     type_name = CHART_TYPE_NAMES.get(type_int, str(type_int))
-    if type_int in chart_file.CHART_TYPES and chart_file.available():
-        chart_shape, type_now, warnings = _add_chart_from_file(
-            app, pres, slide, type_int, left, top, width, height)
+    if type_int in chart_defaults.CHART_TYPES:
+        chart_shape, type_now, warnings = _add_chart_by_paste(
+            app, slide, type_int, left, top, width, height)
         result = {
             "success": True,
             "shape_name": chart_shape.Name,
@@ -587,7 +607,7 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
             result["warning"] = " ".join(warnings)
         return result
 
-    # The types python-pptx cannot write still go through AddChart2, which
+    # The types gvml cannot write still go through AddChart2, which
     # starts an Excel; not while the last chart's is ending (#299).
     held.wait_until_ended()
     chart_shape = slide.Shapes.AddChart2(-1, type_int, left, top, width, height)
@@ -626,8 +646,6 @@ def _excel_needed(slide, shape) -> Optional[str]:
     copy does not take along, would be lost. A check that cannot be made
     counts as a reason, since then nothing says the copy would be safe.
     """
-    if not chart_file.available():
-        return "python-pptx is not installed"
     try:
         return _why_excel(slide, shape)
     except Exception as e:  # noqa: BLE001 - Excel then, as before
@@ -646,7 +664,7 @@ def _connectors(shapes):
 
 def _why_excel(slide, shape) -> Optional[str]:
     chart = shape.Chart
-    if chart.ChartType not in chart_file.REPLACEABLE_TYPES:
+    if chart.ChartType not in chart_defaults.CHART_TYPES:
         return f"its type ({CHART_TYPE_NAMES.get(chart.ChartType, chart.ChartType)}) is not swapped without Excel"
     try:
         if chart.ChartData.IsLinked:
@@ -742,25 +760,6 @@ def _carry_over(state, shape) -> list:
     return failed
 
 
-def _match_theme(scratch, slide) -> None:
-    """Give the scratch deck the theme colours and fonts of ``slide``.
-
-    A chart pasted into a deck takes that deck's theme, so a chart coloured
-    by its own deck's theme would come back in the default Office colours.
-    """
-    colours = slide.ThemeColorScheme
-    target = scratch.SlideMaster.Theme.ThemeColorScheme
-    for i in range(1, 13):  # msoThemeDark1 to msoThemeFollowedHyperlink
-        target(i).RGB = colours(i).RGB
-    fonts = slide.Design.SlideMaster.Theme.ThemeFontScheme
-    target_fonts = scratch.SlideMaster.Theme.ThemeFontScheme
-    for kind in ("MajorFont", "MinorFont"):
-        for script in (1, 2, 3):  # Latin, East Asian, complex script
-            name = getattr(fonts, kind)(script).Name
-            if name:
-                getattr(target_fonts, kind)(script).Name = name
-
-
 def _series_colours(chart) -> list:
     """The fill and line colour of each series, as shown."""
     out = []
@@ -774,45 +773,71 @@ def _shape_state_tags(shape) -> list:
     return [(shape.Tags.Name(i), shape.Tags.Value(i)) for i in range(1, shape.Tags.Count + 1)]
 
 
+def _number(label, what: str) -> float:
+    try:
+        return float(label)
+    except (TypeError, ValueError):
+        raise ValueError(f"{what} {label!r} is not a number") from None
+
+
+def _new_chart_bytes(chart_bytes, chart_type, categories, series) -> bytes:
+    """``chart1.xml`` with the new data, the chart's formatting kept.
+
+    Raises ``_NotCarried`` for a chart with more than one plot, whose other
+    plots would keep their old data, and ValueError for data a scatter or
+    bubble chart cannot take.
+    """
+    groups = gvml_charts.plot_count(chart_bytes)
+    if groups != 1:
+        raise _NotCarried(f"it has {groups} plot groups, and only the first would get the data")
+    if chart_type in chart_defaults.XY_TYPES or chart_type in chart_defaults.BUBBLE_TYPES:
+        categories = [_number(label, "the x value") for label in categories]
+    if chart_type in chart_defaults.BUBBLE_TYPES:
+        for entry in series:
+            if "sizes" not in entry:
+                raise ValueError(f"series {entry['name']!r} has no sizes for its bubbles")
+            entry["sizes"] = [_number(size, "the bubble size") for size in entry["sizes"]]
+    return gvml_charts.set_data(chart_bytes, categories, series)
+
+
 def _replace_chart_data(app, pres, slide, shape, categories, series):
     """Swap a chart's data without Excel, by replacing the chart (#299).
 
-    The chart is copied into a scratch presentation without a window and
-    saved, python-pptx swaps its data and workbook, and the copy is pasted
-    back. It takes the old chart's name, place, size, stacking order,
-    alternative text, tags and click actions before the old chart is
-    deleted, and it has to show the new data in the same series colours.
-    The scratch presentation gets the slide's theme for that. Anything short of that
-    removes the copy, leaves the old chart as it was, and raises
-    ``_NotCarried``. Answers the new shape.
+    The chart is copied, its ``chart1.xml`` gets the new data with
+    ``gvml.charts.set_data``, which keeps its formatting, and it is pasted
+    back as ``Art::GVML ClipFormat``. Its embedded workbook is left out,
+    since it would no longer match; PowerPoint makes a new one from the
+    chart the first time its data is opened. The copy takes the old chart's
+    name, place, size, stacking order, alternative text, tags and click
+    actions before the old chart is deleted, and it has to show the new data
+    in the same series colours. Anything short of that removes the copy,
+    leaves the old chart as it was, and raises ``_NotCarried``. Answers the
+    new shape.
     """
     try:
         state = _shape_state(shape)
         old_z = shape.ZOrderPosition
         colours = _series_colours(shape.Chart)
+        chart_type = shape.Chart.ChartType
     except Exception as e:  # noqa: BLE001 - then it is not carried over
         raise _NotCarried(f"could not read what it has to take over ({e})") from e
-    fd, path = tempfile.mkstemp(suffix=".pptx", prefix="ppt-mcp-chart-")
-    os.close(fd)
-    os.remove(path)  # SaveAs makes it
+    series = [dict(entry) for entry in series]
     new = None
     try:
         with kept_clipboard() as lost:
-            scratch = app.Presentations.Add(0)  # no window
-            try:
-                scratch.PageSetup.SlideWidth = pres.PageSetup.SlideWidth
-                scratch.PageSetup.SlideHeight = pres.PageSetup.SlideHeight
-                _match_theme(scratch, slide)
-                _paste_from(shape, scratch.Slides.Add(1, 12))  # ppLayoutBlank
-                scratch.SaveAs(path)
-            finally:
-                scratch.Close()
-            chart_file.replace_data(path, categories, series)
-            source = app.Presentations.Open(path, -1, 0, 0)  # ReadOnly, not Untitled, no window
-            try:
-                new = _paste_from(source.Slides(1).Shapes(1), slide)
-            finally:
-                source.Close()
+            package = _copied_package(shape)
+            chart_part = package.chart_part()
+            chart_bytes = package.chart()
+            if chart_bytes is None:
+                raise _NotCarried("its copy holds no chart part")
+            new_bytes = _new_chart_bytes(chart_bytes, chart_type, categories, series)
+            package.parts[chart_part] = new_bytes
+            workbook = gvml_charts.external_data_id(chart_bytes)
+            if workbook is not None:
+                package.remove_relationship(chart_part, workbook)
+            strip_package_ids(package)
+            raw = package.to_bytes()
+            new = _paste_from(lambda: clipboard.put(GVML_FORMAT, raw), slide)
         if not new.HasChart:
             raise _NotCarried("what was pasted back is not a chart")
         problem, renamed = _check_chart_data(new.Chart, categories, series)
@@ -844,11 +869,6 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
         if isinstance(e, _NotCarried):
             raise
         raise _NotCarried(str(e)) from e
-    finally:
-        try:
-            os.remove(path)
-        except OSError:
-            logger.debug("Could not remove %s", path, exc_info=True)
     try:
         shape.Delete()
     except Exception as e:
@@ -900,7 +920,7 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
             return result
 
     if (any("sizes" in entry for entry in series)
-            and shape.Chart.ChartType in chart_file.BUBBLE_TYPES):
+            and shape.Chart.ChartType in chart_defaults.BUBBLE_TYPES):
         # The Excel way writes names and values only, so the sizes would be
         # dropped without a word.
         raise RuntimeError(
@@ -1600,8 +1620,10 @@ def register_tools(mcp):
         bubble, 3d_column, 3d_pie, 3d_line, and variants (e.g. column_stacked,
         line_markers, pie_exploded). You can also pass an XlChartType integer.
         All positions and sizes are in points (72 points = 1 inch).
-        On Windows a 3-D chart, and the other types that still open Excel,
-        can first wait up to 15 s for the previous chart's Excel to close.
+        On Windows the chart is pasted without starting Excel. The types that
+        still open Excel (3-D area and bar, cone, cylinder, pyramid, stock,
+        surface and the like) can first wait up to 15 s for the previous
+        chart's Excel to close.
         """
         return await run_offloaded(add_chart, params)
 
@@ -1631,9 +1653,10 @@ def register_tools(mcp):
         new shape id, given as `shape_id` (the old one as `previous_shape_id`).
         A chart that is animated or starts an animation, grouped, in a
         placeholder, has a connector attached, sits on a slide with comments,
-        or is a 3-D chart, is written through Excel as before, and so is a
-        scatter chart whose categories are not numbers or a bubble chart whose
-        series have no 'sizes'. `method` says which was used, and `reason` why
+        combines more than one chart type, or is of a type that still opens
+        Excel (3-D area and bar, cone, stock, surface and the like), is written
+        through Excel as before, and so is a scatter chart whose categories
+        are not numbers or a bubble chart whose series have no 'sizes'. `method` says which was used, and `reason` why
         Excel was.
         Either way the values' number format goes back to General.
         """

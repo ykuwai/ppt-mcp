@@ -18,6 +18,7 @@ and does not add one afterwards (design section 0, probe 5 and 6). What the
 things only a hand can check.
 """
 
+import datetime as _dt
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence
@@ -40,6 +41,9 @@ class _Spec:
     lines: bool = True        # scatter
     explosion: int = 0        # pie
     three_d: bool = False
+    smooth: bool = False      # scatter
+    radar_style: str = ""     # radar: "filled"; otherwise from ``markers``
+    bubble_3d: bool = False   # bubble
 
 
 # XlChartType -> what to write. The integers are Excel's and match
@@ -50,18 +54,30 @@ SPECS: Dict[int, _Spec] = {
     53: _Spec("bar", "col", "percentStacked"),
     57: _Spec("bar", "bar", "clustered"),
     58: _Spec("bar", "bar", "stacked"),
+    59: _Spec("bar", "bar", "percentStacked"),
     4: _Spec("line", grouping="standard", markers=False),
     65: _Spec("line", grouping="standard", markers=True),
     63: _Spec("line", grouping="stacked", markers=False),
+    64: _Spec("line", grouping="percentStacked", markers=False),
+    66: _Spec("line", grouping="stacked", markers=True),
+    67: _Spec("line", grouping="percentStacked", markers=True),
     5: _Spec("pie"),
     69: _Spec("pie", explosion=25),
     -4120: _Spec("doughnut"),
+    80: _Spec("doughnut", explosion=25),
     1: _Spec("area", grouping="standard"),
     76: _Spec("area", grouping="stacked"),
+    77: _Spec("area", grouping="percentStacked"),
     -4169: _Spec("scatter", lines=False),
     74: _Spec("scatter", lines=True),
+    75: _Spec("scatter", lines=True, markers=False),
+    72: _Spec("scatter", lines=True, smooth=True),
+    73: _Spec("scatter", lines=True, markers=False, smooth=True),
     -4151: _Spec("radar", markers=False),
+    81: _Spec("radar", markers=True),
+    82: _Spec("radar", markers=False, radar_style="filled"),
     15: _Spec("bubble"),
+    87: _Spec("bubble", bubble_3d=True),
     54: _Spec("bar3D", "col", "clustered", three_d=True),
     -4102: _Spec("pie3D", three_d=True),
     -4101: _Spec("line3D", grouping="standard", three_d=True),
@@ -114,13 +130,13 @@ def _str_cache(values: Sequence) -> str:
     return f'<c:strCache><c:ptCount val="{len(values)}"/>{pts}</c:strCache>'
 
 
-def _num_cache(values: Sequence) -> str:
+def _num_cache(values: Sequence, format_code: str = "General") -> str:
     pts = "".join(
         f'<c:pt idx="{i}"><c:v>{_num(v)}</c:v></c:pt>'
         for i, v in enumerate(values) if v is not None
     )
     return (
-        '<c:numCache><c:formatCode>General</c:formatCode>'
+        f'<c:numCache><c:formatCode>{_escape(format_code)}</c:formatCode>'
         f'<c:ptCount val="{len(values)}"/>{pts}</c:numCache>'
     )
 
@@ -129,24 +145,40 @@ def _str_ref(formula: str, values: Sequence) -> str:
     return f"<c:strRef><c:f>{formula}</c:f>{_str_cache(values)}</c:strRef>"
 
 
-def _num_ref(formula: str, values: Sequence) -> str:
-    return f"<c:numRef><c:f>{formula}</c:f>{_num_cache(values)}</c:numRef>"
+def _num_ref(formula: str, values: Sequence, format_code: str = "General") -> str:
+    return f"<c:numRef><c:f>{formula}</c:f>{_num_cache(values, format_code)}</c:numRef>"
 
 
-def _series_xml(spec: _Spec, i: int, series: dict, categories: Sequence, n: int) -> str:
-    """One ``c:ser``. Element order follows the schema for each chart kind."""
+# Excel's day 0 for dates, as the 1900 date system counts them.
+_EXCEL_EPOCH = _dt.date(1899, 12, 30)
+
+
+def _serial(day: _dt.date) -> int:
+    return (day - _EXCEL_EPOCH).days
+
+
+def _series_xml(spec: _Spec, i: int, series: dict, categories: Sequence, n: int,
+                date_format: Optional[str] = None) -> str:
+    """One ``c:ser``. Element order follows the schema for each chart kind.
+
+    With ``date_format`` the categories are dates, written as Excel's day
+    numbers in that format, the way a new area or radar chart holds them."""
     col = _column(i + 1)
     head = (
         f'<c:ser><c:idx val="{i}"/><c:order val="{i}"/>'
         f'<c:tx>{_str_ref(f"Sheet1!${col}$1", [series["name"]])}</c:tx>'
     )
-    cat = f'<c:cat>{_str_ref(f"Sheet1!$A$2:$A${n + 1}", categories)}</c:cat>'
+    if date_format:
+        days = [_serial(c) for c in categories]
+        cat = f'<c:cat>{_num_ref(f"Sheet1!$A$2:$A${n + 1}", days, date_format)}</c:cat>'
+    else:
+        cat = f'<c:cat>{_str_ref(f"Sheet1!$A$2:$A${n + 1}", categories)}</c:cat>'
     val = f'<c:val>{_num_ref(f"Sheet1!${col}$2:${col}${n + 1}", series["values"])}</c:val>'
     kind = spec.kind
     if kind in ("bar", "bar3D"):
         return head + '<c:invertIfNegative val="0"/>' + cat + val + "</c:ser>"
     if kind in ("line", "radar"):
-        marker = "" if spec.markers else '<c:marker><c:symbol val="none"/></c:marker>'
+        marker = "" if spec.markers or spec.radar_style == "filled" else '<c:marker><c:symbol val="none"/></c:marker>'
         return head + marker + cat + val + ("<c:smooth val=\"0\"/>" if kind == "line" else "") + "</c:ser>"
     if kind == "line3D":
         return head + cat + val + "</c:ser>"
@@ -157,16 +189,19 @@ def _series_xml(spec: _Spec, i: int, series: dict, categories: Sequence, n: int)
         return head + cat + val + "</c:ser>"
     if kind == "scatter":
         line = "" if spec.lines else '<c:spPr><a:ln w="19050"><a:noFill/></a:ln></c:spPr>'
+        marker = "" if spec.markers else '<c:marker><c:symbol val="none"/></c:marker>'
         x_val = f'<c:xVal>{_num_ref(f"Sheet1!$A$2:$A${n + 1}", categories)}</c:xVal>'
         y_val = f'<c:yVal>{_num_ref(f"Sheet1!${col}$2:${col}${n + 1}", series["values"])}</c:yVal>'
-        return head + line + x_val + y_val + '<c:smooth val="0"/></c:ser>'
+        smooth = f'<c:smooth val="{1 if spec.smooth else 0}"/>'
+        return head + line + marker + x_val + y_val + smooth + "</c:ser>"
     if kind == "bubble":
         size_col = _column(i + 2)
         x_val = f'<c:xVal>{_num_ref(f"Sheet1!$A$2:$A${n + 1}", categories)}</c:xVal>'
         y_val = f'<c:yVal>{_num_ref(f"Sheet1!${col}$2:${col}${n + 1}", series["values"])}</c:yVal>'
         sizes = series.get("sizes") or [1.0] * n
         size = f'<c:bubbleSize>{_num_ref(f"Sheet1!${size_col}$2:${size_col}${n + 1}", sizes)}</c:bubbleSize>'
-        return head + '<c:invertIfNegative val="0"/>' + x_val + y_val + size + "</c:ser>"
+        bubble_3d = '<c:bubble3D val="1"/>' if spec.bubble_3d else ""
+        return head + '<c:invertIfNegative val="0"/>' + x_val + y_val + size + bubble_3d + "</c:ser>"
     raise ChartTypeError(f"no series template for {kind}")
 
 
@@ -247,11 +282,12 @@ def _plot(spec: _Spec, series_xml: str) -> str:
         )
     if kind == "scatter":
         return (
-            f'<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>'
+            f'<c:scatterChart><c:scatterStyle val="{"smoothMarker" if spec.smooth else "lineMarker"}"/>'
+            '<c:varyColors val="0"/>'
             f'{series_xml}{ax}</c:scatterChart>'
         )
     if kind == "radar":
-        style = "marker" if spec.markers else "standard"
+        style = spec.radar_style or ("marker" if spec.markers else "standard")
         return (
             f'<c:radarChart><c:radarStyle val="{style}"/><c:varyColors val="0"/>'
             f'{series_xml}{ax}</c:radarChart>'
@@ -284,8 +320,15 @@ def chart_xml(
     type_int: int,
     categories: Optional[Sequence] = None,
     series: Optional[Sequence[dict]] = None,
+    *,
+    legend_pos: str = "b",
+    date_format: Optional[str] = None,
 ) -> str:
     """``chart1.xml`` for an ``XlChartType``, with the given or default data.
+
+    ``legend_pos`` is the legend's ``c:legendPos`` (``b``, ``t``, ``l``,
+    ``r``). With ``date_format``, ``categories`` are ``datetime.date``s,
+    shown in that Excel number format.
 
     Raises ``ChartTypeError`` for a type with no template, naming it, so the
     caller can refuse by argument rather than by tool.
@@ -308,21 +351,31 @@ def chart_xml(
             raise ValueError(
                 f"series '{s['name']}' has {len(s['values'])} values for {n} categories"
             )
-    series_xml = "".join(_series_xml(spec, i, s, categories, n) for i, s in enumerate(series))
+    series_xml = "".join(
+        _series_xml(spec, i, s, categories, n, date_format) for i, s in enumerate(series))
     view3d = ""
     if spec.three_d:
         if spec.kind == "pie3D":
             view3d = '<c:view3D><c:rotX val="30"/><c:rotY val="0"/><c:rAngAx val="0"/></c:view3D>'
+        elif spec.kind == "line3D":
+            # In perspective, as AddChart2 makes a 3-D line chart.
+            view3d = '<c:view3D><c:rotX val="15"/><c:rotY val="20"/><c:rAngAx val="0"/></c:view3D>'
         else:
             view3d = '<c:view3D><c:rotX val="15"/><c:rotY val="20"/><c:rAngAx val="1"/></c:view3D>'
-    legend = '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>'
+    axes = _axes(spec)
+    if date_format:
+        # The category axis shows the dates as dates, not Excel's day numbers.
+        axes = axes.replace(
+            '<c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="0"/>',
+            f'<c:axPos val="b"/><c:numFmt formatCode="{_escape(date_format)}" sourceLinked="1"/>', 1)
+    legend = f'<c:legend><c:legendPos val="{legend_pos}"/><c:overlay val="0"/></c:legend>'
     return (
         XML_DECL
         + f'<c:chartSpace xmlns:c="{NS_C}" xmlns:a="{NS_A}" xmlns:r="{NS_R}">'
         + '<c:roundedCorners val="0"/>'
         + f'<c:chart><c:autoTitleDeleted val="0"/>{view3d}<c:plotArea><c:layout/>'
         + _plot(spec, series_xml)
-        + _axes(spec)
+        + axes
         + "</c:plotArea>"
         + legend
         + '<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>'
@@ -703,6 +756,13 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
 
     _remove(root, "externalData")
     return dump(root)
+
+
+def plot_count(chart_xml_bytes: bytes) -> int:
+    """How many plot groups the chart has: more than one in a combo chart."""
+    root = _parse(chart_xml_bytes)
+    plot_area = root.find(f"{_C}chart/{_C}plotArea")
+    return 0 if plot_area is None else len(_plots(plot_area))
 
 
 def external_data_id(chart_xml_bytes: bytes) -> Optional[str]:
