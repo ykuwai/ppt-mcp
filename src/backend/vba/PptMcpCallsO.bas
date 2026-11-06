@@ -23,6 +23,8 @@ Public Function CallO(o As Object, kind As String, m As String, f() As String, n
             Else
                 Select Case n
                     Case 0: Assign r, o.Offset
+                    Case 1: Assign r, o.Offset(ArgOf(f(3)))
+                    Case 2: Assign r, o.Offset(ArgOf(f(3)), ArgOf(f(4)))
                     Case Else: CallO = False
                 End Select
             End If

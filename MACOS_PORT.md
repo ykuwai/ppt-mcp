@@ -693,6 +693,14 @@ What it took to make it dependable:
   use (about 300, `PptMcpCalls*.bas`), and `CallByName` runs only the rest. A
   row inserted past the end of a table now answers, as on Windows, "Rows.Add :
   Integer out of range. 9 is not in BeforeRow's valid range of 1 to 2."
+- **Chart data goes through Excel, and needs a refresh.** `ppt_set_chart_data`
+  writes the chart's workbook (`ChartData.Workbook`), which keeps the chart
+  itself, where the Windows code's other way would replace it with a copy. On
+  the Mac the chart shows the new data only after `Chart.Refresh`, and
+  `SetSourceData` is called plainly, without pywin32's workaround. Excel's
+  type library for the workbook, its sheets and ranges comes from the copy
+  PowerPoint for Mac ships (`--excel-tlb`). Tried with Excel already running;
+  with Excel not running, `ChartData.Activate` starts it.
 - **Temporary files the Windows code writes must be in PowerPoint's
   container**, or macOS asks the user for access. `ppt_copy_slide` saves a
   snapshot of the source deck to insert slides from, so while a call runs
@@ -712,7 +720,7 @@ Left on the Apple Event route, with the reason:
 | `ppt_start_undo_entry` | No `StartNewUndoEntry` (438) |
 | `ppt_set_window_state` | `Application.WindowState` takes the value and changes nothing |
 | `ppt_add_chart` | No `AddChart2` (438) |
-| `ppt_set_chart_data` | Works through `ChartData.Workbook`, but the chart shows the new data only after `Chart.Refresh`, which the Windows code does not call, and Excel's own type library is not in `com_members.json` |
+| bubble sizes on `ppt_set_chart_data` | Through VBA the data goes through the chart's Excel workbook, which takes names and values only |
 | `ppt_add_smartart`, `ppt_modify_smartart` | SmartArt answers "Permission denied" (70) now and then until PowerPoint restarts |
 | `ppt_set_node_editing_type` | The same call smoothed a straight path once and straightened a curved one another time |
 | `link_to_file` on video and audio | A linked file outside PowerPoint's container raises a sandbox prompt |

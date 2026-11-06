@@ -437,8 +437,9 @@ inesperado.
 servidor carga en PowerPoint un pequeño complemento, `ppt-mcp-bridge`, y ejecuta
 a través de él el código de Windows para lo que el diccionario de scripting no
 tiene palabras: etiquetas, `ppt_select_shapes`, `ppt_set_table_style`, quitar y
-copiar una sola animación, las herramientas de formato, ejes, series y tipo del
-gráfico, las de nodos de forma libre y la agrupación, el texto dentro de un
+copiar una sola animación, las herramientas de formato, ejes, series, tipo y
+datos del gráfico (los datos a través del libro de Excel del gráfico, que se
+abre un momento en Excel, como en Windows), las de nodos de forma libre y la agrupación, el texto dentro de un
 grupo, los diseños de una plantilla por nombre, duplicar y copiar
 diapositivas, y los argumentos que el
 Mac rechaza de otro modo (la información en pantalla, una fila o columna de
@@ -496,13 +497,13 @@ Diferencias menores:
   a PowerPoint cerrar todos los documentos abiertos y salir cuando aparecía un
   aviso del sandbox detrás de un script
   ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Añadir un gráfico y fijar sus datos pasan por el portapapeles**, y sin el
+- **Añadir un gráfico pasa por el portapapeles**, y sin el
   complemento también las demás herramientas de gráficos, los trazados de forma
   libre y la agrupación. La operación ocupa el portapapeles un momento y luego
   restaura lo que había. Así es como llegan a un diccionario que no tiene
   palabras para ellas.
 - **Sin el complemento, editar un gráfico o un trazado existente vuelve a crear
-  la forma**, y con él, fijar los datos de un gráfico todavía lo hace. Las
+  la forma**, y con él, fijar los tamaños de un gráfico de burbujas todavía lo hace. Las
   herramientas de datos, tipo, título, leyenda, ejes y series del gráfico, y
   las de nodos, copian la forma, la reescriben, la vuelven a pegar y luego
   eliminan la original. Se conservan el nombre, la posición y el orden Z; las

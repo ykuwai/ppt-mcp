@@ -160,6 +160,8 @@ Public Function CallC(o As Object, kind As String, m As String, f() As String, n
                 Select Case n
                     Case 0: Assign r, o.Close
                     Case 1: Assign r, o.Close(ArgOf(f(3)))
+                    Case 2: Assign r, o.Close(ArgOf(f(3)), ArgOf(f(4)))
+                    Case 3: Assign r, o.Close(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
                     Case Else: CallC = False
                 End Select
             End If

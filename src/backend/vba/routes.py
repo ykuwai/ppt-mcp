@@ -45,6 +45,12 @@ def shrink_to_fit(arguments) -> bool:
     return arguments.get("auto_size") == "shrink_to_fit"
 
 
+def no_bubble_sizes(arguments) -> bool:
+    # Through Excel, which writes names and values only; the Apple Event route
+    # sets bubble sizes in the chart's XML.
+    return not any(isinstance(s, dict) and "sizes" in s for s in arguments.get("series") or [])
+
+
 def group_member(arguments) -> bool:
     """The text tool's target is inside a group.
 
@@ -81,6 +87,7 @@ ROUTES = {
     ("ppt_com.charts", "_set_chart_series_impl"): ALWAYS,
     ("ppt_com.charts", "_change_chart_type_impl"): ALWAYS,
     ("ppt_com.charts", "_get_chart_data_impl"): ALWAYS,
+    ("ppt_com.charts", "_set_chart_data_impl"): no_bubble_sizes,
     ("ppt_com.freeform", "_get_shape_nodes_impl"): ALWAYS,
     ("ppt_com.freeform", "_set_node_position_impl"): ALWAYS,
     ("ppt_com.freeform", "_insert_node_impl"): ALWAYS,
@@ -117,7 +124,7 @@ NOT_ROUTED = {
     "ppt_set_window_state": "Application.WindowState changes nothing on the Mac",
     "ppt_add_chart": "PowerPoint for Mac's VBA has no AddChart2",
     "ppt_set_node_editing_type": "through PowerPoint for Mac's VBA the same call made a straight path curved once and a curved one straight another time",
-    "ppt_set_chart_data": "through VBA it needs Excel's own object model and a refresh the Windows code does not do",
+    "bubble sizes on ppt_set_chart_data": "through VBA the data goes through Excel, which writes names and values only",
     "ppt_add_smartart / ppt_modify_smartart": "PowerPoint for Mac's VBA answers 'Permission denied' from SmartArt now and then",
     "link_to_file on ppt_add_video / ppt_add_audio": "a linked file outside PowerPoint's container raises a macOS sandbox prompt",
 }

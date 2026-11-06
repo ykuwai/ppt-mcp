@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 ADDIN_FILE = HERE / "ppt-mcp-bridge.ppam"
 ADDIN_NAME = "ppt-mcp-bridge"
 # Must match BRIDGE_VERSION in PptMcpBridge.bas; a test keeps them together.
-BRIDGE_VERSION = "3"
+BRIDGE_VERSION = "4"
 DISPATCH = "PptMcpBridge.Dispatch"
 PING = "PptMcpBridge.Ping"
 # PowerPoint is sandboxed. Its ~/Documents is this folder, which is where the
@@ -128,7 +128,12 @@ def _interface(typename):
     for name in (typename, "_" + typename):
         if name in lib:
             entry = lib[name]
-            return entry["members"], entry["default"] or _DEFAULTS.get(typename)
+            default = entry["default"] or _DEFAULTS.get(typename)
+            # Excel's collections and ranges mark a hidden _Default; Item is
+            # the same call by its documented name.
+            if default == "_Default" and "Item" in entry["members"]:
+                default = "Item"
+            return entry["members"], default
     return {}, _DEFAULTS.get(typename)
 
 

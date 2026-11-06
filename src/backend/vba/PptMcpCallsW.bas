@@ -60,6 +60,17 @@ Public Function CallW(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallW = False
                 End Select
             End If
+        Case "Worksheets"
+            If kind = "l" Then
+                o.Worksheets = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.Worksheets = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.Worksheets
+                    Case Else: CallW = False
+                End Select
+            End If
         Case Else
             CallW = False
     End Select

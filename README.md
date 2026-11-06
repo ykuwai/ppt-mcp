@@ -434,7 +434,9 @@ something the tool says so rather than doing something unexpected.
 server loads a small add-in, `ppt-mcp-bridge`, into PowerPoint and runs the
 Windows code through it for what the scripting dictionary has no words for:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, removing and copying one
-animation, the chart formatting, axis, series and type tools, the freeform node
+animation, the chart formatting, axis, series, type and data tools (the data
+through the chart's Excel workbook, which opens in Excel for a moment, as on
+Windows), the freeform node
 tools and grouping, text inside a group, a template's layouts by name,
 duplicating and copying slides, and the arguments the Mac otherwise refuses (a screen tip,
 a table row or column at a position, a click trigger on another shape,
@@ -482,12 +484,12 @@ Smaller differences:
 - Save the deck early and at each break. It costs nothing, and PowerPoint has
   been seen to close every open document and then exit when a sandbox prompt
   went up behind a script ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Adding a chart and setting its data go through the clipboard**, and
-  without the add-in so do the other chart tools, freeform paths and grouping.
+- **Adding a chart goes through the clipboard**, and without the add-in so do
+  the other chart tools, freeform paths and grouping.
   The operation takes the clipboard for a moment and puts back what was there.
   This is how they reach a dictionary that has no words for them.
 - **Without the add-in, editing an existing chart or path recreates the
-  shape**, and with it, setting a chart's data still does. The tool copies the
+  shape**, and with it, setting a bubble chart's sizes still does. The tool copies the
   shape, rewrites it and pastes it back, then deletes the original. The name,
   position and z order are kept; animations on the shape are not, and the
   result says how many were lost. Without the add-in, a few formatting

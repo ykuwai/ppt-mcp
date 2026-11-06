@@ -383,7 +383,7 @@ class TestTheRoutes:
 
     def test_what_is_not_routed_is_not(self):
         routed = {impl for _, impl in routes.ROUTES}
-        for name in ("_merge_shapes_impl", "_execute_mso_impl", "_add_chart_impl", "_set_chart_data_impl",
+        for name in ("_merge_shapes_impl", "_execute_mso_impl", "_add_chart_impl",
                      "_add_smartart_impl", "_modify_smartart_impl", "_set_node_editing_type_impl",
                      "_set_window_state_impl", "_start_undo_entry_impl"):
             assert name not in routed
@@ -662,3 +662,42 @@ def test_temporary_files_go_where_powerpoint_may_read_them(monkeypatch, tmp_path
     with vba._temp_files_powerpoint_can_read():
         assert tempfile.mkdtemp(prefix="ppt-mcp-copy-").startswith(str(tmp_path / "ppt-mcp" / "tmp"))
     assert tempfile.tempdir == before
+
+
+# ---------------------------------------------------------------------------
+# Chart data through Excel
+# ---------------------------------------------------------------------------
+class TestChartData:
+    """On the Mac's VBA route, set_chart_data writes through the chart's Excel
+    workbook, which keeps the chart itself; the swap the Windows code prefers
+    would make a new shape, through the Windows clipboard code."""
+
+    def test_bubble_sizes_stay_on_the_apple_event_route(self):
+        route = routes.ROUTES[("ppt_com.charts", "_set_chart_data_impl")]
+        assert route({"series": [{"name": "S", "values": [1, 2]}]})
+        assert not route({"series": [{"name": "S", "values": [1, 2], "sizes": [3, 4]}]})
+
+    def test_on_the_vba_route_excel_is_chosen(self):
+        from ppt_com import charts
+
+        token = vba._CALL.set(vba.Call(app=None, pres=None))
+        try:
+            assert "through Excel" in charts._excel_needed(None, None)
+        finally:
+            vba._CALL.reset(token)
+
+    def test_without_pywin32_the_source_is_set_plainly_and_the_chart_refreshed(self):
+        from ppt_com import charts
+
+        b = RecordingBridge()
+        charts._set_source_data(vba.Proxy(b, "h5", "Chart"), "Sheet1!$A$1:$C$4")
+        assert [(r[1], r[2], r[3]) for r in b.requests] == [
+            ("c", "SetSourceData", ("Sheet1!$A$1:$C$4", charts.XL_COLUMNS)),
+            ("c", "Refresh", ()),
+        ]
+
+    def test_excel_collections_are_indexed_by_item(self):
+        # Excel marks a hidden _Default as their default member; Item is the
+        # same call by its documented name.
+        for name in ("Range", "Sheets"):
+            assert vba._interface(name)[1] == "Item"

@@ -28,6 +28,11 @@ Public Function CallS(o As Object, kind As String, m As String, f() As String, n
                     Case 1: Assign r, o.SaveAs(ArgOf(f(3)))
                     Case 2: Assign r, o.SaveAs(ArgOf(f(3)), ArgOf(f(4)))
                     Case 3: Assign r, o.SaveAs(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
+                    Case 4: Assign r, o.SaveAs(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)))
+                    Case 5: Assign r, o.SaveAs(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)))
+                    Case 6: Assign r, o.SaveAs(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)))
+                    Case 7: Assign r, o.SaveAs(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)))
+                    Case 8: Assign r, o.SaveAs(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)), ArgOf(f(10)))
                     Case Else: CallS = False
                 End Select
             End If

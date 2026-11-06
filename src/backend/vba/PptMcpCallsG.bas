@@ -55,6 +55,10 @@ Public Function CallG(o As Object, kind As String, m As String, f() As String, n
             Else
                 Select Case n
                     Case 0: Assign r, o.Group
+                    Case 1: Assign r, o.Group(ArgOf(f(3)))
+                    Case 2: Assign r, o.Group(ArgOf(f(3)), ArgOf(f(4)))
+                    Case 3: Assign r, o.Group(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
+                    Case 4: Assign r, o.Group(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)))
                     Case Else: CallG = False
                 End Select
             End If

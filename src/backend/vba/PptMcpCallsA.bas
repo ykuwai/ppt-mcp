@@ -221,6 +221,11 @@ Public Function CallA(o As Object, kind As String, m As String, f() As String, n
             Else
                 Select Case n
                     Case 0: Assign r, o.Address
+                    Case 1: Assign r, o.Address(ArgOf(f(3)))
+                    Case 2: Assign r, o.Address(ArgOf(f(3)), ArgOf(f(4)))
+                    Case 3: Assign r, o.Address(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
+                    Case 4: Assign r, o.Address(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)))
+                    Case 5: Assign r, o.Address(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)))
                     Case Else: CallA = False
                 End Select
             End If

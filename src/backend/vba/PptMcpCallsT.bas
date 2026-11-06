@@ -12,6 +12,8 @@ Public Function CallT(o As Object, kind As String, m As String, f() As String, n
             Else
                 Select Case n
                     Case 0: Assign r, o.Table
+                    Case 1: Assign r, o.Table(ArgOf(f(3)))
+                    Case 2: Assign r, o.Table(ArgOf(f(3)), ArgOf(f(4)))
                     Case Else: CallT = False
                 End Select
             End If

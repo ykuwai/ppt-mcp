@@ -435,7 +435,9 @@ ele não alcança algo a ferramenta avisa em vez de fazer algo inesperado.
 carrega no PowerPoint um pequeno suplemento, `ppt-mcp-bridge`, e roda por meio
 dele o código do Windows para o que o dicionário de scripts não tem palavras:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, remover e copiar uma única
-animação, as ferramentas de formatação, eixo, séries e tipo do gráfico, as de
+animação, as ferramentas de formatação, eixo, séries, tipo e dados do gráfico (os
+dados pela pasta de trabalho do Excel do gráfico, que abre no Excel por um
+instante, como no Windows), as de
 nós de forma livre e o agrupamento, o texto dentro de um grupo, os layouts de
 um modelo pelo nome, duplicar e copiar slides, e os argumentos que o Mac recusa de outro
 modo (a dica de tela, uma linha ou coluna de tabela numa posição, uma animação
@@ -488,13 +490,13 @@ Diferenças menores:
   PowerPoint fechar todos os documentos abertos e depois sair quando um aviso
   de sandbox apareceu por trás de um script
   ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Adicionar um gráfico e definir os dados dele passam pela área de
+- **Adicionar um gráfico passa pela área de
   transferência**, e sem o suplemento também as demais ferramentas de gráfico,
   as formas livres e o agrupamento. A operação ocupa a área de transferência por
   um instante e depois devolve o que havia nela. É assim que chegam a um
   dicionário que não tem palavras para eles.
 - **Sem o suplemento, editar um gráfico ou forma livre existente recria a
-  forma**, e com ele, definir os dados de um gráfico ainda recria. As
+  forma**, e com ele, definir os tamanhos de um gráfico de bolhas ainda recria. As
   ferramentas de dados, tipo, título, legenda, eixo e séries do gráfico, e as
   ferramentas de nós, copiam a forma, reescrevem e colam de volta, e depois
   excluem a original. O nome, a posição e a ordem Z são mantidos; as animações
