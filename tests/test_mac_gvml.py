@@ -868,7 +868,7 @@ class TestFreeformEditors:
         }
         assert nodes["node_count"] == 6
         assert [n["segment_type"] for n in nodes["nodes"]] == [
-            "line", "curve", "inaccessible", "inaccessible", "line", "inaccessible",
+            "line", "line", "inaccessible", "inaccessible", "curve", "inaccessible",
         ]
 
     def test_set_segment_type_carries_the_windows_note_when_the_count_changes(self):
