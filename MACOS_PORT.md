@@ -701,6 +701,16 @@ What it took to make it dependable:
   type library for the workbook, its sheets and ranges comes from the copy
   PowerPoint for Mac ships (`--excel-tlb`). Tried with Excel already running;
   with Excel not running, `ChartData.Activate` starts it.
+- **Handles to a closed deck's SmartArt break SmartArt.** While the add-in
+  holds handles to a SmartArt in a deck, closing that deck makes every
+  SmartArt call after it fail, "Automation error" and then "Access denied" or
+  "Permission denied" (70), in any deck, until the handles are let go of.
+  Every call lets go of its handles when it ends, and one that could not is
+  made up for at the start of the next. Test harnesses that kept handles
+  between runs met it as an intermittent failure that only a restart cured.
+- **The deck is looked up only when the Windows code asks for it.** With no
+  deck open, the Apple Event side hands back a missing value rather than an
+  error, and some calls need no deck.
 - **Temporary files the Windows code writes must be in PowerPoint's
   container**, or macOS asks the user for access. `ppt_copy_slide` saves a
   snapshot of the source deck to insert slides from, so while a call runs
@@ -721,7 +731,7 @@ Left on the Apple Event route, with the reason:
 | `ppt_set_window_state` | `Application.WindowState` takes the value and changes nothing |
 | `ppt_add_chart` | No `AddChart2` (438) |
 | bubble sizes on `ppt_set_chart_data` | Through VBA the data goes through the chart's Excel workbook, which takes names and values only |
-| `ppt_add_smartart`, `ppt_modify_smartart` | SmartArt answers "Permission denied" (70) now and then until PowerPoint restarts |
+| `ppt_list_smartart_layouts`, `ppt_add_smartart`, `change_layout` on `ppt_modify_smartart` | Layouts are picked by index from the Mac's list of the 162 it installs, which needs no deck open. Its VBA knows 159, in another order, and none until a deck is open. Colour schemes and styles come in the same order on both sides, so the other SmartArt edits go through VBA |
 | `ppt_set_node_editing_type` | The same call smoothed a straight path once and straightened a curved one another time |
 | `link_to_file` on video and audio | A linked file outside PowerPoint's container raises a sandbox prompt |
 | trimming media | The Windows code for it needs a fix of its own first |

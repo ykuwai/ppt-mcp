@@ -237,6 +237,7 @@ class FakeBridgeForRun:
     def __init__(self, decks):
         self.app = FakeApp(decks)
         self.released = 0
+        self.stale = False
 
     def application(self):
         return self.app
@@ -266,10 +267,17 @@ def route(monkeypatch):
     bridge = FakeBridgeForRun(decks)
 
     class FakePpt:
+        """Hands over the VBA call's objects while one runs, as the real
+        Apple Event wrapper does."""
+
         def _get_app_impl(self, *a, **k):
-            return "app_ref"
+            call = vba.current()
+            return call.app if call is not None else "app_ref"
 
         def _get_pres_impl(self):
+            call = vba.current()
+            if call is not None:
+                return call.pres
             return FakeMacDeck("Deck.pptx", "/x/Deck.pptx")
 
     monkeypatch.setattr(backend, "ppt", FakePpt())
@@ -384,7 +392,7 @@ class TestTheRoutes:
     def test_what_is_not_routed_is_not(self):
         routed = {impl for _, impl in routes.ROUTES}
         for name in ("_merge_shapes_impl", "_execute_mso_impl", "_add_chart_impl",
-                     "_add_smartart_impl", "_modify_smartart_impl", "_set_node_editing_type_impl",
+                     "_set_node_editing_type_impl",
                      "_set_window_state_impl", "_start_undo_entry_impl"):
             assert name not in routed
 
@@ -701,3 +709,63 @@ class TestChartData:
         # same call by its documented name.
         for name in ("Range", "Sheets"):
             assert vba._interface(name)[1] == "Item"
+
+
+# ---------------------------------------------------------------------------
+# SmartArt
+# ---------------------------------------------------------------------------
+class TestSmartArt:
+    """Holding handles to a closed deck's SmartArt makes every SmartArt call
+    after it fail ("Access denied", or "Permission denied", 70) until they are
+    let go of. Every call lets go of its handles; one that could not is made
+    up for at the start of the next."""
+
+    def test_an_edit_takes_the_route_and_picking_a_layout_does_not(self):
+        # Layouts are numbered by the Mac's own list, which VBA does not share;
+        # colour schemes and styles come in the same order on both sides.
+        route = routes.ROUTES[("ppt_com.smartart", "_modify_smartart_impl")]
+        for action in ("set_text", "add_node", "delete_node", "change_color", "change_style"):
+            assert route({"action": action})
+        assert not route({"action": "change_layout"})
+        for impl in ("_list_smartart_options_impl", "_add_smartart_impl"):
+            assert ("ppt_com.smartart", impl) not in routes.ROUTES
+
+    def test_a_release_that_failed_is_done_before_the_next_call(self, route):
+        impl, calls, bridge, _, _ = route
+        bridge.stale = True
+        impl(2, "Box", screen_tip="tip")
+        assert bridge.released == 2, "once before the call, once after"
+
+    def test_a_release_that_fails_leaves_the_bridge_marked(self, tmp_path):
+        bridge, _, _ = bridge_answering(tmp_path)  # answers nothing
+        bridge.timeout = 0.2
+        with pytest.raises(vba.BridgeTimeout):
+            bridge.release()
+        assert bridge.stale
+
+
+def test_a_call_that_needs_no_deck_does_not_look_for_one(route, monkeypatch):
+    """Listing needs no deck, and with none open the Apple Event side hands
+    back a missing value; the deck is looked up only when asked for."""
+    import backend
+
+    impl, calls, bridge, _, mac_impl = route
+
+    class NoDeck:
+        def _get_app_impl(self, *a, **k):
+            return "app_ref"
+
+        def _get_pres_impl(self):
+            class Missing:
+                def name(self):
+                    return object()  # appscript's k.missing_value
+            return Missing()
+
+    monkeypatch.setattr(backend, "ppt", NoDeck())
+    seen = []
+    no_deck = vba.routed(lambda: seen.append(vba.current().app) or "listed", lambda: "mac", routes.ALWAYS)
+    assert no_deck() == "listed" and seen == [bridge.app]
+
+    asks = vba.routed(lambda: vba.current().pres, lambda: "mac", routes.ALWAYS)
+    with pytest.raises(RuntimeError, match="No presentation is open"):
+        asks()

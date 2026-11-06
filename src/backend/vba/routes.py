@@ -51,6 +51,18 @@ def no_bubble_sizes(arguments) -> bool:
     return not any(isinstance(s, dict) and "sizes" in s for s in arguments.get("series") or [])
 
 
+def keeps_layout(arguments) -> bool:
+    """A SmartArt edit that does not pick a layout.
+
+    Layouts are picked from ppt_list_smartart_layouts, which lists the 162
+    PowerPoint for Mac installs, numbered in its own order, with no deck open.
+    Its VBA knows 159 of them, in another order, and none until a deck is
+    open; so adding a SmartArt and changing its layout stay where the list
+    is. Colour schemes and styles come in the same order on both sides.
+    """
+    return arguments.get("action") != "change_layout"
+
+
 def group_member(arguments) -> bool:
     """The text tool's target is inside a group.
 
@@ -97,6 +109,8 @@ ROUTES = {
     ("ppt_com.groups", "_group_shapes_impl"): ALWAYS,
     ("ppt_com.groups", "_get_group_items_impl"): ALWAYS,
     ("ppt_com.slides", "_duplicate_slide_impl"): ALWAYS,
+    # Editing a SmartArt, but not changing its layout (see keeps_layout).
+    ("ppt_com.smartart", "_modify_smartart_impl"): keeps_layout,
     ("ppt_com.slides", "_copy_slide_impl"): ALWAYS,
     # Through the clipboard on the Mac only for a group's member.
     ("ppt_com.text", "_set_text_impl"): group_member,
@@ -125,7 +139,9 @@ NOT_ROUTED = {
     "ppt_add_chart": "PowerPoint for Mac's VBA has no AddChart2",
     "ppt_set_node_editing_type": "through PowerPoint for Mac's VBA the same call made a straight path curved once and a curved one straight another time",
     "bubble sizes on ppt_set_chart_data": "through VBA the data goes through Excel, which writes names and values only",
-    "ppt_add_smartart / ppt_modify_smartart": "PowerPoint for Mac's VBA answers 'Permission denied' from SmartArt now and then",
+    "ppt_list_smartart_layouts, ppt_add_smartart, changing a SmartArt's layout":
+        "PowerPoint for Mac's VBA knows 159 layouts in its own order, and none with no deck open; "
+        "the Mac's list holds 162, needs no deck, and numbers the layouts these take",
     "link_to_file on ppt_add_video / ppt_add_audio": "a linked file outside PowerPoint's container raises a macOS sandbox prompt",
 }
 

@@ -441,7 +441,8 @@ copiar una sola animación, las herramientas de formato, ejes, series, tipo y
 datos del gráfico (los datos a través del libro de Excel del gráfico, que se
 abre un momento en Excel, como en Windows), las de nodos de forma libre y la agrupación, el texto dentro de un
 grupo, los diseños de una plantilla por nombre, duplicar y copiar
-diapositivas, y los argumentos que el
+diapositivas, editar un SmartArt (su texto, nodos, colores y estilo), y los
+argumentos que el
 Mac rechaza de otro modo (la información en pantalla, una fila o columna de
 tabla en una posición, una animación que se inicia al hacer clic en otra forma,
 los tamaños del reflejo, el resplandor, la sombra y el reflejo sobre el texto,

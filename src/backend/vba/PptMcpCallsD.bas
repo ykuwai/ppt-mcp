@@ -28,6 +28,17 @@ Public Function CallD(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallD = False
                 End Select
             End If
+        Case "Description"
+            If kind = "l" Then
+                o.Description = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.Description = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.Description
+                    Case Else: CallD = False
+                End Select
+            End If
         Case "Design"
             If kind = "l" Then
                 o.Design = ArgOf(f(3))

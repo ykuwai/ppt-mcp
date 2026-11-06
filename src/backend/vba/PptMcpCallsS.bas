@@ -375,6 +375,50 @@ Public Function CallS(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallS = False
                 End Select
             End If
+        Case "SmartArt"
+            If kind = "l" Then
+                o.SmartArt = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.SmartArt = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.SmartArt
+                    Case Else: CallS = False
+                End Select
+            End If
+        Case "SmartArtColors"
+            If kind = "l" Then
+                o.SmartArtColors = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.SmartArtColors = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.SmartArtColors
+                    Case Else: CallS = False
+                End Select
+            End If
+        Case "SmartArtLayouts"
+            If kind = "l" Then
+                o.SmartArtLayouts = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.SmartArtLayouts = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.SmartArtLayouts
+                    Case Else: CallS = False
+                End Select
+            End If
+        Case "SmartArtQuickStyles"
+            If kind = "l" Then
+                o.SmartArtQuickStyles = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.SmartArtQuickStyles = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.SmartArtQuickStyles
+                    Case Else: CallS = False
+                End Select
+            End If
         Case "SmoothEnd"
             If kind = "l" Then
                 o.SmoothEnd = ArgOf(f(3))

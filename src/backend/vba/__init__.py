@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 ADDIN_FILE = HERE / "ppt-mcp-bridge.ppam"
 ADDIN_NAME = "ppt-mcp-bridge"
 # Must match BRIDGE_VERSION in PptMcpBridge.bas; a test keeps them together.
-BRIDGE_VERSION = "4"
+BRIDGE_VERSION = "5"
 DISPATCH = "PptMcpBridge.Dispatch"
 PING = "PptMcpBridge.Ping"
 # PowerPoint is sandboxed. Its ~/Documents is this folder, which is where the
@@ -158,6 +158,11 @@ class Bridge:
         self.answers = Path(answers)
         self.timeout = timeout
         self.calls = 0
+        # Set when letting go of the handles failed; the next call does it
+        # first. Handles to a closed deck's SmartArt make every SmartArt call
+        # after it fail ("Access denied", or "Permission denied", 70) until
+        # they are let go of.
+        self.stale = False
 
     # -- transport ---------------------------------------------------------
     def _send(self, macro, params):
@@ -267,7 +272,9 @@ class Bridge:
         return Proxy(self, "app", "Application")
 
     def release(self):
+        self.stale = True
         self.run([("app", "r", "")])
+        self.stale = False
 
 
 class Proxy:
@@ -445,11 +452,23 @@ _SESSION = _Session()
 # Running a Windows implementation
 # ---------------------------------------------------------------------------
 class Call:
-    """What the Windows code reaches through ``ppt`` while it runs on VBA."""
+    """What the Windows code reaches through ``ppt`` while it runs on VBA.
 
-    def __init__(self, app, pres):
+    The deck is looked up when the Windows code first asks for it, not
+    before: some tools need none (listing SmartArt layouts), and with no deck
+    open there is none to find.
+    """
+
+    def __init__(self, app, pres=None, find_pres=None):
         self.app = app
-        self.pres = pres
+        self._pres = pres
+        self._find_pres = find_pres
+
+    @property
+    def pres(self):
+        if self._pres is None and self._find_pres is not None:
+            self._pres = self._find_pres()
+        return self._pres
 
     def window(self):
         windows = self.pres.Windows
@@ -513,14 +532,33 @@ def _temp_files_powerpoint_can_read():
         tempfile.tempdir = before
 
 
-def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
+def _deck_for(app):
+    """The bridge's presentation for the deck the Apple Event side resolves."""
     from backend import ppt
 
-    mac_pres = ppt._get_pres_impl()
+    # Asked outside the VBA call: inside it, the wrapper hands back the call's
+    # own deck, which is what is being looked up.
+    token = _CALL.set(None)
+    try:
+        mac_pres = ppt._get_pres_impl()
+    finally:
+        _CALL.reset(token)
+    name = mac_pres.name()
+    if not isinstance(name, str):
+        # With no deck open, `active presentation` is a missing value rather
+        # than an error.
+        raise RuntimeError(
+            "No presentation is open in PowerPoint. "
+            "Use ppt_create_presentation or ppt_open_presentation first.")
+    return _same_deck(app, name, mac_pres.full_name())
+
+
+def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
+    if bridge.stale:
+        bridge.release()
     app = bridge.application()
     try:
-        pres = _same_deck(app, mac_pres.name(), mac_pres.full_name())
-        token = _CALL.set(Call(app, pres))
+        token = _CALL.set(Call(app, find_pres=lambda: _deck_for(app)))
         try:
             with _temp_files_powerpoint_can_read():
                 return com_impl(*args, **kwargs)

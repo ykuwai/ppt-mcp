@@ -130,6 +130,23 @@ Public Function CallA(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallA = False
                 End Select
             End If
+        Case "AddNode"
+            If kind = "l" Then
+                o.AddNode = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.AddNode = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.AddNode
+                    Case 1: Assign r, o.AddNode(ArgOf(f(3)))
+                    Case 2: Assign r, o.AddNode(ArgOf(f(3)), ArgOf(f(4)))
+                    Case 3: Assign r, o.AddNode(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
+                    Case 4: Assign r, o.AddNode(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)))
+                    Case 5: Assign r, o.AddNode(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)))
+                    Case 6: Assign r, o.AddNode(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)))
+                    Case Else: CallA = False
+                End Select
+            End If
         Case "AddNodes"
             If kind = "l" Then
                 o.AddNodes = ArgOf(f(3))
@@ -193,6 +210,22 @@ Public Function CallA(o As Object, kind As String, m As String, f() As String, n
                     Case 0: Assign r, o.AddSlide
                     Case 1: Assign r, o.AddSlide(ArgOf(f(3)))
                     Case 2: Assign r, o.AddSlide(ArgOf(f(3)), ArgOf(f(4)))
+                    Case Else: CallA = False
+                End Select
+            End If
+        Case "AddSmartArt"
+            If kind = "l" Then
+                o.AddSmartArt = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.AddSmartArt = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.AddSmartArt
+                    Case 1: Assign r, o.AddSmartArt(ArgOf(f(3)))
+                    Case 2: Assign r, o.AddSmartArt(ArgOf(f(3)), ArgOf(f(4)))
+                    Case 3: Assign r, o.AddSmartArt(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
+                    Case 4: Assign r, o.AddSmartArt(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)))
+                    Case 5: Assign r, o.AddSmartArt(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)))
                     Case Else: CallA = False
                 End Select
             End If
@@ -292,6 +325,17 @@ Public Function CallA(o As Object, kind As String, m As String, f() As String, n
             Else
                 Select Case n
                     Case 0: Assign r, o.Alignment
+                    Case Else: CallA = False
+                End Select
+            End If
+        Case "AllNodes"
+            If kind = "l" Then
+                o.AllNodes = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.AllNodes = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.AllNodes
                     Case Else: CallA = False
                 End Select
             End If

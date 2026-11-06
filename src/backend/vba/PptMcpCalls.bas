@@ -25,6 +25,7 @@ Public Function Direct(o As Object, kind As String, m As String, f() As String, 
         Case "N": Direct = CallN(o, kind, m, f, n, r)
         Case "O": Direct = CallO(o, kind, m, f, n, r)
         Case "P": Direct = CallP(o, kind, m, f, n, r)
+        Case "Q": Direct = CallQ(o, kind, m, f, n, r)
         Case "R": Direct = CallR(o, kind, m, f, n, r)
         Case "S": Direct = CallS(o, kind, m, f, n, r)
         Case "T": Direct = CallT(o, kind, m, f, n, r)

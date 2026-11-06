@@ -438,7 +438,8 @@ animation, the chart formatting, axis, series, type and data tools (the data
 through the chart's Excel workbook, which opens in Excel for a moment, as on
 Windows), the freeform node
 tools and grouping, text inside a group, a template's layouts by name,
-duplicating and copying slides, and the arguments the Mac otherwise refuses (a screen tip,
+duplicating and copying slides, editing a SmartArt (its text, nodes, colours
+and style), and the arguments the Mac otherwise refuses (a screen tip,
 a table row or column at a position, a click trigger on another shape,
 reflection sizes, glow, shadow and reflection on text, shrinking text to fit,
 volume, mute and fades, a chart style and the legend and title placement).

@@ -439,7 +439,8 @@ animação, as ferramentas de formatação, eixo, séries, tipo e dados do gráf
 dados pela pasta de trabalho do Excel do gráfico, que abre no Excel por um
 instante, como no Windows), as de
 nós de forma livre e o agrupamento, o texto dentro de um grupo, os layouts de
-um modelo pelo nome, duplicar e copiar slides, e os argumentos que o Mac recusa de outro
+um modelo pelo nome, duplicar e copiar slides, editar um SmartArt (texto, nós, cores e estilo), e os
+argumentos que o Mac recusa de outro
 modo (a dica de tela, uma linha ou coluna de tabela numa posição, uma animação
 disparada pelo clique em outra forma, os tamanhos do reflexo, brilho, sombra e
 reflexo no texto, reduzir o texto para caber, volume, mudo e esmaecimentos, o
