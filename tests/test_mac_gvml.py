@@ -871,21 +871,26 @@ class TestFreeformEditors:
             "line", "curve", "inaccessible", "inaccessible", "line", "inaccessible",
         ]
 
-    def test_set_segment_type_carries_the_windows_note_when_the_count_changes(self):
-        from ppt_mac.freeform import _set_segment_type_impl
+    def test_set_segment_type_answers_the_nodes_as_they_are_now(self):
+        """A curve's two control points are nodes of their own, so the indexes
+        after them move; the answer carries the new numbering, the same note
+        as Windows, and the nodes ppt_get_shape_nodes would read."""
+        from ppt_com.freeform import NODES_MOVED_NOTE
+        from ppt_mac.freeform import _get_shape_nodes_impl, _set_segment_type_impl
 
         with _fake_deck(shapes=[("Blob", "freeform", _fixture_bytes("freeform"))]):
             to_curve = json.loads(_set_segment_type_impl(1, "Blob", None, 1, 1))
+            read = json.loads(_get_shape_nodes_impl(1, "Blob", None))
             same = json.loads(_set_segment_type_impl(1, "Blob", None, 1, 1))
 
+        nodes = to_curve.pop("nodes")
         assert {k: v for k, v in to_curve.items() if k != "warnings"} == {
             "success": True, "shape_name": "Blob", "node_index": 1, "segment_type": "curve",
-            "old_node_count": 9, "new_node_count": 11,
-            "note": "Node count changed — switching line↔curve adds or removes control-point nodes. "
-                    "Re-call ppt_get_shape_nodes to see updated indices.",
+            "old_node_count": 9, "new_node_count": 11, "note": NODES_MOVED_NOTE,
         }
+        assert nodes == read["nodes"] and len(nodes) == 11
         assert same["old_node_count"] == same["new_node_count"] == 11
-        assert "note" not in same
+        assert "note" not in same and len(same["nodes"]) == 11
 
     def test_an_index_out_of_range_raises_before_anything_is_pasted(self):
         from ppt_mac.freeform import _delete_node_impl
