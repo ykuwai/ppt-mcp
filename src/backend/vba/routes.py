@@ -45,6 +45,28 @@ def shrink_to_fit(arguments) -> bool:
     return arguments.get("auto_size") == "shrink_to_fit"
 
 
+def group_member(arguments) -> bool:
+    """The text tool's target is inside a group.
+
+    A ``"Group/Member"`` path is; so is a name that no top-level shape on the
+    slide has, since the tools reach a group's member by its own name too. A
+    top-level shape stays on the Apple Event route, which edits it in place
+    already; only a member goes through the clipboard there.
+    """
+    target = arguments.get("shape_name_or_index")
+    if not isinstance(target, str):
+        return False
+    if "/" in target:
+        return True
+    from backend import ppt
+
+    try:
+        names = ppt._get_pres_impl().slides[arguments["slide_index"]].shapes.name.get()
+    except Exception:  # noqa: BLE001 - let the Apple Event route answer
+        return False
+    return target not in names
+
+
 ROUTES = {
     # Refused on the Mac: nothing in the dictionary reaches them.
     ("ppt_com.advanced_ops", "_select_shapes_impl"): ALWAYS,
@@ -67,6 +89,14 @@ ROUTES = {
     ("ppt_com.freeform", "_build_freeform_impl"): ALWAYS,
     ("ppt_com.groups", "_group_shapes_impl"): ALWAYS,
     ("ppt_com.groups", "_get_group_items_impl"): ALWAYS,
+    ("ppt_com.slides", "_duplicate_slide_impl"): ALWAYS,
+    ("ppt_com.slides", "_copy_slide_impl"): ALWAYS,
+    # Through the clipboard on the Mac only for a group's member.
+    ("ppt_com.text", "_set_text_impl"): group_member,
+    ("ppt_com.text", "_format_text_impl"): group_member,
+    # A template's own layout by name: the Mac reads names from the saved file
+    # and pastes a slide on the layout; VBA finds the layout itself.
+    ("ppt_com.slides", "_add_slide_impl"): given("layout_name"),
     # Arguments the Mac refuses; the rest of these tools' calls stay as they are.
     ("ppt_com.hyperlinks", "_add_hyperlink_impl"): given("screen_tip"),
     ("ppt_com.tables", "_add_table_row_impl"): given("position"),

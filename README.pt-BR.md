@@ -436,7 +436,8 @@ carrega no PowerPoint um pequeno suplemento, `ppt-mcp-bridge`, e roda por meio
 dele o código do Windows para o que o dicionário de scripts não tem palavras:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, remover e copiar uma única
 animação, as ferramentas de formatação, eixo, séries e tipo do gráfico, as de
-nós de forma livre e o agrupamento, e os argumentos que o Mac recusa de outro
+nós de forma livre e o agrupamento, o texto dentro de um grupo, os layouts de
+um modelo pelo nome, duplicar e copiar slides, e os argumentos que o Mac recusa de outro
 modo (a dica de tela, uma linha ou coluna de tabela numa posição, uma animação
 disparada pelo clique em outra forma, os tamanhos do reflexo, brilho, sombra e
 reflexo no texto, reduzir o texto para caber, volume, mudo e esmaecimentos, o
@@ -473,11 +474,12 @@ Diferenças menores:
 - As exportações passam pelo contêiner do próprio PowerPoint e depois são
   movidas, porque o aplicativo roda em sandbox e não consegue gravar em
   qualquer pasta.
-- **Os layouts próprios de um modelo são encontrados pelo nome no arquivo
-  salvo da apresentação**, então salve uma apresentação nova antes de pedir um
-  layout pelo nome a `ppt_add_slide`. O PowerPoint para Mac não informa o nome
-  de nenhum layout a um script, então o slide é colado já no layout, o que leva
-  cerca de um segundo.
+- **Sem o suplemento, os layouts próprios de um modelo são encontrados pelo
+  nome no arquivo salvo da apresentação**, então salve uma apresentação nova
+  antes de pedir um layout pelo nome a `ppt_add_slide`. O PowerPoint para Mac
+  não informa o nome de nenhum layout a um script, então o slide é colado já no
+  layout, o que leva cerca de um segundo. Com o suplemento, o layout é
+  encontrado na apresentação aberta, salva ou não.
 - As imagens dos slides são geradas a partir de um PDF em vez de exportadas
   como PNG. Uma prévia tem 2 pixels por ponto nas duas plataformas.
 - A permissão de automação pertence ao aplicativo que iniciou o servidor, então
@@ -500,11 +502,12 @@ Diferenças menores:
   formatação que dependem do tamanho renderizado do gráfico (`chart_style`, as
   coordenadas da legenda e do título, as predefinições de legenda em 8
   direções) são recusados pelo nome.
-- **O texto dentro de um grupo é editado do mesmo jeito.** `ppt_set_text` (o
-  texto inteiro, ou um trecho dentro de uma linha) e `ppt_format_text` chegam a
-  um membro do grupo pelo nome dele ou pelo caminho (`"Group 4/TextBox 3"`); o
-  grupo é copiado, o membro reescrito e o grupo colado de volta. Os membros
-  mantêm os nomes, e o grupo perde as animações, como acima.
+- **O texto dentro de um grupo** é alcançado pelo nome do membro ou pelo
+  caminho (`"Group 4/TextBox 3"`), com `ppt_set_text` (o texto inteiro, ou um
+  trecho dentro de uma linha) e `ppt_format_text`. Com o suplemento, o membro é
+  editado no lugar. Sem ele, o grupo é copiado, o membro reescrito e o grupo
+  colado de volta: os membros mantêm os nomes, e o grupo perde as animações,
+  como acima.
 - Os ícones são rasterizados com `sips` antes de serem inseridos, porque o
   PowerPoint para Mac não consegue ler SVG. Isso exige macOS 13 ou posterior;
   sistemas mais antigos recebem uma recusa explicando o motivo em vez de uma

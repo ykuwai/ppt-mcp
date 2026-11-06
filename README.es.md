@@ -438,7 +438,9 @@ servidor carga en PowerPoint un pequeño complemento, `ppt-mcp-bridge`, y ejecut
 a través de él el código de Windows para lo que el diccionario de scripting no
 tiene palabras: etiquetas, `ppt_select_shapes`, `ppt_set_table_style`, quitar y
 copiar una sola animación, las herramientas de formato, ejes, series y tipo del
-gráfico, las de nodos de forma libre y la agrupación, y los argumentos que el
+gráfico, las de nodos de forma libre y la agrupación, el texto dentro de un
+grupo, los diseños de una plantilla por nombre, duplicar y copiar
+diapositivas, y los argumentos que el
 Mac rechaza de otro modo (la información en pantalla, una fila o columna de
 tabla en una posición, una animación que se inicia al hacer clic en otra forma,
 los tamaños del reflejo, el resplandor, la sombra y el reflejo sobre el texto,
@@ -478,11 +480,12 @@ Diferencias menores:
 - Las exportaciones se preparan en el contenedor propio de PowerPoint y luego se
   mueven fuera, porque la aplicación está aislada (sandbox) y no puede escribir
   en cualquier carpeta.
-- **Los diseños propios de una plantilla se buscan por nombre en el archivo
-  guardado de la presentación**, así que guarda una presentación nueva antes de
-  pedirle a `ppt_add_slide` uno por nombre. PowerPoint para Mac no da a un
-  script el nombre de ningún diseño, así que la diapositiva se pega con su
-  diseño, lo que tarda alrededor de un segundo.
+- **Sin el complemento, los diseños propios de una plantilla se buscan por
+  nombre en el archivo guardado de la presentación**, así que guarda una
+  presentación nueva antes de pedirle a `ppt_add_slide` uno por nombre.
+  PowerPoint para Mac no da a un script el nombre de ningún diseño, así que la
+  diapositiva se pega con su diseño, lo que tarda alrededor de un segundo. Con
+  el complemento, el diseño se busca en la presentación abierta, guardada o no.
 - Las imágenes de las diapositivas se generan a partir de un PDF en lugar de
   exportarse como PNG. Una vista previa tiene 2 píxeles por punto en ambas
   plataformas.
@@ -508,12 +511,12 @@ Diferencias menores:
   gráfico (`chart_style`, las coordenadas de la leyenda y del título, las
   posiciones predefinidas de la leyenda en 8 direcciones) se rechazan por
   nombre.
-- **El texto dentro de un grupo se edita de la misma manera.** `ppt_set_text`
-  (el texto completo, o un fragmento dentro de una línea) y `ppt_format_text`
-  llegan a un miembro del grupo por su nombre o por su ruta
-  (`"Group 4/TextBox 3"`); el grupo se copia, el miembro se reescribe y el
-  grupo se vuelve a pegar. Los miembros conservan sus nombres, y el grupo pierde
-  sus animaciones, como arriba.
+- **El texto dentro de un grupo** se alcanza por el nombre del miembro o por
+  su ruta (`"Group 4/TextBox 3"`), con `ppt_set_text` (el texto completo, o un
+  fragmento dentro de una línea) y `ppt_format_text`. Con el complemento, el
+  miembro se edita en su sitio. Sin él, el grupo se copia, el miembro se
+  reescribe y el grupo se vuelve a pegar: los miembros conservan sus nombres, y
+  el grupo pierde sus animaciones, como arriba.
 - Los iconos se rasterizan con `sips` antes de insertarse, porque PowerPoint
   para Mac no puede leer un SVG. Esto requiere macOS 13 o posterior; los
   sistemas más antiguos reciben un rechazo que indica el motivo en lugar de un

@@ -61,6 +61,17 @@ Public Function CallD(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallD = False
                 End Select
             End If
+        Case "Duplicate"
+            If kind = "l" Then
+                o.Duplicate = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.Duplicate = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.Duplicate
+                    Case Else: CallD = False
+                End Select
+            End If
         Case "Duration"
             If kind = "l" Then
                 o.Duration = ArgOf(f(3))

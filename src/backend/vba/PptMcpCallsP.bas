@@ -39,6 +39,17 @@ Public Function CallP(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallP = False
                 End Select
             End If
+        Case "Password"
+            If kind = "l" Then
+                o.Password = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.Password = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.Password
+                    Case Else: CallP = False
+                End Select
+            End If
         Case "Paste"
             If kind = "l" Then
                 o.Paste = ArgOf(f(3))
@@ -96,6 +107,17 @@ Public Function CallP(o As Object, kind As String, m As String, f() As String, n
             Else
                 Select Case n
                     Case 0: Assign r, o.PlaceholderFormat
+                    Case Else: CallP = False
+                End Select
+            End If
+        Case "Placeholders"
+            If kind = "l" Then
+                o.Placeholders = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.Placeholders = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.Placeholders
                     Case Else: CallP = False
                 End Select
             End If

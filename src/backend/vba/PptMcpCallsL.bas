@@ -49,6 +49,17 @@ Public Function CallL(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallL = False
                 End Select
             End If
+        Case "Layout"
+            If kind = "l" Then
+                o.Layout = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.Layout = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.Layout
+                    Case Else: CallL = False
+                End Select
+            End If
         Case "Left"
             If kind = "l" Then
                 o.Left = ArgOf(f(3))

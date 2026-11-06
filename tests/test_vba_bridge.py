@@ -597,3 +597,68 @@ class TestDirectCalls:
     def test_the_dispatcher_tries_the_written_out_call_first(self):
         body = (VBA_DIR / "PptMcpBridge.bas").read_text(encoding="utf-8").split("Sub Dispatch")[1]
         assert body.index("If Not Direct(") < body.index('Case "l": CallByName')
+
+
+# ---------------------------------------------------------------------------
+# Text in groups, slides by layout name, duplicating and copying slides
+# ---------------------------------------------------------------------------
+class TestGroupMemberRoute:
+    """On the Mac a group's member is edited through the clipboard, which
+    recreates the group; a top-level shape is edited in place already."""
+
+    @pytest.fixture
+    def slide_with(self, monkeypatch):
+        import backend
+
+        def make(*top_level):
+            class Shapes:
+                class name:  # noqa: N801 - appscript's spelling
+                    @staticmethod
+                    def get():
+                        return list(top_level)
+
+            class Slide:
+                shapes = Shapes
+
+            class Deck:
+                slides = {2: Slide}
+
+            class FakePpt:
+                def _get_pres_impl(self):
+                    return Deck()
+
+            monkeypatch.setattr(backend, "ppt", FakePpt())
+        return make
+
+    def test_a_path_is_a_member(self, slide_with):
+        slide_with("Group 4")
+        assert routes.group_member({"slide_index": 2, "shape_name_or_index": "Group 4/TextBox 3"})
+
+    def test_a_name_no_top_level_shape_has_is_a_member(self, slide_with):
+        slide_with("Group 4", "Title 1")
+        assert routes.group_member({"slide_index": 2, "shape_name_or_index": "TextBox 3"})
+
+    def test_a_top_level_shape_stays_on_apple_events(self, slide_with):
+        slide_with("Group 4", "Title 1")
+        assert not routes.group_member({"slide_index": 2, "shape_name_or_index": "Title 1"})
+        assert not routes.group_member({"slide_index": 2, "shape_name_or_index": 1})
+
+    def test_the_new_routes_are_listed(self):
+        assert routes.ROUTES[("ppt_com.text", "_set_text_impl")] is routes.group_member
+        assert routes.ROUTES[("ppt_com.text", "_format_text_impl")] is routes.group_member
+        assert routes.ROUTES[("ppt_com.slides", "_duplicate_slide_impl")] is routes.ALWAYS
+        assert routes.ROUTES[("ppt_com.slides", "_copy_slide_impl")] is routes.ALWAYS
+        add_slide = routes.ROUTES[("ppt_com.slides", "_add_slide_impl")]
+        assert add_slide({"layout_name": "Title Only"}) and not add_slide({"layout": 12})
+
+
+def test_temporary_files_go_where_powerpoint_may_read_them(monkeypatch, tmp_path):
+    # copy_slide's Windows code saves a snapshot of the deck for PowerPoint to
+    # insert slides from; outside its container macOS would ask the user.
+    import tempfile
+
+    monkeypatch.setattr(vba, "INSTALL_DIR", tmp_path / "ppt-mcp")
+    before = tempfile.tempdir
+    with vba._temp_files_powerpoint_can_read():
+        assert tempfile.mkdtemp(prefix="ppt-mcp-copy-").startswith(str(tmp_path / "ppt-mcp" / "tmp"))
+    assert tempfile.tempdir == before

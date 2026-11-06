@@ -183,6 +183,19 @@ Public Function CallA(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallA = False
                 End Select
             End If
+        Case "AddSlide"
+            If kind = "l" Then
+                o.AddSlide = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.AddSlide = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.AddSlide
+                    Case 1: Assign r, o.AddSlide(ArgOf(f(3)))
+                    Case 2: Assign r, o.AddSlide(ArgOf(f(3)), ArgOf(f(4)))
+                    Case Else: CallA = False
+                End Select
+            End If
         Case "AddTable"
             If kind = "l" Then
                 o.AddTable = ArgOf(f(3))

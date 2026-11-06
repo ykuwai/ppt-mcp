@@ -68,6 +68,21 @@ Public Function CallI(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallI = False
                 End Select
             End If
+        Case "InsertFromFile"
+            If kind = "l" Then
+                o.InsertFromFile = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.InsertFromFile = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.InsertFromFile
+                    Case 1: Assign r, o.InsertFromFile(ArgOf(f(3)))
+                    Case 2: Assign r, o.InsertFromFile(ArgOf(f(3)), ArgOf(f(4)))
+                    Case 3: Assign r, o.InsertFromFile(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
+                    Case 4: Assign r, o.InsertFromFile(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)))
+                    Case Else: CallI = False
+                End Select
+            End If
         Case "InteractiveSequences"
             If kind = "l" Then
                 o.InteractiveSequences = ArgOf(f(3))

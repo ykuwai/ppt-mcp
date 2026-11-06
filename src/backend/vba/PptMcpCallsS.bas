@@ -31,6 +31,20 @@ Public Function CallS(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallS = False
                 End Select
             End If
+        Case "SaveCopyAs"
+            If kind = "l" Then
+                o.SaveCopyAs = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.SaveCopyAs = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.SaveCopyAs
+                    Case 1: Assign r, o.SaveCopyAs(ArgOf(f(3)))
+                    Case 2: Assign r, o.SaveCopyAs(ArgOf(f(3)), ArgOf(f(4)))
+                    Case 3: Assign r, o.SaveCopyAs(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
+                    Case Else: CallS = False
+                End Select
+            End If
         Case "Saved"
             If kind = "l" Then
                 o.Saved = ArgOf(f(3))
@@ -298,6 +312,17 @@ Public Function CallS(o As Object, kind As String, m As String, f() As String, n
             Else
                 Select Case n
                     Case 0: Assign r, o.SlideMaster
+                    Case Else: CallS = False
+                End Select
+            End If
+        Case "SlideNumber"
+            If kind = "l" Then
+                o.SlideNumber = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.SlideNumber = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.SlideNumber
                     Case Else: CallS = False
                 End Select
             End If

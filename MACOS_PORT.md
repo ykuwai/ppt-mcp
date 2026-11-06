@@ -694,8 +694,9 @@ What it took to make it dependable:
   row inserted past the end of a table now answers, as on Windows, "Rows.Add :
   Integer out of range. 9 is not in BeforeRow's valid range of 1 to 2."
 - **Temporary files the Windows code writes must be in PowerPoint's
-  container**, or macOS asks the user for access. None of the routed tools
-  writes one.
+  container**, or macOS asks the user for access. `ppt_copy_slide` saves a
+  snapshot of the source deck to insert slides from, so while a call runs
+  through VBA, Python's temporary folder is `ppt-mcp/tmp` in the container.
 
 Checked on PowerPoint for Mac 16.114, through the server, by reading the saved
 file back: every routed tool did what it says, each edited shape kept its id

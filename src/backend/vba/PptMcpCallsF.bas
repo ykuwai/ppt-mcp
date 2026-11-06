@@ -52,6 +52,18 @@ Public Function CallF(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallF = False
                 End Select
             End If
+        Case "FindBySlideID"
+            If kind = "l" Then
+                o.FindBySlideID = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.FindBySlideID = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.FindBySlideID
+                    Case 1: Assign r, o.FindBySlideID(ArgOf(f(3)))
+                    Case Else: CallF = False
+                End Select
+            End If
         Case "FindFirstAnimationFor"
             If kind = "l" Then
                 o.FindFirstAnimationFor = ArgOf(f(3))
@@ -94,6 +106,17 @@ Public Function CallF(o As Object, kind As String, m As String, f() As String, n
             Else
                 Select Case n
                     Case 0: Assign r, o.FirstRow
+                    Case Else: CallF = False
+                End Select
+            End If
+        Case "FollowMasterBackground"
+            If kind = "l" Then
+                o.FollowMasterBackground = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.FollowMasterBackground = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.FollowMasterBackground
                     Case Else: CallF = False
                 End Select
             End If

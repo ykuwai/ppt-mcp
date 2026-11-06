@@ -420,6 +420,28 @@ Public Function CallC(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallC = False
                 End Select
             End If
+        Case "CustomLayout"
+            If kind = "l" Then
+                o.CustomLayout = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.CustomLayout = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.CustomLayout
+                    Case Else: CallC = False
+                End Select
+            End If
+        Case "CustomLayouts"
+            If kind = "l" Then
+                o.CustomLayouts = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.CustomLayouts = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.CustomLayouts
+                    Case Else: CallC = False
+                End Select
+            End If
         Case Else
             CallC = False
     End Select

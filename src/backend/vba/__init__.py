@@ -29,13 +29,14 @@ its Apple Event implementation whenever the add-in cannot be loaded, and
 ``PPT_MAC_VBA=off`` turns the route off altogether.
 """
 
+import contextlib
 import contextvars
 import functools
 import inspect
 import json
 import logging
 import os
-import shutil
+import tempfile
 import threading
 import time
 import uuid
@@ -48,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 ADDIN_FILE = HERE / "ppt-mcp-bridge.ppam"
 ADDIN_NAME = "ppt-mcp-bridge"
 # Must match BRIDGE_VERSION in PptMcpBridge.bas; a test keeps them together.
-BRIDGE_VERSION = "2"
+BRIDGE_VERSION = "3"
 DISPATCH = "PptMcpBridge.Dispatch"
 PING = "PptMcpBridge.Ping"
 # PowerPoint is sandboxed. Its ~/Documents is this folder, which is where the
@@ -488,6 +489,25 @@ def run(com_impl: Callable, *args, **kwargs) -> Any:
     return _run(_SESSION.bridge(ppt._get_app_impl()), com_impl, args, kwargs)
 
 
+@contextlib.contextmanager
+def _temp_files_powerpoint_can_read():
+    """Temporary files in PowerPoint's container while Windows code runs.
+
+    The Windows code writes some files for PowerPoint to read (a snapshot of
+    a deck to insert slides from, for one); PowerPoint is sandboxed, and
+    anywhere outside its container macOS asks the user for access first.
+    Only the worker runs tool code, so this is set and put back on one thread.
+    """
+    folder = INSTALL_DIR / "tmp"
+    folder.mkdir(parents=True, exist_ok=True)
+    before = tempfile.tempdir
+    tempfile.tempdir = str(folder)
+    try:
+        yield
+    finally:
+        tempfile.tempdir = before
+
+
 def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
     from backend import ppt
 
@@ -497,7 +517,8 @@ def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
         pres = _same_deck(app, mac_pres.name(), mac_pres.full_name())
         token = _CALL.set(Call(app, pres))
         try:
-            return com_impl(*args, **kwargs)
+            with _temp_files_powerpoint_can_read():
+                return com_impl(*args, **kwargs)
         finally:
             _CALL.reset(token)
     finally:

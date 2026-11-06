@@ -435,7 +435,8 @@ server loads a small add-in, `ppt-mcp-bridge`, into PowerPoint and runs the
 Windows code through it for what the scripting dictionary has no words for:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, removing and copying one
 animation, the chart formatting, axis, series and type tools, the freeform node
-tools and grouping, and the arguments the Mac otherwise refuses (a screen tip,
+tools and grouping, text inside a group, a template's layouts by name,
+duplicating and copying slides, and the arguments the Mac otherwise refuses (a screen tip,
 a table row or column at a position, a click trigger on another shape,
 reflection sizes, glow, shadow and reflection on text, shrinking text to fit,
 volume, mute and fades, a chart style and the legend and title placement).
@@ -469,10 +470,11 @@ Smaller differences:
   animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.
-- **A template's own layouts are found by name in the deck's saved file**, so
-  save a new deck before asking `ppt_add_slide` for one by name. PowerPoint for
-  Mac names no layouts to a script, so the slide is pasted in on its layout,
-  which takes about a second.
+- **Without the add-in, a template's own layouts are found by name in the
+  deck's saved file**, so save a new deck before asking `ppt_add_slide` for one
+  by name. PowerPoint for Mac names no layouts to a script, so the slide is
+  pasted in on its layout, which takes about a second. With the add-in the
+  layout is found in the open deck, saved or not.
 - Slide images are rendered from a PDF rather than exported as PNG. A preview
   is 2 pixels per point on both platforms.
 - Automation consent belongs to whichever application launched the server, so
@@ -491,11 +493,12 @@ Smaller differences:
   result says how many were lost. Without the add-in, a few formatting
   arguments that depend on the chart's rendered size (`chart_style`, legend and
   title coordinates, the 8-direction legend presets) are refused by name.
-- **Text inside a group is edited the same way.** `ppt_set_text` (the whole
-  text, or a span inside one line) and `ppt_format_text` reach a group's
-  member by its name, or by its path (`"Group 4/TextBox 3"`); the group is
-  copied, the member rewritten and the group pasted back. The members keep
-  their names, and the group loses its animations, as above.
+- **Text inside a group** is reached by the member's name, or by its path
+  (`"Group 4/TextBox 3"`), with `ppt_set_text` (the whole text, or a span
+  inside one line) and `ppt_format_text`. With the add-in the member is edited
+  in place. Without it the group is copied, the member rewritten and the group
+  pasted back: the members keep their names, and the group loses its
+  animations, as above.
 - Icons are rasterised with `sips` before they are inserted, because
   PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
   systems get a refusal naming the reason rather than a blank box.

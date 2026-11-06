@@ -50,6 +50,17 @@ Public Function CallN(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallN = False
                 End Select
             End If
+        Case "NotesPage"
+            If kind = "l" Then
+                o.NotesPage = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.NotesPage = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.NotesPage
+                    Case Else: CallN = False
+                End Select
+            End If
         Case "NumberFormat"
             If kind = "l" Then
                 o.NumberFormat = ArgOf(f(3))
