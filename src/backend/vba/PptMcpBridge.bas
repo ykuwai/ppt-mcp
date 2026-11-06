@@ -1,11 +1,12 @@
 Attribute VB_Name = "PptMcpBridge"
 ' ppt-mcp's VBA bridge for PowerPoint for Mac. ppt-mcp sends `run VB macro`
-' with a batch of calls; each is run on the object model with CallByName, and
+' with a batch of calls; each is run on the object model, written out where
+' PptMcpCalls has it and with CallByName otherwise, and
 ' the answers are written to a file in PowerPoint's container, which is the
 ' one place both sides can reach. Every entry point traps its errors, because
 ' an untrapped one would stop PowerPoint on a dialog.
 Option Explicit
-Public Const BRIDGE_VERSION As String = "1"
+Public Const BRIDGE_VERSION As String = "2"
 Private Sub WriteResult(id As String, s As String)
     Dim b() As Byte, f As Integer, dir As String, tmp As String, fin As String
     dir = Environ("HOME") & "/Documents/"
@@ -91,25 +92,30 @@ Sub Dispatch(id As String, batch As String)
         Else
             Set o = Obj(f(0))
             n = UBound(f) - 2
-            r = Array(Empty)
-            Select Case f(1)
-                Case "l": CallByName o, f(2), VbLet, ArgOf(f(3))
-                Case "s": CallByName o, f(2), VbSet, ArgOf(f(3))
-                Case Else
-                    If f(1) = "g" Then ct = VbGet Else ct = VbMethod
-                    Select Case n
-                        Case 0: r = Array(CallByName(o, f(2), ct))
-                        Case 1: r = Array(CallByName(o, f(2), ct, ArgOf(f(3))))
-                        Case 2: r = Array(CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4))))
-                        Case 3: r = Array(CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5))))
-                        Case 4: r = Array(CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6))))
-                        Case 5: r = Array(CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7))))
-                        Case 6: r = Array(CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8))))
-                        Case 7: r = Array(CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9))))
-                        Case Else: r = Array(CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)), ArgOf(f(10))))
-                    End Select
-            End Select
-            out = out & "ok" & Chr$(31) & Describe(r(0)) & Chr$(30)
+            r = Empty
+            ' A call written out keeps PowerPoint's own error text, which
+            ' CallByName replaces with 440 "Automation error"; CallByName runs
+            ' whatever PptMcpCalls does not write out.
+            If Not Direct(o, f(1), f(2), f, n, r) Then
+                Select Case f(1)
+                    Case "l": CallByName o, f(2), VbLet, ArgOf(f(3))
+                    Case "s": CallByName o, f(2), VbSet, ArgOf(f(3))
+                    Case Else
+                        If f(1) = "g" Then ct = VbGet Else ct = VbMethod
+                        Select Case n
+                            Case 0: Assign r, CallByName(o, f(2), ct)
+                            Case 1: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)))
+                            Case 2: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)))
+                            Case 3: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
+                            Case 4: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)))
+                            Case 5: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)))
+                            Case 6: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)))
+                            Case 7: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)))
+                            Case Else: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)), ArgOf(f(10)))
+                        End Select
+                End Select
+            End If
+            out = out & "ok" & Chr$(31) & Describe(r) & Chr$(30)
         End If
     Next
     WriteResult id, out

@@ -481,7 +481,7 @@ def session(monkeypatch, tmp_path):
             pass
 
         def ping(self):
-            return versions.pop(0) if versions else ("1", "16.114.0")
+            return versions.pop(0) if versions else (vba.BRIDGE_VERSION, "16.114.0")
 
     monkeypatch.setattr(vba, "Bridge", Pinging)
     return vba._Session(), versions, tmp_path
@@ -557,3 +557,43 @@ class TestShipped:
         assert default == "Item"
         shape, _ = vba._interface("Shape")
         assert {2, 4} <= set(shape["Left"][0])
+
+
+# ---------------------------------------------------------------------------
+# PowerPoint's own error text
+# ---------------------------------------------------------------------------
+def _generator():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("gen_vba_calls", Path("scripts/gen_vba_calls.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class TestDirectCalls:
+    """CallByName turns every PowerPoint failure into 440, "Automation error".
+    The members the routed tools use are called written out instead, which
+    keeps PowerPoint's own message; the generated modules must keep up."""
+
+    def test_the_generated_modules_are_up_to_date(self):
+        expected = _generator().generate()
+        on_disk = {p.stem: p.read_bytes().decode("ascii").replace("\r\n", "\n")
+                   for p in VBA_DIR.glob("PptMcpCalls*.bas")}
+        assert on_disk == expected, "run: uv run python scripts/gen_vba_calls.py, then rebuild the add-in on Windows"
+
+    def test_they_are_imported_with_crlf_line_endings(self):
+        for p in VBA_DIR.glob("PptMcp*.bas"):
+            data = p.read_bytes()
+            assert b"\r\n" in data and b"\n" not in data.replace(b"\r\n", b""), p.name
+
+    def test_the_members_the_routed_code_uses_are_written_out(self):
+        generated = "".join(p.read_text(encoding="ascii") for p in VBA_DIR.glob("PptMcpCalls?.bas"))
+        for name in ("Tags", "AddTable", "Rows", "Columns", "Nodes", "SetPosition", "Insert",
+                     "SeriesCollection", "Axes", "ChartType", "HasTitle", "TimeLine", "MainSequence",
+                     "Select", "Group", "Range", "Item", "Count"):
+            assert f'Case "{name}"' in generated, name
+
+    def test_the_dispatcher_tries_the_written_out_call_first(self):
+        body = (VBA_DIR / "PptMcpBridge.bas").read_text(encoding="utf-8").split("Sub Dispatch")[1]
+        assert body.index("If Not Direct(") < body.index('Case "l": CallByName')

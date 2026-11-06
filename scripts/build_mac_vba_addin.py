@@ -33,7 +33,8 @@ import winreg  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 VBA = ROOT / "src" / "backend" / "vba"
-MODULES = ("PptMcpHandles", "PptMcpBridge")
+# Every module next to the add-in, the generated PptMcpCalls* included.
+MODULES = tuple(sorted(p.stem for p in VBA.glob("PptMcp*.bas")))
 OUT = VBA / "ppt-mcp-bridge.ppam"
 KEY = r"Software\Microsoft\Office\16.0\PowerPoint\Security"
 ppSaveAsOpenXMLAddin = 30

@@ -688,8 +688,11 @@ What it took to make it dependable:
 - **An argument is passed by value** (`ArgOf(...)` inline): an array taken from
   an array element arrived by reference and failed.
 - **`CallByName` reports a PowerPoint failure as 440, "Automation error"**,
-  without PowerPoint's own text. A late-bound call keeps it, at the cost of
-  generating one per member; the bridge does not do that yet.
+  without PowerPoint's own text. A call written out (`o.Item(a)`) keeps it, so
+  `scripts/gen_vba_calls.py` writes one out for every member the routed tools
+  use (about 300, `PptMcpCalls*.bas`), and `CallByName` runs only the rest. A
+  row inserted past the end of a table now answers, as on Windows, "Rows.Add :
+  Integer out of range. 9 is not in BeforeRow's valid range of 1 to 2."
 - **Temporary files the Windows code writes must be in PowerPoint's
   container**, or macOS asks the user for access. None of the routed tools
   writes one.
@@ -718,9 +721,11 @@ Building the add-in needs PowerPoint for Windows, with "Trust access to the VBA
 project object model" turned on for the build only:
 `scripts/build_mac_vba_addin.py` does that and puts the setting back once
 PowerPoint has quit (PowerPoint writes it back on its way out).
-`scripts/dump_com_members.py` writes `com_members.json`. A change to the `.bas`
-sources needs both the add-in rebuilt and `BRIDGE_VERSION` raised in the
-source and in `backend/vba/__init__.py`; a test keeps them together.
+`scripts/dump_com_members.py` writes `com_members.json`, and
+`scripts/gen_vba_calls.py` the generated modules (a test fails when they fall
+behind the code the routed tools use). A change to the `.bas` sources needs
+both the add-in rebuilt and `BRIDGE_VERSION` raised in the source and in
+`backend/vba/__init__.py`; a test keeps them together.
 
 ---
 
