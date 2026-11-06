@@ -435,7 +435,8 @@ ele não alcança algo a ferramenta avisa em vez de fazer algo inesperado.
 carrega no PowerPoint um pequeno suplemento, `ppt-mcp-bridge`, e roda por meio
 dele o código do Windows para o que o dicionário de scripts não tem palavras:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, remover e copiar uma única
-animação, as ferramentas de formatação, eixo, séries, tipo e dados do gráfico (os
+animação, o tipo de edição de um nó de forma livre, as ferramentas de
+formatação, eixo, séries, tipo e dados do gráfico (os
 dados pela pasta de trabalho do Excel do gráfico, que abre no Excel por um
 instante, como no Windows), as de
 nós de forma livre e o agrupamento, o texto dentro de um grupo, os layouts de
@@ -454,7 +455,7 @@ descrito abaixo. Defina `PPT_MAC_VBA=off` no `env` do servidor para não usá-lo
 
 Não disponível no macOS:
 
-- **O tipo de edição de um nó de forma livre.** Canto, suave e simétrico não
+- **Sem o suplemento, o tipo de edição de um nó de forma livre.** Canto, suave e simétrico não
   ficam guardados em nenhum lugar que um script alcance; mova as alças do nó.
 - **`ppt_execute_mso`**, e sem o suplemento também **tags, `ppt_select_shapes`,
   `ppt_set_table_style` e remover uma única animação** (limpar as animações de

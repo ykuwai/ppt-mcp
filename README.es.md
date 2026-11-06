@@ -437,7 +437,8 @@ inesperado.
 servidor carga en PowerPoint un pequeño complemento, `ppt-mcp-bridge`, y ejecuta
 a través de él el código de Windows para lo que el diccionario de scripting no
 tiene palabras: etiquetas, `ppt_select_shapes`, `ppt_set_table_style`, quitar y
-copiar una sola animación, las herramientas de formato, ejes, series, tipo y
+copiar una sola animación, el tipo de edición de un nodo de forma libre, las
+herramientas de formato, ejes, series, tipo y
 datos del gráfico (los datos a través del libro de Excel del gráfico, que se
 abre un momento en Excel, como en Windows), las de nodos de forma libre y la agrupación, el texto dentro de un
 grupo, los diseños de una plantilla por nombre, duplicar y copiar
@@ -457,7 +458,7 @@ describe abajo. Pon `PPT_MAC_VBA=off` en el `env` del servidor para no usarlo.
 
 No disponible en macOS:
 
-- **El tipo de edición de un nodo de forma libre.** Esquina, suave y simétrico
+- **Sin el complemento, el tipo de edición de un nodo de forma libre.** Esquina, suave y simétrico
   no se guardan en ningún lugar al que llegue un script; mueve en su lugar los
   controladores del nodo.
 - **`ppt_execute_mso`**, y sin el complemento también **las etiquetas,

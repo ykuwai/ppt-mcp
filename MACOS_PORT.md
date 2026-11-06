@@ -535,9 +535,9 @@ The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
 **157 tools. 146 do the job. 11 always refuse.** These are the counts without
-the VBA bridge (6.3); with it, six of the eleven work (tags, selecting shapes,
-table styles, removing and copying one animation), and so do most refused
-arguments.
+the VBA bridge (6.3); with it, seven of the eleven work (tags, selecting
+shapes, table styles, removing and copying one animation, a freeform node's
+editing type), and so do most refused arguments.
 
 | Why | Tools |
 |---|---|
@@ -708,6 +708,13 @@ What it took to make it dependable:
   Every call lets go of its handles when it ends, and one that could not is
   made up for at the start of the next. Test harnesses that kept handles
   between runs met it as an intermittent failure that only a restart cured.
+- **A node's editing type behaves as on Windows, index shifts included.**
+  Smoothing a node turns its segments into curves and inserts their control
+  points, which renumbers the nodes after it; after `ppt_set_segment_type`
+  makes a segment a curve, the next index is a control point, and smoothing
+  that one straightens the curve again. The same steps run through COM on
+  Windows and through VBA on the Mac gave identical nodes at every step,
+  down to which control points' editing type cannot be read.
 - **The deck is looked up only when the Windows code asks for it.** With no
   deck open, the Apple Event side hands back a missing value rather than an
   error, and some calls need no deck.
@@ -732,7 +739,6 @@ Left on the Apple Event route, with the reason:
 | `ppt_add_chart` | No `AddChart2` (438) |
 | bubble sizes on `ppt_set_chart_data` | Through VBA the data goes through the chart's Excel workbook, which takes names and values only |
 | `ppt_list_smartart_layouts`, `ppt_add_smartart`, `change_layout` on `ppt_modify_smartart` | Layouts are picked by index from the Mac's list of the 162 it installs, which needs no deck open. Its VBA knows 159, in another order, and none until a deck is open. Colour schemes and styles come in the same order on both sides, so the other SmartArt edits go through VBA |
-| `ppt_set_node_editing_type` | The same call smoothed a straight path once and straightened a curved one another time |
 | `link_to_file` on video and audio | A linked file outside PowerPoint's container raises a sandbox prompt |
 | trimming media | The Windows code for it needs a fix of its own first |
 

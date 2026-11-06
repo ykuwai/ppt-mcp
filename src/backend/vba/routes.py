@@ -101,6 +101,7 @@ ROUTES = {
     ("ppt_com.charts", "_get_chart_data_impl"): ALWAYS,
     ("ppt_com.charts", "_set_chart_data_impl"): no_bubble_sizes,
     ("ppt_com.freeform", "_get_shape_nodes_impl"): ALWAYS,
+    ("ppt_com.freeform", "_set_node_editing_type_impl"): ALWAYS,
     ("ppt_com.freeform", "_set_node_position_impl"): ALWAYS,
     ("ppt_com.freeform", "_insert_node_impl"): ALWAYS,
     ("ppt_com.freeform", "_delete_node_impl"): ALWAYS,
@@ -137,7 +138,6 @@ NOT_ROUTED = {
     "ppt_start_undo_entry": "PowerPoint for Mac's VBA has no StartNewUndoEntry",
     "ppt_set_window_state": "Application.WindowState changes nothing on the Mac",
     "ppt_add_chart": "PowerPoint for Mac's VBA has no AddChart2",
-    "ppt_set_node_editing_type": "through PowerPoint for Mac's VBA the same call made a straight path curved once and a curved one straight another time",
     "bubble sizes on ppt_set_chart_data": "through VBA the data goes through Excel, which writes names and values only",
     "ppt_list_smartart_layouts, ppt_add_smartart, changing a SmartArt's layout":
         "PowerPoint for Mac's VBA knows 159 layouts in its own order, and none with no deck open; "

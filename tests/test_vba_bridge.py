@@ -392,7 +392,6 @@ class TestTheRoutes:
     def test_what_is_not_routed_is_not(self):
         routed = {impl for _, impl in routes.ROUTES}
         for name in ("_merge_shapes_impl", "_execute_mso_impl", "_add_chart_impl",
-                     "_set_node_editing_type_impl",
                      "_set_window_state_impl", "_start_undo_entry_impl"):
             assert name not in routed
 
@@ -769,3 +768,11 @@ def test_a_call_that_needs_no_deck_does_not_look_for_one(route, monkeypatch):
     asks = vba.routed(lambda: vba.current().pres, lambda: "mac", routes.ALWAYS)
     with pytest.raises(RuntimeError, match="No presentation is open"):
         asks()
+
+
+def test_a_nodes_editing_type_takes_the_route():
+    """Through COM on Windows and VBA on the Mac the same steps gave the same
+    nodes at every step, index shifts included: smoothing a node inserts the
+    control points of its now curved segments, which renumbers the nodes
+    after it. What looked like an inconsistency was an index that had moved."""
+    assert routes.ROUTES[("ppt_com.freeform", "_set_node_editing_type_impl")] is routes.ALWAYS

@@ -434,7 +434,8 @@ something the tool says so rather than doing something unexpected.
 server loads a small add-in, `ppt-mcp-bridge`, into PowerPoint and runs the
 Windows code through it for what the scripting dictionary has no words for:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, removing and copying one
-animation, the chart formatting, axis, series, type and data tools (the data
+animation, a freeform node's editing type, the chart formatting, axis, series, type and
+data tools (the data
 through the chart's Excel workbook, which opens in Excel for a moment, as on
 Windows), the freeform node
 tools and grouping, text inside a group, a template's layouts by name,
@@ -452,9 +453,8 @@ below. Set `PPT_MAC_VBA=off` in the server's `env` to leave it out.
 
 Not available on macOS:
 
-- **A freeform node's editing type.** Corner, smooth and symmetric are not
-  stored anywhere a script can reach; move the node's handles instead.
-- **`ppt_execute_mso`**, and without the add-in also **tags,
+- **`ppt_execute_mso`**, and without the add-in also **a freeform node's
+  editing type** (move the node's handles instead), **tags,
   `ppt_select_shapes`, `ppt_set_table_style` and removing one animation**
   (clearing a slide's animations works). Nothing in the dictionary reaches them.
 
