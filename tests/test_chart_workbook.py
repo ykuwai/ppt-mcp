@@ -96,7 +96,7 @@ class TestTheToolsSayWhenItWasLeftOpen:
         from ppt_com import charts
 
         data = ChartData(workbook)
-        chart = SimpleNamespace(ChartData=data, _oleobj_=SimpleNamespace(InvokeTypes=lambda *a: None))
+        chart = SimpleNamespace(ChartType=51, ChartData=data, _oleobj_=SimpleNamespace(InvokeTypes=lambda *a: None))
         shown = SimpleNamespace(Name="S", Values=(1.0,), XValues=("Q1",))
         chart.SeriesCollection = lambda *i: shown if i else SimpleNamespace(Count=1)
         shape = SimpleNamespace(Name="Chart 1", ZOrderPosition=1, Chart=chart, HasChart=True)
