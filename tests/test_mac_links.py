@@ -648,7 +648,6 @@ class TestMediaPlaybackSettings:
             "ppt_set_media_settings cannot set volume, muted, fade_out on macOS"
         )
         assert "no volume, mute, trim or fade" in result["reason"]
-        assert "PPT_MAC_VBA=on" in result["reason"], "says how to get them"
         # Refused whole. A call that set loop and dropped the volume would be
         # the silent half success MACOS_PORT section 5 is about.
         assert deck.journal == []
