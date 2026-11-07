@@ -227,7 +227,10 @@ class SetSegmentTypeInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index.")
-    node_index: int = Field(..., ge=1, description="1-based node index. The segment AFTER this node is changed.")
+    node_index: int = Field(..., ge=1, description=(
+        "1-based node index. An anchor changes the segment that ends at it, node 1 the first "
+        "segment, and a control point its own curve."
+    ))
     segment_type: str = Field(
         ...,
         description="New segment type: 'line' or 'curve'.",
@@ -757,11 +760,16 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_set_segment_type(params: SetSegmentTypeInput) -> str:
-        """Change the segment type of the segment following a freeform node.
+        """Change a freeform segment between line and curve.
+
+        node_index picks the segment the way PowerPoint does: an anchor
+        stands for the segment that ends at it, node 1 for the first segment,
+        and a curve's control point for that curve. This is the segment
+        ppt_get_shape_nodes reports as the node's segment_type.
 
         Segment types:
-        - 'line': Straight line to the next vertex.
-        - 'curve': Bézier curve to the next vertex.
+        - 'line': Straight line between the two vertices.
+        - 'curve': Bézier curve between the two vertices.
 
         WARNING: Switching between 'line' and 'curve' may change the total
         node count because Bézier curves require two extra control-point nodes.

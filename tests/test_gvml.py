@@ -218,8 +218,8 @@ class TestRoundTrips:
         sp = canvas.children(canvas.parse(canvas.wrap(body, x, y, cx, cy).encode()))[0]
         nodes = freeform.read_nodes(sp)
         assert [n["segment_type"] for n in nodes] == [
-            "line", "curve", "inaccessible", "inaccessible", "curve",
-            "inaccessible", "inaccessible", "line", "inaccessible",
+            "line", "line", "inaccessible", "inaccessible", "curve",
+            "inaccessible", "inaccessible", "curve", "inaccessible",
         ]
         assert [(n["x"], n["y"]) for n in nodes if n["segment_type"] != "inaccessible"] == [
             (100.0, 150.0), (200.0, 100.0), (250.0, 200.0), (120.0, 200.0),
@@ -948,8 +948,10 @@ class TestNodeEdits:
         nodes = freeform.nodes_of([out])
         assert len(nodes) == 10
         assert (nodes[2]["x"], nodes[2]["y"]) == (10.0, 20.0)
-        # The curve that followed node 2 now starts at the new point.
-        assert nodes[2]["segment_type"] == "curve"
+        # The new point ends the new line; the curve after it still ends at
+        # its old anchor.
+        assert nodes[2]["segment_type"] == "line"
+        assert nodes[5]["segment_type"] == "curve"
 
     def test_inserting_a_curve_adds_three_nodes(self):
         _, path = fixture_path()
@@ -1022,18 +1024,35 @@ class TestNodeEdits:
 
     def test_a_curve_becomes_a_line_and_loses_two_nodes(self):
         _, path = fixture_path()
-        out = freeform.set_segment_type(path, 2, 0)
+        # Node 5 is the anchor the first curve ends at.
+        out = freeform.set_segment_type(path, 5, 0)
         assert out.segments[1] == ("line", path.segments[1][3])
         assert freeform.node_count(out) == 7
 
-    def test_a_control_point_stands_for_its_own_curve(self):
+    @pytest.mark.parametrize("index", [3, 4])
+    def test_a_control_point_stands_for_its_own_curve(self, index):
         _, path = fixture_path()
-        assert freeform.set_segment_type(path, 3, 0).segments == freeform.set_segment_type(path, 2, 0).segments
+        assert freeform.set_segment_type(path, index, 0).segments == freeform.set_segment_type(path, 5, 0).segments
 
-    def test_the_last_node_has_no_segment_to_set(self):
+    def test_an_anchor_stands_for_the_segment_ending_at_it(self):
+        """As ShapeNodes.SetSegmentType does on Windows and through VBA on
+        the Mac: node 2 ends the first segment, and node 1 stands for it too."""
         _, path = fixture_path()
-        with pytest.raises(ValueError, match="node_index 9 is the last node"):
-            freeform.set_segment_type(path, 9, 1)
+        for index in (1, 2):
+            out = freeform.set_segment_type(path, index, 1)
+            assert out.segments[0][0] == "curve"
+            assert out.segments[1:] == path.segments[1:]
+
+    def test_the_closing_node_sets_the_closing_segment(self):
+        _, path = fixture_path()
+        out = freeform.set_segment_type(path, 9, 1)
+        assert out.segments[-1][0] == "curve"
+        assert out.segments[:-1] == path.segments[:-1]
+
+    def test_a_single_point_has_no_segment_to_set(self):
+        path = freeform.Path((1.0, 2.0), [])
+        with pytest.raises(ValueError, match="node_index 1 has no segment"):
+            freeform.set_segment_type(path, 1, 1)
 
     @pytest.mark.parametrize("call", [
         lambda p: freeform.set_node_position(p, 10, 0.0, 0.0),
