@@ -369,7 +369,7 @@ Each write moves the deck's window to the slide it works on, so you can see wher
 
 ### The tool list: catalog mode
 
-A client sends the description of every tool it lists with every request, and this server's tools come to about 112k tokens, a large part of a 128k or 200k window before any work. With `PPT_TOOL_MODE=catalog` in the server's `env`, the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
+A client sends the description of every tool it lists with every request, and this server's tools come to about 112k tokens, a large part of a 128k or 200k window before any work. By default the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
 
 | Tool | What it does |
 |---|---|
@@ -379,7 +379,7 @@ A client sends the description of every tool it lists with every request, and th
 
 The tools themselves are the same, with the same arguments, checks and answers, and `presentation` is passed the same way. The model asks `ppt_describe` before using a tool for the first time, which costs one call. Building the same 12-slide deck through Claude Code, the context peaked at 136k tokens in catalog mode against 206k with every tool listed, and the run cost a third less.
 
-What catalog mode gives up is per-tool control in the client: approving or blocking a tool by its name, and its read-only hint, apply to the three tools above rather than to each one. That is why it is not the default: every tool is listed by its own name unless the setting asks otherwise, which is also what `PPT_TOOL_MODE=full` says. A value other than `catalog` or `full` is ignored with a warning, and every tool is listed.
+What catalog mode gives up is per-tool control in the client: approving or blocking a tool by its name, and its read-only hint, apply to the three tools above rather than to each one. A client that relies on that sets `PPT_TOOL_MODE=full` in the server's `env`, and every tool is listed by its own name, as below; `PPT_TOOL_MODE=catalog` is the default. A value other than `catalog` or `full` is ignored with a warning, and catalog mode is used.
 
 ```json
 {
@@ -387,7 +387,7 @@ What catalog mode gives up is per-tool control in the client: approving or block
     "powerpoint": {
       "command": "uvx",
       "args": ["ppt-mcp"],
-      "env": { "PPT_TOOL_MODE": "catalog" }
+      "env": { "PPT_TOOL_MODE": "full" }
     }
   }
 }
@@ -402,7 +402,7 @@ The same tools, the same arguments, the same answers. What differs is what
 PowerPoint for Mac's scripting dictionary can reach, and where it cannot reach
 something the tool says so rather than doing something unexpected.
 
-**PowerPoint for Mac's VBA reaches further, and can be turned on.** The
+**PowerPoint for Mac's VBA reaches further.** The
 server loads a small add-in, `ppt-mcp-bridge`, into PowerPoint and runs the
 Windows code through it for what the scripting dictionary has no words for:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, removing and copying one
@@ -421,9 +421,10 @@ not touched. The add-in only passes those calls on; its source is in
 `src/backend/vba`. PowerPoint loads it without a prompt, it lasts until
 PowerPoint quits, and nothing of it stays behind. Where it cannot be loaded,
 where macros are turned off by policy for instance, the tools work as described
-below. It is off by
-default, because it is macro code loaded without a prompt. Set `PPT_MAC_VBA=on`
-in the server's `env` to use it.
+below. It is on by
+default; `PPT_MAC_VBA=off` in the server's `env` turns it off. A call the
+add-in would have taken then says so, in its `hint` or `warnings`, as it does
+when the add-in cannot be loaded.
 
 Not available on macOS:
 
