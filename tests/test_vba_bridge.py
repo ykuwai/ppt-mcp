@@ -890,3 +890,25 @@ class TestEachServerLetsGoOfItsOwn:
         assert "ReleaseAll" not in handles + bridge
         assert "Release who" in bridge.split("Sub Dispatch")[1]
         assert "owned.Add keys & h & Chr$(29), owner" in handles
+
+
+class TestTheBatchCannotBeWidened:
+    """Text with the add-in's separators cannot add a call of its own."""
+
+    @pytest.mark.parametrize("text", ["a\x1eapp\x1fc\x1fRun\x1fs:M", "a\x1fb", "a\x1db"])
+    def test_separators_in_text_are_refused(self, tmp_path, text):
+        bridge, target, _ = bridge_answering(tmp_path, "ok" + US + "empty" + RS)
+        with pytest.raises(ValueError, match="control characters"):
+            bridge.run([("h1", "l", "Text", text)])
+        assert target.sent == [], "nothing reached PowerPoint"
+
+    def test_lists_still_pass(self, tmp_path):
+        bridge, _, seen = bridge_answering(tmp_path, "ok" + US + "empty" + RS)
+        bridge.run([("h1", "c", "Add", ["a", "b"], [1, 2])])
+        assert seen
+
+    def test_the_add_in_checks_the_id_and_refuses_risky_members(self):
+        bridge = (VBA_DIR / "PptMcpBridge.bas").read_text(encoding="utf-8")
+        assert "If Not GoodId(id) Then Exit Sub" in bridge
+        assert 'Case "run", "quit", "addins", "comaddins", "vbe", "automationsecurity"' in bridge
+        assert "Refuse o, f(2)" in bridge.split("Sub Dispatch")[1]
