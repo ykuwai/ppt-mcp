@@ -1,10 +1,10 @@
-"""Write the tool counts into every README, from the code.
+"""Write the tool counts into the tool list and every README, from the code.
 
 The READMEs are kept by hand in several languages, and the numbers in them
 went stale whenever a tool was added in one pull request and the translations
 were not touched. This script owns those numbers, so nobody has to count:
 
-- each row of the tool table (in the same order in every README) gets the
+- each row of the table in TOOLS.md, which is in English only, gets the
   number of tools in its category, and the total row gets the sum;
 - every ``<!--tools-->N<!--/tools-->`` and ``<!--categories-->N<!--/categories-->``
   in the prose gets the total and the number of categories, and every
@@ -35,6 +35,7 @@ READMES = {
     "pt-BR": "README.pt-BR.md",
     "he": "README.he.md",
 }
+TOOL_LIST = "TOOLS.md"
 
 # The tool table's rows, in order, and the module each one counts.
 CATEGORIES = [
@@ -97,7 +98,7 @@ def counts() -> list:
                 raise SystemExit(
                     f"{tool} in {path.name} belongs to no row of the tool table. "
                     "Add its module to CATEGORIES in scripts/sync_readmes.py, "
-                    "and a row to every README's table."
+                    f"and a row to the table in {TOOL_LIST}."
                 )
             tally[row] += 1
     return [tally[name] for name, _ in CATEGORIES]
@@ -111,27 +112,20 @@ def mac_refusals() -> int:
     return int(stated.group(3))
 
 
-def table_bounds(body: str):
-    start = body.index("## 🛠️")
-    return start, body.index("\n## ", start + 1)
-
-
 def synced(body: str, numbers: list, name: str, refusals: int) -> str:
     """``body`` with its numbers brought up to date."""
-    start, end = table_bounds(body)
-    table = body[start:end]
-    rows = ROW.findall(table)
-    if len(rows) != len(numbers):
-        raise SystemExit(
-            f"{name}'s tool table has {len(rows)} rows, and scripts/sync_readmes.py "
-            f"has {len(numbers)} categories. Keep the rows in the same order in every README."
-        )
-    it = iter(numbers)
-    table = ROW.sub(lambda m: f"{m.group(1)}{next(it)}{m.group(3)}", table)
-    table, found = TOTAL.subn(lambda m: f"{m.group(1)}{sum(numbers)}{m.group(3)}", table)
-    if found != 1:
-        raise SystemExit(f"{name}'s tool table has no total row.")
-    body = body[:start] + table + body[end:]
+    if name == TOOL_LIST:
+        rows = ROW.findall(body)
+        if len(rows) != len(numbers):
+            raise SystemExit(
+                f"{name}'s tool table has {len(rows)} rows, and scripts/sync_readmes.py "
+                f"has {len(numbers)} categories. Keep them in the same order."
+            )
+        it = iter(numbers)
+        body = ROW.sub(lambda m: f"{m.group(1)}{next(it)}{m.group(3)}", body)
+        body, found = TOTAL.subn(lambda m: f"{m.group(1)}{sum(numbers)}{m.group(3)}", body)
+        if found != 1:
+            raise SystemExit(f"{name}'s tool table has no total row.")
     values = {"tools": sum(numbers), "categories": len(numbers), "mac-refusals": refusals}
     return MARKER.sub(lambda m: f"<!--{m.group(1)}-->{values[m.group(1)]}<!--/{m.group(1)}-->", body)
 
@@ -141,7 +135,7 @@ def main(argv) -> int:
     numbers = counts()
     refusals = mac_refusals()
     stale = []
-    for name in READMES.values():
+    for name in [*READMES.values(), TOOL_LIST]:
         path = ROOT / name
         body = path.read_text(encoding="utf-8")
         new = synced(body, numbers, name, refusals)

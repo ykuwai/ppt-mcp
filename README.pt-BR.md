@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ Principais recursos
 
 - **Controle em tempo real**: age direto sobre o PowerPoint em execução, e as mudanças aparecem na tela na mesma hora
-- **<!--tools-->157<!--/tools--> ferramentas em <!--categories-->26<!--/categories--> categorias**: slides, formas, texto, tabelas, gráficos, animações, SmartArt, mídia, formas livres e mais
+- **Ampla cobertura**: slides, formas, texto, tabelas, gráficos, animações, SmartArt, mídia, formas livres e mais
 - **Seguro para agentes de IA**: `ppt_activate_presentation` prende todas as ferramentas a um arquivo específico, evitando edições acidentais na apresentação errada
 - **Ícones do [Google Material Symbols](https://fonts.google.com/icons)**: busque entre mais de 2.500 ícones por palavra-chave e insira como SVG com as cores do tema
 - **Cores do tema**: passe `accent1`, `accent2` etc. em qualquer lugar que aceite cor de preenchimento, linha, sombra, brilho ou texto, em vez de valores RGB fixos; as formas acompanham o tema quando ele muda
@@ -136,35 +136,7 @@ uv sync
 
 ## 🛠️ Categorias de ferramentas
 
-| Categoria | Ferramentas | Descrição |
-|----------|------:|-------------|
-| **Aplicativo** | 5 | Conectar ao PowerPoint, informações do app, janela ativa, estado da janela, listar apresentações |
-| **Apresentação** | 8 | Criar (com modelos), abrir (um arquivo local ou, no Windows, uma URL do SharePoint ou do OneDrive), salvar, fechar, informações, definir o alvo, listar modelos |
-| **Slides** | 10 | Adicionar, excluir (em lote), duplicar (por posição/vários), mover (em lote), copiar (entre apresentações), listar, informações, anotações, navegação |
-| **Formas** | 10 | Adicionar formas/caixas de texto/imagens/linhas (com posição na ordem Z, inclusive atrás do texto), listar, informações (posição, preenchimento, linha, quadro de texto), atualizar (uma forma, um conjunto ou o slide inteiro, em valor absoluto ou por deslocamento), excluir, ordem Z |
-| **Texto** | 10 | Definir texto (o quadro inteiro, um trecho mantendo a formatação, ou em partes), obter texto (com medição e transbordamento), formatar um trecho ou vários em lote, formato de parágrafo, marcadores, localizar/substituir (inclusive dentro de grupos), quadro de texto, extrair todo o texto como Markdown, verificação tipográfica |
-| **Espaços reservados** | 6 | Listar, obter e definir o conteúdo dos espaços reservados |
-| **Formatação** | 3 | Preenchimento, linha, sombra (na forma ou no texto dela) |
-| **Tabelas** | 13 | Adicionar tabelas, obter/definir células, definir dados em lote, mesclar/dividir células, adicionar/excluir linhas/colunas, estilos, layout, bordas |
-| **Exportação** | 4 | PDF, imagens, prévia do slide, cópia para a área de transferência |
-| **Apresentação de slides** | 6 | Iniciar, parar, próximo, anterior, ir para um slide, status |
-| **Gráficos** | 7 | Adicionar gráficos (no Windows, exceto alguns tipos menos comuns como área 3D, cone e ações, sem abrir o Excel), definir/obter dados (no Windows, ao definir, o gráfico é trocado por uma cópia com outro id de forma, sem abrir o Excel quando dá, e lido de volta; dados que não entraram são um erro, e um rótulo que o Excel leu de outro jeito é um aviso; um gráfico de dispersão ou de bolhas toma os valores x das categorias, e uma série de bolhas seus `sizes`), formatar, formatar eixo, séries, trocar o tipo |
-| **Animação** | 6 | Transições, adicionar/listar/atualizar/remover/limpar animações (entrada, saída, ênfase, trajetória de movimento, sequências interativas) |
-| **Temas** | 4 | Aplicar temas, obter/definir cores do tema, cabeçalhos/rodapés |
-| **Grupos** | 3 | Agrupar, desagrupar, obter os itens do grupo |
-| **Conectores** | 2 | Adicionar, formatar |
-| **Hiperlinks** | 3 | Adicionar, obter, remover |
-| **Seções** | 3 | Adicionar, listar, gerenciar |
-| **Propriedades** | 2 | Definir/obter os metadados da apresentação |
-| **Mídia** | 3 | Vídeo, áudio, configurações de mídia |
-| **SmartArt** | 3 | Adicionar, modificar, listar layouts |
-| **Operações de edição** | 6 | Desfazer e refazer (na apresentação alvo), copiar formas/formatação entre slides |
-| **Layout** | 8 | Alinhar, distribuir, tamanho do slide, plano de fundo, espelhar, mesclar formas, verificação de layout |
-| **Efeitos** | 3 | Brilho e reflexo (na forma ou no texto dela), bordas suaves |
-| **Comentários** | 3 | Adicionar, listar, excluir |
-| **Avançado** | 19 | Tags, fontes (listar as da apresentação ou as deste computador, definir padrões, substituir em massa), recorte, formato de imagem, exportar forma, visibilidade, seleção, modo de exibição, copiar animação, imagem a partir de URL, ícones SVG, busca de ícones, travar proporção, aplicar em lote, estilo padrão de forma |
-| **Forma livre** | 7 | Construir formas livres, obter/definir a posição dos nós, inserir/excluir nós, tipo de edição do nó, tipo de segmento |
-| | **157** | |
+A lista completa de ferramentas, por categoria, está em [TOOLS.md](TOOLS.md) (em inglês).
 
 ## 💡 Exemplos de prompts
 
@@ -398,7 +370,7 @@ Cada escrita leva a janela da apresentação ao slide em que ela atua, para voc�
 
 ### A lista de ferramentas: modo catálogo
 
-Um cliente envia a descrição de cada ferramenta que lista em toda requisição, e as <!--tools-->157<!--/tools--> deste servidor somam cerca de 112 mil tokens, uma boa parte de uma janela de 128 mil ou 200 mil antes de qualquer trabalho. Com `PPT_TOOL_MODE=catalog` no `env` do servidor, ele lista apenas três ferramentas, cerca de 700 tokens, e o modelo chega às demais por meio delas:
+Um cliente envia a descrição de cada ferramenta que lista em toda requisição, e as deste servidor somam cerca de 112 mil tokens, uma boa parte de uma janela de 128 mil ou 200 mil antes de qualquer trabalho. Com `PPT_TOOL_MODE=catalog` no `env` do servidor, ele lista apenas três ferramentas, cerca de 700 tokens, e o modelo chega às demais por meio delas:
 
 | Ferramenta | O que faz |
 |---|---|

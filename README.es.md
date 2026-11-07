@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ Características principales
 
 - **Control en tiempo real**: manipula directamente una instancia de PowerPoint en ejecución; los cambios aparecen al instante en pantalla
-- **<!--tools-->157<!--/tools--> herramientas en <!--categories-->26<!--/categories--> categorías**: diapositivas, formas, texto, tablas, gráficos, animaciones, SmartArt, multimedia, trazados de forma libre y más
+- **Amplia cobertura**: diapositivas, formas, texto, tablas, gráficos, animaciones, SmartArt, multimedia, trazados de forma libre y más
 - **Seguro para agentes de IA**: `ppt_activate_presentation` fija todas las herramientas a un archivo concreto y evita editar por error la presentación equivocada
 - **Iconos de [Google Material Symbols](https://fonts.google.com/icons)**: busca entre más de 2500 iconos por palabra clave y los inserta como SVG con colores del tema
 - **Colores del tema**: pasa `accent1`, `accent2`, etc. en cualquier lugar donde se acepte un color de relleno, línea, sombra, resplandor o texto, en vez de valores RGB fijos; las formas siguen al tema cuando este cambia
@@ -137,35 +137,7 @@ uv sync
 
 ## 🛠️ Categorías de herramientas
 
-| Categoría | Herramientas | Descripción |
-|----------|------:|-------------|
-| **Aplicación** | 5 | Conectar con PowerPoint, información de la aplicación, ventana activa, estado de la ventana, listar presentaciones |
-| **Presentación** | 8 | Crear (con plantillas), abrir (un archivo local o, en Windows, una URL de SharePoint u OneDrive), guardar, cerrar, información, activar destino, listar plantillas |
-| **Diapositivas** | 10 | Añadir, eliminar (en bloque), duplicar (por posición/varias), mover (en bloque), copiar (entre presentaciones), listar, información, notas, navegación |
-| **Formas** | 10 | Añadir formas/cuadros de texto/imágenes/líneas (con posición en el orden Z, incluso detrás del texto), listar, información (posición, relleno, línea, marco de texto), actualizar (una forma, un conjunto o toda la diapositiva, en valor absoluto o por desplazamiento), eliminar, orden Z |
-| **Texto** | 10 | Escribir texto (el marco entero, un fragmento conservando su formato, o por segmentos), leer texto (con medidas y desbordamiento), dar formato a uno o varios fragmentos a la vez, formato de párrafo, viñetas, buscar/reemplazar (opcionalmente dentro de grupos), marco de texto, extraer todo el texto como Markdown, revisión tipográfica |
-| **Marcadores de posición** | 6 | Listar, leer y escribir el contenido de los marcadores de posición |
-| **Formato** | 3 | Relleno, línea, sombra (en la forma o en su texto) |
-| **Tablas** | 13 | Añadir tablas, leer/escribir celdas, escribir datos en bloque, combinar/dividir celdas, añadir/eliminar filas/columnas, estilos, diseño, bordes |
-| **Exportación** | 4 | PDF, imágenes, vista previa de diapositiva, copia al portapapeles |
-| **Presentación con diapositivas** | 6 | Iniciar, detener, siguiente, anterior, ir a diapositiva, estado |
-| **Gráficos** | 7 | Añadir gráficos (en Windows, salvo algunos tipos poco comunes como áreas 3D, cono y cotizaciones, sin abrir Excel), escribir/leer datos (en Windows, al escribirlos el gráfico se cambia por una copia con otro id de forma, sin abrir Excel cuando se puede, y se vuelve a leer; los datos que no quedaron son un error y una etiqueta que Excel interpretó de otro modo es un aviso; un gráfico de dispersión o de burbujas toma los valores x de las categorías, y una serie de burbujas sus `sizes`), formato, formato de ejes, series, cambiar tipo |
-| **Animación** | 6 | Transiciones, añadir/listar/actualizar/quitar/borrar animaciones (entrada, salida, énfasis, trayectoria de movimiento, secuencias interactivas) |
-| **Temas** | 4 | Aplicar temas, leer/escribir colores del tema, encabezados/pies de página |
-| **Grupos** | 3 | Agrupar, desagrupar, leer los elementos del grupo |
-| **Conectores** | 2 | Añadir, dar formato |
-| **Hipervínculos** | 3 | Añadir, leer, quitar |
-| **Secciones** | 3 | Añadir, listar, gestionar |
-| **Propiedades** | 2 | Escribir/leer los metadatos de la presentación |
-| **Multimedia** | 3 | Vídeo, audio, configuración multimedia |
-| **SmartArt** | 3 | Añadir, modificar, listar diseños |
-| **Operaciones de edición** | 6 | Deshacer y rehacer (en la presentación de destino), copiar formas/formato entre diapositivas |
-| **Diseño** | 8 | Alinear, distribuir, tamaño de diapositiva, fondo, voltear, combinar formas, revisión del diseño |
-| **Efectos** | 3 | Resplandor y reflejo (en la forma o en su texto), bordes suaves |
-| **Comentarios** | 3 | Añadir, listar, eliminar |
-| **Avanzado** | 19 | Etiquetas, fuentes (listar las de la presentación o las de este equipo, fijar las predeterminadas, reemplazar en bloque), recorte, formato de imagen, exportar formas, visibilidad, selección, vista, copiar animaciones, imagen desde URL, iconos SVG, búsqueda de iconos, bloqueo de proporciones, aplicar en bloque, estilo de forma predeterminado |
-| **Forma libre** | 7 | Crear trazados de forma libre, leer/escribir posiciones de nodos, insertar/eliminar nodos, tipo de edición de nodos, tipo de segmento |
-| | **157** | |
+La lista completa de herramientas, por categoría, está en [TOOLS.md](TOOLS.md) (en inglés).
 
 ## 💡 Ejemplos de instrucciones
 
@@ -399,7 +371,7 @@ Cada escritura lleva la ventana de la presentación a la diapositiva en la que t
 
 ### La lista de herramientas: modo catálogo
 
-Un cliente envía la descripción de cada herramienta que lista con cada petición, y las <!--tools-->157<!--/tools--> de este servidor suman unos 112k tokens, una buena parte de una ventana de 128k o 200k antes de empezar a trabajar. Con `PPT_TOOL_MODE=catalog` en el `env` del servidor, el servidor lista solo tres herramientas, unos 700 tokens, y el modelo llega al resto a través de ellas:
+Un cliente envía la descripción de cada herramienta que lista con cada petición, y las de este servidor suman unos 112k tokens, una buena parte de una ventana de 128k o 200k antes de empezar a trabajar. Con `PPT_TOOL_MODE=catalog` en el `env` del servidor, el servidor lista solo tres herramientas, unos 700 tokens, y el modelo llega al resto a través de ellas:
 
 | Herramienta | Qué hace |
 |---|---|
