@@ -5,9 +5,10 @@ shapes; what differs is the walk through PowerPoint's object model.
 
 Two things do not carry over from Windows and are handled here rather than
 being pretended away. PowerPoint for Mac has no ``Application.Visible`` and no
-headless mode, so ``visible`` is reported as always true. And the application
-window state is not scriptable, so ``ppt_set_window_state`` refuses instead of
-quietly doing nothing.
+headless mode, so ``visible`` is reported as always true. And there is no
+application window state: ``ppt_set_window_state`` maximises and restores the
+front deck's window through its ``zoomed`` property, and refuses to minimise,
+which PowerPoint for Mac does not script.
 """
 
 import logging
@@ -165,19 +166,52 @@ def _list_presentations_impl() -> dict:
     return {"presentations": presentations, "count": len(presentations)}
 
 
-def _set_window_state_impl(window_state: str) -> dict:
-    """Refuse, because macOS has no scriptable application window state.
+_WINDOW_STATES = ("normal", "minimized", "maximized")
 
-    The Windows side sets ``Application.WindowState``. PowerPoint for Mac has
-    no such property; its ``document window`` carries position and size, but
-    nothing that maximises or minimises the application, and there is no
-    single application window to act on in the first place.
+
+def _set_window_state_impl(window_state: str) -> dict:
+    """Maximise or restore the front deck's window; refuse to minimise.
+
+    The Windows side sets ``Application.WindowState``, which with one window
+    per deck acts on the active deck's window. PowerPoint for Mac's document
+    window inherits the standard window's ``zoomed``, which fills the screen
+    and gives the old size back, and it reads back what it holds. Its
+    ``miniaturized`` and ``collapsed`` read empty and setting them does
+    nothing, and neither the dictionary nor the Mac's VBA has anything else
+    that minimises (``WindowState`` through VBA is taken and ignored), so
+    ``minimized`` is refused by name. Measured on PowerPoint for Mac 16.114;
+    zooming does not bring PowerPoint to the front.
     """
-    return refusal(
-        "ppt_set_window_state",
-        (
-            "PowerPoint for Mac exposes no application window state to Apple "
-            "Events. Individual presentation windows can be moved and resized, "
-            "but there is nothing to maximise or minimise."
-        ),
-    )
+    state = window_state.lower()
+    if state not in _WINDOW_STATES:
+        return {
+            "error": f"Invalid window_state: {window_state}. Use 'normal', 'minimized', or 'maximized'."
+        }
+    if state == "minimized":
+        return refusal(
+            "ppt_set_window_state",
+            (
+                "PowerPoint for Mac does not script minimising a window: its "
+                "dictionary's `miniaturized` reads empty and setting it does "
+                "nothing, and its VBA ignores WindowState. 'maximized' and "
+                "'normal' work, through the window's `zoomed`."
+            ),
+            ["ppt_set_window_state with window_state='normal' or 'maximized'"],
+            error="ppt_set_window_state cannot set window_state='minimized' on macOS",
+        )
+    app = ppt._get_app_impl()
+    if count(app.document_windows) == 0:
+        return {"error": "No presentation window is open in PowerPoint, so there is no window to "
+                         f"make {state}. Open or create a presentation first."}
+    window = app.document_windows.first
+    wanted = state == "maximized"
+    window.zoomed.set(wanted)
+    now = bool(window.zoomed.get())
+    if now != wanted:
+        return {"error": f"PowerPoint kept the window {'maximized' if now else 'normal'}, "
+                         f"not {state}."}
+    return {
+        "success": True,
+        "window_state": state,
+        "window": window.caption(),
+    }

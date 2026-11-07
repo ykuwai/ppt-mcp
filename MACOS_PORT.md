@@ -534,8 +534,8 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**157 tools. 146 do the job. 11 always refuse.** These are the counts without
-the VBA bridge (6.3); with it, seven of the eleven work (tags, selecting
+**157 tools. 147 do the job. 10 always refuse.** These are the counts without
+the VBA bridge (6.3); with it, seven of the ten work (tags, selecting
 shapes, table styles, removing and copying one animation, a freeform node's
 editing type), and so do most refused arguments.
 
@@ -547,10 +547,9 @@ editing type), and so do most refused arguments.
 | Deleting one effect answers -50 and clearing its shape costs the slide | `ppt_remove_animation`, `ppt_copy_animation` |
 | No table style, only the text direction | `ppt_set_table_style` |
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
-| No application window state, only each deck's window position and size | `ppt_set_window_state` |
 | No Boolean merge verbs (union, combine, intersect, subtract, fragment), and no shape range to merge | `ppt_merge_shapes` |
 
-A further **18 tools work and refuse one argument**, with `error` naming
+A further **19 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
@@ -561,7 +560,10 @@ fade, `ppt_format_chart` cannot take `chart_style` (choosing a style rewrites
 the chart's own formatting from the style's definition, which the clipboard
 route would have to redo), the legend and title coordinates or an
 8-direction `legend_position` (they are computed from the chart's rendered
-size, which the XML does not carry), `ppt_set_textframe`
+size, which the XML does not carry), `ppt_set_window_state` cannot take
+`window_state='minimized'` (it maximises and restores the front deck's window
+through the window's `zoomed`; `miniaturized` reads empty and does nothing),
+`ppt_set_textframe`
 cannot take `auto_size='shrink_to_fit'` (PowerPoint for Mac refuses to set it
 from a script, under either of its names). `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
 checks that report a write which did not land rather than a capability that
@@ -738,7 +740,7 @@ Left on the Apple Event route, with the reason:
 | `ppt_merge_shapes` | PowerPoint for Mac's VBA has no `MergeShapes` either (438) |
 | `ppt_execute_mso` | `CommandBars.GetEnabledMso` fails in its VBA (450) |
 | `ppt_start_undo_entry` | No `StartNewUndoEntry` (438) |
-| `ppt_set_window_state` | `Application.WindowState` takes the value and changes nothing |
+| `ppt_set_window_state` | `Application.WindowState` takes the value and changes nothing, and a deck window's `WindowState` zooms but reads back normal; the Apple Event route does maximised and normal through `zoomed`, and minimised has no way in |
 | `ppt_add_chart` | No `AddChart2` (438) |
 | bubble sizes on `ppt_set_chart_data` | Through VBA the data goes through the chart's Excel workbook, which takes names and values only |
 | `ppt_list_smartart_layouts`, `ppt_add_smartart`, `change_layout` on `ppt_modify_smartart` | Layouts are picked by index from the Mac's list of the 162 it installs, which needs no deck open. Its VBA knows 159, in another order, and none until a deck is open. Colour schemes and styles come in the same order on both sides, so the other SmartArt edits go through VBA |
