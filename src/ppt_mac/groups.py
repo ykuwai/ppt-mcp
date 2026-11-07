@@ -46,6 +46,7 @@ from ppt_mac.gvml_paste import (
     Clipboard,
     Refused,
     copy_shape_package,
+    front_refusal,
     paste_package,
     replace_shape,
     unused_name,
@@ -99,6 +100,11 @@ def _group_shapes_impl(slide_index, shape_names):
     for name in shape_names:
         if name not in names_on_slide:
             raise ValueError(f"Shape '{name}' not found on slide {slide_index}")
+
+    # Before the first copy, so a refusal leaves the clipboard alone.
+    refused = front_refusal(pres, "ppt_group_shapes")
+    if refused is not None:
+        return refused
 
     clip = Clipboard.take()
     try:
@@ -395,6 +401,11 @@ def _edit_member(slide_index: int, member: str, tool_name: str, edit) -> Optiona
     if len(path) > 1:
         groups = [(i, g) for i, g in groups if g.name() == path[0]]
         path = path[1:]
+
+    # Before the first copy, so a refusal leaves the clipboard alone.
+    refused = front_refusal(pres, tool_name)
+    if refused is not None:
+        return refused
 
     clip = Clipboard.take()
     try:

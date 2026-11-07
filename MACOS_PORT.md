@@ -231,7 +231,7 @@ round trip.
 | **export one shape to PNG, into the container** | **0.15 s, 28 KB verified** |
 | **insert a movie or a sound from a path, verified as `shape type media`** | **`make new media2 object`, embedded in `ppt/media/` at the file's own byte size** |
 | a chart already in the deck, seen as a shape | name, type and geometry all readable |
-| **a chart, a freeform or a group, pasted from a DrawingML package we wrote** | **`paste object` takes `com.microsoft.Art--GVML-ClipFormat` in 5 to 65 ms; the shape reports its own type; the clipboard is put back afterwards** |
+| **a chart, a freeform or a group, pasted from a DrawingML package we wrote** | **`paste object` takes `com.microsoft.Art--GVML-ClipFormat` in 5 to 65 ms; the shape reports its own type; the clipboard is put back afterwards.** It pastes into PowerPoint's front window, whichever window's view it is sent to: with two decks open, a paste meant for the deck behind landed in the deck in front. So a shape is pasted only into the deck in front, and a call for another deck is refused before anything is written, pointing to `ppt_activate_presentation` |
 | **a chart's numbers or a freeform's points, read from the package `copy shape` writes** | **`chart1.xml` carries the caches with no workbook; `a:custGeom` carries every point** |
 
 Per operation cost on the live object model settles around **0.5 ms for a simple

@@ -465,7 +465,10 @@ Smaller differences:
   went up behind a script ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
 - **Charts, freeform paths and grouping go through the clipboard**, which
   means the operation takes it for a moment and puts back what was there. This
-  is how those three reach a dictionary that has no words for them.
+  is how those three reach a dictionary that has no words for them. PowerPoint
+  for Mac pastes into its front window, so with two decks open these work on
+  the deck in front; for the other, the tool says so and changes nothing, and
+  `ppt_activate_presentation` brings it to the front.
 - **Editing an existing chart or path recreates the shape.** The chart data,
   type, title, legend, axis and series tools, and the node tools, copy the
   shape, rewrite it and paste it back, then delete the original. The name,

@@ -46,6 +46,7 @@ from backend.mac_ae import (
     target_window,
 )
 from backend.unsupported import refusal as _refusal
+from ppt_mac.gvml_paste import front_refusal
 from ppt_mac.shapes import _get_shape
 from utils.navigation import goto_slide, return_to, shown_slide
 
@@ -131,6 +132,11 @@ def _copy_shape_to_slide_impl(src_slide_index, shape_name_or_index, dst_slide_in
     dst_slide = _slide(pres, dst_slide_index)
 
     before = count(dst_slide.shapes)
+
+    # Before the copy, so a refusal leaves the clipboard alone.
+    refused = front_refusal(pres, "ppt_copy_shape_to_slide", ["ppt_add_shape", "ppt_duplicate_slide"])
+    if refused is not None:
+        return refused
 
     # `copy shape` puts the shape on the system clipboard, replacing whatever
     # was there. The Windows tool does the same, so this is parity rather than

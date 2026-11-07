@@ -115,6 +115,43 @@ class TestThePasteProcedure:
         assert [s.name() for s in deck.shapes] == ["Title"]
         assert deck.order[-1] == "restore"
 
+    def test_another_deck_in_front_is_refused_before_anything_is_written(self):
+        """PowerPoint for Mac pastes into its front window whatever view the
+        paste is sent to, so a paste for the deck behind landed in the deck in
+        front, and the read back called it a silent no-op."""
+        from ppt_mac.freeform import _build_freeform_impl
+
+        with _fake_deck(shapes=[("Title", "auto")], front="Other") as deck:
+            payload = json.loads(_build_freeform_impl(1, 1, 0.0, 0.0, _LINE_NODES, False, None))
+
+        assert payload["error"] == "ppt_build_freeform needs 'Fake' in PowerPoint's front window"
+        assert "'Other'" in payload["reason"]
+        assert any("ppt_activate_presentation" in a for a in payload["alternatives"])
+        assert "success" not in payload
+        assert "write" not in deck.order and "paste" not in deck.order
+        assert deck.board.contents == {"public.utf8-plain-text": b"kept"}
+        assert [s.name() for s in deck.shapes] == ["Title"]
+
+    def test_the_deck_in_front_pastes_as_before(self):
+        from ppt_mac.freeform import _build_freeform_impl
+
+        with _fake_deck(shapes=[("Title", "auto")]) as deck:
+            payload = json.loads(_build_freeform_impl(1, 1, 0.0, 0.0, _LINE_NODES, False, "Zig"))
+
+        assert payload["success"] is True and "paste" in deck.order
+
+    def test_a_front_window_that_cannot_be_read_does_not_stop_the_paste(self):
+        from backend.mac_ae import ppt
+        from ppt_mac.freeform import _build_freeform_impl
+
+        with _fake_deck(shapes=[("Title", "auto")]) as deck:
+            broken = mock.Mock()
+            broken.document_windows.first.presentation.full_name.side_effect = RuntimeError("-1728")
+            with mock.patch.object(ppt, "_get_app_impl", return_value=broken):
+                payload = json.loads(_build_freeform_impl(1, 1, 0.0, 0.0, _LINE_NODES, False, "Zig"))
+
+        assert payload["success"] is True
+
     def test_a_clipboard_rewritten_after_the_write_stops_the_paste(self):
         from ppt_mac.freeform import _build_freeform_impl
 
@@ -325,6 +362,16 @@ class TestFreeformTools:
 # ---------------------------------------------------------------------------
 @macos_only
 class TestGroupShapes:
+    def test_another_deck_in_front_stops_it_before_the_first_copy(self):
+        from ppt_mac.groups import _group_shapes_impl
+
+        with _fake_deck(shapes=[("Box", "auto"), ("Circle", "auto")], front="Other") as deck:
+            result = _group_shapes_impl(1, ["Box", "Circle"])
+
+        assert result["error"] == "ppt_group_shapes needs 'Fake' in PowerPoint's front window"
+        assert "snapshot" not in deck.order and "copy" not in deck.order
+        assert deck.board.contents == {"public.utf8-plain-text": b"kept"}
+
     def test_the_members_are_copied_pasted_as_one_group_then_deleted(self):
         from ppt_mac.groups import _group_shapes_impl
 
@@ -1283,6 +1330,9 @@ class _FakeDeck:
             def name(self):
                 return "Fake"
 
+            def full_name(self):
+                return "/decks/Fake.pptx"
+
         return _Pres()
 
 
@@ -1302,8 +1352,14 @@ def _fake_deck(**kwargs):
     from backend.mac_ae import ppt
     from ppt_mac import gvml_paste
 
+    # Another deck in PowerPoint's front window, or this one when None.
+    front = kwargs.pop("front", None)
     deck = _FakeDeck(**kwargs)
     board = deck.board
+    app = mock.Mock()
+    app.document_windows.first.presentation.full_name.return_value = (
+        f"/decks/{front}.pptx" if front else "/decks/Fake.pptx")
+    app.document_windows.first.presentation.name.return_value = front or "Fake"
 
     class _Pasteboard:
         SNAPSHOT_LIMIT = board.SNAPSHOT_LIMIT
@@ -1320,7 +1376,7 @@ def _fake_deck(**kwargs):
         self.mine = board.count
 
     with mock.patch.object(ppt, "_get_pres_impl", return_value=deck.presentation), \
-            mock.patch.object(ppt, "_get_app_impl", return_value=mock.Mock()), \
+            mock.patch.object(ppt, "_get_app_impl", return_value=app), \
             mock.patch.object(gvml_paste, "pasteboard", _Pasteboard), \
             mock.patch.object(gvml_paste, "_recreation_explained", False), \
             mock.patch.object(gvml_paste.Clipboard, "claim", claim):

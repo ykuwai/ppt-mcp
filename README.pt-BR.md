@@ -471,7 +471,10 @@ Diferenças menores:
 - **Gráficos, formas livres e agrupamento passam pela área de transferência**,
   o que significa que a operação a ocupa por um instante e depois devolve o que
   havia nela. É assim que esses três chegam a um dicionário que não tem
-  palavras para eles.
+  palavras para eles. O PowerPoint para Mac cola na janela da frente, então com
+  duas apresentações abertas eles funcionam na da frente; para a outra, a
+  ferramenta avisa e não muda nada, e `ppt_activate_presentation` a traz para a
+  frente.
 - **Editar um gráfico ou forma livre existente recria a forma.** As
   ferramentas de dados, tipo, título, legenda, eixo e séries do gráfico, e as
   ferramentas de nós, copiam a forma, reescrevem e colam de volta, e depois
