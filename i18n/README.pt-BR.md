@@ -396,7 +396,7 @@ O que o modo catálogo sacrifica é o controle por ferramenta no cliente: aprova
 
 ## 🍎 Suporte ao macOS
 
-**<!--mac-refusals-->11<!--/mac-refusals--> ferramentas recusam no macOS. As demais funcionam.** As <!--mac-refusals-->11<!--/mac-refusals--> estão listadas pelo nome na
+**<!--mac-refusals-->10<!--/mac-refusals--> ferramentas recusam no macOS. As demais funcionam.** As <!--mac-refusals-->10<!--/mac-refusals--> estão listadas pelo nome na
 seção 6.1 de [MACOS_PORT.md](../MACOS_PORT.md), e um teste garante que essa lista esteja correta.
 
 As mesmas ferramentas, os mesmos argumentos, as mesmas respostas. O que muda é
