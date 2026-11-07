@@ -393,7 +393,7 @@ ESC 只是取消而不会提交，所以没有破坏性的副作用。在无人�
 
 ## 🍎 macOS 支持
 
-**在 macOS 上有 <!--mac-refusals-->10<!--/mac-refusals--> 个工具会拒绝执行，其余都能用。** 这 <!--mac-refusals-->10<!--/mac-refusals--> 个工具的名称列在
+**在 macOS 上，启用默认开启的 VBA 加载项时有 3 个工具会拒绝执行，不启用时有 <!--mac-refusals-->10<!--/mac-refusals--> 个，其余都能用。** 这 <!--mac-refusals-->10<!--/mac-refusals--> 个工具的名称列在
 [MACOS_PORT.md](../MACOS_PORT.md) 第 6.1 节，并有测试保证该列表准确无误。
 
 工具相同，参数相同，返回结果也相同。不同之处在于 Mac 版 PowerPoint 的脚本字典能触及哪些功能；

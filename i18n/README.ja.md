@@ -395,7 +395,7 @@ PowerPointが起動していないときにツールが必要とすると（`ppt
 
 ## 🍎 macOS 対応
 
-**macOS で断るツールは <!--mac-refusals-->10<!--/mac-refusals--> です。残りは動きます。**その <!--mac-refusals-->10<!--/mac-refusals--> は
+**macOS で断るツールは、既定でオンの VBA アドインがあれば 3、なければ <!--mac-refusals-->10<!--/mac-refusals--> です。残りは動きます。**その <!--mac-refusals-->10<!--/mac-refusals--> は
 [MACOS_PORT.md](../MACOS_PORT.md) の 6.1 に名前で並べてあり、
 その一覧が古びないようにテストで見張っています。
 

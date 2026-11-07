@@ -395,7 +395,7 @@ What catalog mode gives up is per-tool control in the client: approving or block
 
 ## 🍎 macOS support
 
-**<!--mac-refusals-->10<!--/mac-refusals--> tools refuse on macOS. The rest work.** The <!--mac-refusals-->10<!--/mac-refusals--> are listed by name in
+**With the VBA add-in, on by default, 3 tools refuse on macOS; without it, <!--mac-refusals-->10<!--/mac-refusals--> do. The rest work.** The <!--mac-refusals-->10<!--/mac-refusals--> are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what
