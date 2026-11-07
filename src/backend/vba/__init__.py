@@ -25,9 +25,11 @@ built from the ``.bas`` sources next to it by ``scripts/build_mac_vba_addin.py``
 and ``com_members.json`` by ``scripts/dump_com_members.py``.
 
 Which tools take this route is in ``routes.py``. A routed tool falls back to
-its Apple Event implementation whenever the add-in cannot be loaded. The route
-is off unless ``PPT_MAC_VBA=on``, since the add-in is macro code PowerPoint
-loads without a prompt, and that should be the user's choice.
+its Apple Event implementation whenever the add-in cannot be loaded, and its
+answer then says why (``routed``). The route is on unless ``PPT_MAC_VBA=off``.
+The add-in is macro code PowerPoint loads without a prompt, but it only runs
+the calls this server sends, the ones the Windows code makes through COM;
+it lasts until PowerPoint quits and leaves nothing behind.
 """
 
 import contextlib
@@ -71,15 +73,36 @@ SEND_FLAGS = 64 | 1
 
 def _setting(value: str) -> bool:
     value = value.strip().lower()
-    if value in ("on", "true", "1", "yes"):
+    if value in ("", "on", "true", "1", "yes"):
         return True
-    if value in ("", "off", "false", "0", "no"):
+    if value in ("off", "false", "0", "no"):
         return False
-    logger.warning("PPT_MAC_VBA=%r is not a setting; use 'on' or 'off' (the default). Using 'off'.", value)
-    return False
+    logger.warning("PPT_MAC_VBA=%r is not a setting; use 'on' (the default) or 'off'. Using 'on'.", value)
+    return True
 
 
-ENABLED = _setting(os.getenv("PPT_MAC_VBA", "off"))
+ENABLED = _setting(os.getenv("PPT_MAC_VBA", "on"))
+
+# What a call the add-in would have taken says when it ran on the Apple Event
+# route instead. Without it, a refusal reads as "the Mac cannot do this", and
+# a shape the clipboard recreated as the only way to edit it.
+OFF_NOTE = (
+    "PowerPoint for Mac's VBA does this, through the add-in this server loads, "
+    "but PPT_MAC_VBA=off turns that off here. Remove the setting from the "
+    "server's env, or set it to on, and restart the server."
+)
+OFF_RECREATED_NOTE = (
+    "With PPT_MAC_VBA on (the default, off here), this edit is made in place "
+    "through PowerPoint for Mac's VBA, and the shape keeps its id and animations."
+)
+
+
+def _unavailable_note(error: Exception) -> str:
+    return (
+        f"PPT_MAC_VBA is on, but the add-in could not be loaded ({error}), so "
+        "this ran on the Apple Event route, where PowerPoint for Mac's "
+        "dictionary reaches less."
+    )
 
 
 class VbaUnavailable(RuntimeError):
@@ -572,6 +595,31 @@ def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
             logger.debug("Could not release the VBA bridge's handles", exc_info=True)
 
 
+def _noted(result, failure_note: str, recreated_note: str):
+    """``result`` of an Apple Event implementation, with a note on why the
+    add-in did not take the call.
+
+    A failure gets ``failure_note`` as its ``hint``. A success whose shape was
+    recreated through the clipboard gets ``recreated_note`` among its
+    ``warnings``. Anything else, and anything that is not a JSON object, is
+    handed back as it was. A result given as JSON text goes back as JSON text.
+    """
+    as_text = isinstance(result, str)
+    try:
+        body = json.loads(result) if as_text else result
+    except ValueError:
+        return result
+    if not isinstance(body, dict):
+        return result
+    if "error" in body:
+        body["hint"] = f"{body['hint']} {failure_note}" if body.get("hint") else failure_note
+    elif any("was recreated" in str(w) for w in body.get("warnings") or []):
+        body["warnings"] = list(body["warnings"]) + [recreated_note]
+    else:
+        return result
+    return json.dumps(body) if as_text else body
+
+
 def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], bool]) -> Callable:
     """An implementation that takes the VBA route when it can and should.
 
@@ -583,7 +631,7 @@ def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], b
 
     @functools.wraps(mac_impl)
     def impl(*args, **kwargs):
-        if not ENABLED or active():
+        if active():
             return mac_impl(*args, **kwargs)
         try:
             bound = signature.bind(*args, **kwargs)
@@ -592,12 +640,16 @@ def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], b
         bound.apply_defaults()
         if not condition(bound.arguments):
             return mac_impl(*args, **kwargs)
+        if not ENABLED:
+            return _noted(mac_impl(*args, **kwargs), OFF_NOTE, OFF_RECREATED_NOTE)
         from backend import ppt
 
         try:
             bridge = _SESSION.bridge(ppt._get_app_impl())
-        except VbaUnavailable:
-            return mac_impl(*args, **kwargs)
+        except VbaUnavailable as e:
+            logger.warning("The VBA add-in could not be loaded: %s", e)
+            note = _unavailable_note(e)
+            return _noted(mac_impl(*args, **kwargs), note, note)
         return _run(bridge, com_impl, args, kwargs)
 
     impl.vba_route = (com_impl, condition)

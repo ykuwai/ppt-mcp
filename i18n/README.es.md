@@ -371,7 +371,7 @@ Cada escritura lleva la ventana de la presentación a la diapositiva en la que t
 
 ### La lista de herramientas: modo catálogo
 
-Un cliente envía la descripción de cada herramienta que lista con cada petición, y las de este servidor suman unos 112k tokens, una buena parte de una ventana de 128k o 200k antes de empezar a trabajar. Con `PPT_TOOL_MODE=catalog` en el `env` del servidor, el servidor lista solo tres herramientas, unos 700 tokens, y el modelo llega al resto a través de ellas:
+Un cliente envía la descripción de cada herramienta que lista con cada petición, y las de este servidor suman unos 112k tokens, una buena parte de una ventana de 128k o 200k antes de empezar a trabajar. De forma predeterminada, el servidor lista solo tres herramientas, unos 700 tokens, y el modelo llega al resto a través de ellas:
 
 | Herramienta | Qué hace |
 |---|---|
@@ -381,7 +381,7 @@ Un cliente envía la descripción de cada herramienta que lista con cada petici�
 
 Las herramientas en sí son las mismas, con los mismos argumentos, comprobaciones y respuestas, y `presentation` se pasa de la misma manera. El modelo consulta `ppt_describe` antes de usar una herramienta por primera vez, lo que cuesta una llamada. Al crear la misma presentación de 12 diapositivas con Claude Code, el contexto llegó como máximo a 136k tokens en modo catálogo frente a 206k con todas las herramientas listadas, y la ejecución costó un tercio menos.
 
-Lo que se pierde en modo catálogo es el control por herramienta en el cliente: aprobar o bloquear una herramienta por su nombre, y su indicación de solo lectura, se aplican a las tres herramientas de arriba y no a cada una. Por eso no es el modo predeterminado: cada herramienta se lista con su propio nombre salvo que el ajuste pida otra cosa, que es también lo que indica `PPT_TOOL_MODE=full`. Un valor distinto de `catalog` o `full` se ignora con un aviso, y se listan todas las herramientas.
+Lo que se pierde en modo catálogo es el control por herramienta en el cliente: aprobar o bloquear una herramienta por su nombre, y su indicación de solo lectura, se aplican a las tres herramientas de arriba y no a cada una. Un cliente que depende de eso pone `PPT_TOOL_MODE=full` en el `env` del servidor, y cada herramienta se lista con su propio nombre, como abajo; `PPT_TOOL_MODE=catalog` es el modo predeterminado. Un valor distinto de `catalog` o `full` se ignora con un aviso, y se usa el modo catálogo.
 
 ```json
 {
@@ -389,7 +389,7 @@ Lo que se pierde en modo catálogo es el control por herramienta en el cliente: 
     "powerpoint": {
       "command": "uvx",
       "args": ["ppt-mcp"],
-      "env": { "PPT_TOOL_MODE": "catalog" }
+      "env": { "PPT_TOOL_MODE": "full" }
     }
   }
 }
@@ -405,7 +405,7 @@ cambia es lo que alcanza el diccionario de scripting de PowerPoint para Mac, y
 cuando no alcanza algo, la herramienta lo dice en lugar de hacer algo
 inesperado.
 
-**El VBA de PowerPoint para Mac llega más lejos, y se puede activar.** El
+**El VBA de PowerPoint para Mac llega más lejos.** El
 servidor carga en PowerPoint un pequeño complemento, `ppt-mcp-bridge`, y ejecuta
 a través de él el código de Windows para lo que el diccionario de scripting no
 tiene palabras: etiquetas, `ppt_select_shapes`, `ppt_set_table_style`, quitar y
@@ -426,9 +426,10 @@ portapapeles. El complemento solo transmite esas llamadas; su código fuente est
 en `src/backend/vba`. PowerPoint lo carga sin preguntar, dura hasta que
 PowerPoint se cierra y no deja nada atrás. Donde no puede cargarse, por ejemplo
 si una directiva desactiva las macros, las herramientas funcionan como se
-describe abajo. Está desactivado por defecto, porque es
-código de macros que se carga sin preguntar. Pon `PPT_MAC_VBA=on` en el `env`
-del servidor para usarlo.
+describe abajo. Está activado por defecto;
+`PPT_MAC_VBA=off` en el `env` del servidor lo desactiva. Una llamada que el
+complemento habría atendido lo dice entonces en su `hint` o en `warnings`, igual
+que cuando el complemento no puede cargarse.
 
 No disponible en macOS:
 
