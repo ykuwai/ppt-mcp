@@ -911,6 +911,13 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
 
+    if shape.Chart.ChartType in chart_defaults.BUBBLE_TYPES:
+        missing = [s.get("name") for s in series if "sizes" not in s]
+        if missing:
+            raise ValueError(
+                f"A bubble chart's series need 'sizes', and {missing[0]!r} has none. "
+                "Nothing was changed.")
+
     reason = _excel_needed(slide, shape)
     if reason is None:
         old_id = shape.Id

@@ -128,6 +128,13 @@ class TestTheToolsSayWhenItWasLeftOpen:
         result = charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
         assert "warning" not in result
 
+    def test_bubbles_without_sizes_are_refused_before_anything_else(self, monkeypatch):
+        charts = self.deck(monkeypatch, Workbook(failures=0))
+        charts._get_chart_shape(None, None).Chart.ChartType = 15  # xlBubble
+        monkeypatch.setattr(charts, "_excel_needed", lambda *a: pytest.fail("got as far as Excel"))
+        with pytest.raises(ValueError, match="'S' has none"):
+            charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
+
 
 def test_a_workbook_that_never_closes_is_reported(caplog):
     workbook = Workbook(failures=99, error=OSError("Excel is busy"))
