@@ -455,6 +455,15 @@ _REBUILDING_MESSAGE = (
 # Deliberately longer than one whole call budget, so a caller behind one slow
 # but healthy operation is served rather than taken back.
 _QUEUE_WAIT = 60.0
+# Only the server's lifespan starts the worker. A caller that reaches the tools
+# without running the server, a test or a script driving server.mcp directly,
+# would otherwise queue onto nothing and wait out _QUEUE_WAIT for a message that
+# blames "earlier operations" when there were none.
+_NOT_STARTED_MESSAGE = (
+    "The COM worker thread has not been started, so nothing would run this "
+    "operation. The MCP server starts it when it runs; code that calls the "
+    "tools without running the server has to call ppt.start() first."
+)
 _QUEUE_TIMEOUT_MESSAGE = (
     "PowerPoint did not start the operation within %.0fs because earlier "
     "operations were still running. It was cancelled rather than left to run "
@@ -954,6 +963,9 @@ class PowerPointCOMWrapper:
             # cost another full timeout to learn what is already known
             # (issue #199).
             raise RuntimeError(_REBUILDING_MESSAGE)
+
+        if self._com_thread is None and not self._running:
+            raise RuntimeError(_NOT_STARTED_MESSAGE)
 
         if self._com_thread is not None and not self._com_thread.is_alive():
             # Nothing is draining the queue any more, so queueing would just
