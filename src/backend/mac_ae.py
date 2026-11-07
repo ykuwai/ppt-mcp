@@ -1223,6 +1223,23 @@ def target_window(pres):
     return pres.document_windows[1]
 
 
+def slide_total(pres) -> int:
+    """How many slides a deck has, asked of the deck in one event.
+
+    ``count(pres.slides)`` reads every slide to count them, about 80 ms on a
+    deck of 50 and more as it grows, and ``slide_at`` runs on nearly every
+    call. The deck answers its own count at once. A reference that no longer
+    reaches a deck raises here (-1728) where the list read answers empty, so
+    that case falls back to the list read, whose 0 ``slide_at`` turns into the
+    message for a dead reference. Any other failure of the quick count takes
+    the same, slower, route to the same number.
+    """
+    try:
+        return count_of(pres, k.slide)
+    except Exception:  # noqa: BLE001 - the list read answers it, and says why if it cannot
+        return count(pres.slides)
+
+
 def slide_at(pres, slide_index: int):
     """Return a slide reference, checking the index first.
 
@@ -1230,7 +1247,7 @@ def slide_at(pres, slide_index: int):
     somewhere later with -1728 and no mention of the index, so the range is
     checked here where the number is still in hand.
     """
-    total = count(pres.slides)
+    total = slide_total(pres)
     if total == 0:
         # `elements` turns -1728 into an empty list, so "this deck has no
         # slides" and "this reference no longer reaches a deck" arrive here
