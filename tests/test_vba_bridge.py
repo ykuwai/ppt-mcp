@@ -385,7 +385,9 @@ class TestTheRoutes:
         assert routes.reflection_details({"target": "text"})
         assert not routes.reflection_details({"reflection_type": 1, "target": "shape"})
         assert routes.media_levels({"volume": 0.5})
-        assert not routes.media_levels({"volume": 0.5, "start_point": 100}), "trimming stays where it is"
+        assert routes.media_levels({"volume": 0.5, "start_point": 100})
+        assert routes.media_levels({"start_point": 100})
+        assert routes.media_levels({"end_point": 2000})
         assert not routes.media_levels({"loop": True})
         assert routes.shrink_to_fit({"auto_size": "shrink_to_fit"})
         assert not routes.shrink_to_fit({"auto_size": "none"})
