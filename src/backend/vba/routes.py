@@ -35,8 +35,8 @@ def reflection_details(arguments) -> bool:
 
 
 def media_levels(arguments) -> bool:
-    # Volume, mute and fades. Trimming stays where it is: the Windows code for
-    # it needs a fix of its own first (StartPoint and EndPoint).
+    # Volume, mute and fades. Trimming stays where it is: it has not been
+    # checked through VBA yet.
     return (given("volume", "muted", "fade_in", "fade_out")(arguments)
             and arguments.get("start_point") is None and arguments.get("end_point") is None)
 

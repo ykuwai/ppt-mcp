@@ -480,3 +480,14 @@ class TestTheResultSaysWhatWasDone:
             charts._set_chart_data_impl(
                 1, "Chart 1", ["1", "2"], [{"name": "S", "values": [1, 2], "sizes": [3, 4]}])
         assert written == [], "nothing was written"
+
+    def test_a_bubble_chart_with_no_sizes_is_refused_too(self, charts, monkeypatch):
+        shape = chart_shape(chart_type=15)
+        self.deck(charts, monkeypatch, shape)
+        monkeypatch.setattr(charts, "_excel_needed", lambda slide, s: "it is animated")
+        written = []
+        monkeypatch.setattr(charts, "_set_chart_data_through_excel",
+                            lambda *a: written.append(a) or {"success": True})
+        with pytest.raises(RuntimeError, match="Nothing was changed"):
+            charts._set_chart_data_impl(1, "Chart 1", ["1", "2"], [{"name": "S", "values": [1, 2]}])
+        assert written == [], "the Excel way would drop the sizes"
