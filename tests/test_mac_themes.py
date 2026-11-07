@@ -591,8 +591,8 @@ class TestEveryReadmeCountsTheSame:
         import re
 
         refusing = self._documented_refusals()
-        for name in ("README.md", "README.ja.md", "README.zh-CN.md",
-                     "README.es.md", "README.pt-BR.md", "README.he.md"):
+        for name in ("README.md", "i18n/README.ja.md", "i18n/README.zh-CN.md",
+                     "i18n/README.es.md", "i18n/README.pt-BR.md", "i18n/README.he.md"):
             text = pathlib.Path(name).read_text(encoding="utf-8")
             said = re.findall(r"<!--mac-refusals-->(\d+)<!--/mac-refusals-->", text)
             assert said, f"{name} no longer says how many refuse"

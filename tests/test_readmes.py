@@ -9,6 +9,7 @@ that the Hebrew one reads right to left.
 """
 
 import importlib.util
+import posixpath
 import re
 from pathlib import Path
 
@@ -52,7 +53,7 @@ def test_the_rows_of_the_tool_table_add_up_to_its_total():
 
 @pytest.mark.parametrize("lang", sorted(READMES))
 def test_each_links_the_tool_list(lang):
-    assert "(TOOLS.md)" in text(lang)
+    assert re.search(r"\((\.\./)?TOOLS\.md\)", text(lang))
 
 
 @pytest.mark.parametrize("lang", [lang for lang in READMES if lang != "en"])
@@ -83,7 +84,8 @@ def test_each_has_the_same_language_bar(lang):
         if other == lang:
             assert "<strong>" in body and f"({other})</strong>" in body, f"{READMES[lang]} does not name itself in its language bar"
         else:
-            assert f'href="{name}"' in body, f"{READMES[lang]} does not link to {name}"
+            link = posixpath.relpath(name, posixpath.dirname(READMES[lang]) or ".")
+            assert f'href="{link}"' in body, f"{READMES[lang]} does not link to {name}"
             assert f"({other})</a>" in body, f"{READMES[lang]} does not give {name}'s code in its language bar"
 
 
@@ -114,8 +116,20 @@ def test_each_has_the_same_sections(lang):
 
 @pytest.mark.parametrize("lang", sorted(READMES))
 def test_the_same_pictures_and_examples_are_shown(lang):
-    pictures = sorted(re.findall(r'src="(assets/[^"]+)"', text(lang)))
+    pictures = sorted(re.findall(r'src="(?:\.\./)?(assets/[^"]+)"', text(lang)))
     assert pictures == sorted(re.findall(r'src="(assets/[^"]+)"', text("en")))
+
+
+@pytest.mark.parametrize("lang", sorted(READMES))
+def test_every_relative_link_reaches_a_file(lang):
+    """The translations sit in a folder of their own, so what they link to is
+    one level up."""
+    body = text(lang)
+    links = re.findall(r"\]\(([^)\s]+)\)", body) + re.findall(r'(?:src|href)="([^"]+)"', body)
+    base = (ROOT / READMES[lang]).parent
+    for link in links:
+        if not link.startswith(("http", "#", "mailto:")):
+            assert (base / link.split("#")[0]).exists(), f"{READMES[lang]} links to {link}"
 
 
 @pytest.mark.parametrize("lang", sorted(READMES))
@@ -134,4 +148,4 @@ def test_the_hebrew_readme_reads_right_to_left():
 def test_the_hebrew_readme_links_resolve_to_its_own_anchors():
     body = text("he")
     for anchor in re.findall(r"\]\(#([^)]+)\)", body):
-        assert f'id="{anchor}"' in body, f"README.he.md links to #{anchor}, which it does not have"
+        assert f'id="{anchor}"' in body, f"{READMES['he']} links to #{anchor}, which it does not have"

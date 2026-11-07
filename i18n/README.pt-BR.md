@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <strong>Português (pt-BR)</strong> · <a href="README.he.md">עברית (he)</a>
+  <a href="../README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <strong>Português (pt-BR)</strong> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
@@ -136,7 +136,7 @@ uv sync
 
 ## 🛠️ Categorias de ferramentas
 
-A lista completa de ferramentas, por categoria, está em [TOOLS.md](TOOLS.md) (em inglês).
+A lista completa de ferramentas, por categoria, está em [TOOLS.md](../TOOLS.md) (em inglês).
 
 ## 💡 Exemplos de prompts
 
@@ -151,9 +151,9 @@ Basta descrever o que você quer em linguagem comum, sem precisar de código.
 <details>
 <summary>Ver slides</summary>
 <br>
-<img src="assets/examples/example1/Slide1.png" width="640">
-<img src="assets/examples/example1/Slide2.png" width="640">
-<img src="assets/examples/example1/Slide3.png" width="640">
+<img src="../assets/examples/example1/Slide1.png" width="640">
+<img src="../assets/examples/example1/Slide2.png" width="640">
+<img src="../assets/examples/example1/Slide3.png" width="640">
 </details>
 
 ---
@@ -165,10 +165,10 @@ Basta descrever o que você quer em linguagem comum, sem precisar de código.
 <details>
 <summary>Ver slides</summary>
 <br>
-<img src="assets/examples/example2/Slide1.png" width="640">
-<img src="assets/examples/example2/Slide2.png" width="640">
-<img src="assets/examples/example2/Slide3.png" width="640">
-<img src="assets/examples/example2/Slide4.png" width="640">
+<img src="../assets/examples/example2/Slide1.png" width="640">
+<img src="../assets/examples/example2/Slide2.png" width="640">
+<img src="../assets/examples/example2/Slide3.png" width="640">
+<img src="../assets/examples/example2/Slide4.png" width="640">
 </details>
 
 ---
@@ -180,11 +180,11 @@ Basta descrever o que você quer em linguagem comum, sem precisar de código.
 <details>
 <summary>Ver slides</summary>
 <br>
-<img src="assets/examples/example3/Slide1.png" width="640">
-<img src="assets/examples/example3/Slide2.png" width="640">
-<img src="assets/examples/example3/Slide3.png" width="640">
-<img src="assets/examples/example3/Slide4.png" width="640">
-<img src="assets/examples/example3/Slide5.png" width="640">
+<img src="../assets/examples/example3/Slide1.png" width="640">
+<img src="../assets/examples/example3/Slide2.png" width="640">
+<img src="../assets/examples/example3/Slide3.png" width="640">
+<img src="../assets/examples/example3/Slide4.png" width="640">
+<img src="../assets/examples/example3/Slide5.png" width="640">
 </details>
 
 ---
@@ -397,7 +397,7 @@ O que o modo catálogo sacrifica é o controle por ferramenta no cliente: aprova
 ## 🍎 Suporte ao macOS
 
 **<!--mac-refusals-->11<!--/mac-refusals--> ferramentas recusam no macOS. As demais funcionam.** As <!--mac-refusals-->11<!--/mac-refusals--> estão listadas pelo nome na
-seção 6.1 de [MACOS_PORT.md](MACOS_PORT.md), e um teste garante que essa lista esteja correta.
+seção 6.1 de [MACOS_PORT.md](../MACOS_PORT.md), e um teste garante que essa lista esteja correta.
 
 As mesmas ferramentas, os mesmos argumentos, as mesmas respostas. O que muda é
 o que o dicionário de scripts do PowerPoint para Mac consegue alcançar, e onde
@@ -496,7 +496,7 @@ Diferenças menores:
 
 ## 🤝 Como contribuir
 
-Pull requests são bem-vindos. Baseie-os em `develop`, um assunto por PR, com testes; o [CONTRIBUTING.md](CONTRIBUTING.md) traz o resto.
+Pull requests são bem-vindos. Baseie-os em `develop`, um assunto por PR, com testes; o [CONTRIBUTING.md](../CONTRIBUTING.md) traz o resto.
 
 ## 📄 Licença
 
