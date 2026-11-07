@@ -53,6 +53,7 @@ from ppt_mac.gvml_paste import (
     Clipboard,
     Refused,
     copy_shape_package,
+    front_refusal,
     paste_package,
     replace_shape,
     strip_ids,
@@ -194,6 +195,11 @@ def _edit_chart(tool_name, slide_index, shape_name_or_index, edit, verify, descr
     index = _shape_index(slide, shape_name_or_index)
     name = shape.name()
     left, top = shape.left_position(), shape.top()
+
+    # Before the first copy, so a refusal leaves the clipboard alone.
+    refused = front_refusal(pres, tool_name, _SHAPE_TOOLS[1:]) if requested else None
+    if refused is not None:
+        return refused
 
     clip = Clipboard.take()
     kept = None

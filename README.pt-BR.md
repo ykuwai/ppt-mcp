@@ -148,7 +148,7 @@ uv sync
 | **Tabelas** | 13 | Adicionar tabelas, obter/definir células, definir dados em lote, mesclar/dividir células, adicionar/excluir linhas/colunas, estilos, layout, bordas |
 | **Exportação** | 4 | PDF, imagens, prévia do slide, cópia para a área de transferência |
 | **Apresentação de slides** | 6 | Iniciar, parar, próximo, anterior, ir para um slide, status |
-| **Gráficos** | 7 | Adicionar gráficos (no Windows, exceto os 3D e alguns tipos menos comuns, sem abrir o Excel), definir/obter dados (no Windows, ao definir, o gráfico é trocado por uma cópia com outro id de forma, sem abrir o Excel quando dá, e lido de volta; dados que não entraram são um erro, e um rótulo que o Excel leu de outro jeito é um aviso; um gráfico de dispersão ou de bolhas toma os valores x das categorias, e uma série de bolhas seus `sizes`), formatar, formatar eixo, séries, trocar o tipo |
+| **Gráficos** | 7 | Adicionar gráficos (no Windows, exceto alguns tipos menos comuns como área 3D, cone e ações, sem abrir o Excel), definir/obter dados (no Windows, ao definir, o gráfico é trocado por uma cópia com outro id de forma, sem abrir o Excel quando dá, e lido de volta; dados que não entraram são um erro, e um rótulo que o Excel leu de outro jeito é um aviso; um gráfico de dispersão ou de bolhas toma os valores x das categorias, e uma série de bolhas seus `sizes`), formatar, formatar eixo, séries, trocar o tipo |
 | **Animação** | 6 | Transições, adicionar/listar/atualizar/remover/limpar animações (entrada, saída, ênfase, trajetória de movimento, sequências interativas) |
 | **Temas** | 4 | Aplicar temas, obter/definir cores do tema, cabeçalhos/rodapés |
 | **Grupos** | 3 | Agrupar, desagrupar, obter os itens do grupo |
@@ -496,7 +496,10 @@ Diferenças menores:
   transferência**, e sem o suplemento também as demais ferramentas de gráfico,
   as formas livres e o agrupamento. A operação ocupa a área de transferência por
   um instante e depois devolve o que havia nela. É assim que chegam a um
-  dicionário que não tem palavras para eles.
+  dicionário que não tem palavras para eles. O PowerPoint para Mac cola na
+  janela da frente, então com duas apresentações abertas eles funcionam na da
+  frente; para a outra, a ferramenta avisa e não muda nada, e
+  `ppt_activate_presentation` a traz para a frente.
 - **Sem o suplemento, editar um gráfico ou forma livre existente recria a
   forma**, e com ele, definir os tamanhos de um gráfico de bolhas ainda recria. As
   ferramentas de dados, tipo, título, legenda, eixo e séries do gráfico, e as

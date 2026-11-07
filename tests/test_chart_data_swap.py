@@ -1,6 +1,7 @@
 """ppt_set_chart_data swaps a chart's data without Excel where it can (#299).
 
-The chart is replaced by a copy holding the new data. What decides that, what
+The chart is copied, its XML gets the new data, and it is pasted back as a
+new shape holding it. What decides that, what
 the copy takes over, and what happens when it cannot, are checked here against
 stand-ins for PowerPoint. The live checks are in the PR.
 """
@@ -87,10 +88,9 @@ def slide_with(shapes, animated=(), interactive=(), comments=0):
 
 
 @pytest.fixture
-def charts(monkeypatch):
+def charts():
     from ppt_com import charts as module
 
-    monkeypatch.setattr(module.chart_file, "available", lambda: True)
     return module
 
 
@@ -101,16 +101,12 @@ class TestWhenExcelIsStillNeeded:
 
     @pytest.mark.parametrize("chart_type, needed", [
         (51, False), (5, False), (-4120, False), (4, False), (1, False), (-4151, False),
-        (-4169, False), (74, False), (15, False), (87, False), (54, True), (-4102, True),
+        (-4169, False), (74, False), (15, False), (87, False), (54, False), (-4102, False),
+        (70, True), (99, True), (83, True), (88, True),
     ])
-    def test_3d_charts_do(self, charts, chart_type, needed):
+    def test_types_gvml_cannot_write_do(self, charts, chart_type, needed):
         shape = chart_shape(chart_type=chart_type)
         assert (charts._excel_needed(slide_with([shape]), shape) is not None) is needed
-
-    def test_without_python_pptx(self, charts, monkeypatch):
-        monkeypatch.setattr(charts.chart_file, "available", lambda: False)
-        shape = chart_shape()
-        assert "python-pptx" in charts._excel_needed(slide_with([shape]), shape)
 
     def test_linked_data(self, charts):
         shape = chart_shape()
@@ -209,40 +205,43 @@ class TestCarryingOver:
         assert failed == ["AlternativeText", "Name"]
 
 
-class FakePowerPoint:
-    """The scratch deck, the file and the paste back, as _replace_chart_data
-    meets them."""
+WORKBOOK = "clipboard/embeddings/Microsoft_Excel_Worksheet.xlsx"
 
-    def __init__(self, slide, copy, fail_at=None):
-        self.slide, self.copy, self.fail_at = slide, copy, fail_at
-        self.closed = []
-        fake = self
 
-        class Scratch:
-            PageSetup = SimpleNamespace(SlideWidth=0, SlideHeight=0)
-            Slides = SimpleNamespace(Add=lambda i, layout: "scratch slide")
+def copied(chart_type=51, workbook=True, plots=1):
+    """A package as PowerPoint copies a chart: with its workbook, by default."""
+    from gvml import charts as gvml_charts
+    from gvml import package
 
-            def SaveAs(self, path):
-                if fake.fail_at == "save":
-                    raise RuntimeError("cannot save")
-                Path(path).write_bytes(b"pptx")
-
-            def Close(self):
-                fake.closed.append("scratch")
-
-        source = SimpleNamespace(
-            Slides=lambda i: SimpleNamespace(Shapes=lambda j: "copy in file"),
-            Close=lambda: self.closed.append("source"))
-        self.app = SimpleNamespace(Presentations=SimpleNamespace(
-            Add=lambda with_window: Scratch(),
-            Open=lambda path, *a: source))
+    xml = gvml_charts.chart_xml(chart_type)
+    if plots > 1:
+        # A second plot group, as a combo chart has.
+        xml = xml.replace("</c:barChart>", "</c:barChart><c:lineChart><c:grouping val=\"standard\"/>"
+                          "<c:varyColors val=\"0\"/><c:axId val=\"10\"/><c:axId val=\"20\"/></c:lineChart>")
+    if workbook:
+        xml = xml.replace("</c:chartSpace>", '<c:externalData r:id="rId9"><c:autoUpdate val="0"/>'
+                          "</c:externalData></c:chartSpace>")
+    raw = package.read(gvml_charts.chart_package("Chart 1", 0, 0, 100, 100, xml))
+    if workbook:
+        raw.parts[WORKBOOK] = b"xlsx"
+        part = raw.chart_part()
+        raw.parts[part.rsplit("/", 1)[0] + "/_rels/" + part.rsplit("/", 1)[1] + ".rels"] = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/'
+            'relationships/package" Target="../embeddings/Microsoft_Excel_Worksheet.xlsx"/>'
+            "</Relationships>").encode()
+    return raw
 
 
 def replace(charts, monkeypatch, *, check=None, carry=None, fail_at=None, copy_z=4,
-            colours=None, stuck=False, state=None):
+            colours=None, stuck=False, state=None, chart_type=51, package=None,
+            categories=CATS, series=SERIES):
     import contextlib
 
-    old = chart_shape(z=2)
+    from gvml import package as gvml_package
+
+    old = chart_shape(z=2, chart_type=chart_type)
     copy = chart_shape(name="Chart 1", shape_id=7, z=copy_z)
     copy.deleted = False
     copy.Delete = lambda: setattr(copy, "deleted", True)
@@ -265,51 +264,68 @@ def replace(charts, monkeypatch, *, check=None, carry=None, fail_at=None, copy_z
 
     copy.ZOrder = send_backward
     slide = slide_with([old, copy])
-    pp = FakePowerPoint(slide, copy, fail_at)
+    seen = {"put": [], "pasted": False}
 
-    def paste_from(source, target):
-        if source == "copy in file":
-            if fail_at == "paste back":
-                raise RuntimeError("Could not paste the new chart")
-            return copy
-        return "copy in scratch"
+    def copied_package(shape):
+        assert shape is old
+        if fail_at == "copy":
+            raise RuntimeError("Copying the chart put no Art::GVML ClipFormat on the clipboard")
+        return package if package is not None else copied(chart_type)
+
+    def paste_from(put, target):
+        put()
+        if fail_at == "paste back":
+            raise RuntimeError("Could not paste the chart")
+        seen["pasted"] = True
+        return copy
 
     @contextlib.contextmanager
     def kept():
         yield []
 
+    monkeypatch.setattr(charts, "_copied_package", copied_package)
     monkeypatch.setattr(charts, "_paste_from", paste_from)
     monkeypatch.setattr(charts, "kept_clipboard", kept)
-    monkeypatch.setattr(charts.chart_file, "replace_data", lambda path, c, s: None)
+    monkeypatch.setattr(charts.clipboard, "put", lambda fmt, raw: seen["put"].append(
+        (fmt, gvml_package.read(raw))))
     monkeypatch.setattr(charts, "_check_chart_data", check or (lambda chart, c, s: (None, None)))
     if carry is not None:
         monkeypatch.setattr(charts, "_carry_over", carry)
     if state is not None:
         monkeypatch.setattr(charts, "_shape_state", state)
-    matched = []
-    monkeypatch.setattr(charts, "_match_theme", lambda scratch, s: matched.append(s))
     shown = iter(colours or [[(1, 2)], [(1, 2)]])
     monkeypatch.setattr(charts, "_series_colours", lambda chart: next(shown))
-    pp.matched = matched
     pres = SimpleNamespace(PageSetup=SimpleNamespace(SlideWidth=960, SlideHeight=540))
-    return old, copy, pp, (lambda: charts._replace_chart_data(pp.app, pres, slide, old, CATS, SERIES))
+    run = lambda: charts._replace_chart_data("app", pres, slide, old, categories, series)  # noqa: E731
+    return old, copy, seen, run
 
 
 class TestReplacing:
     def test_the_copy_takes_the_old_chart_s_place(self, charts, monkeypatch):
-        old, copy, pp, run = replace(charts, monkeypatch)
+        old, copy, seen, run = replace(charts, monkeypatch)
         new, warnings = run()
         assert new is copy and not copy.deleted
         assert old.deleted
         assert copy.ZOrderPosition == 2, "in the old chart's place in the stacking order"
-        assert pp.closed == ["scratch", "source"]
         assert warnings == []
+
+    def test_what_is_pasted_holds_the_new_data_and_no_workbook(self, charts, monkeypatch):
+        from gvml import charts as gvml_charts
+
+        old, copy, seen, run = replace(charts, monkeypatch)
+        run()
+        [(fmt, pasted)] = seen["put"]
+        assert fmt == "Art::GVML ClipFormat"
+        data = gvml_charts.read_chart(pasted.chart())
+        assert data == {"categories": CATS, "series": [{"name": "S", "values": [1.0, 2.0]}]}
+        assert gvml_charts.external_data_id(pasted.chart()) is None
+        assert WORKBOOK not in pasted.parts, "the old workbook would say something else"
 
     @pytest.mark.parametrize("how, match", [
         ("check", "does not show the data"),
         ("carry", "could not carry over Name"),
         ("paste back", "Could not paste"),
-        ("save", "cannot save"),
+        ("copy", "put no Art::GVML ClipFormat"),
     ])
     def test_a_copy_that_falls_short_is_removed_and_the_old_chart_kept(
             self, charts, monkeypatch, how, match):
@@ -320,43 +336,56 @@ class TestReplacing:
             kwargs["carry"] = lambda state, shape: ["Name"]
         else:
             kwargs["fail_at"] = how
-        old, copy, pp, run = replace(charts, monkeypatch, **kwargs)
+        old, copy, seen, run = replace(charts, monkeypatch, **kwargs)
         with pytest.raises(charts._NotCarried, match=match):
             run()
         assert not old.deleted
         assert copy.deleted is (how in ("check", "carry"))
-        assert "scratch" in pp.closed
 
     def test_data_that_does_not_fit_the_chart_leaves_it_as_it_was(self, charts, monkeypatch):
         """A scatter chart given labels for x, say: Excel then, as before."""
-        old, copy, pp, run = replace(charts, monkeypatch)
-
-        def refuse(path, categories, series):
-            raise ValueError("the x value 'Q1' is not a number")
-
-        monkeypatch.setattr(charts.chart_file, "replace_data", refuse)
-        with pytest.raises(charts._NotCarried, match="'Q1' is not a number"):
+        old, copy, seen, run = replace(charts, monkeypatch, chart_type=-4169)
+        with pytest.raises(charts._NotCarried, match="'A' is not a number"):
             run()
-        assert not old.deleted and not copy.deleted, "nothing was pasted back"
+        assert not old.deleted and not copy.deleted and not seen["pasted"], "nothing was pasted back"
 
-    def test_the_scratch_deck_gets_the_slide_s_theme(self, charts, monkeypatch):
-        old, copy, pp, run = replace(charts, monkeypatch)
+    def test_a_bubble_chart_needs_its_sizes(self, charts, monkeypatch):
+        old, copy, seen, run = replace(charts, monkeypatch, chart_type=15, categories=["1", "2"])
+        with pytest.raises(charts._NotCarried, match="no sizes for its bubbles"):
+            run()
+        assert not old.deleted and not seen["pasted"]
+
+    def test_a_bubble_chart_with_sizes_is_swapped(self, charts, monkeypatch):
+        from gvml import charts as gvml_charts
+
+        old, copy, seen, run = replace(
+            charts, monkeypatch, chart_type=15, categories=["1", "2.5"],
+            series=[{"name": "S", "values": [1, 2], "sizes": [3, "4"]}])
         run()
-        assert len(pp.matched) == 1
+        xml = seen["put"][0][1].chart().decode("utf-8")
+        assert "<c:v>2.5</c:v>" in xml and "<c:v>4</c:v>" in xml
+        assert old.deleted
+        assert gvml_charts.read_chart(seen["put"][0][1].chart())["categories"] == ["1.0", "2.5"]
+
+    def test_a_combo_chart_goes_through_excel(self, charts, monkeypatch):
+        old, copy, seen, run = replace(charts, monkeypatch, package=copied(plots=2))
+        with pytest.raises(charts._NotCarried, match="2 plot groups"):
+            run()
+        assert not old.deleted and not seen["pasted"]
 
     def test_series_that_come_back_in_other_colours_are_not_kept(self, charts, monkeypatch):
-        old, copy, pp, run = replace(charts, monkeypatch, colours=[[(1, 2), (3, 4)], [(1, 2), (9, 9)]])
+        old, copy, seen, run = replace(charts, monkeypatch, colours=[[(1, 2), (3, 4)], [(1, 2), (9, 9)]])
         with pytest.raises(charts._NotCarried, match="other colours"):
             run()
         assert copy.deleted and not old.deleted
 
     def test_a_series_more_or_fewer_is_no_colour_change(self, charts, monkeypatch):
-        old, copy, pp, run = replace(charts, monkeypatch, colours=[[(1, 2)], [(1, 2), (5, 6)]])
+        old, copy, seen, run = replace(charts, monkeypatch, colours=[[(1, 2)], [(1, 2), (5, 6)]])
         run()
         assert old.deleted
 
     def test_a_stacking_step_that_does_not_move_ends_the_loop(self, charts, monkeypatch):
-        old, copy, pp, run = replace(charts, monkeypatch, stuck=True)
+        old, copy, seen, run = replace(charts, monkeypatch, stuck=True)
         with pytest.raises(charts._NotCarried, match="stacking order"):
             run()
         assert copy.deleted and not old.deleted
@@ -365,13 +394,13 @@ class TestReplacing:
         def no_title(shape):
             raise AttributeError("Title")
 
-        old, copy, pp, run = replace(charts, monkeypatch, state=no_title)
+        old, copy, seen, run = replace(charts, monkeypatch, state=no_title)
         with pytest.raises(charts._NotCarried, match="could not read what it has to take over"):
             run()
-        assert not old.deleted and pp.closed == []
+        assert not old.deleted and seen["put"] == []
 
     def test_an_old_chart_and_copy_that_both_stay_name_the_copy(self, charts, monkeypatch):
-        old, copy, pp, run = replace(charts, monkeypatch)
+        old, copy, seen, run = replace(charts, monkeypatch)
 
         def refuse():
             raise RuntimeError("cannot delete")
@@ -382,7 +411,7 @@ class TestReplacing:
             run()
 
     def test_a_copy_that_cannot_be_removed_is_named(self, charts, monkeypatch):
-        old, copy, pp, run = replace(
+        old, copy, seen, run = replace(
             charts, monkeypatch, check=lambda chart, c, s: ("empty", None))
 
         def refuse():

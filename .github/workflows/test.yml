@@ -41,7 +41,6 @@ jobs:
               --with "mcp[cli]>=2,<3"
               --with "pywin32>=306"
               --with "pydantic>=2"
-              --with "python-pptx>=1.0.2"
               --with pytest
               python -m pytest -q
 

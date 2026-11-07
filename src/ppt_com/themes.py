@@ -340,7 +340,7 @@ class SetHeadersFootersInput(BaseModel):
         default=None,
         description=(
             "Date format as PpDateTimeFormat integer (e.g. 1=M/d/yy, "
-            "2=DayOfWeek Month dd yyyy, 9=H:mm, 12=h:mm:ss AM/PM)"
+            "2=DayOfWeek Month dd yyyy, 10=H:mm, 13=h:mm:ss AM/PM)"
         ),
     )
     date_fixed_text: Optional[str] = Field(

@@ -149,7 +149,7 @@ uv sync
 | **Tablas** | 13 | Añadir tablas, leer/escribir celdas, escribir datos en bloque, combinar/dividir celdas, añadir/eliminar filas/columnas, estilos, diseño, bordes |
 | **Exportación** | 4 | PDF, imágenes, vista previa de diapositiva, copia al portapapeles |
 | **Presentación con diapositivas** | 6 | Iniciar, detener, siguiente, anterior, ir a diapositiva, estado |
-| **Gráficos** | 7 | Añadir gráficos (en Windows, salvo los 3D y algunos tipos poco comunes, sin abrir Excel), escribir/leer datos (en Windows, al escribirlos el gráfico se cambia por una copia con otro id de forma, sin abrir Excel cuando se puede, y se vuelve a leer; los datos que no quedaron son un error y una etiqueta que Excel interpretó de otro modo es un aviso; un gráfico de dispersión o de burbujas toma los valores x de las categorías, y una serie de burbujas sus `sizes`), formato, formato de ejes, series, cambiar tipo |
+| **Gráficos** | 7 | Añadir gráficos (en Windows, salvo algunos tipos poco comunes como áreas 3D, cono y cotizaciones, sin abrir Excel), escribir/leer datos (en Windows, al escribirlos el gráfico se cambia por una copia con otro id de forma, sin abrir Excel cuando se puede, y se vuelve a leer; los datos que no quedaron son un error y una etiqueta que Excel interpretó de otro modo es un aviso; un gráfico de dispersión o de burbujas toma los valores x de las categorías, y una serie de burbujas sus `sizes`), formato, formato de ejes, series, cambiar tipo |
 | **Animación** | 6 | Transiciones, añadir/listar/actualizar/quitar/borrar animaciones (entrada, salida, énfasis, trayectoria de movimiento, secuencias interactivas) |
 | **Temas** | 4 | Aplicar temas, leer/escribir colores del tema, encabezados/pies de página |
 | **Grupos** | 3 | Agrupar, desagrupar, leer los elementos del grupo |
@@ -503,7 +503,10 @@ Diferencias menores:
   complemento también las demás herramientas de gráficos, los trazados de forma
   libre y la agrupación. La operación ocupa el portapapeles un momento y luego
   restaura lo que había. Así es como llegan a un diccionario que no tiene
-  palabras para ellas.
+  palabras para ellas. PowerPoint para Mac pega en su ventana del frente, así
+  que con dos presentaciones abiertas funcionan en la del frente; para la otra,
+  la herramienta lo dice y no cambia nada, y `ppt_activate_presentation` la trae
+  al frente.
 - **Sin el complemento, editar un gráfico o un trazado existente vuelve a crear
   la forma**, y con él, fijar los tamaños de un gráfico de burbujas todavía lo hace. Las
   herramientas de datos, tipo, título, leyenda, ejes y series del gráfico, y

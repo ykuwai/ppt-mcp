@@ -147,7 +147,7 @@ uv sync
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
 | **Export** | 4 | PDF, images, slide preview, clipboard copy |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
-| **Charts** | 7 | Add charts (on Windows, all but the 3-D and a few rarer types without starting Excel), set/get data (on Windows, setting it swaps in a copy of the chart under a new shape id without starting Excel where it can, then reads the chart back, and data that did not land is an error while a label Excel read differently is a warning; a scatter or bubble chart takes its x values from the categories, and a bubble series its `sizes`), format, format axis, series, change type |
+| **Charts** | 7 | Add charts (on Windows, all but a few rarer types such as 3-D area, cone and stock without starting Excel), set/get data (on Windows, setting it swaps in a copy of the chart under a new shape id without starting Excel where it can, then reads the chart back, and data that did not land is an error while a label Excel read differently is a warning; a scatter or bubble chart takes its x values from the categories, and a bubble series its `sizes`), format, format axis, series, change type |
 | **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
 | **Themes** | 4 | Apply themes, get/set theme colors, headers/footers |
 | **Groups** | 3 | Group, ungroup, get group items |
@@ -488,7 +488,10 @@ Smaller differences:
 - **Adding a chart goes through the clipboard**, and without the add-in so do
   the other chart tools, freeform paths and grouping.
   The operation takes the clipboard for a moment and puts back what was there.
-  This is how they reach a dictionary that has no words for them.
+  This is how they reach a dictionary that has no words for them. PowerPoint
+  for Mac pastes into its front window, so with two decks open these work on
+  the deck in front; for the other, the tool says so and changes nothing, and
+  `ppt_activate_presentation` brings it to the front.
 - **Without the add-in, editing an existing chart or path recreates the
   shape**, and with it, setting a bubble chart's sizes still does. The tool copies the
   shape, rewrites it and pastes it back, then deletes the original. The name,

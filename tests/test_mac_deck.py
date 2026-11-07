@@ -631,6 +631,21 @@ class TestEditOps:
         assert deck.shapes[1] == ["Title"]
         assert deck.shapes[2] == []
 
+    def test_another_deck_in_front_stops_it_before_the_copy(self, monkeypatch):
+        """PowerPoint for Mac pastes into its front window; the check is in
+        ppt_mac.gvml_paste (tests/test_mac_gvml.py). Here: it runs first, and a
+        refusal leaves the clipboard and both slides alone."""
+        from ppt_mac import edit_ops
+
+        refusal = {"error": "ppt_copy_shape_to_slide needs 'Deck' in PowerPoint's front window"}
+        monkeypatch.setattr(edit_ops, "front_refusal", lambda pres, tool, alternatives=(): refusal)
+        with _fake_deck(slides=2, shapes={1: ["Title"], 2: []}) as deck:
+            result = edit_ops._copy_shape_to_slide_impl(1, "Title", 2)
+
+        assert result is refusal
+        assert deck.order == []
+        assert deck.shapes[2] == []
+
     def test_a_paste_that_added_nothing_refuses(self):
         from ppt_mac.edit_ops import _copy_shape_to_slide_impl
 

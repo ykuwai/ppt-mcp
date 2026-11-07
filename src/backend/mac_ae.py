@@ -782,6 +782,15 @@ class PowerPointAppleEventWrapper:
                 is the case that qualifies; anything that edits a deck is not.
             **kwargs: Keyword arguments for func.
         """
+        if self._thread is None and not self._running:
+            # Only the server's lifespan starts the worker. Queueing onto
+            # nothing would wait out _QUEUE_WAIT and then blame earlier work.
+            raise RuntimeError(
+                "The Apple Event worker thread has not been started, so nothing "
+                "would run this operation. The MCP server starts it when it runs; "
+                "code that calls the tools without running the server has to "
+                "call ppt.start() first."
+            )
         wanted = call_presentation.get()
         if wanted is not None:
             func = bind_call_presentation(self._call_local, wanted, func)

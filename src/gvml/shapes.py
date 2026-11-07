@@ -255,11 +255,27 @@ def strip_creation_ids(element: ET.Element) -> ET.Element:
     PowerPoint was seen to object to, but a member that is pasted back while
     its original is still on the slide is exactly that case, and the id is
     worth nothing to us. Removing it costs nothing and removes the doubt.
+    Other extensions stay: a decorative flag lives in the same list.
     """
     for cnv in element.iter(f"{_A}cNvPr"):
         for ext_lst in cnv.findall(f"{_A}extLst"):
-            cnv.remove(ext_lst)
+            for ext in ext_lst.findall(f"{_A}ext"):
+                if any(child.tag.endswith("}creationId") for child in ext):
+                    ext_lst.remove(ext)
+            if not len(ext_lst):
+                cnv.remove(ext_lst)
     return element
+
+
+def strip_package_ids(package) -> None:
+    """Drop the creation ids from every shape of a package about to be pasted
+    beside its original, in place. See ``strip_creation_ids``."""
+    from gvml import canvas as _canvas
+
+    root = ET.fromstring(package.drawing())
+    for element in _canvas.children(_canvas.canvas_of(root)):
+        strip_creation_ids(element)
+    package.parts[package.drawing_part()] = _canvas.serialize_drawing(root).encode("utf-8")
 
 
 def only_child(canvas_children: List[ET.Element], what: str) -> ET.Element:
