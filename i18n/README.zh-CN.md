@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <strong>简体中文 (zh-CN)</strong> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
+  <a href="../README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <strong>简体中文 (zh-CN)</strong> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
@@ -133,7 +133,7 @@ uv sync
 
 ## 🛠️ 工具类别
 
-全部工具按类别列在 [TOOLS.md](TOOLS.md)（英文）中。
+全部工具按类别列在 [TOOLS.md](../TOOLS.md)（英文）中。
 
 ## 💡 提示词示例
 
@@ -148,9 +148,9 @@ uv sync
 <details>
 <summary>查看幻灯片</summary>
 <br>
-<img src="assets/examples/example1/Slide1.png" width="640">
-<img src="assets/examples/example1/Slide2.png" width="640">
-<img src="assets/examples/example1/Slide3.png" width="640">
+<img src="../assets/examples/example1/Slide1.png" width="640">
+<img src="../assets/examples/example1/Slide2.png" width="640">
+<img src="../assets/examples/example1/Slide3.png" width="640">
 </details>
 
 ---
@@ -162,10 +162,10 @@ uv sync
 <details>
 <summary>查看幻灯片</summary>
 <br>
-<img src="assets/examples/example2/Slide1.png" width="640">
-<img src="assets/examples/example2/Slide2.png" width="640">
-<img src="assets/examples/example2/Slide3.png" width="640">
-<img src="assets/examples/example2/Slide4.png" width="640">
+<img src="../assets/examples/example2/Slide1.png" width="640">
+<img src="../assets/examples/example2/Slide2.png" width="640">
+<img src="../assets/examples/example2/Slide3.png" width="640">
+<img src="../assets/examples/example2/Slide4.png" width="640">
 </details>
 
 ---
@@ -177,11 +177,11 @@ uv sync
 <details>
 <summary>查看幻灯片</summary>
 <br>
-<img src="assets/examples/example3/Slide1.png" width="640">
-<img src="assets/examples/example3/Slide2.png" width="640">
-<img src="assets/examples/example3/Slide3.png" width="640">
-<img src="assets/examples/example3/Slide4.png" width="640">
-<img src="assets/examples/example3/Slide5.png" width="640">
+<img src="../assets/examples/example3/Slide1.png" width="640">
+<img src="../assets/examples/example3/Slide2.png" width="640">
+<img src="../assets/examples/example3/Slide3.png" width="640">
+<img src="../assets/examples/example3/Slide4.png" width="640">
+<img src="../assets/examples/example3/Slide5.png" width="640">
 </details>
 
 ---
@@ -394,7 +394,7 @@ ESC 只是取消而不会提交，所以没有破坏性的副作用。在无人�
 ## 🍎 macOS 支持
 
 **在 macOS 上有 <!--mac-refusals-->11<!--/mac-refusals--> 个工具会拒绝执行，其余都能用。** 这 <!--mac-refusals-->11<!--/mac-refusals--> 个工具的名称列在
-[MACOS_PORT.md](MACOS_PORT.md) 第 6.1 节，并有测试保证该列表准确无误。
+[MACOS_PORT.md](../MACOS_PORT.md) 第 6.1 节，并有测试保证该列表准确无误。
 
 工具相同，参数相同，返回结果也相同。不同之处在于 Mac 版 PowerPoint 的脚本字典能触及哪些功能；
 遇到触及不到的地方，工具会明确说明，而不是做出意料之外的事。
@@ -451,7 +451,7 @@ macOS 上不可用的功能：
 
 ## 🤝 参与贡献
 
-欢迎提交拉取请求。请基于 `develop` 分支，每个请求只涉及一个主题，并附带测试；其余说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎提交拉取请求。请基于 `develop` 分支，每个请求只涉及一个主题，并附带测试；其余说明见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
 ## 📄 许可证
 

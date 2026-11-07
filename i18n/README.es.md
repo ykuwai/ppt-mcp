@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <strong>Español (es)</strong> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
+  <a href="../README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <strong>Español (es)</strong> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
@@ -137,7 +137,7 @@ uv sync
 
 ## 🛠️ Categorías de herramientas
 
-La lista completa de herramientas, por categoría, está en [TOOLS.md](TOOLS.md) (en inglés).
+La lista completa de herramientas, por categoría, está en [TOOLS.md](../TOOLS.md) (en inglés).
 
 ## 💡 Ejemplos de instrucciones
 
@@ -152,9 +152,9 @@ Describe lo que quieres con tus propias palabras; no hace falta escribir código
 <details>
 <summary>Ver diapositivas</summary>
 <br>
-<img src="assets/examples/example1/Slide1.png" width="640">
-<img src="assets/examples/example1/Slide2.png" width="640">
-<img src="assets/examples/example1/Slide3.png" width="640">
+<img src="../assets/examples/example1/Slide1.png" width="640">
+<img src="../assets/examples/example1/Slide2.png" width="640">
+<img src="../assets/examples/example1/Slide3.png" width="640">
 </details>
 
 ---
@@ -166,10 +166,10 @@ Describe lo que quieres con tus propias palabras; no hace falta escribir código
 <details>
 <summary>Ver diapositivas</summary>
 <br>
-<img src="assets/examples/example2/Slide1.png" width="640">
-<img src="assets/examples/example2/Slide2.png" width="640">
-<img src="assets/examples/example2/Slide3.png" width="640">
-<img src="assets/examples/example2/Slide4.png" width="640">
+<img src="../assets/examples/example2/Slide1.png" width="640">
+<img src="../assets/examples/example2/Slide2.png" width="640">
+<img src="../assets/examples/example2/Slide3.png" width="640">
+<img src="../assets/examples/example2/Slide4.png" width="640">
 </details>
 
 ---
@@ -181,11 +181,11 @@ Describe lo que quieres con tus propias palabras; no hace falta escribir código
 <details>
 <summary>Ver diapositivas</summary>
 <br>
-<img src="assets/examples/example3/Slide1.png" width="640">
-<img src="assets/examples/example3/Slide2.png" width="640">
-<img src="assets/examples/example3/Slide3.png" width="640">
-<img src="assets/examples/example3/Slide4.png" width="640">
-<img src="assets/examples/example3/Slide5.png" width="640">
+<img src="../assets/examples/example3/Slide1.png" width="640">
+<img src="../assets/examples/example3/Slide2.png" width="640">
+<img src="../assets/examples/example3/Slide3.png" width="640">
+<img src="../assets/examples/example3/Slide4.png" width="640">
+<img src="../assets/examples/example3/Slide5.png" width="640">
 </details>
 
 ---
@@ -398,7 +398,7 @@ Lo que se pierde en modo catálogo es el control por herramienta en el cliente: 
 ## 🍎 Compatibilidad con macOS
 
 **<!--mac-refusals-->11<!--/mac-refusals--> herramientas se niegan a funcionar en macOS. El resto funciona.** Las <!--mac-refusals-->11<!--/mac-refusals--> aparecen por nombre en
-la sección 6.1 de [MACOS_PORT.md](MACOS_PORT.md), y una prueba se encarga de que esa lista sea exacta.
+la sección 6.1 de [MACOS_PORT.md](../MACOS_PORT.md), y una prueba se encarga de que esa lista sea exacta.
 
 Las mismas herramientas, los mismos argumentos, las mismas respuestas. Lo que
 cambia es lo que alcanza el diccionario de scripting de PowerPoint para Mac, y
@@ -504,7 +504,7 @@ Diferencias menores:
 
 ## 🤝 Contribuir
 
-Las pull requests son bienvenidas. Deben partir de `develop`, tratar un solo tema e incluir pruebas; [CONTRIBUTING.md](CONTRIBUTING.md) explica el resto.
+Las pull requests son bienvenidas. Deben partir de `develop`, tratar un solo tema e incluir pruebas; [CONTRIBUTING.md](../CONTRIBUTING.md) explica el resto.
 
 ## 📄 Licencia
 

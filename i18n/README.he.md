@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <strong>עברית (he)</strong>
+  <a href="../README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <strong>עברית (he)</strong>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
@@ -129,7 +129,7 @@ uv sync
 
 ## 🛠️ קטגוריות הכלים
 
-הרשימה המלאה של הכלים, לפי קטגוריות, נמצאת ב־[TOOLS.md](TOOLS.md) (באנגלית).
+הרשימה המלאה של הכלים, לפי קטגוריות, נמצאת ב־[TOOLS.md](../TOOLS.md) (באנגלית).
 
 ## 💡 דוגמאות לבקשות
 
@@ -144,9 +144,9 @@ uv sync
 <details>
 <summary>הצגת השקופיות</summary>
 <br>
-<img src="assets/examples/example1/Slide1.png" width="640">
-<img src="assets/examples/example1/Slide2.png" width="640">
-<img src="assets/examples/example1/Slide3.png" width="640">
+<img src="../assets/examples/example1/Slide1.png" width="640">
+<img src="../assets/examples/example1/Slide2.png" width="640">
+<img src="../assets/examples/example1/Slide3.png" width="640">
 </details>
 
 ---
@@ -158,10 +158,10 @@ uv sync
 <details>
 <summary>הצגת השקופיות</summary>
 <br>
-<img src="assets/examples/example2/Slide1.png" width="640">
-<img src="assets/examples/example2/Slide2.png" width="640">
-<img src="assets/examples/example2/Slide3.png" width="640">
-<img src="assets/examples/example2/Slide4.png" width="640">
+<img src="../assets/examples/example2/Slide1.png" width="640">
+<img src="../assets/examples/example2/Slide2.png" width="640">
+<img src="../assets/examples/example2/Slide3.png" width="640">
+<img src="../assets/examples/example2/Slide4.png" width="640">
 </details>
 
 ---
@@ -173,11 +173,11 @@ uv sync
 <details>
 <summary>הצגת השקופיות</summary>
 <br>
-<img src="assets/examples/example3/Slide1.png" width="640">
-<img src="assets/examples/example3/Slide2.png" width="640">
-<img src="assets/examples/example3/Slide3.png" width="640">
-<img src="assets/examples/example3/Slide4.png" width="640">
-<img src="assets/examples/example3/Slide5.png" width="640">
+<img src="../assets/examples/example3/Slide1.png" width="640">
+<img src="../assets/examples/example3/Slide2.png" width="640">
+<img src="../assets/examples/example3/Slide3.png" width="640">
+<img src="../assets/examples/example3/Slide4.png" width="640">
+<img src="../assets/examples/example3/Slide5.png" width="640">
 </details>
 
 ---
@@ -372,7 +372,7 @@ ESC מבטל בלי לאשר דבר, כך שאין לו תופעות לוואי 
 ## 🍎 תמיכה ב־macOS
 
 **<!--mac-refusals-->11<!--/mac-refusals--> כלים מסרבים ב־macOS. כל השאר עובדים.** שמות <!--mac-refusals-->11<!--/mac-refusals--> הכלים מופיעים
-ב־[MACOS_PORT.md](MACOS_PORT.md), סעיף 6.1, ובדיקה אוטומטית מוודאת שהרשימה מעודכנת.
+ב־[MACOS_PORT.md](../MACOS_PORT.md), סעיף 6.1, ובדיקה אוטומטית מוודאת שהרשימה מעודכנת.
 
 אותם כלים, אותם ארגומנטים, אותן תשובות. מה שמשתנה הוא מה שמילון הסקריפטים
 של PowerPoint ל־Mac יכול להגיע אליו, וכשהוא לא יכול להגיע למשהו, הכלי אומר זאת
@@ -450,7 +450,7 @@ ESC מבטל בלי לאשר דבר, כך שאין לו תופעות לוואי 
 
 ## 🤝 תרומה
 
-בקשות משיכה יתקבלו בברכה. בססו אותן על `develop`, נושא אחד בכל אחת, עם בדיקות; השאר ב־[CONTRIBUTING.md](CONTRIBUTING.md) (באנגלית).
+בקשות משיכה יתקבלו בברכה. בססו אותן על `develop`, נושא אחד בכל אחת, עם בדיקות; השאר ב־[CONTRIBUTING.md](../CONTRIBUTING.md) (באנגלית).
 
 ## 📄 רישיון
 
