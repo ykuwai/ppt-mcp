@@ -706,6 +706,13 @@ What it took to make it dependable:
   type library for the workbook, its sheets and ranges comes from the copy
   PowerPoint for Mac ships (`--excel-tlb`). Tried with Excel already running;
   with Excel not running, `ChartData.Activate` starts it.
+- **Excel comes to the front, and stays running.** `ChartData.Activate` brings
+  Excel to the front on every call, and an Excel it started is not quit when
+  the workbook closes. So after each chart call through the add-in, an Excel
+  that took the front is hidden, and one the call started is quit once the
+  workbook is closed (`backend/mac_excel.py`, through `NSRunningApplication`,
+  so with no Automation prompt for Excel). An Excel the user started is left
+  running.
 - **Handles to a closed deck's SmartArt break SmartArt.** While the add-in
   holds handles to a SmartArt in a deck, closing that deck makes every
   SmartArt call after it fail, "Automation error" and then "Access denied" or
