@@ -6,7 +6,7 @@ Attribute VB_Name = "PptMcpBridge"
 ' one place both sides can reach. Every entry point traps its errors, because
 ' an untrapped one would stop PowerPoint on a dialog.
 Option Explicit
-Public Const BRIDGE_VERSION As String = "6"
+Public Const BRIDGE_VERSION As String = "7"
 Private Sub WriteResult(id As String, s As String)
     Dim b() As Byte, f As Integer, dir As String, tmp As String, fin As String
     dir = Environ("HOME") & "/Documents/"
@@ -79,15 +79,16 @@ Sub Ping(id As String)
     On Error Resume Next
     WriteResult id, "ok" & Chr$(31) & BRIDGE_VERSION & Chr$(31) & Application.Version
 End Sub
-Sub Dispatch(id As String, batch As String)
+Sub Dispatch(id As String, batch As String, who As String)
     Dim reqs() As String, f() As String, o As Object, out As String
     Dim n As Integer, k As Long, r As Variant, ct As VbCallType
     On Error GoTo fail
+    owner = who
     reqs = Split(FromHex(batch), Chr$(30))
     For k = 0 To UBound(reqs)
         f = Split(reqs(k), Chr$(31))
         If f(1) = "r" Then
-            ReleaseAll
+            Release who
             out = out & "ok" & Chr$(31) & "empty" & Chr$(30)
         Else
             Set o = Obj(f(0))

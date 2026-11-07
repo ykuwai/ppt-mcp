@@ -89,6 +89,7 @@ class TestTheProtocol:
         assert out[4] == 12.5 and out[5] is None
         macro, body = seen[0]
         assert macro == vba.DISPATCH
+        assert target.sent[0]["params"][b"tpAE"][-1] == bridge.owner, "the batch names its server (#347)"
         assert body.split(RS)[3] == US.join(["app", "c", "Item", "i:1"])
 
     def test_arguments_are_typed(self):
@@ -556,7 +557,7 @@ class TestShipped:
         assert 'Attribute VB_Name = "PptMcpHandles"' in handles
         # Every entry point traps its errors from its first line: an untrapped
         # one stops PowerPoint on a dialog.
-        assert "Sub Dispatch(id As String, batch As String)\n    Dim" in bridge
+        assert "Sub Dispatch(id As String, batch As String, who As String)\n    Dim" in bridge
         assert "On Error GoTo fail" in bridge.split("Sub Dispatch")[1].split("For k")[0]
 
     def test_the_member_table_knows_properties_from_methods(self):
@@ -873,3 +874,19 @@ def test_the_dispatcher_passes_as_many_arguments_as_the_calls_take():
     assert f"Case 9: Assign r, CallByName(o, f(2), ct, {nine})" in bridge
     calls = (VBA_DIR / "PptMcpCallsI.bas").read_text(encoding="utf-8")
     assert f"o.Insert({nine})" in calls, "a corner curve's nine"
+
+
+class TestEachServerLetsGoOfItsOwn:
+    """Two servers on one PowerPoint share the add-in's table (#347)."""
+
+    def test_two_bridges_name_themselves_apart(self, tmp_path):
+        a, _, _ = bridge_answering(tmp_path)
+        b, _, _ = bridge_answering(tmp_path)
+        assert a.owner != b.owner
+
+    def test_the_add_in_releases_by_owner(self):
+        handles = (VBA_DIR / "PptMcpHandles.bas").read_text(encoding="utf-8")
+        bridge = (VBA_DIR / "PptMcpBridge.bas").read_text(encoding="utf-8")
+        assert "ReleaseAll" not in handles + bridge
+        assert "Release who" in bridge.split("Sub Dispatch")[1]
+        assert "owned.Add keys & h & Chr$(29), owner" in handles
