@@ -9,7 +9,7 @@ that the Hebrew one reads right to left.
 """
 
 import importlib.util
-import os
+import posixpath
 import re
 from pathlib import Path
 
@@ -84,7 +84,7 @@ def test_each_has_the_same_language_bar(lang):
         if other == lang:
             assert "<strong>" in body and f"({other})</strong>" in body, f"{READMES[lang]} does not name itself in its language bar"
         else:
-            link = os.path.relpath(name, os.path.dirname(READMES[lang]) or ".")
+            link = posixpath.relpath(name, posixpath.dirname(READMES[lang]) or ".")
             assert f'href="{link}"' in body, f"{READMES[lang]} does not link to {name}"
             assert f"({other})</a>" in body, f"{READMES[lang]} does not give {name}'s code in its language bar"
 
