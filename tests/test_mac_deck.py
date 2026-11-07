@@ -13,6 +13,7 @@ meant to fail reports success and changes nothing, which is what the silent
 no-op refusals exist to catch.
 """
 
+import inspect
 import sys
 
 import pytest
@@ -53,7 +54,12 @@ class TestImplementationsAreSwapped:
         ]
         assert swapped, "the mac module defines no implementations at all"
         for name in swapped:
-            assert getattr(com, name) is getattr(mac, name)
+            impl = getattr(com, name)
+            # A tool with a VBA route is the Apple Event one behind a router
+            # (backend.vba), which unwraps to it.
+            if hasattr(impl, "vba_route"):
+                impl = inspect.unwrap(impl)
+            assert impl is getattr(mac, name)
 
 
 # ---------------------------------------------------------------------------

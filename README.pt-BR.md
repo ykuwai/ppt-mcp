@@ -431,13 +431,37 @@ As mesmas ferramentas, os mesmos argumentos, as mesmas respostas. O que muda é
 o que o dicionário de scripts do PowerPoint para Mac consegue alcançar, e onde
 ele não alcança algo a ferramenta avisa em vez de fazer algo inesperado.
 
+**O VBA do PowerPoint para Mac alcança mais, e pode ser ativado.** O servidor
+carrega no PowerPoint um pequeno suplemento, `ppt-mcp-bridge`, e roda por meio
+dele o código do Windows para o que o dicionário de scripts não tem palavras:
+tags, `ppt_select_shapes`, `ppt_set_table_style`, remover e copiar uma única
+animação, o tipo de edição de um nó de forma livre, as ferramentas de
+formatação, eixo, séries, tipo e dados do gráfico (os
+dados pela pasta de trabalho do Excel do gráfico, que abre no Excel por um
+instante, como no Windows), as de
+nós de forma livre e o agrupamento, o texto dentro de um grupo, os layouts de
+um modelo pelo nome, duplicar e copiar slides, editar um SmartArt (texto, nós, cores e estilo), e os
+argumentos que o Mac recusa de outro
+modo (a dica de tela, uma linha ou coluna de tabela numa posição, uma animação
+disparada pelo clique em outra forma, os tamanhos do reflexo, brilho, sombra e
+reflexo no texto, reduzir o texto para caber, volume, mudo e esmaecimentos, o
+estilo do gráfico e a posição da legenda e do título). Essas ferramentas editam
+a forma no lugar, então ela mantém as animações, e a área de transferência não
+é tocada. O suplemento só repassa essas chamadas; o código-fonte está em
+`src/backend/vba`. O PowerPoint o carrega sem perguntar, ele dura até o
+PowerPoint fechar e não deixa nada para trás. Onde não puder ser carregado, por
+exemplo quando uma política desativa as macros, as ferramentas funcionam como
+descrito abaixo. Ele vem desativado por padrão, porque é
+código de macro carregado sem aviso. Defina `PPT_MAC_VBA=on` no `env` do servidor
+para usá-lo.
+
 Não disponível no macOS:
 
-- **O tipo de edição de um nó de forma livre.** Canto, suave e simétrico não
+- **Sem o suplemento, o tipo de edição de um nó de forma livre.** Canto, suave e simétrico não
   ficam guardados em nenhum lugar que um script alcance; mova as alças do nó.
-- **Remover uma única animação.** Limpar as animações de um slide funciona.
-- **Tags, `ppt_select_shapes`, `ppt_set_table_style` e `ppt_execute_mso`.**
-  Nada no dicionário chega a nenhum deles.
+- **`ppt_execute_mso`**, e sem o suplemento também **tags, `ppt_select_shapes`,
+  `ppt_set_table_style` e remover uma única animação** (limpar as animações de
+  um slide funciona). Nada no dicionário chega a eles.
 
 Diferenças menores:
 
@@ -445,21 +469,23 @@ Diferenças menores:
   uma requisição por vez chega ao PowerPoint, então as outras ficam na fila
   atrás dela e saem na ordem em que chegaram. Uma chamada que espera demais é
   retirada e avisa, sem ter mudado nada.
-- Algumas ferramentas aceitam um argumento que não tem equivalente, como a dica
+- Sem o suplemento, algumas ferramentas aceitam um argumento que não tem equivalente, como a dica
   de tela de um hiperlink. Essas recusam com uma mensagem que nomeia o
   argumento, então basta removê-lo e tentar de novo.
 - **Vídeo e áudio entram incorporados, nunca vinculados**, e das oito
-  configurações de reprodução só existem repetir e ocultar o quadro. Ocultar o
+  configurações de reprodução só existem repetir e ocultar o quadro, e com o
+  suplemento também volume, mudo e esmaecimentos. Ocultar o
   quadro é recusado num slide que já tem animações, porque gravar essa opção
   as reescreve.
 - As exportações passam pelo contêiner do próprio PowerPoint e depois são
   movidas, porque o aplicativo roda em sandbox e não consegue gravar em
   qualquer pasta.
-- **Os layouts próprios de um modelo são encontrados pelo nome no arquivo
-  salvo da apresentação**, então salve uma apresentação nova antes de pedir um
-  layout pelo nome a `ppt_add_slide`. O PowerPoint para Mac não informa o nome
-  de nenhum layout a um script, então o slide é colado já no layout, o que leva
-  cerca de um segundo.
+- **Sem o suplemento, os layouts próprios de um modelo são encontrados pelo
+  nome no arquivo salvo da apresentação**, então salve uma apresentação nova
+  antes de pedir um layout pelo nome a `ppt_add_slide`. O PowerPoint para Mac
+  não informa o nome de nenhum layout a um script, então o slide é colado já no
+  layout, o que leva cerca de um segundo. Com o suplemento, o layout é
+  encontrado na apresentação aberta, salva ou não.
 - As imagens dos slides são geradas a partir de um PDF em vez de exportadas
   como PNG. Uma prévia tem 2 pixels por ponto nas duas plataformas.
 - A permissão de automação pertence ao aplicativo que iniciou o servidor, então
@@ -468,26 +494,29 @@ Diferenças menores:
   PowerPoint fechar todos os documentos abertos e depois sair quando um aviso
   de sandbox apareceu por trás de um script
   ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Gráficos, formas livres e agrupamento passam pela área de transferência**,
-  o que significa que a operação a ocupa por um instante e depois devolve o que
-  havia nela. É assim que esses três chegam a um dicionário que não tem
-  palavras para eles. O PowerPoint para Mac cola na janela da frente, então com
-  duas apresentações abertas eles funcionam na da frente; para a outra, a
-  ferramenta avisa e não muda nada, e `ppt_activate_presentation` a traz para a
-  frente.
-- **Editar um gráfico ou forma livre existente recria a forma.** As
+- **Adicionar um gráfico passa pela área de
+  transferência**, e sem o suplemento também as demais ferramentas de gráfico,
+  as formas livres e o agrupamento. A operação ocupa a área de transferência por
+  um instante e depois devolve o que havia nela. É assim que chegam a um
+  dicionário que não tem palavras para eles. O PowerPoint para Mac cola na
+  janela da frente, então com duas apresentações abertas eles funcionam na da
+  frente; para a outra, a ferramenta avisa e não muda nada, e
+  `ppt_activate_presentation` a traz para a frente.
+- **Sem o suplemento, editar um gráfico ou forma livre existente recria a
+  forma**, e com ele, definir os tamanhos de um gráfico de bolhas ainda recria. As
   ferramentas de dados, tipo, título, legenda, eixo e séries do gráfico, e as
   ferramentas de nós, copiam a forma, reescrevem e colam de volta, e depois
   excluem a original. O nome, a posição e a ordem Z são mantidos; as animações
-  da forma não, e o resultado informa quantas se perderam. Alguns argumentos de
+  da forma não, e o resultado informa quantas se perderam. Sem o suplemento, alguns argumentos de
   formatação que dependem do tamanho renderizado do gráfico (`chart_style`, as
   coordenadas da legenda e do título, as predefinições de legenda em 8
   direções) são recusados pelo nome.
-- **O texto dentro de um grupo é editado do mesmo jeito.** `ppt_set_text` (o
-  texto inteiro, ou um trecho dentro de uma linha) e `ppt_format_text` chegam a
-  um membro do grupo pelo nome dele ou pelo caminho (`"Group 4/TextBox 3"`); o
-  grupo é copiado, o membro reescrito e o grupo colado de volta. Os membros
-  mantêm os nomes, e o grupo perde as animações, como acima.
+- **O texto dentro de um grupo** é alcançado pelo nome do membro ou pelo
+  caminho (`"Group 4/TextBox 3"`), com `ppt_set_text` (o texto inteiro, ou um
+  trecho dentro de uma linha) e `ppt_format_text`. Com o suplemento, o membro é
+  editado no lugar. Sem ele, o grupo é copiado, o membro reescrito e o grupo
+  colado de volta: os membros mantêm os nomes, e o grupo perde as animações,
+  como acima.
 - Os ícones são rasterizados com `sips` antes de serem inseridos, porque o
   PowerPoint para Mac não consegue ler SVG. Isso exige macOS 13 ou posterior;
   sistemas mais antigos recebem uma recusa explicando o motivo em vez de uma

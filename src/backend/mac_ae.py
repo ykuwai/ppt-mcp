@@ -40,6 +40,8 @@ from typing import Any, Callable, Optional
 from appscript import app, its, k, mactypes  # noqa: F401  (re-exported for tools)
 from appscript.reference import CommandError, Reference
 
+from backend import vba
+
 # Only for the cancellation contract. `utils.com_wrapper` imports nothing from
 # this package, so this direction is safe, and the module is importable on any
 # platform because of the guard at its top (#185).
@@ -967,7 +969,13 @@ class PowerPointAppleEventWrapper:
         Attach only by default. Most tools operate on an already open
         presentation and should fail fast rather than silently starting
         PowerPoint, which is the same contract as the Windows side.
+
+        While a Windows implementation runs through the VBA bridge, this is
+        the bridge's Application instead (see ``backend.vba``).
         """
+        call = vba.current()
+        if call is not None:
+            return call.app
         if self._app is None:
             return self._connect_impl(allow_launch=allow_launch)
         try:
@@ -993,7 +1001,13 @@ class PowerPointAppleEventWrapper:
 
         A presentation named by the running tool call comes first, and when it
         is not open this raises instead of falling back to another deck.
+
+        While a Windows implementation runs through the VBA bridge, this is
+        the bridge's presentation for that same deck.
         """
+        call = vba.current()
+        if call is not None:
+            return call.pres
         app_ref = self._get_app_impl()
         presentations = self._presentations(app_ref)
 
@@ -1038,6 +1052,26 @@ class PowerPointAppleEventWrapper:
                 "No presentation is open in PowerPoint. "
                 "Use ppt_create_presentation or ppt_open_presentation first."
             ) from None
+
+    # -- windows, for the Windows implementations run through VBA ------------
+
+    def _get_target_window_impl(self) -> Any:
+        """The deck's window, as the Windows code reaches it through VBA.
+
+        Only the Windows implementations ask for this, and only while they
+        run through the VBA bridge; the Apple Event code uses `target_window`.
+        Not activated, so PowerPoint is not brought to the front.
+        """
+        call = vba.current()
+        if call is None:
+            raise RuntimeError("The deck's window is reached this way only through the VBA bridge.")
+        return call.window()
+
+    _activate_target_window_impl = _get_target_window_impl
+
+    def _activate_target_window_for_command_impl(self) -> None:
+        if vba.current() is None:
+            raise RuntimeError("The deck's window is reached this way only through the VBA bridge.")
 
     def _set_target_pres_impl(self, name_or_index) -> dict:
         """Internal: set the session target presentation on the worker thread."""

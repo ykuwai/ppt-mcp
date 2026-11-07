@@ -433,15 +433,40 @@ cambia es lo que alcanza el diccionario de scripting de PowerPoint para Mac, y
 cuando no alcanza algo, la herramienta lo dice en lugar de hacer algo
 inesperado.
 
+**El VBA de PowerPoint para Mac llega más lejos, y se puede activar.** El
+servidor carga en PowerPoint un pequeño complemento, `ppt-mcp-bridge`, y ejecuta
+a través de él el código de Windows para lo que el diccionario de scripting no
+tiene palabras: etiquetas, `ppt_select_shapes`, `ppt_set_table_style`, quitar y
+copiar una sola animación, el tipo de edición de un nodo de forma libre, las
+herramientas de formato, ejes, series, tipo y
+datos del gráfico (los datos a través del libro de Excel del gráfico, que se
+abre un momento en Excel, como en Windows), las de nodos de forma libre y la agrupación, el texto dentro de un
+grupo, los diseños de una plantilla por nombre, duplicar y copiar
+diapositivas, editar un SmartArt (su texto, nodos, colores y estilo), y los
+argumentos que el
+Mac rechaza de otro modo (la información en pantalla, una fila o columna de
+tabla en una posición, una animación que se inicia al hacer clic en otra forma,
+los tamaños del reflejo, el resplandor, la sombra y el reflejo sobre el texto,
+reducir el texto para que quepa, el volumen, el silencio y los fundidos, el
+estilo del gráfico y la posición de la leyenda y del título). Esas herramientas
+editan la forma en su sitio, así que conserva sus animaciones, y no tocan el
+portapapeles. El complemento solo transmite esas llamadas; su código fuente está
+en `src/backend/vba`. PowerPoint lo carga sin preguntar, dura hasta que
+PowerPoint se cierra y no deja nada atrás. Donde no puede cargarse, por ejemplo
+si una directiva desactiva las macros, las herramientas funcionan como se
+describe abajo. Está desactivado por defecto, porque es
+código de macros que se carga sin preguntar. Pon `PPT_MAC_VBA=on` en el `env`
+del servidor para usarlo.
+
 No disponible en macOS:
 
-- **El tipo de edición de un nodo de forma libre.** Esquina, suave y simétrico
+- **Sin el complemento, el tipo de edición de un nodo de forma libre.** Esquina, suave y simétrico
   no se guardan en ningún lugar al que llegue un script; mueve en su lugar los
   controladores del nodo.
-- **Quitar una sola animación.** Borrar todas las animaciones de una
-  diapositiva sí funciona.
-- **Etiquetas, `ppt_select_shapes`, `ppt_set_table_style` y `ppt_execute_mso`.**
-  Nada en el diccionario llega a ninguna de ellas.
+- **`ppt_execute_mso`**, y sin el complemento también **las etiquetas,
+  `ppt_select_shapes`, `ppt_set_table_style` y quitar una sola animación**
+  (borrar todas las animaciones de una diapositiva sí funciona). Nada en el
+  diccionario llega a ellas.
 
 Diferencias menores:
 
@@ -449,21 +474,23 @@ Diferencias menores:
   una petición a la vez llega a PowerPoint, así que las demás se ponen en cola
   detrás y salen en el orden en que llegaron, sea cual sea. Una llamada que
   espera demasiado se retira y lo indica, sin haber cambiado nada.
-- Unas pocas herramientas aceptan un argumento que no tiene equivalente, por
+- Sin el complemento, unas pocas herramientas aceptan un argumento que no tiene equivalente, por
   ejemplo la información en pantalla de un hipervínculo. Esas se niegan con un
   mensaje que nombra el argumento, así que basta con quitarlo y reintentar.
 - **El vídeo y el audio se insertan incrustados, nunca vinculados**, y de los
   ocho ajustes de reproducción solo existen la repetición en bucle y ocultar el
-  fotograma. Ocultar el fotograma se rechaza en una diapositiva que ya tiene
+  fotograma, y con el complemento también el volumen, el silencio y los
+  fundidos. Ocultar el fotograma se rechaza en una diapositiva que ya tiene
   animaciones, porque escribirlo las reescribe.
 - Las exportaciones se preparan en el contenedor propio de PowerPoint y luego se
   mueven fuera, porque la aplicación está aislada (sandbox) y no puede escribir
   en cualquier carpeta.
-- **Los diseños propios de una plantilla se buscan por nombre en el archivo
-  guardado de la presentación**, así que guarda una presentación nueva antes de
-  pedirle a `ppt_add_slide` uno por nombre. PowerPoint para Mac no da a un
-  script el nombre de ningún diseño, así que la diapositiva se pega con su
-  diseño, lo que tarda alrededor de un segundo.
+- **Sin el complemento, los diseños propios de una plantilla se buscan por
+  nombre en el archivo guardado de la presentación**, así que guarda una
+  presentación nueva antes de pedirle a `ppt_add_slide` uno por nombre.
+  PowerPoint para Mac no da a un script el nombre de ningún diseño, así que la
+  diapositiva se pega con su diseño, lo que tarda alrededor de un segundo. Con
+  el complemento, el diseño se busca en la presentación abierta, guardada o no.
 - Las imágenes de las diapositivas se generan a partir de un PDF en lugar de
   exportarse como PNG. Una vista previa tiene 2 píxeles por punto en ambas
   plataformas.
@@ -474,28 +501,30 @@ Diferencias menores:
   a PowerPoint cerrar todos los documentos abiertos y salir cuando aparecía un
   aviso del sandbox detrás de un script
   ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Los gráficos, los trazados de forma libre y la agrupación pasan por el
-  portapapeles**, lo que significa que la operación lo ocupa un momento y luego
-  restaura lo que había. Así es como esas tres operaciones llegan a un
-  diccionario que no tiene palabras para ellas. PowerPoint para Mac pega en su
-  ventana del frente, así que con dos presentaciones abiertas funcionan en la
-  del frente; para la otra, la herramienta lo dice y no cambia nada, y
-  `ppt_activate_presentation` la trae al frente.
-- **Editar un gráfico o un trazado existente vuelve a crear la forma.** Las
+- **Añadir un gráfico pasa por el portapapeles**, y sin el
+  complemento también las demás herramientas de gráficos, los trazados de forma
+  libre y la agrupación. La operación ocupa el portapapeles un momento y luego
+  restaura lo que había. Así es como llegan a un diccionario que no tiene
+  palabras para ellas. PowerPoint para Mac pega en su ventana del frente, así
+  que con dos presentaciones abiertas funcionan en la del frente; para la otra,
+  la herramienta lo dice y no cambia nada, y `ppt_activate_presentation` la trae
+  al frente.
+- **Sin el complemento, editar un gráfico o un trazado existente vuelve a crear
+  la forma**, y con él, fijar los tamaños de un gráfico de burbujas todavía lo hace. Las
   herramientas de datos, tipo, título, leyenda, ejes y series del gráfico, y
   las de nodos, copian la forma, la reescriben, la vuelven a pegar y luego
   eliminan la original. Se conservan el nombre, la posición y el orden Z; las
-  animaciones de la forma no, y el resultado indica cuántas se perdieron. Unos
-  pocos argumentos de formato que dependen del tamaño con que se dibuja el
+  animaciones de la forma no, y el resultado indica cuántas se perdieron. Sin el
+  complemento, unos pocos argumentos de formato que dependen del tamaño con que se dibuja el
   gráfico (`chart_style`, las coordenadas de la leyenda y del título, las
   posiciones predefinidas de la leyenda en 8 direcciones) se rechazan por
   nombre.
-- **El texto dentro de un grupo se edita de la misma manera.** `ppt_set_text`
-  (el texto completo, o un fragmento dentro de una línea) y `ppt_format_text`
-  llegan a un miembro del grupo por su nombre o por su ruta
-  (`"Group 4/TextBox 3"`); el grupo se copia, el miembro se reescribe y el
-  grupo se vuelve a pegar. Los miembros conservan sus nombres, y el grupo pierde
-  sus animaciones, como arriba.
+- **El texto dentro de un grupo** se alcanza por el nombre del miembro o por
+  su ruta (`"Group 4/TextBox 3"`), con `ppt_set_text` (el texto completo, o un
+  fragmento dentro de una línea) y `ppt_format_text`. Con el complemento, el
+  miembro se edita en su sitio. Sin él, el grupo se copia, el miembro se
+  reescribe y el grupo se vuelve a pegar: los miembros conservan sus nombres, y
+  el grupo pierde sus animaciones, como arriba.
 - Los iconos se rasterizan con `sips` antes de insertarse, porque PowerPoint
   para Mac no puede leer un SVG. Esto requiere macOS 13 o posterior; los
   sistemas más antiguos reciben un rechazo que indica el motivo en lugar de un

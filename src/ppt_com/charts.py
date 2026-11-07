@@ -34,7 +34,7 @@ from utils import clipboard
 from utils.clipboard import kept_clipboard
 from utils.held_refs import held, window_process
 from utils.offload import run_offloaded
-from backend import ppt
+from backend import ppt, vba
 from ppt_com.layout_check import report_layout, touched_names
 from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
@@ -656,6 +656,11 @@ def _excel_needed(slide, shape) -> Optional[str]:
     copy does not take along, would be lost. A check that cannot be made
     counts as a reason, since then nothing says the copy would be safe.
     """
+    if vba.active():
+        # PowerPoint for Mac, through its VBA (backend.vba): Excel writes into
+        # the chart itself, where a copy would come through the Windows
+        # clipboard code and be a new shape.
+        return "PowerPoint for Mac writes chart data through Excel"
     try:
         return _why_excel(slide, shape)
     except Exception as e:  # noqa: BLE001 - Excel then, as before
@@ -948,6 +953,28 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
 XL_COLUMNS = 2  # XlRowCol.xlColumns
 
 
+def _set_source_data(chart, address) -> None:
+    """Point the chart at ``address``, a series per column, as written.
+
+    Left to Excel, it takes rows when there are more series than categories.
+    chart.SetSourceData() has a pywin32 VT_BYREF bug on the PlotBy parameter,
+    so through pywin32 it is called with InvokeTypes and fixed type flags
+    (12, 49) instead of (12, 17). PowerPoint for Mac's VBA (backend.vba) has
+    no such bug and no ``_oleobj_``, and shows the new data only once the
+    chart is refreshed.
+    """
+    oleobj = getattr(chart, "_oleobj_", None)
+    if oleobj is not None:
+        oleobj.InvokeTypes(
+            1413, 0, 1, (24, 0),
+            ((8, 1), (12, 49)),
+            address, XL_COLUMNS,
+        )
+    else:
+        chart.SetSourceData(address, XL_COLUMNS)
+        chart.Refresh()
+
+
 def _set_chart_data_through_excel(slide, shape, categories, series):
     chart = shape.Chart
 
@@ -982,20 +1009,10 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
                 ws.Cells(i + 2, col).Value = val
 
         # Set the chart's source data range.
-        # chart.SetSourceData() has a pywin32 VT_BYREF bug on the PlotBy
-        # parameter, so we call _oleobj_.InvokeTypes directly with fixed
-        # type flags (12, 49) instead of (12, 17) for PlotBy.
         last_row = len(categories) + 1
         last_col = len(series) + 1
         data_range = refs.add(ws.Range(ws.Cells(1, 1), ws.Cells(last_row, last_col)))
-        addr = "Sheet1!" + data_range.Address
-        # PlotBy xlColumns: a series per column, as written. Left to Excel, it
-        # takes rows when there are more series than categories.
-        chart._oleobj_.InvokeTypes(
-            1413, 0, 1, (24, 0),
-            ((8, 1), (12, 49)),
-            addr, XL_COLUMNS,
-        )
+        _set_source_data(chart, "Sheet1!" + data_range.Address)
     finally:
         try:
             closed = _close_chart_workbook(chart, wb, keep=refs)

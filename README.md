@@ -430,13 +430,35 @@ The same tools, the same arguments, the same answers. What differs is what
 PowerPoint for Mac's scripting dictionary can reach, and where it cannot reach
 something the tool says so rather than doing something unexpected.
 
+**PowerPoint for Mac's VBA reaches further, and can be turned on.** The
+server loads a small add-in, `ppt-mcp-bridge`, into PowerPoint and runs the
+Windows code through it for what the scripting dictionary has no words for:
+tags, `ppt_select_shapes`, `ppt_set_table_style`, removing and copying one
+animation, a freeform node's editing type, the chart formatting, axis, series, type and
+data tools (the data
+through the chart's Excel workbook, which opens in Excel for a moment, as on
+Windows), the freeform node
+tools and grouping, text inside a group, a template's layouts by name,
+duplicating and copying slides, editing a SmartArt (its text, nodes, colours
+and style), and the arguments the Mac otherwise refuses (a screen tip,
+a table row or column at a position, a click trigger on another shape,
+reflection sizes, glow, shadow and reflection on text, shrinking text to fit,
+volume, mute and fades, a chart style and the legend and title placement).
+Those edit the shape in place, so it keeps its animations, and the clipboard is
+not touched. The add-in only passes those calls on; its source is in
+`src/backend/vba`. PowerPoint loads it without a prompt, it lasts until
+PowerPoint quits, and nothing of it stays behind. Where it cannot be loaded,
+where macros are turned off by policy for instance, the tools work as described
+below. It is off by
+default, because it is macro code loaded without a prompt. Set `PPT_MAC_VBA=on`
+in the server's `env` to use it.
+
 Not available on macOS:
 
-- **A freeform node's editing type.** Corner, smooth and symmetric are not
-  stored anywhere a script can reach; move the node's handles instead.
-- **Removing one animation.** Clearing a slide's animations works.
-- **Tags, `ppt_select_shapes`, `ppt_set_table_style` and `ppt_execute_mso`.**
-  Nothing in the dictionary reaches any of them.
+- **`ppt_execute_mso`**, and without the add-in also **a freeform node's
+  editing type** (move the node's handles instead), **tags,
+  `ppt_select_shapes`, `ppt_set_table_style` and removing one animation**
+  (clearing a slide's animations works). Nothing in the dictionary reaches them.
 
 Smaller differences:
 
@@ -444,18 +466,20 @@ Smaller differences:
   request at a time reaches PowerPoint, so the rest queue behind it and come
   out in whatever order they arrived. A call left waiting too long is taken
   back and says so, having changed nothing.
-- A few tools accept an argument that has no counterpart, a screen tip on a
-  hyperlink for instance. Those refuse with a message naming the argument, so
-  dropping it and retrying works.
+- Without the add-in, a few tools accept an argument that has no counterpart,
+  a screen tip on a hyperlink for instance. Those refuse with a message naming
+  the argument, so dropping it and retrying works.
 - **Video and audio go in embedded, never linked**, and of the eight playback
-  settings only looping and hiding the frame exist. Hiding the frame is refused
-  on a slide that already has animations, because writing it rewrites them.
+  settings only looping and hiding the frame exist, and with the add-in volume,
+  mute and fades. Hiding the frame is refused on a slide that already has
+  animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.
-- **A template's own layouts are found by name in the deck's saved file**, so
-  save a new deck before asking `ppt_add_slide` for one by name. PowerPoint for
-  Mac names no layouts to a script, so the slide is pasted in on its layout,
-  which takes about a second.
+- **Without the add-in, a template's own layouts are found by name in the
+  deck's saved file**, so save a new deck before asking `ppt_add_slide` for one
+  by name. PowerPoint for Mac names no layouts to a script, so the slide is
+  pasted in on its layout, which takes about a second. With the add-in the
+  layout is found in the open deck, saved or not.
 - Slide images are rendered from a PDF rather than exported as PNG. A preview
   is 2 pixels per point on both platforms.
 - Automation consent belongs to whichever application launched the server, so
@@ -463,24 +487,26 @@ Smaller differences:
 - Save the deck early and at each break. It costs nothing, and PowerPoint has
   been seen to close every open document and then exit when a sandbox prompt
   went up behind a script ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Charts, freeform paths and grouping go through the clipboard**, which
-  means the operation takes it for a moment and puts back what was there. This
-  is how those three reach a dictionary that has no words for them. PowerPoint
+- **Adding a chart goes through the clipboard**, and without the add-in so do
+  the other chart tools, freeform paths and grouping.
+  The operation takes the clipboard for a moment and puts back what was there.
+  This is how they reach a dictionary that has no words for them. PowerPoint
   for Mac pastes into its front window, so with two decks open these work on
   the deck in front; for the other, the tool says so and changes nothing, and
   `ppt_activate_presentation` brings it to the front.
-- **Editing an existing chart or path recreates the shape.** The chart data,
-  type, title, legend, axis and series tools, and the node tools, copy the
-  shape, rewrite it and paste it back, then delete the original. The name,
+- **Without the add-in, editing an existing chart or path recreates the
+  shape**, and with it, setting a bubble chart's sizes still does. The tool copies the
+  shape, rewrites it and pastes it back, then deletes the original. The name,
   position and z order are kept; animations on the shape are not, and the
-  result says how many were lost. A few formatting arguments that depend on
-  the chart's rendered size (`chart_style`, legend and title coordinates,
-  the 8-direction legend presets) are refused by name.
-- **Text inside a group is edited the same way.** `ppt_set_text` (the whole
-  text, or a span inside one line) and `ppt_format_text` reach a group's
-  member by its name, or by its path (`"Group 4/TextBox 3"`); the group is
-  copied, the member rewritten and the group pasted back. The members keep
-  their names, and the group loses its animations, as above.
+  result says how many were lost. Without the add-in, a few formatting
+  arguments that depend on the chart's rendered size (`chart_style`, legend and
+  title coordinates, the 8-direction legend presets) are refused by name.
+- **Text inside a group** is reached by the member's name, or by its path
+  (`"Group 4/TextBox 3"`), with `ppt_set_text` (the whole text, or a span
+  inside one line) and `ppt_format_text`. With the add-in the member is edited
+  in place. Without it the group is copied, the member rewritten and the group
+  pasted back: the members keep their names, and the group loses its
+  animations, as above.
 - Icons are rasterised with `sips` before they are inserted, because
   PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
   systems get a refusal naming the reason rather than a blank box.
