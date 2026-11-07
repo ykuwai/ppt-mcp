@@ -1040,7 +1040,9 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
         for s_idx, s in enumerate(series):
             col = s_idx + 2  # columns B, C, D, ...
             ws.Cells(1, col).Value = s["name"]
-            for i, val in enumerate(s["values"]):
+            # Every row is written, so a short series leaves no old value behind.
+            values = list(s["values"]) + [None] * (len(categories) - len(s["values"]))
+            for i, val in enumerate(values):
                 ws.Cells(i + 2, col).Value = val
 
         # Set the chart's source data range.
