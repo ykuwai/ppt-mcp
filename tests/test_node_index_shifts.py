@@ -40,7 +40,7 @@ class TestTheArgumentsSaySo:
         assert "ppt_get_shape_nodes" in description
 
     def test_the_segment_type_argument_still_says_which_segment(self):
-        assert "AFTER this node" in freeform.SetSegmentTypeInput.model_fields["node_index"].description
+        assert "ends at it" in freeform.SetSegmentTypeInput.model_fields["node_index"].description
 
 
 # ---------------------------------------------------------------------------
