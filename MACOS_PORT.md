@@ -699,6 +699,17 @@ What it took to make it dependable:
   use (about 300, `PptMcpCalls*.bas`), and `CallByName` runs only the rest. A
   row inserted past the end of a table now answers, as on Windows, "Rows.Add :
   Integer out of range. 9 is not in BeforeRow's valid range of 1 to 2."
+- **Comments are modern comments, and only VBA has them.** PowerPoint makes
+  only modern comments now; a slide's `comment` elements answer none of them,
+  and `make new comment` is refused (-1708). Through the add-in,
+  `ppt_list_comments`, `ppt_add_comment` and `ppt_delete_comment` run the
+  Windows code: `Comments` reads author, initials, text, date and position,
+  `Add` adds (`Add2` is not there), and `Delete` deletes. A comment is signed
+  by the Office user whatever author it is given, on both platforms, and one
+  added on the Mac belongs to the slide as a whole: it has no position in the
+  file and reads as 960, 0, the slide's top right. `ppt_add_comment` answers
+  both. The add-in sends a date as `yyyy-mm-dd hh:nn:ss`, since VBA's own
+  text for it follows the Mac's locale.
 - **Chart data goes through Excel, and needs a refresh.** `ppt_set_chart_data`
   writes the chart's workbook (`ChartData.Workbook`), which keeps the chart
   itself, where the Windows code's other way would replace it with a copy. On

@@ -64,21 +64,54 @@ def _add_comment_impl(slide_index, text, author, author_initials,
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
+    comments_col = slide.Comments
+    before = comments_col.Count
 
     # Try Add2 first (newer PowerPoint versions), fall back to Add
     try:
-        slide.Comments.Add2(left, top, author, author_initials, text, "AD", "")
+        comments_col.Add2(left, top, author, author_initials, text, "AD", "")
     except Exception:
         try:
-            slide.Comments.Add(left, top, author, author_initials, text)
+            comments_col.Add(left, top, author, author_initials, text)
         except Exception as e:
             raise RuntimeError(f"Failed to add comment: {e}")
 
-    return {
-        "success": True,
-        "text": text,
-        "author": author,
-    }
+    result = {"success": True, "text": text, "author": author}
+    added = _added_comment(comments_col, before, text)
+    if added is None:
+        return result
+    # What PowerPoint made of it. A modern comment is signed by the Office
+    # user, whatever author it is given, and on the Mac it belongs to the
+    # slide as a whole rather than to a point on it (measured 2026-11-08).
+    result.update(author=added.Author, author_initials=added.AuthorInitials,
+                  left=round(added.Left, 2), top=round(added.Top, 2))
+    notes = []
+    if (added.Author, added.AuthorInitials) != (author, author_initials):
+        result["requested_author"] = author
+        notes.append(
+            f"PowerPoint signed the comment as {added.Author!r} ({added.AuthorInitials}), the "
+            f"Office user, not {author!r}: modern comments take their author from the "
+            "signed-in account. Put a name in the text if it has to show.")
+    if abs(added.Left - left) > 1 or abs(added.Top - top) > 1:
+        notes.append(
+            f"PowerPoint placed it at {round(added.Left, 2)}, {round(added.Top, 2)}, not at "
+            f"{left}, {top}: on the Mac a new comment belongs to the slide as a whole.")
+    if notes:
+        result["note"] = " ".join(notes)
+    return result
+
+
+def _added_comment(comments_col, before, text):
+    """The comment just added: the last one with this text, once the count
+    has grown by one, or None."""
+    count = comments_col.Count
+    if count != before + 1:
+        return None
+    for i in range(count, 0, -1):
+        comment = comments_col(i)
+        if comment.Text == text:
+            return comment
+    return None
 
 
 def _list_comments_impl(slide_index) -> dict:
