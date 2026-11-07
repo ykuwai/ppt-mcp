@@ -327,7 +327,12 @@ def _edit_nodes(pres, slide, slide_index, shape, action, edit, swaps=()) -> dict
     from gvml import smartart as gvml_smartart
     from gvml.canvas import XML_DECL
     from ppt_mac.gvml_paste import (
-        Clipboard, Refused, copy_shape_package, replace_shape, with_warnings)
+        Clipboard, Refused, copy_shape_package, front_refusal, replace_shape, with_warnings)
+
+    # Before the first copy, so a refusal leaves the clipboard alone.
+    refused = front_refusal(pres, "ppt_modify_smartart", _SHAPE_TOOLS)
+    if refused is not None:
+        return refused
 
     name = shape.name()
     index = _shape_index(slide, name)

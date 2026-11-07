@@ -50,6 +50,7 @@ from ppt_mac.gvml_paste import (
     Clipboard,
     Refused,
     copy_shape_package,
+    front_refusal,
     paste_package,
     replace_shape,
     strip_ids,
@@ -150,6 +151,11 @@ def _edit_path(tool_name, slide_index, shape_name, shape_index, edit, describe):
     _check_freeform(shape)
     index = _shape_index(slide, None, shape_name=shape_name, shape_index=shape_index)
     name = shape.name()
+
+    # Before the first copy, so a refusal leaves the clipboard alone.
+    refused = front_refusal(pres, tool_name, _EDIT_ALTERNATIVES)
+    if refused is not None:
+        return json.dumps(refused)
 
     clip = Clipboard.take()
     try:

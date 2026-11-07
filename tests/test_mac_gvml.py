@@ -362,6 +362,16 @@ class TestFreeformTools:
 # ---------------------------------------------------------------------------
 @macos_only
 class TestGroupShapes:
+    def test_another_deck_in_front_stops_it_before_the_first_copy(self):
+        from ppt_mac.groups import _group_shapes_impl
+
+        with _fake_deck(shapes=[("Box", "auto"), ("Circle", "auto")], front="Other") as deck:
+            result = _group_shapes_impl(1, ["Box", "Circle"])
+
+        assert result["error"] == "ppt_group_shapes needs 'Fake' in PowerPoint's front window"
+        assert "snapshot" not in deck.order and "copy" not in deck.order
+        assert deck.board.contents == {"public.utf8-plain-text": b"kept"}
+
     def test_the_members_are_copied_pasted_as_one_group_then_deleted(self):
         from ppt_mac.groups import _group_shapes_impl
 
