@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.offload import run_offloaded
 from utils.color import hex_to_int
-from backend import ppt
+from backend import ppt, vba
 from utils.navigation import goto_slide as nav_goto_slide
 from ppt_com.constants import (
     ppLayoutBlank, msoTrue, msoFalse, msoPlaceholder,
@@ -985,6 +985,7 @@ def _copy_slide_impl(
     # one a raising COM call inserted), so the destination stays as it was.
     before = {s.SlideID for s in dst_pres.Slides}
     inserted = []  # SlideIDs of the copies, in source order
+    clip = None
     folder = tempfile.mkdtemp(prefix="ppt-mcp-copy-")
     try:
         snapshot = _snapshot(src_pres, folder)
@@ -994,8 +995,13 @@ def _copy_slide_impl(
             _check_copies(dst_pres, inserted, expected, sources)
         else:
             method = "clipboard"
-            _paste_checked(src_pres, dst_pres, src_ids, expected, sources,
-                           first, inserted)
+            clip = _mac_clipboard()
+            try:
+                _paste_checked(src_pres, dst_pres, src_ids, expected, sources,
+                               first, inserted, clip.claim if clip else None)
+            finally:
+                if clip:
+                    clip.restore()
     except Exception:
         for slide in [s for s in dst_pres.Slides if s.SlideID not in before]:
             try:
@@ -1015,7 +1021,7 @@ def _copy_slide_impl(
     except Exception:
         pass
 
-    return {
+    result = {
         "success": True,
         "copied_count": len(new_indices),
         "new_slide_indices": new_indices,
@@ -1027,6 +1033,9 @@ def _copy_slide_impl(
         "target_presentation": dst_pres.Name,
         "source_presentation": src_pres.Name,
     }
+    if clip and clip.warnings:
+        result["warnings"] = clip.warnings
+    return result
 
 
 # Open XML extensions SaveCopyAs keeps in the presentation's own format;
@@ -1145,13 +1154,26 @@ def _check_copies(dst_pres, inserted: list, expected: list, sources: list) -> No
             )
 
 
+def _mac_clipboard():
+    """The user's clipboard, taken, when this runs on the Mac through its VBA
+    (backend.vba), where a tool puts it back; None on Windows."""
+    if not vba.active():
+        return None
+    from ppt_mac.gvml_paste import Clipboard
+
+    return Clipboard.take()
+
+
 def _paste_checked(src_pres, dst_pres, src_ids: list, expected: list,
-                   sources: list, first: int, inserted: list) -> None:
+                   sources: list, first: int, inserted: list,
+                   copied=None) -> None:
     """Copy slide by slide via the clipboard, checking each pasted slide
-    against its source."""
+    against its source. ``copied`` is called after each copy."""
     for j, sid in enumerate(src_ids):
         for attempt in range(_PASTE_ATTEMPTS):
             src_pres.Slides.FindBySlideID(sid).Copy()
+            if copied:
+                copied()
             # Paste(Index) inserts before slide Index; there is no slide one
             # past the end to paste before, so fall back to append in that case.
             if first + j > dst_pres.Slides.Count:

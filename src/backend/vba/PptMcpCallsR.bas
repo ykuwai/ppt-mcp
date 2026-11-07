@@ -88,6 +88,7 @@ Public Function CallR(o As Object, kind As String, m As String, f() As String, n
                     Case 6: Assign r, o.Replace(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)))
                     Case 7: Assign r, o.Replace(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)))
                     Case 8: Assign r, o.Replace(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)), ArgOf(f(10)))
+                    Case 9: Assign r, o.Replace(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)), ArgOf(f(10)), ArgOf(f(11)))
                     Case Else: CallR = False
                 End Select
             End If

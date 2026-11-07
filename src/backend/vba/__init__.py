@@ -50,7 +50,7 @@ HERE = Path(__file__).resolve().parent
 ADDIN_FILE = HERE / "ppt-mcp-bridge.ppam"
 ADDIN_NAME = "ppt-mcp-bridge"
 # Must match BRIDGE_VERSION in PptMcpBridge.bas; a test keeps them together.
-BRIDGE_VERSION = "5"
+BRIDGE_VERSION = "6"
 DISPATCH = "PptMcpBridge.Dispatch"
 PING = "PptMcpBridge.Ping"
 # PowerPoint is sandboxed. Its ~/Documents is this folder, which is where the

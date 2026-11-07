@@ -6,7 +6,7 @@ Attribute VB_Name = "PptMcpBridge"
 ' one place both sides can reach. Every entry point traps its errors, because
 ' an untrapped one would stop PowerPoint on a dialog.
 Option Explicit
-Public Const BRIDGE_VERSION As String = "5"
+Public Const BRIDGE_VERSION As String = "6"
 Private Sub WriteResult(id As String, s As String)
     Dim b() As Byte, f As Integer, dir As String, tmp As String, fin As String
     dir = Environ("HOME") & "/Documents/"
@@ -111,7 +111,9 @@ Sub Dispatch(id As String, batch As String)
                             Case 5: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)))
                             Case 6: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)))
                             Case 7: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)))
-                            Case Else: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)), ArgOf(f(10)))
+                            Case 8: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)), ArgOf(f(10)))
+                            Case 9: Assign r, CallByName(o, f(2), ct, ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)), ArgOf(f(10)), ArgOf(f(11)))
+                            Case Else: Err.Raise 450, "PptMcpBridge", "The bridge passes at most nine arguments"
                         End Select
                 End Select
             End If

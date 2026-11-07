@@ -13,6 +13,7 @@ import json
 import re
 import sys
 import threading
+import types
 import zipfile
 from pathlib import Path
 
@@ -786,3 +787,89 @@ class TestTheRouteIsAChoice:
     ])
     def test_the_setting(self, value, on):
         assert vba._setting(value) is on
+
+
+# ---------------------------------------------------------------------------
+# What a routed call must not leave behind
+# ---------------------------------------------------------------------------
+def windows_impl(impl):
+    """The Windows code of a tool, which the Mac reaches through its route."""
+    return getattr(impl, "vba_route", (impl,))[0]
+
+
+class TestHalfDoneEdits:
+    def test_a_highlight_on_a_group_member_stays_on_apple_events(self):
+        member = {"shape_name_or_index": "Group 4/TextBox 3"}
+        assert routes.group_member(member)
+        assert not routes.group_member({**member, "highlight_color": "#FFFF00"})
+        assert not routes.group_member({**member, "runs": [{"text": "a"}, {"text": "b", "highlight_color": "clear"}]})
+        assert routes.group_member({**member, "runs": [{"text": "a", "bold": True}]})
+
+    @pytest.mark.parametrize("wrong", [{"orientation": "diagonal"}, {"auto_size": "wide"}, {"vertical_anchor": "side"}])
+    def test_a_wrong_text_frame_name_changes_nothing(self, wrong):
+        from unittest.mock import MagicMock, patch
+
+        from ppt_com import text
+
+        shape = MagicMock(HasTextFrame=True)
+        arguments = {"auto_size": None, "word_wrap": None, "margin_left": 20, "margin_right": None,
+                     "margin_top": None, "margin_bottom": None, "orientation": None,
+                     "vertical_anchor": None, **wrong}
+        with patch.object(text.ppt, "_get_app_impl"), patch.object(text.ppt, "_get_pres_impl"), \
+                patch.object(text, "goto_slide"), patch.object(text, "_get_shape", return_value=shape):
+            with pytest.raises(ValueError, match="Invalid"):
+                windows_impl(text._set_textframe_impl)(1, "Box", **arguments)
+        assert shape.TextFrame.MarginLeft != 20
+
+
+class TestCopyingSlidesKeepsTheClipboard:
+    class Guard:
+        def __init__(self):
+            self.claims = 0
+            self.restored = False
+            self.warnings = ["kept"]
+
+        def claim(self):
+            self.claims += 1
+
+        def restore(self):
+            self.restored = True
+
+    def copy_from_a_legacy_deck(self, monkeypatch, active):
+        from test_copy_slide import _App, _decks
+
+        from ppt_com import slides
+
+        guard = self.Guard()
+        fake = types.ModuleType("ppt_mac.gvml_paste")
+        fake.Clipboard = types.SimpleNamespace(take=lambda: guard)
+        monkeypatch.setitem(sys.modules, "ppt_mac.gvml_paste", fake)
+        monkeypatch.setattr(slides.vba, "active", lambda: active)
+        monkeypatch.setattr(slides.ppt, "_get_app_impl", lambda: app)
+        app = _App()
+        _, dst, decks = _decks(app, name="src.ppt")
+        monkeypatch.setattr(slides, "_resolve_presentation",
+                            lambda _app, presentation_index=None, presentation_name=None: decks[presentation_name])
+        monkeypatch.setattr(slides, "nav_goto_slide", lambda *a: None)
+        result = windows_impl(slides._copy_slide_impl)(2, None, None, "src.ppt", None, "dst.pptx", None)
+        assert dst.titles() == ["D1", "D2", "D3", "S2"]
+        return guard, result
+
+    def test_the_mac_puts_the_users_clipboard_back(self, monkeypatch):
+        guard, result = self.copy_from_a_legacy_deck(monkeypatch, active=True)
+        assert result["method"] == "clipboard"
+        assert guard.claims == 1 and guard.restored
+        assert result["warnings"] == ["kept"]
+
+    def test_windows_does_not_touch_the_mac_guard(self, monkeypatch):
+        guard, result = self.copy_from_a_legacy_deck(monkeypatch, active=False)
+        assert guard.claims == 0 and not guard.restored
+        assert "warnings" not in result
+
+
+def test_the_dispatcher_passes_as_many_arguments_as_the_calls_take():
+    bridge = (VBA_DIR / "PptMcpBridge.bas").read_text(encoding="utf-8")
+    nine = ", ".join(f"ArgOf(f({3 + i}))" for i in range(9))
+    assert f"Case 9: Assign r, CallByName(o, f(2), ct, {nine})" in bridge
+    calls = (VBA_DIR / "PptMcpCallsI.bas").read_text(encoding="utf-8")
+    assert f"o.Insert({nine})" in calls, "a corner curve's nine"

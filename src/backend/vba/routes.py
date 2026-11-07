@@ -69,8 +69,16 @@ def group_member(arguments) -> bool:
     A ``"Group/Member"`` path is; so is a name that no top-level shape on the
     slide has, since the tools reach a group's member by its own name too. A
     top-level shape stays on the Apple Event route, which edits it in place
-    already; only a member goes through the clipboard there.
+    already; only a member goes through the clipboard there. So does a call
+    that sets a highlight: the Windows code for one needs pywin32 and
+    ExecuteMso, neither of which the Mac has, and it would fail after the
+    first write.
     """
+    if arguments.get("highlight_color") is not None or any(
+        isinstance(run, dict) and run.get("highlight_color") is not None
+        for run in arguments.get("runs") or []
+    ):
+        return False
     target = arguments.get("shape_name_or_index")
     if not isinstance(target, str):
         return False
