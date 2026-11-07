@@ -100,10 +100,8 @@ class TestTheToolsSayWhenItWasLeftOpen:
         shown = SimpleNamespace(Name="S", Values=(1.0,), XValues=("Q1",))
         chart.SeriesCollection = lambda *i: shown if i else SimpleNamespace(Count=1)
         shape = SimpleNamespace(Name="Chart 1", ZOrderPosition=1, Chart=chart, HasChart=True)
-        cells = SimpleNamespace(Clear=lambda: None)
-        sheet = SimpleNamespace(Cells=lambda *a: SimpleNamespace(Value=None) if a else cells,
+        sheet = SimpleNamespace(Cells=lambda *a: SimpleNamespace(Value=None),
                                 Range=lambda *a: SimpleNamespace(Address="$A$1:$B$2"))
-        sheet.Cells.Clear = lambda: None
         workbook.Worksheets = lambda i: sheet
         shapes = SimpleNamespace(AddChart2=lambda *a: shape)
         slide = SimpleNamespace(Shapes=shapes)
@@ -129,6 +127,13 @@ class TestTheToolsSayWhenItWasLeftOpen:
         charts = self.deck(monkeypatch, Workbook(failures=0))
         result = charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
         assert "warning" not in result
+
+    def test_bubbles_without_sizes_are_refused_before_anything_else(self, monkeypatch):
+        charts = self.deck(monkeypatch, Workbook(failures=0))
+        charts._get_chart_shape(None, None).Chart.ChartType = 15  # xlBubble
+        monkeypatch.setattr(charts, "_excel_needed", lambda *a: pytest.fail("got as far as Excel"))
+        with pytest.raises(ValueError, match="'S' has none"):
+            charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1]}])
 
 
 def test_a_workbook_that_never_closes_is_reported(caplog):
@@ -528,3 +533,42 @@ class TestTheChartIsPasted:
         monkeypatch.setattr(charts.clipboard, "empty", lambda: None)
         assert charts._paste_from(lambda: None, slide) == "chart"
         assert len(tries) == 3
+
+
+class TestTheOldDataIsClearedAfterTheNew:
+    """Only what lies beyond the new data is cleared, and after it is written (#343)."""
+
+    def sheet(self):
+        from types import SimpleNamespace
+
+        cleared = []
+
+        class Range:
+            def __init__(self, a, b):
+                self.span = (a, b)
+
+            def Clear(self):
+                cleared.append(self.span)
+
+        return SimpleNamespace(Cells=lambda r, c: (r, c), Range=Range), cleared
+
+    def test_nothing_beyond(self):
+        from ppt_com.charts import _clear_beyond
+
+        ws, cleared = self.sheet()
+        _clear_beyond(ws, (4, 3), 4, 3)
+        assert cleared == []
+
+    def test_rows_and_columns_beyond(self):
+        from ppt_com.charts import _clear_beyond
+
+        ws, cleared = self.sheet()
+        _clear_beyond(ws, (6, 5), 4, 3)
+        assert cleared == [((5, 1), (6, 5)), ((1, 4), (4, 5))]
+
+    def test_a_failure_leaves_the_chart_alone(self):
+        from types import SimpleNamespace
+
+        from ppt_com.charts import _clear_beyond
+
+        _clear_beyond(SimpleNamespace(), (6, 5), 4, 3)  # no Range: logged, not raised

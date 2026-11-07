@@ -911,6 +911,13 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     slide = pres.Slides(slide_index)
     shape = _get_chart_shape(slide, shape_name_or_index)
 
+    if shape.Chart.ChartType in chart_defaults.BUBBLE_TYPES:
+        missing = [s.get("name") for s in series if "sizes" not in s]
+        if missing:
+            raise ValueError(
+                f"A bubble chart's series need 'sizes', and {missing[0]!r} has none. "
+                "Nothing was changed.")
+
     reason = _excel_needed(slide, shape)
     if reason is None:
         old_id = shape.Id
@@ -974,8 +981,35 @@ def _set_source_data(chart, address) -> None:
         chart.Refresh()
 
 
+def _old_extent(chart):
+    """The last row and column the chart's current data takes on its sheet."""
+    try:
+        categories, series = _read_chart_data(chart)
+        return len(categories) + 1, len(series) + 1
+    except Exception as e:
+        logger.warning("Could not read the old chart data: %s", e)
+        return 0, 0
+
+
+def _clear_beyond(ws, old, last_row, last_col) -> None:
+    """Clear what the old data left below and to the right of the new data.
+
+    Done once the chart points at the new range, so it never shows them.
+    """
+    rows, cols = old
+    try:
+        if rows > last_row:
+            ws.Range(ws.Cells(last_row + 1, 1), ws.Cells(rows, max(cols, last_col))).Clear()
+        if cols > last_col:
+            ws.Range(ws.Cells(1, last_col + 1), ws.Cells(last_row, cols)).Clear()
+    except Exception as e:
+        # The chart already shows the new data; leftovers sit outside its range.
+        logger.warning("Could not clear the old chart data: %s", e)
+
+
 def _set_chart_data_through_excel(slide, shape, categories, series):
     chart = shape.Chart
+    old = _old_extent(chart)
 
     # Activate starts an Excel; not while the last chart's is ending (#299).
     held.wait_until_ended()
@@ -994,7 +1028,9 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
         raise
     try:
         ws = refs.add(wb.Worksheets(1))
-        ws.Cells.Clear()
+        # The cells are written over rather than cleared first, so the chart
+        # never points at an empty sheet while Excel is busy (#343, #323).
+        ws.Cells(1, 1).Value = None
 
         # Write categories in column A starting at row 2
         for i, cat in enumerate(categories):
@@ -1012,6 +1048,7 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
         last_col = len(series) + 1
         data_range = refs.add(ws.Range(ws.Cells(1, 1), ws.Cells(last_row, last_col)))
         _set_source_data(chart, "Sheet1!" + data_range.Address)
+        _clear_beyond(ws, old, last_row, last_col)
     finally:
         try:
             closed = _close_chart_workbook(chart, wb, keep=refs)
