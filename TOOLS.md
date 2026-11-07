@@ -1,10 +1,10 @@
 # Tools
 
-ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/categories--> categories. Each tool's own description, which your client shows, says what it takes. On macOS some tools work differently or refuse: [MACOS_PORT.md](MACOS_PORT.md) lists them.
+ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/categories--> categories. Each tool's own description, which your client shows, says what it takes. On macOS some tools work differently or refuse: [MACOS_PORT.md](MACOS_PORT.md) lists them. There, a call that PowerPoint for Mac's VBA add-in would have taken but that ran without it, because `PPT_MAC_VBA=off` or because the add-in could not be loaded, says so: a refusal carries a `hint` naming the reason, and a shape that had to be recreated gets a warning that the add-in would have edited it in place.
 
 | Category | Tools | Description |
 |----------|------:|-------------|
-| **App** | 5 | Connect to PowerPoint, app info, active window, window state, list presentations |
+| **App** | 5 | Connect to PowerPoint, app info, active window, window state (on macOS, normal and maximized on the front deck's window; minimized is refused), list presentations |
 | **Presentation** | 8 | Create (with templates), open (a local file, or on Windows a SharePoint or OneDrive URL), save, close, info, activate target, list templates |
 | **Slides** | 10 | Add, delete (bulk), duplicate (positional/multi), move (bulk), copy (cross-presentation), list, info, notes, navigation |
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines (with z-order placement, including behind the text), list, info (position, fill, line, text frame), update (one shape, a set, or the whole slide, absolute or by offset), delete, z-order |
@@ -22,7 +22,7 @@ ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/catego
 | **Hyperlinks** | 3 | Add, get, remove |
 | **Sections** | 3 | Add, list, manage |
 | **Properties** | 2 | Set/get presentation metadata |
-| **Media** | 3 | Video, audio, media settings |
+| **Media** | 3 | Video, audio, media settings (on macOS, trimming with `start_point` and `end_point` goes through the VBA add-in, and is refused without it) |
 | **SmartArt** | 3 | Add, modify, list layouts |
 | **Edit Operations** | 6 | Undo and redo (on the target presentation), copy shapes/formatting between slides |
 | **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check |

@@ -132,6 +132,8 @@ def test_no_setting_lists_the_three():
     assert sorted(default["listed"]) == ["ppt_describe", "ppt_run", "ppt_run_steps"]
 
 
-def test_a_setting_that_is_not_one_falls_back_to_the_default():
-    mistyped = _probe("catalogue")
-    assert sorted(mistyped["listed"]) == ["ppt_describe", "ppt_run", "ppt_run_steps"]
+def test_a_setting_that_is_not_one_lists_every_tool():
+    """A mistyped value meant something other than the default, and a client's
+    rules that name tools work only when every tool is listed."""
+    mistyped = _probe("ful")
+    assert len(mistyped["listed"]) > 100

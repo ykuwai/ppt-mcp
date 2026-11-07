@@ -386,6 +386,19 @@ class TestTheAnswerSaysWhyTheAddInDidNotTakeIt:
     def test_a_plain_success_is_left_as_it_was(self, monkeypatch):
         assert self.router(monkeypatch, {"success": True}, enabled=False)(1, screen_tip="tip") == {"success": True}
 
+    def test_a_failure_that_is_not_a_refusal_gets_no_note(self, monkeypatch):
+        """A slide that does not exist fails the same way through the add-in."""
+        failed = {"error": "Slide 9 does not exist"}
+        out = self.router(monkeypatch, dict(failed), enabled=False)(9, screen_tip="tip")
+        assert out == failed
+
+    def test_turned_off_the_condition_is_asked_only_for_a_note(self, monkeypatch):
+        asked = []
+        monkeypatch.setattr(vba, "ENABLED", False)
+        impl = vba.routed(lambda slide_index: None, lambda slide_index: {"success": True},
+                          lambda arguments: asked.append(arguments) or True)
+        assert impl(1) == {"success": True} and asked == []
+
     def test_a_call_the_add_in_would_not_take_gets_no_note(self, monkeypatch):
         out = self.router(monkeypatch, dict(REFUSED), enabled=False)(1)
         assert "hint" not in out
@@ -846,7 +859,7 @@ class TestTheRouteIsAChoice:
     """On unless PPT_MAC_VBA=off; a value that is no setting is the default."""
 
     @pytest.mark.parametrize("value, on", [
-        ("on", True), ("1", True), ("", True), ("off", False), ("NO", False), ("maybe", True),
+        ("on", True), ("1", True), ("", True), ("off", False), ("NO", False), ("maybe", False),
     ])
     def test_the_setting(self, value, on):
         assert vba._setting(value) is on

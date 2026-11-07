@@ -1131,10 +1131,12 @@ def _tool_mode(value):
     if value in ("full", "all"):
         return "full"
     # Read at import, so a typo must not stop the server from starting.
+    # Full: whoever set it meant something other than the default, and a
+    # client's rules that name tools work only in full mode.
     logger.warning(
         "PPT_TOOL_MODE=%r is not a setting; use 'catalog' (the default) to list "
-        "three tools, or 'full' to list every tool. Using 'catalog'.", value)
-    return "catalog"
+        "three tools, or 'full' to list every tool. Using 'full'.", value)
+    return "full"
 
 
 CATALOG_MODE = _tool_mode(os.getenv("PPT_TOOL_MODE", "catalog")) == "catalog"

@@ -397,7 +397,7 @@ Lo que se pierde en modo catálogo es el control por herramienta en el cliente: 
 
 ## 🍎 Compatibilidad con macOS
 
-**<!--mac-refusals-->10<!--/mac-refusals--> herramientas se niegan a funcionar en macOS. El resto funciona.** Las <!--mac-refusals-->10<!--/mac-refusals--> aparecen por nombre en
+**Con el complemento VBA, activado por defecto, 3 herramientas se niegan a funcionar en macOS; sin él, <!--mac-refusals-->10<!--/mac-refusals-->. El resto funciona.** Las <!--mac-refusals-->10<!--/mac-refusals--> aparecen por nombre en
 la sección 6.1 de [MACOS_PORT.md](../MACOS_PORT.md), y una prueba se encarga de que esa lista sea exacta.
 
 Las mismas herramientas, los mismos argumentos, las mismas respuestas. Lo que
@@ -423,8 +423,11 @@ reducir el texto para que quepa, el volumen, el silencio, el recorte y los fundi
 el estilo del gráfico y la posición de la leyenda y del título). Esas herramientas
 editan la forma en su sitio, así que conserva sus animaciones, y no tocan el
 portapapeles. El complemento solo transmite esas llamadas; su código fuente está
-en `src/backend/vba`. PowerPoint lo carga sin preguntar, dura hasta que
-PowerPoint se cierra y no deja nada atrás. Donde no puede cargarse, por ejemplo
+en `src/backend/vba`. PowerPoint lo carga sin preguntar y lo mantiene hasta que se cierra;
+una copia del archivo queda en la carpeta propia de PowerPoint. Mientras está
+cargado, otros programas autorizados a controlar PowerPoint también pueden
+llamarlo, pero solo dentro del modelo de objetos de PowerPoint, y se niega a
+ejecutar macros, cerrar PowerPoint o acceder a complementos. Donde no puede cargarse, por ejemplo
 si una directiva desactiva las macros, las herramientas funcionan como se
 describe abajo. Está activado por defecto;
 `PPT_MAC_VBA=off` en el `env` del servidor lo desactiva. Una llamada que el

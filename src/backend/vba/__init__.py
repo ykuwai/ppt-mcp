@@ -27,9 +27,11 @@ and ``com_members.json`` by ``scripts/dump_com_members.py``.
 Which tools take this route is in ``routes.py``. A routed tool falls back to
 its Apple Event implementation whenever the add-in cannot be loaded, and its
 answer then says why (``routed``). The route is on unless ``PPT_MAC_VBA=off``.
-The add-in is macro code PowerPoint loads without a prompt, but it only runs
-the calls this server sends, the ones the Windows code makes through COM;
-it lasts until PowerPoint quits and leaves nothing behind.
+The add-in is macro code PowerPoint loads without a prompt. It lasts until
+PowerPoint quits, and its file stays in PowerPoint's container. While loaded,
+any program allowed to send PowerPoint Apple Events can call it too, but only
+on PowerPoint's object model, and it refuses Application.Run, Quit, AddIns,
+COMAddIns, VBE and AutomationSecurity.
 """
 
 import contextlib
@@ -61,7 +63,11 @@ PING = "PptMcpBridge.Ping"
 CONTAINER = Path.home() / "Library" / "Containers" / "com.microsoft.Powerpoint" / "Data" / "Documents"
 INSTALL_DIR = CONTAINER / "ppt-mcp"
 CALL_TIMEOUT = 60.0
-RETRY_AFTER = 30.0
+# Loading the add-in answers in well under a second. Where macros are blocked
+# it never answers, so it is not waited on for a whole call's time, nor tried
+# again on every call.
+PING_TIMEOUT = 10.0
+RETRY_AFTER = 300.0
 RS, US, GS = "\x1e", "\x1f", "\x1d"
 # PowerPoint's own event for `run VB macro`. appscript has no term for it.
 RUN_VB_MACRO = b"sPPTrVbM"
@@ -77,8 +83,10 @@ def _setting(value: str) -> bool:
         return True
     if value in ("off", "false", "0", "no"):
         return False
-    logger.warning("PPT_MAC_VBA=%r is not a setting; use 'on' (the default) or 'off'. Using 'on'.", value)
-    return True
+    # Whoever set it meant something other than the default, and turning
+    # macro code on is not something to do by mistake.
+    logger.warning("PPT_MAC_VBA=%r is not a setting; use 'on' (the default) or 'off'. Using 'off'.", value)
+    return False
 
 
 ENABLED = _setting(os.getenv("PPT_MAC_VBA", "on"))
@@ -467,7 +475,7 @@ class _Session:
             app_ref.register_add_in(str(installed))
             for _ in range(2):
                 addin.loaded.set(True)
-        bridge = Bridge(app_ref.AS_appdata.target())
+        bridge = Bridge(app_ref.AS_appdata.target(), timeout=PING_TIMEOUT)
         version, office = bridge.ping()
         if version != BRIDGE_VERSION:
             # An older add-in is loaded from an earlier run; load the new file.
@@ -480,6 +488,7 @@ class _Session:
                     f"PowerPoint has version {version} of the add-in loaded, not "
                     f"{BRIDGE_VERSION}; quit PowerPoint so it can load the new one")
         logger.info("VBA bridge %s loaded into PowerPoint %s", version, office)
+        bridge.timeout = CALL_TIMEOUT
         self._bridge = bridge
         return bridge
 
@@ -626,7 +635,8 @@ def _noted(result, failure_note: str, recreated_note: str):
     """``result`` of an Apple Event implementation, with a note on why the
     add-in did not take the call.
 
-    A failure gets ``failure_note`` as its ``hint``. A success whose shape was
+    A refusal (a failure naming its ``platform``) gets ``failure_note`` as
+    its ``hint``. A success whose shape was
     recreated through the clipboard gets ``recreated_note`` among its
     ``warnings``. Anything else, and anything that is not a JSON object, is
     handed back as it was. A result given as JSON text goes back as JSON text.
@@ -638,7 +648,11 @@ def _noted(result, failure_note: str, recreated_note: str):
         return result
     if not isinstance(body, dict):
         return result
+    body = dict(body)  # a noted result is a new one; the original stays as it was
     if "error" in body:
+        if "platform" not in body:
+            # Not a refusal: the add-in would have failed the same way.
+            return result
         body["hint"] = f"{body['hint']} {failure_note}" if body.get("hint") else failure_note
     elif any("was recreated" in str(w) for w in body.get("warnings") or []):
         body["warnings"] = list(body["warnings"]) + [recreated_note]
@@ -665,10 +679,14 @@ def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], b
         except TypeError:
             return mac_impl(*args, **kwargs)
         bound.apply_defaults()
+        if not ENABLED:
+            # The condition can cost an Apple Event, so it is asked only when
+            # there is a note to add.
+            result = mac_impl(*args, **kwargs)
+            noted = _noted(result, OFF_NOTE, OFF_RECREATED_NOTE)
+            return noted if noted is not result and condition(bound.arguments) else result
         if not condition(bound.arguments):
             return mac_impl(*args, **kwargs)
-        if not ENABLED:
-            return _noted(mac_impl(*args, **kwargs), OFF_NOTE, OFF_RECREATED_NOTE)
         # Checked before anything is written: a tool makes several calls, and
         # one refused halfway would leave the earlier ones done.
         for value in bound.arguments.values():
@@ -678,7 +696,7 @@ def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], b
         try:
             bridge = _SESSION.bridge(ppt._get_app_impl())
         except VbaUnavailable as e:
-            logger.warning("The VBA add-in could not be loaded: %s", e)
+            # _SESSION has logged it, once for each reason.
             note = _unavailable_note(e)
             return _noted(mac_impl(*args, **kwargs), note, note)
         return _run(bridge, com_impl, args, kwargs)

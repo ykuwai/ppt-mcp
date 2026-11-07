@@ -396,7 +396,7 @@ O que o modo catálogo sacrifica é o controle por ferramenta no cliente: aprova
 
 ## 🍎 Suporte ao macOS
 
-**<!--mac-refusals-->10<!--/mac-refusals--> ferramentas recusam no macOS. As demais funcionam.** As <!--mac-refusals-->10<!--/mac-refusals--> estão listadas pelo nome na
+**Com o suplemento VBA, ativado por padrão, 3 ferramentas recusam no macOS; sem ele, <!--mac-refusals-->10<!--/mac-refusals-->. As demais funcionam.** As <!--mac-refusals-->10<!--/mac-refusals--> estão listadas pelo nome na
 seção 6.1 de [MACOS_PORT.md](../MACOS_PORT.md), e um teste garante que essa lista esteja correta.
 
 As mesmas ferramentas, os mesmos argumentos, as mesmas respostas. O que muda é
@@ -420,8 +420,11 @@ reflexo no texto, reduzir o texto para caber, volume, mudo, corte e esmaecimento
 o estilo do gráfico e a posição da legenda e do título). Essas ferramentas editam
 a forma no lugar, então ela mantém as animações, e a área de transferência não
 é tocada. O suplemento só repassa essas chamadas; o código-fonte está em
-`src/backend/vba`. O PowerPoint o carrega sem perguntar, ele dura até o
-PowerPoint fechar e não deixa nada para trás. Onde não puder ser carregado, por
+`src/backend/vba`. O PowerPoint o carrega sem perguntar e o mantém até fechar; uma cópia
+do arquivo fica na pasta do próprio PowerPoint. Enquanto está carregado, outros
+programas autorizados a controlar o PowerPoint também podem chamá-lo, mas só
+dentro do modelo de objetos do PowerPoint, e ele se recusa a executar macros,
+fechar o PowerPoint ou acessar suplementos. Onde não puder ser carregado, por
 exemplo quando uma política desativa as macros, as ferramentas funcionam como
 descrito abaixo. Ele vem ativado por padrão;
 `PPT_MAC_VBA=off` no `env` do servidor o desativa. Uma chamada que o suplemento
