@@ -278,3 +278,13 @@ def test_a_process_it_may_not_wait_on_is_not_taken_for_ended(monkeypatch):
     _fake_windows(monkeypatch, 5)
     with pytest.raises(_WinError):
         process_ended(1234)
+
+
+def test_an_excel_past_the_limit_is_still_ending_until_it_has_ended():
+    processes, gone, clock = Processes(), [], Clock()
+    held = HeldUntilEnded(processes, pause=clock.pause, clock=clock)
+    held.hold([Reference(gone)], 5)
+    held.wait_until_ended(limit=2)
+    assert held.still_ending()
+    processes.ended.add(5)
+    assert not held.still_ending()

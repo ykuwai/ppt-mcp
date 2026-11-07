@@ -389,6 +389,19 @@ WORKBOOK_LEFT_OPEN = (
 )
 
 
+def _wait_for_the_last_excel() -> None:
+    """Wait for the Excel before this one to end, and stop if it has not.
+
+    An Excel started while the one before it is ending crashes, and has taken
+    PowerPoint with it (#299, #323).
+    """
+    held.wait_until_ended()
+    if held.still_ending():
+        raise RuntimeError(
+            "The last chart's Excel has not ended yet, and starting another now can "
+            "crash PowerPoint. Nothing was changed; call this again in a minute.")
+
+
 def _wait_pumping(seconds) -> None:
     """Wait on the STA thread while still answering COM calls into it."""
     end = time.monotonic() + seconds
@@ -619,7 +632,7 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
 
     # The types gvml cannot write still go through AddChart2, which
     # starts an Excel; not while the last chart's is ending (#299).
-    held.wait_until_ended()
+    _wait_for_the_last_excel()
     chart_shape = slide.Shapes.AddChart2(-1, type_int, left, top, width, height)
     chart = chart_shape.Chart
 
@@ -950,6 +963,9 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
 
 
 XL_COLUMNS = 2  # XlRowCol.xlColumns
+# Seconds a chart's workbook stays open once its data is written. Measured on
+# Windows, closing at once emptied the chart 7 times in 10; after 3 s, 0 in 15.
+EXCEL_SETTLE = 3.0
 
 
 def _set_source_data(chart, address) -> None:
@@ -978,7 +994,7 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
     chart = shape.Chart
 
     # Activate starts an Excel; not while the last chart's is ending (#299).
-    held.wait_until_ended()
+    _wait_for_the_last_excel()
     # Every Excel object kept here is handed to ``held`` once the workbook is
     # closed, and let go of after its Excel has ended (#299).
     refs = _ExcelRefs()
@@ -1012,6 +1028,9 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
         last_col = len(series) + 1
         data_range = refs.add(ws.Range(ws.Cells(1, 1), ws.Cells(last_row, last_col)))
         _set_source_data(chart, "Sheet1!" + data_range.Address)
+        # What was written reaches the chart a moment later, and a workbook
+        # closed before that leaves the chart empty (#343).
+        _wait_pumping(EXCEL_SETTLE)
     finally:
         try:
             closed = _close_chart_workbook(chart, wb, keep=refs)

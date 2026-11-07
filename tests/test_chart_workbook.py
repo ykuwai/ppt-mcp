@@ -241,7 +241,8 @@ class TestExcelIsLetGoOfOnceItHasEnded:
         monkeypatch.setattr(charts, "window_process", lambda hwnd: {555: 4321}.get(hwnd))
         monkeypatch.setattr(charts, "held", SimpleNamespace(
             hold=lambda objects, pid: handed.append((list(objects), pid)),
-            wait_until_ended=lambda: handed.append("waited")))
+            wait_until_ended=lambda: handed.append("waited"),
+            still_ending=lambda: False))
         return charts, workbook, handed
 
     def test_add_chart_hands_over_the_closed_workbook(self, monkeypatch):
@@ -265,6 +266,35 @@ class TestExcelIsLetGoOfOnceItHasEnded:
         del workbook.Application
         charts._add_chart_impl(1, 70, 0, 0, 100, 100)  # 3-D area: still AddChart2
         assert handed == ["waited", ([workbook], None)]
+
+
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="drives the COM impls, which macOS replaces with its own")
+
+
+class TestTheWorkbookStaysOpenUntilTheDataHasLanded:
+    """Closed at once, the chart often ended up empty (#343)."""
+
+    def test_it_closes_only_after_the_wait(self, monkeypatch):
+        workbook = Workbook(failures=0)
+        charts = TestTheToolsSayWhenItWasLeftOpen().deck(monkeypatch, workbook)
+        waits = []
+        monkeypatch.setattr(charts, "_wait_pumping", lambda s: waits.append((s, workbook.closed)))
+        charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1.0]}])
+        assert waits[0] == (charts.EXCEL_SETTLE, False)
+        assert workbook.closed
+
+    def test_an_excel_still_ending_stops_the_call_before_another_starts(self, monkeypatch):
+        from types import SimpleNamespace
+
+        workbook = Workbook(failures=0)
+        charts = TestTheToolsSayWhenItWasLeftOpen().deck(monkeypatch, workbook)
+        monkeypatch.setattr(charts, "held", SimpleNamespace(
+            wait_until_ended=lambda: None, still_ending=lambda: True, hold=lambda *a: None))
+        monkeypatch.setattr(charts, "_set_source_data",
+                            lambda *a: pytest.fail("the workbook was written"))
+        with pytest.raises(RuntimeError, match="Nothing was changed"):
+            charts._set_chart_data_impl(1, "Chart 1", ["Q1"], [{"name": "S", "values": [1.0]}])
 
 
 @pytest.mark.skipif(sys.platform != "win32",
@@ -338,6 +368,7 @@ class TestANewChartStartsNoExcel:
         charts, calls = self.deck(monkeypatch)
         monkeypatch.setattr(charts, "held", SimpleNamespace(
             wait_until_ended=lambda: calls.append("waited"),
+            still_ending=lambda: False,
             hold=lambda objects, pid: None))
         with pytest.raises(AssertionError, match="starts an Excel"):
             charts._add_chart_impl(1, type_int, 0, 0, 100, 100)

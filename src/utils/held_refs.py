@@ -39,7 +39,7 @@ _MANY = 16
 
 # How long AddChart2 waits for the Excel before it to end, in seconds. An
 # Excel ends from two seconds to about a minute after its workbook is closed,
-# so this waits out the short ones and lets a slow one overlap.
+# so this waits out the short ones, and a slow one stops the next chart.
 WAIT_LIMIT = 15.0
 
 
@@ -157,6 +157,22 @@ class HeldUntilEnded:
             references.clear()
         return len(done)
 
+    def still_ending(self) -> bool:
+        """Whether the Excel behind any held set has not ended yet.
+
+        A process that cannot be asked about does not count, as in
+        ``wait_until_ended``.
+        """
+        with self._lock:
+            pids = {entry[1] for entry in self._held}
+        for pid in pids:
+            try:
+                if not self._ended(pid):
+                    return True
+            except Exception:  # noqa: BLE001 - not waited for
+                logger.debug("Could not tell whether process %s has ended", pid, exc_info=True)
+        return False
+
     def wait_until_ended(self, limit: float = WAIT_LIMIT) -> float:
         """Wait for the Excel behind every held set to end, then let go.
 
@@ -164,8 +180,9 @@ class HeldUntilEnded:
         another is still ending. The sets of every thread are waited for, an
         abandoned worker's too, since their Excel overlaps all the same, but
         only this thread's are let go of. After ``limit`` seconds the chart
-        goes ahead, and that is logged. A process that cannot be asked
-        about is not waited for. Answers the seconds waited.
+        stops waiting, and that is logged; ``still_ending`` then tells the
+        caller. A process that cannot be asked about is not waited for.
+        Answers the seconds waited.
         """
         start = self._clock()
         while True:
@@ -183,8 +200,8 @@ class HeldUntilEnded:
                 break
             if waited >= limit:
                 logger.warning(
-                    "Excel %s has not ended %.0f s after its chart was done; "
-                    "opening the next chart's workbook anyway", waiting, waited,
+                    "Excel %s has not ended %.0f s after its chart was done",
+                    waiting, waited,
                 )
                 break
             self._pause(0.1)
