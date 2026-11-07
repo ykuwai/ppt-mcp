@@ -56,12 +56,16 @@ def _get_app_info_impl() -> dict:
         "name": app.name(),
         "version": app.version(),
         "visible": True,
-        # No scriptable application window state on macOS; see
-        # _set_window_state_impl.
+        # The front deck window's `zoomed`, as ppt_set_window_state sets it.
         "window_state": "unknown",
         "presentations_count": count(app.presentations),
         "active_presentation": None,
     }
+    try:
+        if count(app.document_windows):
+            info["window_state"] = "maximized" if app.document_windows.first.zoomed.get() is True else "normal"
+    except Exception:
+        pass
     if info["presentations_count"] > 0:
         try:
             info["active_presentation"] = ppt._get_pres_impl().name()

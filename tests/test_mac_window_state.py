@@ -90,3 +90,16 @@ def test_with_no_deck_open_there_is_no_window(app):
 def test_a_zoom_that_did_not_take_is_an_error(app):
     window = _Window(zoomed=False, sticks=False)
     assert app([window])("maximized") == {"error": "PowerPoint kept the window normal, not maximized."}
+
+
+@pytest.mark.parametrize("zoomed, state", [(True, "maximized"), (False, "normal")])
+def test_app_info_reads_the_window_state(monkeypatch, zoomed, state):
+    from ppt_mac import app as mac_app
+
+    fake = type("App", (), {"document_windows": _Windows([_Window(zoomed)]),
+                            "presentations": _Windows([]),
+                            "name": lambda self: "Microsoft PowerPoint",
+                            "version": lambda self: "16.114"})()
+    monkeypatch.setattr(mac_app.ppt, "_get_app_impl", lambda *a, **k: fake)
+    monkeypatch.setattr(mac_app, "count", lambda x: len(x.get()))
+    assert mac_app._get_app_info_impl()["window_state"] == state

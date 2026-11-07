@@ -103,7 +103,7 @@ class TestToolCountMatchesToolList:
 
     def test_tool_count_matches_tool_list(self):
         # Catalog mode's three tools reach the others rather than adding to
-        # what the server can do, and exist only with PPT_TOOL_MODE=catalog.
+        # what the server can do, and are listed only in catalog mode (the default).
         catalog = {"ppt_describe", "ppt_run", "ppt_run_steps"}
         source_count = len([n for n in _all_tool_names() if n not in catalog])
 

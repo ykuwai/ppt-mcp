@@ -418,8 +418,10 @@ reflection sizes, glow, shadow and reflection on text, shrinking text to fit,
 volume, mute, trimming and fades, a chart style and the legend and title placement).
 Those edit the shape in place, so it keeps its animations, and the clipboard is
 not touched. The add-in only passes those calls on; its source is in
-`src/backend/vba`. PowerPoint loads it without a prompt, it lasts until
-PowerPoint quits, and nothing of it stays behind. Where it cannot be loaded,
+`src/backend/vba`. PowerPoint loads it without a prompt and keeps it until PowerPoint quits;
+a copy of the file stays in PowerPoint's own folder. While it is loaded, other
+programs allowed to control PowerPoint can call it too, but only within
+PowerPoint's object model, and it refuses to run macros, quit or reach add-ins. Where it cannot be loaded,
 where macros are turned off by policy for instance, the tools work as described
 below. It is on by
 default; `PPT_MAC_VBA=off` in the server's `env` turns it off. A call the
