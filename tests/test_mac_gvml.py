@@ -453,6 +453,18 @@ class TestTheReplaceProcedure:
     """Copy, rewrite, paste, read back, then delete the original, then walk
     the new shape back down the z order. Every stop on that road."""
 
+    def test_whole_x_values_read_back_as_the_numbers_they_are(self):
+        from gvml import Package
+        from ppt_com import chart_defaults
+        from ppt_mac.charts import _set_chart_data_impl
+
+        package = Package.from_bytes(_fixture_bytes("chart"))
+        package.parts[package.chart_part()] = chart_defaults.chart_xml(-4169).encode()
+        deck_shapes = [("XY", "chart", package.to_bytes())]
+        with _fake_deck(shapes=deck_shapes):
+            result = _set_chart_data_impl(1, "XY", ["2020", "2021"], [{"name": "S", "values": [1, 2]}])
+        assert result["success"] is True
+
     def test_the_steps_run_in_order_and_the_chart_keeps_its_place(self):
         from ppt_mac.charts import _set_chart_data_impl
 

@@ -106,6 +106,15 @@ def _escape(text) -> str:
     )
 
 
+def _bubble_columns(i: int) -> tuple:
+    """The sheet columns of bubble series ``i``: its values, then its sizes.
+
+    A bubble series takes two columns, so that no cell holds two things when
+    PowerPoint makes a workbook from the chart.
+    """
+    return _column(2 * i + 1), _column(2 * i + 2)
+
+
 def _column(i: int) -> str:
     """0 -> B, 1 -> C, ... the sheet column a series would live in."""
     n = i + 1
@@ -164,7 +173,7 @@ def _series_xml(spec: _Spec, i: int, series: dict, categories: Sequence, n: int,
 
     With ``date_format`` the categories are dates, written as Excel's day
     numbers in that format, the way a new area or radar chart holds them."""
-    col = _column(i + 1)
+    col = _bubble_columns(i)[0] if spec.kind == "bubble" else _column(i + 1)
     head = (
         f'<c:ser><c:idx val="{i}"/><c:order val="{i}"/>'
         f'<c:tx>{_str_ref(f"Sheet1!${col}$1", [series["name"]])}</c:tx>'
@@ -196,7 +205,7 @@ def _series_xml(spec: _Spec, i: int, series: dict, categories: Sequence, n: int,
         smooth = f'<c:smooth val="{1 if spec.smooth else 0}"/>'
         return head + line + marker + x_val + y_val + smooth + "</c:ser>"
     if kind == "bubble":
-        size_col = _column(i + 2)
+        size_col = _bubble_columns(i)[1]
         x_val = f'<c:xVal>{_num_ref(f"Sheet1!$A$2:$A${n + 1}", categories)}</c:xVal>'
         y_val = f'<c:yVal>{_num_ref(f"Sheet1!${col}$2:${col}${n + 1}", series["values"])}</c:yVal>'
         sizes = series.get("sizes") or [1.0] * n
@@ -695,10 +704,12 @@ def _set_ref(ser: ET.Element, name: str, numeric: bool, formula: str, values: Se
 def _next_colour(ser: ET.Element, index: int) -> ET.Element:
     """Give a series cloned from the last one the colour of its own place.
 
-    Only the colours change. What the last series leaves out stays out: a
-    scatter series with no line, or a line series with no markers, is that
-    kind through its ``spPr`` and ``marker``, so a new series without them
-    would grow a line or markers.
+    Only the series' own colour changes, its transparency kept. A theme
+    colour that is not an accent, such as a white outline, is not the series'
+    colour and stays. What the last series leaves out stays out: a scatter
+    series with no line, or a line series with no markers, is that kind
+    through its ``spPr`` and ``marker``, so a new series without them would
+    grow a line or markers.
     """
     accent = f"accent{index % 6 + 1}"
     trees = ser.findall(f"{_C}spPr")
@@ -707,8 +718,12 @@ def _next_colour(ser: ET.Element, index: int) -> ET.Element:
     for tree in trees:
         for fill in tree.iter(f"{_A}solidFill"):
             for colour in list(fill):
+                theme = colour.tag == f"{_A}schemeClr"
+                if theme and not colour.get("val", "").startswith("accent"):
+                    continue
+                keep = list(colour) if theme else []
                 fill.remove(colour)
-            ET.SubElement(fill, f"{_A}schemeClr", {"val": accent})
+                ET.SubElement(fill, f"{_A}schemeClr", {"val": accent}).extend(keep)
     return ser
 
 
@@ -747,6 +762,10 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
         raise PackageError("the chart's first plot holds no series to take as a template")
     kind = _local(plot.tag)
     xy = kind in ("scatterChart", "bubbleChart")
+    if kind == "bubbleChart":
+        for s in series:
+            if "sizes" not in s:
+                raise ValueError(f"series '{s.get('name', '')}' has no sizes for its bubbles")
 
     insert_at = list(plot).index(old[0])
     for ser in old:
@@ -757,7 +776,7 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
 
     for i, s in enumerate(series):
         ser = _copy.deepcopy(old[i]) if i < len(old) else _next_colour(_copy.deepcopy(template), i)
-        col = _column(i + 1)
+        col = _bubble_columns(i)[0] if kind == "bubbleChart" else _column(i + 1)
         _insert_ordered(ser, _val("idx", i), _SER_ORDER)
         _insert_ordered(ser, _val("order", i), _SER_ORDER)
         tx = _el("tx")
@@ -769,9 +788,8 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
             _set_ref(ser, "xVal", True, f"Sheet1!$A$2:$A${n + 1}", categories)
             _set_ref(ser, "yVal", True, f"Sheet1!${col}$2:${col}${n + 1}", s["values"])
             if kind == "bubbleChart":
-                size_col = _column(i + 2)
-                sizes = s.get("sizes") or [1.0] * n
-                _set_ref(ser, "bubbleSize", True, f"Sheet1!${size_col}$2:${size_col}${n + 1}", sizes)
+                size_col = _bubble_columns(i)[1]
+                _set_ref(ser, "bubbleSize", True, f"Sheet1!${size_col}$2:${size_col}${n + 1}", s["sizes"])
         else:
             _remove(ser, "xVal")
             _remove(ser, "yVal")

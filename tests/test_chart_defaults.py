@@ -201,3 +201,41 @@ def test_only_the_creation_id_is_stripped():
     strip_creation_ids(element)
 
     assert [e.get("uri") for e in element.iter(f"{A}ext")] == ["{C183}"]
+
+
+def bubble_series():
+    return [{"name": "One", "values": [1, 2], "sizes": [3, 4]},
+            {"name": "Two", "values": [5, 6], "sizes": [7, 8]}]
+
+
+def formulas(xml):
+    return [f.text for f in ET.fromstring(xml).iter(f"{C}f")]
+
+
+@pytest.mark.parametrize("write", [
+    lambda: gvml_charts.chart_xml(15, ["1", "2"], bubble_series()).encode(),
+    lambda: gvml_charts.set_data(chart_defaults.chart_xml(15).encode(), ["1", "2"], bubble_series()),
+])
+def test_no_two_things_of_a_bubble_chart_share_a_cell(write):
+    cells = [f for f in formulas(write()) if not f.startswith("Sheet1!$A$")]
+    assert cells == ["Sheet1!$B$1", "Sheet1!$B$2:$B$3", "Sheet1!$C$2:$C$3",
+                     "Sheet1!$D$1", "Sheet1!$D$2:$D$3", "Sheet1!$E$2:$E$3"]
+
+
+def test_a_bubble_series_without_sizes_is_refused_rather_than_set_to_one():
+    with pytest.raises(ValueError, match="no sizes"):
+        gvml_charts.set_data(chart_defaults.chart_xml(15).encode(), ["1", "2"],
+                             [{"name": "S", "values": [1, 2]}])
+
+
+def test_an_added_series_takes_its_colour_and_leaves_the_rest():
+    a = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    fill = (f'<c:spPr xmlns:a="{a}"><a:solidFill><a:schemeClr val="accent1"><a:alpha val="50000"/>'
+            '</a:schemeClr></a:solidFill><a:ln><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:ln></c:spPr>')
+    base = gvml_charts.chart_xml(51, ["A"], [{"name": "S", "values": [1]}])
+    xml = base.replace('<c:invertIfNegative', fill + '<c:invertIfNegative', 1).encode()
+    out = gvml_charts.set_data(xml, ["A"], [{"name": "S", "values": [1]}, {"name": "T", "values": [2]}])
+    added = ET.fromstring(out).findall(f".//{C}ser")[1].find(f"{C}spPr")
+    colours = [e for e in added.iter() if e.tag == f"{{{a}}}schemeClr"]
+    assert [e.get("val") for e in colours] == ["accent2", "lt1"]
+    assert colours[0].find(f"{{{a}}}alpha").get("val") == "50000"

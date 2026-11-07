@@ -131,7 +131,7 @@ class SetChartDataInput(BaseModel):
             "List of series dicts, each with 'name' (str) and 'values' (list[float]). "
             "Example: [{'name': 'Sales', 'values': [100, 200, 150, 300]}]. "
             "For a scatter or bubble chart the categories are the x values, and "
-            "on Windows a bubble chart's series also take 'sizes' (list[float])."
+            "a bubble chart's series also need 'sizes' (list[float])."
         ),
     )
 
@@ -934,8 +934,7 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
                 result["warning"] = " ".join(warnings)
             return result
 
-    if (any("sizes" in entry for entry in series)
-            and shape.Chart.ChartType in chart_defaults.BUBBLE_TYPES):
+    if shape.Chart.ChartType in chart_defaults.BUBBLE_TYPES:
         # The Excel way writes names and values only, so the sizes would be
         # dropped without a word.
         raise RuntimeError(
@@ -1683,7 +1682,9 @@ def register_tools(mcp):
         combines more than one chart type, or is of a type that still opens
         Excel (3-D area and bar, cone, stock, surface and the like), is written
         through Excel as before, and so is a scatter chart whose categories
-        are not numbers or a bubble chart whose series have no 'sizes'. `method` says which was used, and `reason` why
+        are not numbers. A bubble chart cannot go through Excel, which would
+        drop its sizes, so such a call, or one with a series that has no
+        'sizes', is refused. `method` says which was used, and `reason` why
         Excel was.
         Either way the values' number format goes back to General.
         """

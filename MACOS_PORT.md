@@ -741,7 +741,7 @@ Left on the Apple Event route, with the reason:
 | bubble sizes on `ppt_set_chart_data` | Through VBA the data goes through the chart's Excel workbook, which takes names and values only |
 | `ppt_list_smartart_layouts`, `ppt_add_smartart`, `change_layout` on `ppt_modify_smartart` | Layouts are picked by index from the Mac's list of the 162 it installs, which needs no deck open. Its VBA knows 159, in another order, and none until a deck is open. Colour schemes and styles come in the same order on both sides, so the other SmartArt edits go through VBA |
 | `link_to_file` on video and audio | A linked file outside PowerPoint's container raises a sandbox prompt |
-| trimming media | The Windows code for it needs a fix of its own first |
+| trimming media | Not yet checked through VBA, so it stays refused |
 
 Building the add-in needs PowerPoint for Windows, with "Trust access to the VBA
 project object model" turned on for the build only:
