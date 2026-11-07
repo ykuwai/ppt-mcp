@@ -560,13 +560,59 @@ def _table_to_markdown(shape) -> str:
         return ""
 
 
-def _collect_text_shapes(slide) -> list:
+def _shape_records(slide) -> list:
+    """Each shape of a slide with its record, every property of it, read for
+    all the shapes in one event; a shape's record is None when that read is
+    refused or does not line up with the shapes."""
+    shapes = shapes_of(slide)
+    try:
+        records = slide.shapes.properties.get()
+    except Exception:
+        logger.debug("Shape records refused; reading each shape", exc_info=True)
+        records = None
+    if (not isinstance(records, list) or len(records) != len(shapes)
+            or not all(isinstance(r, dict) for r in records)):
+        records = [None] * len(shapes)
+    return list(zip(shapes, records))
+
+
+def _shape_package_paragraphs(shape, clip):
+    """A shape's paragraphs, read from the package `copy shape` writes for it:
+    runs with their emphasis, bullets and levels as PowerPoint resolves them
+    (a placeholder's inherited bullets included). None when the copy gives no
+    package, which is the case for a deck that is not in front and for a
+    table."""
+    from gvml import canvas as gvml_canvas
+    from ppt_mac.gvml_paste import Refused, copy_shape_package
+
+    try:
+        package = copy_shape_package(shape, clip, "ppt_get_all_text")
+        children = gvml_canvas.children(gvml_canvas.parse(package.drawing()))
+    except (Refused, CommandError, ValueError):
+        return None
+    except Exception:  # noqa: BLE001 - read the slow way instead
+        logger.debug("Could not read a shape's package", exc_info=True)
+        return None
+    if len(children) != 1 or not children[0].tag.endswith("}sp"):
+        return None
+    return _package_paragraphs(children[0])
+
+
+def _collect_text_shapes(slide, clip=None) -> list:
     """Collect all text-bearing shapes from a slide with position info.
 
     Returns a list of dicts with keys:
         shape, top, left, width, height, is_title, is_subtitle,
         has_table, is_group
     Skips SlideNumber, Header, Footer, Date placeholders.
+
+    What a shape is and where comes from one record read for the whole slide.
+    With ``clip`` (the user's clipboard, taken for the call), a text shape's
+    paragraphs come from the package `copy shape` writes, in one event: they
+    then carry each run's own bold and italic, which PowerPoint for Mac
+    cannot answer for a range (asked for a range with one bold word, it
+    answers bold for the whole of it). A shape that will not copy is read
+    the slow way.
     """
     from ppt_com.text import (
         _SKIP_PLACEHOLDER_TYPES,
@@ -578,12 +624,17 @@ def _collect_text_shapes(slide) -> list:
 
     shapes = []
 
-    def _process_shape(shape, offset_top=0.0, offset_left=0.0):
+    def _process_shape(shape, record=None, offset_top=0.0, offset_left=0.0):
         """Process a single shape (may be called recursively for groups)."""
+        def read(key, getter):
+            if record is not None and key in record:
+                return _clean(record[key])
+            return getter()
+
         # Check placeholder skip / classify
         is_title = False
         is_subtitle = False
-        shape_kind = shape.shape_type()
+        shape_kind = read(k.shape_type, lambda: shape.shape_type())
         if shape_kind == placeholder_kind:
             try:
                 # `placeholder type` is declared on `place holder`, and a shape
@@ -591,7 +642,7 @@ def _collect_text_shapes(slide) -> list:
                 # really is one. The try/except is what covers the case where
                 # it does not, exactly as on the COM side.
                 ph_type = _windows_constant(
-                    PpPlaceholderType, shape.placeholder_type()
+                    PpPlaceholderType, read(k.placeholder_type, lambda: shape.placeholder_type())
                 )
                 if ph_type in _SKIP_PLACEHOLDER_TYPES:
                     return
@@ -604,17 +655,17 @@ def _collect_text_shapes(slide) -> list:
         # its members are read from the package `copy shape` writes for it.
         if shape_kind == group_kind:
             try:
-                shapes.extend(_group_text_infos(shape))
+                shapes.extend(_group_text_infos(shape, clip))
             except Exception as exc:  # noqa: BLE001 - a group that cannot be read is skipped
                 logger.debug("Could not read the text inside a group: %s", exc)
             return
 
         info = {
             "shape": shape,
-            "top": shape.top() + offset_top,
-            "left": shape.left_position() + offset_left,
-            "width": shape.width(),
-            "height": shape.height(),
+            "top": read(k.top, lambda: shape.top()) + offset_top,
+            "left": read(k.left_position, lambda: shape.left_position()) + offset_left,
+            "width": read(k.width, lambda: shape.width()),
+            "height": read(k.height, lambda: shape.height()),
             "is_title": is_title,
             "is_subtitle": is_subtitle,
             "has_table": False,
@@ -622,7 +673,7 @@ def _collect_text_shapes(slide) -> list:
 
         # Check for table
         try:
-            if shape.has_table():
+            if read(k.has_table, lambda: shape.has_table()):
                 info["has_table"] = True
                 shapes.append(info)
                 return
@@ -631,30 +682,74 @@ def _collect_text_shapes(slide) -> list:
 
         # Check for text
         try:
-            if shape.has_text_frame():
-                if shape.text_frame.has_text():
+            if not read(k.has_text_frame, lambda: shape.has_text_frame()):
+                return
+            paragraphs = _shape_package_paragraphs(shape, clip) if clip is not None else None
+            if paragraphs is not None:
+                # has text: any character at all, as PowerPoint's own `has text`
+                if any(run["text"] for p in paragraphs for run in p["runs"]):
+                    info["paragraphs"] = paragraphs
                     shapes.append(info)
+            elif shape.text_frame.has_text():
+                shapes.append(info)
         except Exception:
             pass
 
-    for shape in shapes_of(slide):
-        _process_shape(shape)
+    for shape, record in _shape_records(slide):
+        _process_shape(shape, record)
 
     return shapes
 
 
 def _package_paragraphs(member) -> list:
-    """A group member's paragraphs, read from the package: each one's runs as
-    {"text", "bold", "italic"} (a line break as \\n), the bullet the
-    paragraph itself sets ("bullet", "number" or None) and its level."""
+    """A shape's paragraphs, read from its package: each one's runs as
+    {"text", "bold", "italic"} (a line break as \\n), its bullet ("bullet",
+    "number" or None) and its level.
+
+    A paragraph takes its bullet, and a run its bold and italic, from the
+    paragraph's level in the text body's list style unless it sets them
+    itself. A copied placeholder carries what it inherits there, so its
+    bullets are read like a text box's.
+    """
     from gvml.package import NS_A
 
     a = f"{{{NS_A}}}"
     body = member.find(f"{a}txSp/{a}txBody")
     if body is None:
         return []
+
+    def bullet_of(ppr):
+        """The bullet a pPr or lvlNpPr sets: a kind, "none", or None (not set)."""
+        if ppr is None:
+            return None
+        if ppr.find(f"{a}buNone") is not None:
+            return "none"
+        if ppr.find(f"{a}buAutoNum") is not None:
+            return "number"
+        if ppr.find(f"{a}buChar") is not None or ppr.find(f"{a}buBlip") is not None:
+            return "bullet"
+        return None
+
+    defaults = {}
+    styles = body.find(f"{a}lstStyle")
+    for level in range(1, 10):
+        lvl = styles.find(f"{a}lvl{level}pPr") if styles is not None else None
+        rpr = lvl.find(f"{a}defRPr") if lvl is not None else None
+        defaults[level] = {
+            "bullet": bullet_of(lvl),
+            "bold": rpr is not None and rpr.get("b") in ("1", "true"),
+            "italic": rpr is not None and rpr.get("i") in ("1", "true"),
+        }
+
+    def flag(rpr, name, default):
+        value = rpr.get(name) if rpr is not None else None
+        return default if value is None else value in ("1", "true")
+
     out = []
     for paragraph in body.findall(f"{a}p"):
+        ppr = paragraph.find(f"{a}pPr")
+        level = int(ppr.get("lvl", "0")) + 1 if ppr is not None else 1
+        level_default = defaults.get(level, {"bullet": None, "bold": False, "italic": False})
         runs = []
         for child in paragraph:
             if child.tag in (f"{a}r", f"{a}fld"):
@@ -662,20 +757,13 @@ def _package_paragraphs(member) -> list:
                 t = child.find(f"{a}t")
                 runs.append({
                     "text": (t.text or "") if t is not None else "",
-                    "bold": rpr is not None and rpr.get("b") == "1",
-                    "italic": rpr is not None and rpr.get("i") == "1",
+                    "bold": flag(rpr, "b", level_default["bold"]),
+                    "italic": flag(rpr, "i", level_default["italic"]),
                 })
             elif child.tag == f"{a}br":
                 runs.append({"text": "\n", "bold": False, "italic": False})
-        ppr = paragraph.find(f"{a}pPr")
-        bullet = None
-        if ppr is not None:
-            if ppr.find(f"{a}buAutoNum") is not None:
-                bullet = "number"
-            elif ppr.find(f"{a}buChar") is not None:
-                bullet = "bullet"
-        level = int(ppr.get("lvl", "0")) + 1 if ppr is not None else 1
-        out.append({"runs": runs, "bullet": bullet, "level": level})
+        bullet = bullet_of(ppr) or level_default["bullet"]
+        out.append({"runs": runs, "bullet": None if bullet == "none" else bullet, "level": level})
     return out
 
 
@@ -692,7 +780,7 @@ def _text_members(element) -> list:
     return found
 
 
-def _group_text_infos(group) -> list:
+def _group_text_infos(group, clip=None) -> list:
     """The text of a group's members, as _collect_text_shapes reports a shape.
 
     Each member that holds text is one entry, at its box on the slide (a
@@ -704,14 +792,17 @@ def _group_text_infos(group) -> list:
     from gvml import shapes as gvml_shapes
     from ppt_mac.gvml_paste import Clipboard, Refused, copy_shape_package
 
-    clip = Clipboard.take()
+    own = clip is None
+    if own:
+        clip = Clipboard.take()
     try:
         try:
             package = copy_shape_package(group, clip, "ppt_get_all_text")
         except Refused:
             return []
     finally:
-        clip.restore()
+        if own:
+            clip.restore()
     root = gvml_shapes.only_child(
         gvml_canvas.children(gvml_canvas.parse(package.drawing())), "group")
     boxes = gvml_shapes.group_items(root)
@@ -749,9 +840,28 @@ def _paragraphs_to_markdown(paragraphs, as_heading: str = "") -> str:
     return "\n".join(lines)
 
 
+def _package_shape_to_markdown(info: dict, subheading_level: str) -> str:
+    """A slide shape whose paragraphs were read from its package, as the slow
+    path renders it: a title as one heading line, a subtitle as plain text, a
+    shape whose every run is bold as a subheading, anything else as is. The
+    heading's text is the shape's text with its breaks turned into spaces."""
+    paragraphs = info["paragraphs"]
+    plain = " ".join("".join(r["text"] for r in p["runs"]).replace("\n", " ") for p in paragraphs).strip()
+    if info["is_title"]:
+        return f"# {plain}" if plain else ""
+    if info["is_subtitle"]:
+        return _paragraphs_to_markdown(paragraphs)
+    runs = [r for p in paragraphs for r in p["runs"] if r["text"].strip()]
+    if runs and all(r["bold"] for r in runs):
+        return f"{subheading_level} {plain}" if plain else ""
+    return _paragraphs_to_markdown(paragraphs)
+
+
 def _shape_info_to_markdown(info: dict, subheading_level: str = "##") -> str:
     """Convert a single shape_info dict to Markdown text."""
     if info.get("paragraphs") is not None:
+        if info.get("shape") is not None:
+            return _package_shape_to_markdown(info, subheading_level)
         runs = [r for p in info["paragraphs"] for r in p["runs"] if r["text"].strip()]
         if runs and all(r["bold"] for r in runs):
             return _paragraphs_to_markdown(info["paragraphs"], as_heading=subheading_level)
@@ -778,7 +888,7 @@ def _shape_info_to_markdown(info: dict, subheading_level: str = "##") -> str:
     return _shape_paragraphs_to_markdown(shape)
 
 
-def _slide_to_markdown(slide, slide_index: int) -> str:
+def _slide_to_markdown(slide, slide_index: int, clip=None) -> str:
     """Convert a single slide to pseudo-Markdown.
 
     The layout algorithm is the COM module's, unchanged; only the reads moved.
@@ -800,7 +910,7 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
         pass
     parts = [f"== Slide {slide_index}{hidden} =="]
 
-    shape_infos = _collect_text_shapes(slide)
+    shape_infos = _collect_text_shapes(slide, clip)
     if not shape_infos:
         parts.append("(no text)")
         return "\n".join(parts)
@@ -864,18 +974,40 @@ def _get_all_text_impl(slide_indices) -> str:
     else:
         indices = slide_indices
 
+    # A shape's text comes from the package `copy shape` writes, which is
+    # quick and carries each run's emphasis; PowerPoint writes one only for
+    # the deck in its front window, so another deck is read shape by shape.
+    clip = None
+    if _in_front(pres):
+        from ppt_mac.gvml_paste import Clipboard
+
+        clip = Clipboard.take()
     slide_parts = []
-    for idx in indices:
-        if idx < 1 or idx > total_slides:
-            slide_parts.append(
-                f"== Slide {idx} ==\n(invalid slide index, "
-                f"presentation has {total_slides} slides)"
-            )
-            continue
-        slide = pres.slides[idx]
-        slide_parts.append(_slide_to_markdown(slide, idx))
+    try:
+        for idx in indices:
+            if idx < 1 or idx > total_slides:
+                slide_parts.append(
+                    f"== Slide {idx} ==\n(invalid slide index, "
+                    f"presentation has {total_slides} slides)"
+                )
+                continue
+            slide = pres.slides[idx]
+            slide_parts.append(_slide_to_markdown(slide, idx, clip))
+    finally:
+        if clip is not None:
+            clip.restore()
+            for warning in clip.warnings:
+                logger.warning("ppt_get_all_text: %s", warning)
 
     return "\n\n".join(slide_parts)
+
+
+def _in_front(pres) -> bool:
+    """Whether the deck is the one in PowerPoint's front window."""
+    try:
+        return _clean(ppt._get_app_impl().active_presentation.full_name()) == _clean(pres.full_name())
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------

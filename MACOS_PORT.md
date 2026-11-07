@@ -179,6 +179,7 @@ them in one place.
 | `shape.rotation` raises `AttributeError` | the dictionary defines both an enumerator and a property named `rotation`, and appscript resolves the collision toward the enumerator | reach the property by raw code. Verified working, set 33 and read 33.0 back |
 | `line_format.dash_style` raises `AttributeError` | same collision class, the `line dash style …` enumerators take the name | raw code `b'LFds'` |
 | PowerPoint stops answering | a modal sheet, or an operation that wedged it | every call carries `timeout=`, which appscript supports on every command |
+| A range's `font.bold` (or `italic`) answers true for a body with one bold word, and `characters.font.bold` answers that one value rather than one per character | PowerPoint for Mac answers a font property of a range with what any of it has; there is no `run` class | `ppt_get_all_text` reads a text shape's paragraphs from the package `copy shape` writes for it (each run's emphasis, each paragraph's bullet and level, a placeholder's inherited ones resolved into its list style), one event a shape, the clipboard saved and put back. PowerPoint writes that package only for the deck in its front window, so another deck is read shape by shape as before |
 
 The raw code route is small enough to state in full.
 
