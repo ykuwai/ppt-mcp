@@ -329,6 +329,66 @@ class TestTheRouter:
         monkeypatch.setattr(vba, "ENABLED", False)
         assert impl(2, "Box", screen_tip="tip") == {"via": "apple events"}
 
+
+REFUSED = {"error": "ppt_add_hyperlink cannot take screen_tip on macOS", "reason": "no words", "platform": "macOS"}
+RECREATED = {"success": True, "warnings": ["'Chart 1' was recreated by paste; name, position and z order kept, animations not."]}
+
+
+class TestTheAnswerSaysWhyTheAddInDidNotTakeIt:
+    """A call the add-in would have taken, run on the Apple Event route, says
+    so: a refusal would otherwise read as "the Mac cannot", and a recreated
+    shape as the only way to edit it."""
+
+    def router(self, monkeypatch, answer, *, enabled=True, available=True):
+        import backend
+
+        monkeypatch.setattr(vba, "ENABLED", enabled)
+
+        def get_bridge(app_ref):
+            if not available:
+                raise vba.VbaUnavailable("macros are turned off by policy")
+            raise AssertionError("the add-in was asked for")
+
+        monkeypatch.setattr(vba._SESSION, "bridge", get_bridge)
+        monkeypatch.setattr(backend, "ppt", type("P", (), {"_get_app_impl": lambda self: "app"})())
+
+        def com_impl(slide_index, screen_tip=None):
+            raise AssertionError("the Windows code ran")
+
+        def mac_impl(slide_index, screen_tip=None):
+            return answer() if callable(answer) else answer
+
+        return vba.routed(com_impl, mac_impl, routes.given("screen_tip"))
+
+    def test_turned_off_a_refusal_says_how_to_turn_it_on(self, monkeypatch):
+        out = self.router(monkeypatch, dict(REFUSED), enabled=False)(1, screen_tip="tip")
+        assert out["error"] == REFUSED["error"] and out["hint"] == vba.OFF_NOTE
+        assert "PPT_MAC_VBA=off" in out["hint"]
+
+    def test_turned_off_a_recreated_shape_says_it_could_have_been_kept(self, monkeypatch):
+        out = self.router(monkeypatch, lambda: {**RECREATED, "warnings": list(RECREATED["warnings"])},
+                          enabled=False)(1, screen_tip="tip")
+        assert out["warnings"][-1] == vba.OFF_RECREATED_NOTE and len(out["warnings"]) == 2
+
+    def test_a_refusal_given_as_json_text_stays_json_text(self, monkeypatch):
+        out = self.router(monkeypatch, json.dumps(REFUSED), enabled=False)(1, screen_tip="tip")
+        assert json.loads(out)["hint"] == vba.OFF_NOTE
+
+    def test_an_existing_hint_is_kept(self, monkeypatch):
+        out = self.router(monkeypatch, {**REFUSED, "hint": "Drop screen_tip."}, enabled=False)(1, screen_tip="tip")
+        assert out["hint"].startswith("Drop screen_tip. ") and out["hint"].endswith(vba.OFF_NOTE)
+
+    def test_on_but_not_loaded_says_why(self, monkeypatch):
+        out = self.router(monkeypatch, dict(REFUSED), available=False)(1, screen_tip="tip")
+        assert "could not be loaded (macros are turned off by policy)" in out["hint"]
+
+    def test_a_plain_success_is_left_as_it_was(self, monkeypatch):
+        assert self.router(monkeypatch, {"success": True}, enabled=False)(1, screen_tip="tip") == {"success": True}
+
+    def test_a_call_the_add_in_would_not_take_gets_no_note(self, monkeypatch):
+        out = self.router(monkeypatch, dict(REFUSED), enabled=False)(1)
+        assert "hint" not in out
+
     def test_a_failure_in_the_windows_code_is_raised_and_not_retried(self, route, monkeypatch):
         impl, calls, bridge, _, mac_impl = route
 
@@ -780,10 +840,10 @@ def test_a_nodes_editing_type_takes_the_route():
 
 
 class TestTheRouteIsAChoice:
-    """The add-in is macro code loaded without a prompt, so it is off unless asked for."""
+    """On unless PPT_MAC_VBA=off; a value that is no setting is the default."""
 
     @pytest.mark.parametrize("value, on", [
-        ("on", True), ("1", True), ("off", False), ("", False), ("maybe", False),
+        ("on", True), ("1", True), ("", True), ("off", False), ("NO", False), ("maybe", True),
     ])
     def test_the_setting(self, value, on):
         assert vba._setting(value) is on

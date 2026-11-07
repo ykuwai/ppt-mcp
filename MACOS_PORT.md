@@ -674,8 +674,10 @@ saying which names are properties and which methods. So the *Windows*
 implementation of a tool runs unchanged; `backend/vba/routes.py` lists which,
 and `use_mac_impls` puts a router in front of the Apple Event implementation
 that takes the VBA route when the call needs it and the add-in loads, and the
-Apple Event route otherwise. It is off by default, because the add-in is macro
-code PowerPoint loads without a prompt; `PPT_MAC_VBA=on` turns it on.
+Apple Event route otherwise. It is on by default and `PPT_MAC_VBA=off` turns it
+off; a call the add-in would have taken then says so (`routed` puts a `hint` on a
+refusal and a warning on a recreated shape), as it does when the add-in cannot
+be loaded.
 
 What it took to make it dependable:
 
