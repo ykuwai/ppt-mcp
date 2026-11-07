@@ -431,7 +431,7 @@ As mesmas ferramentas, os mesmos argumentos, as mesmas respostas. O que muda é
 o que o dicionário de scripts do PowerPoint para Mac consegue alcançar, e onde
 ele não alcança algo a ferramenta avisa em vez de fazer algo inesperado.
 
-**O VBA do PowerPoint para Mac alcança mais, e é usado por padrão.** O servidor
+**O VBA do PowerPoint para Mac alcança mais, e pode ser ativado.** O servidor
 carrega no PowerPoint um pequeno suplemento, `ppt-mcp-bridge`, e roda por meio
 dele o código do Windows para o que o dicionário de scripts não tem palavras:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, remover e copiar uma única
@@ -451,7 +451,9 @@ a forma no lugar, então ela mantém as animações, e a área de transferência
 `src/backend/vba`. O PowerPoint o carrega sem perguntar, ele dura até o
 PowerPoint fechar e não deixa nada para trás. Onde não puder ser carregado, por
 exemplo quando uma política desativa as macros, as ferramentas funcionam como
-descrito abaixo. Defina `PPT_MAC_VBA=off` no `env` do servidor para não usá-lo.
+descrito abaixo. Ele vem desativado por padrão, porque é
+código de macro carregado sem aviso. Defina `PPT_MAC_VBA=on` no `env` do servidor
+para usá-lo.
 
 Não disponível no macOS:
 

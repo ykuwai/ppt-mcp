@@ -430,7 +430,7 @@ The same tools, the same arguments, the same answers. What differs is what
 PowerPoint for Mac's scripting dictionary can reach, and where it cannot reach
 something the tool says so rather than doing something unexpected.
 
-**PowerPoint for Mac's VBA reaches further, and is used by default.** The
+**PowerPoint for Mac's VBA reaches further, and can be turned on.** The
 server loads a small add-in, `ppt-mcp-bridge`, into PowerPoint and runs the
 Windows code through it for what the scripting dictionary has no words for:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, removing and copying one
@@ -449,7 +449,9 @@ not touched. The add-in only passes those calls on; its source is in
 `src/backend/vba`. PowerPoint loads it without a prompt, it lasts until
 PowerPoint quits, and nothing of it stays behind. Where it cannot be loaded,
 where macros are turned off by policy for instance, the tools work as described
-below. Set `PPT_MAC_VBA=off` in the server's `env` to leave it out.
+below. It is off by
+default, because it is macro code loaded without a prompt. Set `PPT_MAC_VBA=on`
+in the server's `env` to use it.
 
 Not available on macOS:
 

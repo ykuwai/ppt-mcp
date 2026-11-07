@@ -70,6 +70,17 @@ Public Function CallE(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallE = False
                 End Select
             End If
+        Case "EndPoint"
+            If kind = "l" Then
+                o.EndPoint = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.EndPoint = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.EndPoint
+                    Case Else: CallE = False
+                End Select
+            End If
         Case "EntryEffect"
             If kind = "l" Then
                 o.EntryEffect = ArgOf(f(3))

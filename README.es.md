@@ -433,7 +433,7 @@ cambia es lo que alcanza el diccionario de scripting de PowerPoint para Mac, y
 cuando no alcanza algo, la herramienta lo dice en lugar de hacer algo
 inesperado.
 
-**El VBA de PowerPoint para Mac llega más lejos, y se usa por defecto.** El
+**El VBA de PowerPoint para Mac llega más lejos, y se puede activar.** El
 servidor carga en PowerPoint un pequeño complemento, `ppt-mcp-bridge`, y ejecuta
 a través de él el código de Windows para lo que el diccionario de scripting no
 tiene palabras: etiquetas, `ppt_select_shapes`, `ppt_set_table_style`, quitar y
@@ -454,7 +454,9 @@ portapapeles. El complemento solo transmite esas llamadas; su código fuente est
 en `src/backend/vba`. PowerPoint lo carga sin preguntar, dura hasta que
 PowerPoint se cierra y no deja nada atrás. Donde no puede cargarse, por ejemplo
 si una directiva desactiva las macros, las herramientas funcionan como se
-describe abajo. Pon `PPT_MAC_VBA=off` en el `env` del servidor para no usarlo.
+describe abajo. Está desactivado por defecto, porque es
+código de macros que se carga sin preguntar. Pon `PPT_MAC_VBA=on` en el `env`
+del servidor para usarlo.
 
 No disponible en macOS:
 

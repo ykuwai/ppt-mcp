@@ -25,8 +25,9 @@ built from the ``.bas`` sources next to it by ``scripts/build_mac_vba_addin.py``
 and ``com_members.json`` by ``scripts/dump_com_members.py``.
 
 Which tools take this route is in ``routes.py``. A routed tool falls back to
-its Apple Event implementation whenever the add-in cannot be loaded, and
-``PPT_MAC_VBA=off`` turns the route off altogether.
+its Apple Event implementation whenever the add-in cannot be loaded. The route
+is off unless ``PPT_MAC_VBA=on``, since the add-in is macro code PowerPoint
+loads without a prompt, and that should be the user's choice.
 """
 
 import contextlib
@@ -70,15 +71,15 @@ SEND_FLAGS = 64 | 1
 
 def _setting(value: str) -> bool:
     value = value.strip().lower()
-    if value in ("", "on", "true", "1", "yes"):
+    if value in ("on", "true", "1", "yes"):
         return True
-    if value in ("off", "false", "0", "no"):
+    if value in ("", "off", "false", "0", "no"):
         return False
-    logger.warning("PPT_MAC_VBA=%r is not a setting; use 'on' (the default) or 'off'. Using 'on'.", value)
-    return True
+    logger.warning("PPT_MAC_VBA=%r is not a setting; use 'on' or 'off' (the default). Using 'off'.", value)
+    return False
 
 
-ENABLED = _setting(os.getenv("PPT_MAC_VBA", "on"))
+ENABLED = _setting(os.getenv("PPT_MAC_VBA", "off"))
 
 
 class VbaUnavailable(RuntimeError):

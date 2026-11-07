@@ -776,3 +776,13 @@ def test_a_nodes_editing_type_takes_the_route():
     control points of its now curved segments, which renumbers the nodes
     after it. What looked like an inconsistency was an index that had moved."""
     assert routes.ROUTES[("ppt_com.freeform", "_set_node_editing_type_impl")] is routes.ALWAYS
+
+
+class TestTheRouteIsAChoice:
+    """The add-in is macro code loaded without a prompt, so it is off unless asked for."""
+
+    @pytest.mark.parametrize("value, on", [
+        ("on", True), ("1", True), ("off", False), ("", False), ("maybe", False),
+    ])
+    def test_the_setting(self, value, on):
+        assert vba._setting(value) is on
