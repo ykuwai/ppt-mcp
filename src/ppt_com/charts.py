@@ -28,7 +28,7 @@ if sys.platform == "win32":
 else:
     pythoncom = None
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils import clipboard
 from utils.clipboard import kept_clipboard
@@ -134,6 +134,16 @@ class SetChartDataInput(BaseModel):
             "on Windows a bubble chart's series also take 'sizes' (list[float])."
         ),
     )
+
+    @model_validator(mode="after")
+    def _one_size_per_point(self):
+        for entry in self.series:
+            if "sizes" in entry and len(entry["sizes"]) != len(self.categories):
+                raise ValueError(
+                    f"series {entry.get('name')!r} has {len(entry['sizes'])} sizes "
+                    f"for {len(self.categories)} categories."
+                )
+        return self
 
 
 class GetChartDataInput(BaseModel):

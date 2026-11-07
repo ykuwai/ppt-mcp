@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Sequence
 from gvml.package import NS_A, NS_C, NS_R, XML_DECL, PackageError
 
 _C = f"{{{NS_C}}}"
+_A = f"{{{NS_A}}}"
 
 
 class ChartTypeError(ValueError):
@@ -691,13 +692,33 @@ def _set_ref(ser: ET.Element, name: str, numeric: bool, formula: str, values: Se
     _insert_ordered(ser, holder, _SER_ORDER)
 
 
+def _next_colour(ser: ET.Element, index: int) -> ET.Element:
+    """Give a series cloned from the last one the colour of its own place.
+
+    Only the colours change. What the last series leaves out stays out: a
+    scatter series with no line, or a line series with no markers, is that
+    kind through its ``spPr`` and ``marker``, so a new series without them
+    would grow a line or markers.
+    """
+    accent = f"accent{index % 6 + 1}"
+    trees = ser.findall(f"{_C}spPr")
+    for marker in ser.findall(f"{_C}marker"):
+        trees += marker.findall(f"{_C}spPr")
+    for tree in trees:
+        for fill in tree.iter(f"{_A}solidFill"):
+            for colour in list(fill):
+                fill.remove(colour)
+            ET.SubElement(fill, f"{_A}schemeClr", {"val": accent})
+    return ser
+
+
 def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict]) -> bytes:
     """Rewrite the series of the first plot, and nothing else.
 
     Each new series takes over the ``c:ser`` at its position (so a colour or a
     label setting on series 2 stays with series 2); series past the old count
-    are cloned from the last one with its own formatting stripped, so they
-    take the theme colour of their index the way a new series does. The
+    are cloned from the last one and take the theme colour of their index the
+    way a new series does (``_next_colour``). The
     ``c:externalData`` pointer is dropped, because the workbook it points at
     would no longer say what the chart says; the caller drops the part.
     """
@@ -709,6 +730,11 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
             raise ValueError(
                 f"series '{s.get('name', '')}' has {len(s.get('values', []))} "
                 f"values for {n} categories"
+            )
+    for s in series:
+        if "sizes" in s and len(s["sizes"]) != n:
+            raise ValueError(
+                f"series '{s.get('name', '')}' has {len(s['sizes'])} sizes for {n} categories"
             )
     root = load(chart_xml_bytes)
     plot_area = _plot_area(root)
@@ -726,11 +752,11 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
     for ser in old:
         plot.remove(ser)
     template = _copy.deepcopy(old[-1])
-    for name in ("spPr", "dPt", "dLbls", "marker", "trendline", "errBars"):
+    for name in ("dPt", "dLbls", "trendline", "errBars"):
         _remove(template, name)
 
     for i, s in enumerate(series):
-        ser = _copy.deepcopy(old[i]) if i < len(old) else _copy.deepcopy(template)
+        ser = _copy.deepcopy(old[i]) if i < len(old) else _next_colour(_copy.deepcopy(template), i)
         col = _column(i + 1)
         _insert_ordered(ser, _val("idx", i), _SER_ORDER)
         _insert_ordered(ser, _val("order", i), _SER_ORDER)

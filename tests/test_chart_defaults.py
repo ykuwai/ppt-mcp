@@ -146,3 +146,58 @@ def test_scatter_and_bubble_points():
         data = gvml_charts.read_chart(chart_defaults.chart_xml(chart_type).encode())
         assert data["series"][0]["values"] == [2.7, 3.2, 0.8]
         assert data["categories"] == ["0.7", "1.8", "2.6"]
+
+
+A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+
+
+def _one_more_series(xml: bytes) -> ET.Element:
+    count = len(gvml_charts.load(xml).findall(f".//{C}ser"))
+    series = [{"name": f"S{i}", "values": [1, 2]} for i in range(count + 1)]
+    return gvml_charts.load(gvml_charts.set_data(xml, [1, 2], series))
+
+
+def test_a_series_added_does_not_take_the_last_one_s_colour():
+    root = gvml_charts.load(chart_defaults.chart_xml(-4169).encode())
+    ser = root.findall(f".//{C}ser")[-1]
+    fill = ET.Element(f"{A}solidFill")
+    ET.SubElement(fill, f"{A}srgbClr", {"val": "FF0000"})
+    ser.find(f"{C}spPr").insert(0, fill)
+
+    first, added = _one_more_series(gvml_charts.dump(root)).findall(f".//{C}ser")
+
+    assert first.find(f"{C}spPr/{A}solidFill/{A}srgbClr").get("val") == "FF0000"
+    assert added.find(f"{C}spPr/{A}solidFill/{A}srgbClr") is None
+    assert added.find(f"{C}spPr/{A}solidFill/{A}schemeClr").get("val") == "accent2"
+
+
+@pytest.mark.parametrize("chart_type, path", [
+    (-4169, f"{C}spPr/{A}ln/{A}noFill"),    # a scatter with no line
+    (4, f"{C}marker/{C}symbol"),            # a line with no markers
+    (75, f"{C}marker/{C}symbol"),           # a scatter line with no markers
+])
+def test_an_added_series_keeps_what_the_last_one_leaves_out(chart_type, path):
+    xml = chart_defaults.chart_xml(chart_type).encode()
+    assert gvml_charts.load(xml).find(f".//{C}ser/{path}") is not None
+
+    assert _one_more_series(xml).findall(f".//{C}ser")[-1].find(path) is not None
+
+
+@pytest.mark.parametrize("sizes", [[], [1.0]])
+def test_a_bubble_series_needs_one_size_per_point(sizes):
+    xml = chart_defaults.chart_xml(15).encode()
+    with pytest.raises(ValueError, match="sizes"):
+        gvml_charts.set_data(xml, [1, 2], [{"name": "S", "values": [1, 2], "sizes": sizes}])
+
+
+def test_only_the_creation_id_is_stripped():
+    from gvml.shapes import strip_creation_ids
+
+    element = ET.fromstring(f"""<sp xmlns:a="{A[1:-1]}"><a:cNvPr id="1" name="C"><a:extLst>
+        <a:ext uri="{{FF2B}}"><x:creationId xmlns:x="urn:a16"/></a:ext>
+        <a:ext uri="{{C183}}"><y:decorative xmlns:y="urn:adec"/></a:ext>
+        </a:extLst></a:cNvPr></sp>""")
+
+    strip_creation_ids(element)
+
+    assert [e.get("uri") for e in element.iter(f"{A}ext")] == ["{C183}"]

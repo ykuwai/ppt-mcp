@@ -522,7 +522,7 @@ class TestChartDataIsRewrittenInPlace:
             ],
         }
 
-    def test_more_series_than_before_clone_the_last_without_its_formatting(self):
+    def test_more_series_than_before_clone_the_last_in_their_own_colour(self):
         coloured = charts.set_series(chart_bytes(), 3, color="#FF0000")
         out = charts.set_data(coloured, ["a"], [
             {"name": str(i), "values": [i]} for i in range(5)
