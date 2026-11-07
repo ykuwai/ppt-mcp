@@ -488,6 +488,6 @@ class TestTheResultSaysWhatWasDone:
         written = []
         monkeypatch.setattr(charts, "_set_chart_data_through_excel",
                             lambda *a: written.append(a) or {"success": True})
-        with pytest.raises(RuntimeError, match="Nothing was changed"):
+        with pytest.raises(ValueError, match="Nothing was changed"):
             charts._set_chart_data_impl(1, "Chart 1", ["1", "2"], [{"name": "S", "values": [1, 2]}])
         assert written == [], "the Excel way would drop the sizes"
