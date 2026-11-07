@@ -50,6 +50,7 @@ class _Shape:
 
     def __init__(self, nodes):
         self.Nodes = nodes
+        self.Vertices = [(0.0, 0.0)] * nodes.Count
 
 
 windows_only = pytest.mark.skipif(
