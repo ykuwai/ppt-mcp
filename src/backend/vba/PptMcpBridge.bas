@@ -6,9 +6,29 @@ Attribute VB_Name = "PptMcpBridge"
 ' one place both sides can reach. Every entry point traps its errors, because
 ' an untrapped one would stop PowerPoint on a dialog.
 Option Explicit
-Public Const BRIDGE_VERSION As String = "6"
+Public Const BRIDGE_VERSION As String = "7"
+Private Function GoodId(id As String) As Boolean
+    ' The id names the answer file, so it is twelve hex digits and nothing
+    ' else: no wildcard or path can reach Kill, Open or Name.
+    Dim i As Long
+    If Len(id) <> 12 Then Exit Function
+    For i = 1 To 12
+        If InStr("0123456789abcdef", Mid$(id, i, 1)) = 0 Then Exit Function
+    Next
+    GoodId = True
+End Function
+Private Sub Refuse(o As Object, member As String)
+    ' Nothing ppt-mcp sends runs macros, quits, or reaches add-ins, the VBA
+    ' project or macro security, so another program cannot through it either.
+    If TypeName(o) <> "Application" Then Exit Sub
+    Select Case LCase$(member)
+        Case "run", "quit", "addins", "comaddins", "vbe", "automationsecurity"
+            Err.Raise 70, "PptMcpBridge", "The bridge does not pass Application." & member
+    End Select
+End Sub
 Private Sub WriteResult(id As String, s As String)
     Dim b() As Byte, f As Integer, dir As String, tmp As String, fin As String
+    If Not GoodId(id) Then Exit Sub
     dir = Environ("HOME") & "/Documents/"
     tmp = dir & "ppt-mcp-bridge-" & id & ".tmp"
     fin = dir & "ppt-mcp-bridge-" & id & ".txt"
@@ -79,18 +99,20 @@ Sub Ping(id As String)
     On Error Resume Next
     WriteResult id, "ok" & Chr$(31) & BRIDGE_VERSION & Chr$(31) & Application.Version
 End Sub
-Sub Dispatch(id As String, batch As String)
+Sub Dispatch(id As String, batch As String, who As String)
     Dim reqs() As String, f() As String, o As Object, out As String
     Dim n As Integer, k As Long, r As Variant, ct As VbCallType
     On Error GoTo fail
+    owner = who
     reqs = Split(FromHex(batch), Chr$(30))
     For k = 0 To UBound(reqs)
         f = Split(reqs(k), Chr$(31))
         If f(1) = "r" Then
-            ReleaseAll
+            Release who
             out = out & "ok" & Chr$(31) & "empty" & Chr$(30)
         Else
             Set o = Obj(f(0))
+            Refuse o, f(2)
             n = UBound(f) - 2
             r = Empty
             ' A call written out keeps PowerPoint's own error text, which

@@ -89,6 +89,7 @@ class TestTheProtocol:
         assert out[4] == 12.5 and out[5] is None
         macro, body = seen[0]
         assert macro == vba.DISPATCH
+        assert target.sent[0]["params"][b"tpAE"][-1] == bridge.owner, "the batch names its server (#347)"
         assert body.split(RS)[3] == US.join(["app", "c", "Item", "i:1"])
 
     def test_arguments_are_typed(self):
@@ -618,7 +619,7 @@ class TestShipped:
         assert 'Attribute VB_Name = "PptMcpHandles"' in handles
         # Every entry point traps its errors from its first line: an untrapped
         # one stops PowerPoint on a dialog.
-        assert "Sub Dispatch(id As String, batch As String)\n    Dim" in bridge
+        assert "Sub Dispatch(id As String, batch As String, who As String)\n    Dim" in bridge
         assert "On Error GoTo fail" in bridge.split("Sub Dispatch")[1].split("For k")[0]
 
     def test_the_member_table_knows_properties_from_methods(self):
@@ -935,3 +936,56 @@ def test_the_dispatcher_passes_as_many_arguments_as_the_calls_take():
     assert f"Case 9: Assign r, CallByName(o, f(2), ct, {nine})" in bridge
     calls = (VBA_DIR / "PptMcpCallsI.bas").read_text(encoding="utf-8")
     assert f"o.Insert({nine})" in calls, "a corner curve's nine"
+
+
+class TestEachServerLetsGoOfItsOwn:
+    """Two servers on one PowerPoint share the add-in's table (#347)."""
+
+    def test_two_bridges_name_themselves_apart(self, tmp_path):
+        a, _, _ = bridge_answering(tmp_path)
+        b, _, _ = bridge_answering(tmp_path)
+        assert a.owner != b.owner
+
+    def test_the_add_in_releases_by_owner(self):
+        handles = (VBA_DIR / "PptMcpHandles.bas").read_text(encoding="utf-8")
+        bridge = (VBA_DIR / "PptMcpBridge.bas").read_text(encoding="utf-8")
+        assert "ReleaseAll" not in handles + bridge
+        assert "Release who" in bridge.split("Sub Dispatch")[1]
+        assert "owned.Add keys & h & Chr$(29), owner" in handles
+
+
+class TestTheBatchCannotBeWidened:
+    """Text with the add-in's separators cannot add a call of its own."""
+
+    @pytest.mark.parametrize("text", ["a\x1eapp\x1fc\x1fRun\x1fs:M", "a\x1fb", "a\x1db"])
+    def test_separators_in_text_are_refused(self, tmp_path, text):
+        bridge, target, _ = bridge_answering(tmp_path, "ok" + US + "empty" + RS)
+        with pytest.raises(ValueError, match="control characters"):
+            bridge.run([("h1", "l", "Text", text)])
+        assert target.sent == [], "nothing reached PowerPoint"
+
+    def test_lists_still_pass(self, tmp_path):
+        bridge, _, seen = bridge_answering(tmp_path, "ok" + US + "empty" + RS)
+        bridge.run([("h1", "c", "Add", ["a", "b"], [1, 2])])
+        assert seen
+
+    def test_the_add_in_checks_the_id_and_refuses_risky_members(self):
+        bridge = (VBA_DIR / "PptMcpBridge.bas").read_text(encoding="utf-8")
+        assert "If Not GoodId(id) Then Exit Sub" in bridge
+        assert 'Case "run", "quit", "addins", "comaddins", "vbe", "automationsecurity"' in bridge
+        assert "Refuse o, f(2)" in bridge.split("Sub Dispatch")[1]
+
+
+def test_separator_text_is_refused_before_the_tool_starts(route):
+    """A tool makes several calls; one refused halfway would leave the earlier
+    ones done, so the arguments are checked before any of them."""
+    impl, calls, *_ = route
+    with pytest.raises(ValueError, match="control characters"):
+        impl(1, "Box", screen_tip="a\x1db")
+    assert calls == []
+
+
+def test_separator_text_inside_a_list_or_dict_is_refused():
+    with pytest.raises(ValueError):
+        vba._check_text([{"name": "S", "values": ["x\x1ey"]}])
+    vba._check_text([{"name": "S", "values": [1, 2]}, "plain"])

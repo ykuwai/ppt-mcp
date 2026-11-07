@@ -52,7 +52,7 @@ HERE = Path(__file__).resolve().parent
 ADDIN_FILE = HERE / "ppt-mcp-bridge.ppam"
 ADDIN_NAME = "ppt-mcp-bridge"
 # Must match BRIDGE_VERSION in PptMcpBridge.bas; a test keeps them together.
-BRIDGE_VERSION = "6"
+BRIDGE_VERSION = "7"
 DISPATCH = "PptMcpBridge.Dispatch"
 PING = "PptMcpBridge.Ping"
 # PowerPoint is sandboxed. Its ~/Documents is this folder, which is where the
@@ -174,6 +174,24 @@ def _find(members, name):
 # ---------------------------------------------------------------------------
 # The bridge
 # ---------------------------------------------------------------------------
+def _check_text(value) -> None:
+    """Refuse text holding the batch's separators, in a value or anything in it.
+
+    The separators frame the batch, so text carrying one could add a call of
+    its own, and the add-in would cut it short anyway.
+    """
+    if isinstance(value, str):
+        if any(c in value for c in (RS, US, GS)):
+            raise ValueError("Text sent through the VBA bridge cannot hold the "
+                             "control characters U+001D, U+001E or U+001F.")
+    elif isinstance(value, dict):
+        for item in value.values():
+            _check_text(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _check_text(item)
+
+
 class Bridge:
     """Sends batches of calls to the add-in and reads its answers."""
 
@@ -182,6 +200,9 @@ class Bridge:
         self.answers = Path(answers)
         self.timeout = timeout
         self.calls = 0
+        # The add-in keeps every server's handles in one table, and lets go of
+        # only the ones listed under this name (#347).
+        self.owner = uuid.uuid4().hex[:12]
         # Set when letting go of the handles failed; the next call does it
         # first. Handles to a closed deck's SmartArt make every SmartArt call
         # after it fail ("Access denied", or "Permission denied", 70) until
@@ -239,18 +260,24 @@ class Bridge:
         if isinstance(value, (list, tuple)):
             if value and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in value):
                 return "N:" + GS.join(repr(x) for x in value)
-            return "a:" + GS.join(str(x) for x in value)
-        return "s:" + str(value)
+            return "a:" + GS.join(Bridge._text(x) for x in value)
+        return "s:" + Bridge._text(value)
+
+    @staticmethod
+    def _text(value) -> str:
+        text = str(value)
+        _check_text(text)
+        return text
 
     def run(self, requests):
         """Run (handle, kind, member, *args) requests in order; answer their values.
 
         kind is g (get), c (call), l (let) or s (set), and r releases every
-        handle. The first failure stops the batch and is raised.
+        handle this bridge was handed. The first failure stops the batch and is raised.
         """
         body = RS.join(US.join([h, kind, member] + [self._arg(a) for a in args])
                        for h, kind, member, *args in requests)
-        text = self._call(DISPATCH, [body.encode("utf-16-be").hex().upper()])
+        text = self._call(DISPATCH, [body.encode("utf-16-be").hex().upper(), self.owner])
         out = []
         for record in filter(None, text.split(RS)):
             f = record.split(US)
@@ -642,6 +669,10 @@ def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], b
             return mac_impl(*args, **kwargs)
         if not ENABLED:
             return _noted(mac_impl(*args, **kwargs), OFF_NOTE, OFF_RECREATED_NOTE)
+        # Checked before anything is written: a tool makes several calls, and
+        # one refused halfway would leave the earlier ones done.
+        for value in bound.arguments.values():
+            _check_text(value)
         from backend import ppt
 
         try:
