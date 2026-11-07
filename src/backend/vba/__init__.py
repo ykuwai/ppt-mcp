@@ -52,7 +52,7 @@ HERE = Path(__file__).resolve().parent
 ADDIN_FILE = HERE / "ppt-mcp-bridge.ppam"
 ADDIN_NAME = "ppt-mcp-bridge"
 # Must match BRIDGE_VERSION in PptMcpBridge.bas; a test keeps them together.
-BRIDGE_VERSION = "6"
+BRIDGE_VERSION = "7"
 DISPATCH = "PptMcpBridge.Dispatch"
 PING = "PptMcpBridge.Ping"
 # PowerPoint is sandboxed. Its ~/Documents is this folder, which is where the
@@ -182,6 +182,9 @@ class Bridge:
         self.answers = Path(answers)
         self.timeout = timeout
         self.calls = 0
+        # The add-in keeps every server's handles in one table, and lets go of
+        # only the ones listed under this name (#347).
+        self.owner = uuid.uuid4().hex[:12]
         # Set when letting go of the handles failed; the next call does it
         # first. Handles to a closed deck's SmartArt make every SmartArt call
         # after it fail ("Access denied", or "Permission denied", 70) until
@@ -246,11 +249,11 @@ class Bridge:
         """Run (handle, kind, member, *args) requests in order; answer their values.
 
         kind is g (get), c (call), l (let) or s (set), and r releases every
-        handle. The first failure stops the batch and is raised.
+        handle this bridge was handed. The first failure stops the batch and is raised.
         """
         body = RS.join(US.join([h, kind, member] + [self._arg(a) for a in args])
                        for h, kind, member, *args in requests)
-        text = self._call(DISPATCH, [body.encode("utf-16-be").hex().upper()])
+        text = self._call(DISPATCH, [body.encode("utf-16-be").hex().upper(), self.owner])
         out = []
         for record in filter(None, text.split(RS)):
             f = record.split(US)

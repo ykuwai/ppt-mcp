@@ -6,11 +6,24 @@ Attribute VB_Name = "PptMcpHandles"
 Option Explicit
 Public handles As Collection
 Public nextId As Long
+' Each server that uses the add-in names itself on every batch, and its
+' handles are listed under that name, so that it lets go of its own only:
+' several servers can share one PowerPoint (#347).
+Public owner As String
+Public owned As Collection
 Public Function Store(ByVal o As Object) As String
+    Dim h As String, keys As String
     If handles Is Nothing Then Set handles = New Collection
+    If owned Is Nothing Then Set owned = New Collection
     nextId = nextId + 1
-    handles.Add o, "h" & nextId
-    Store = "h" & nextId
+    h = "h" & nextId
+    handles.Add o, h
+    On Error Resume Next
+    keys = owned(owner)
+    owned.Remove owner
+    On Error GoTo 0
+    owned.Add keys & h & Chr$(29), owner
+    Store = h
 End Function
 Public Function Obj(ByVal h As String) As Object
     If h = "app" Then
@@ -19,8 +32,15 @@ Public Function Obj(ByVal h As String) As Object
         Set Obj = handles(h)
     End If
 End Function
-Public Sub ReleaseAll()
-    Set handles = New Collection
+Public Sub Release(ByVal who As String)
+    Dim keys As String, k As Variant
+    If handles Is Nothing Or owned Is Nothing Then Exit Sub
+    On Error Resume Next
+    keys = owned(who)
+    owned.Remove who
+    For Each k In Split(keys, Chr$(29))
+        If Len(k) > 0 Then handles.Remove k
+    Next
 End Sub
 Public Function FromHex(h As String) As String
     Dim i As Long, s As String
