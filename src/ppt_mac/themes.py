@@ -181,6 +181,11 @@ def _set_headers_footers_impl(
     ppt._get_app_impl()
     pres = ppt._get_pres_impl()
 
+    # A format the Mac has no keyword for fails here too, before the first
+    # slide is written.
+    if date_format is not None:
+        _date_format_keyword(date_format)
+
     slide_count = count(pres.slides)
     skipped = 0
     for i in range(1, slide_count + 1):
