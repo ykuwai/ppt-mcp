@@ -242,8 +242,18 @@ class Bridge:
         if isinstance(value, (list, tuple)):
             if value and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in value):
                 return "N:" + GS.join(repr(x) for x in value)
-            return "a:" + GS.join(str(x) for x in value)
-        return "s:" + str(value)
+            return "a:" + GS.join(Bridge._text(x) for x in value)
+        return "s:" + Bridge._text(value)
+
+    @staticmethod
+    def _text(value) -> str:
+        # The separators frame the batch, so text carrying one could add a
+        # call of its own, and the add-in would cut it short anyway.
+        text = str(value)
+        if any(c in text for c in (RS, US, GS)):
+            raise ValueError("Text sent through the VBA bridge cannot hold the "
+                             "control characters U+001D, U+001E or U+001F.")
+        return text
 
     def run(self, requests):
         """Run (handle, kind, member, *args) requests in order; answer their values.
