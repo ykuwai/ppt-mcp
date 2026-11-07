@@ -118,6 +118,19 @@ class BuildFreeformInput(BaseModel):
     shape_name: Optional[str] = Field(default=None, description="Optional name for the created shape.")
 
 
+# What every node index means, said once. Measured the same through COM on
+# Windows and through VBA on the Mac (MACOS_PORT 6.3).
+NODE_INDEX_HELP = (
+    "1-based, in path order, counting a curve's two control points as nodes "
+    "of their own. Indexes after a change move when it adds or removes "
+    "control points: a segment made a curve gains two, one made a line loses "
+    "them, and smoothing a node turns its segments into curves. "
+    "ppt_set_segment_type and ppt_set_node_editing_type answer the nodes as "
+    "they are afterwards; otherwise read ppt_get_shape_nodes before using an "
+    "index again."
+)
+
+
 class ShapeNodeInput(BaseModel):
     """Common input for tools that identify a shape and a node index."""
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -125,7 +138,7 @@ class ShapeNodeInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index.")
-    node_index: int = Field(..., ge=1, description="1-based node index.")
+    node_index: int = Field(..., ge=1, description=f"Node index: {NODE_INDEX_HELP}")
 
 
 class GetShapeNodesInput(BaseModel):
@@ -144,7 +157,7 @@ class SetNodePositionInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index.")
-    node_index: int = Field(..., ge=1, description="1-based node index.")
+    node_index: int = Field(..., ge=1, description=f"Node index: {NODE_INDEX_HELP}")
     x: float = Field(..., description="New X position in points (relative to slide upper-left).")
     y: float = Field(..., description="New Y position in points (relative to slide upper-left).")
 
@@ -156,7 +169,7 @@ class InsertNodeInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index.")
-    after_index: int = Field(..., ge=1, description="Insert new node after this 1-based index.")
+    after_index: int = Field(..., ge=1, description=f"Insert the new node after this one. Node index: {NODE_INDEX_HELP}")
     segment_type: str = Field(default="line", description="Segment type: 'line' or 'curve'.")
     editing_type: str = Field(
         default="auto",
@@ -203,7 +216,7 @@ class DeleteNodeInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index.")
-    node_index: int = Field(..., ge=1, description="1-based node index to delete.")
+    node_index: int = Field(..., ge=1, description=f"Node to delete: {NODE_INDEX_HELP}")
 
 
 class SetNodeEditingTypeInput(BaseModel):
@@ -213,7 +226,7 @@ class SetNodeEditingTypeInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index.")
-    node_index: int = Field(..., ge=1, description="1-based node index.")
+    node_index: int = Field(..., ge=1, description=f"Node index: {NODE_INDEX_HELP}")
     editing_type: str = Field(
         ...,
         description="New editing type: 'auto', 'corner', 'smooth', or 'symmetric'.",
@@ -228,8 +241,8 @@ class SetSegmentTypeInput(BaseModel):
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index.")
     node_index: int = Field(..., ge=1, description=(
-        "1-based node index. An anchor changes the segment that ends at it, node 1 the first "
-        "segment, and a control point its own curve."
+        "An anchor changes the segment that ends at it, node 1 the first segment, and a control "
+        f"point its own curve. Node index: {NODE_INDEX_HELP}"
     ))
     segment_type: str = Field(
         ...,
@@ -337,6 +350,26 @@ def _build_freeform_impl(slide_index, start_et_int, start_x, start_y, nodes_data
         "width": round(shape.Width, 2),
         "height": round(shape.Height, 2),
     })
+
+
+NODES_MOVED_NOTE = (
+    "The node count changed: control points were added or removed, so the "
+    "indexes after them moved. 'nodes' lists them as they are now."
+)
+
+
+def _with_nodes(result: dict, shape, old_count: int) -> dict:
+    """``result`` with the node counts and the nodes as they are now.
+
+    A change that adds or removes control points renumbers every node after
+    them, and a caller acting on an index it read before would edit the wrong
+    point; the answer saves it the extra ppt_get_shape_nodes.
+    """
+    nodes = _read_nodes(shape)
+    result.update(old_node_count=old_count, new_node_count=len(nodes), nodes=nodes)
+    if old_count != len(nodes):
+        result["note"] = NODES_MOVED_NOTE
+    return result
 
 
 def _get_shape_nodes_impl(slide_index, shape_name, shape_index):
@@ -466,6 +499,7 @@ def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index
     if node_index > nodes_com.Count:
         raise ValueError(f"node_index {node_index} out of range (shape has {nodes_com.Count} nodes).")
 
+    old_count = nodes_com.Count
     _refuse_known_crash(nodes_com, node_index, et_int)
     nodes_com.SetEditingType(node_index, et_int)
     try:
@@ -487,7 +521,7 @@ def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index
             "editing_type": "inaccessible",
             "note": "Metadata not accessible via COM (control point or closing node).",
         }
-    return json.dumps(result)
+    return json.dumps(_with_nodes(result, shape, old_count))
 
 
 def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg_int):
@@ -504,22 +538,14 @@ def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg
 
     old_count = nodes_com.Count
     nodes_com.SetSegmentType(node_index, seg_int)
-    new_count = shape.Nodes.Count
 
     result = {
         "success": True,
         "shape_name": shape.Name,
         "node_index": node_index,
         "segment_type": SEGMENT_TYPE_NAMES.get(seg_int, str(seg_int)),
-        "old_node_count": old_count,
-        "new_node_count": new_count,
     }
-    if old_count != new_count:
-        result["note"] = (
-            "Node count changed — switching line↔curve adds or removes control-point nodes. "
-            "Re-call ppt_get_shape_nodes to see updated indices."
-        )
-    return json.dumps(result)
+    return json.dumps(_with_nodes(result, shape, old_count))
 
 
 # ---------------------------------------------------------------------------
@@ -730,12 +756,17 @@ def register_tools(mcp):
         - 'smooth': Smooth curve — handles stay collinear but can differ in length.
         - 'symmetric': Symmetric curve — handles stay collinear and equal in length.
 
+        Making a node smooth or symmetric turns the segments at it into curves
+        and inserts their control points, so the node count grows and every
+        index after the node moves. Aimed at a control point, the call acts on
+        the curve that point belongs to: smoothing the first control point of a
+        curve just made with ppt_set_segment_type turned it back into a line,
+        on Windows and on the Mac alike. The answer carries the nodes as they
+        are afterwards ('nodes', as ppt_get_shape_nodes reads them); use those
+        indexes for the next call.
+
         'corner' on node 2 is refused while the first segment is a curve (node 2
         is then its control point): PowerPoint quits on that call.
-
-        Note: Changing to smooth/symmetric may reposition adjacent control-point
-        nodes. If the target node is a control point, the adjacent vertex node's
-        type is changed instead.
         """
         et_int = EDITING_TYPE_MAP.get(params.editing_type.lower())
         if et_int is None:
@@ -771,9 +802,11 @@ def register_tools(mcp):
         - 'line': Straight line between the two vertices.
         - 'curve': Bézier curve between the two vertices.
 
-        WARNING: Switching between 'line' and 'curve' may change the total
-        node count because Bézier curves require two extra control-point nodes.
-        Call ppt_get_shape_nodes after this operation to confirm updated indices.
+        Switching between 'line' and 'curve' changes the node count, because a
+        Bézier curve's two control points are nodes of their own, and every
+        index after them moves. The answer carries the nodes as they are
+        afterwards ('nodes', as ppt_get_shape_nodes reads them); use those
+        indexes for the next call.
         """
         seg_int = SEGMENT_TYPE_MAP.get(params.segment_type.lower())
         if seg_int is None:

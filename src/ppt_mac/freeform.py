@@ -396,18 +396,18 @@ def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg
         return _gvml_freeform.set_segment_type(path, node_index, seg_int)
 
     def describe(old, new, nodes):
+        from ppt_com.freeform import NODES_MOVED_NOTE
+
         old_count = _gvml_freeform.node_count(old)
         result = {
             "node_index": node_index,
             "segment_type": _gvml_freeform.SEGMENT_NAMES.get(seg_int, str(seg_int)),
             "old_node_count": old_count,
             "new_node_count": len(nodes),
+            "nodes": nodes,
         }
         if old_count != len(nodes):
-            result["note"] = (
-                "Node count changed — switching line↔curve adds or removes control-point nodes. "
-                "Re-call ppt_get_shape_nodes to see updated indices."
-            )
+            result["note"] = NODES_MOVED_NOTE
         return result
 
     return _edit_path("ppt_set_segment_type", slide_index, shape_name, shape_index, edit, describe)
