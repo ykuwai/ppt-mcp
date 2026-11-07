@@ -100,11 +100,8 @@ class TestTheToolsSayWhenItWasLeftOpen:
         shown = SimpleNamespace(Name="S", Values=(1.0,), XValues=("Q1",))
         chart.SeriesCollection = lambda *i: shown if i else SimpleNamespace(Count=1)
         shape = SimpleNamespace(Name="Chart 1", ZOrderPosition=1, Chart=chart, HasChart=True)
-        used = SimpleNamespace(Row=1, Column=1, Rows=SimpleNamespace(Count=2),
-                               Columns=SimpleNamespace(Count=2))
         sheet = SimpleNamespace(Cells=lambda *a: SimpleNamespace(Value=None),
-                                Range=lambda *a: SimpleNamespace(Address="$A$1:$B$2"),
-                                UsedRange=used)
+                                Range=lambda *a: SimpleNamespace(Address="$A$1:$B$2"))
         workbook.Worksheets = lambda i: sheet
         shapes = SimpleNamespace(AddChart2=lambda *a: shape)
         slide = SimpleNamespace(Shapes=shapes)
@@ -534,7 +531,7 @@ class TestTheChartIsPasted:
 class TestTheOldDataIsClearedAfterTheNew:
     """Only what lies beyond the new data is cleared, and after it is written (#343)."""
 
-    def sheet(self, rows, cols):
+    def sheet(self):
         from types import SimpleNamespace
 
         cleared = []
@@ -546,23 +543,20 @@ class TestTheOldDataIsClearedAfterTheNew:
             def Clear(self):
                 cleared.append(self.span)
 
-        used = SimpleNamespace(Row=1, Column=1, Rows=SimpleNamespace(Count=rows),
-                               Columns=SimpleNamespace(Count=cols))
-        ws = SimpleNamespace(UsedRange=used, Cells=lambda r, c: (r, c), Range=Range)
-        return ws, cleared
+        return SimpleNamespace(Cells=lambda r, c: (r, c), Range=Range), cleared
 
     def test_nothing_beyond(self):
         from ppt_com.charts import _clear_beyond
 
-        ws, cleared = self.sheet(4, 3)
-        _clear_beyond(ws, 4, 3)
+        ws, cleared = self.sheet()
+        _clear_beyond(ws, (4, 3), 4, 3)
         assert cleared == []
 
     def test_rows_and_columns_beyond(self):
         from ppt_com.charts import _clear_beyond
 
-        ws, cleared = self.sheet(6, 5)
-        _clear_beyond(ws, 4, 3)
+        ws, cleared = self.sheet()
+        _clear_beyond(ws, (6, 5), 4, 3)
         assert cleared == [((5, 1), (6, 5)), ((1, 4), (4, 5))]
 
     def test_a_failure_leaves_the_chart_alone(self):
@@ -570,4 +564,4 @@ class TestTheOldDataIsClearedAfterTheNew:
 
         from ppt_com.charts import _clear_beyond
 
-        _clear_beyond(SimpleNamespace(), 4, 3)  # no UsedRange: logged, not raised
+        _clear_beyond(SimpleNamespace(), (6, 5), 4, 3)  # no Range: logged, not raised

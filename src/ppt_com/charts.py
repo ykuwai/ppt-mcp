@@ -974,15 +974,23 @@ def _set_source_data(chart, address) -> None:
         chart.Refresh()
 
 
-def _clear_beyond(ws, last_row, last_col) -> None:
-    """Clear what the last data left below and to the right of the new data.
+def _old_extent(chart):
+    """The last row and column the chart's current data takes on its sheet."""
+    try:
+        categories, series = _read_chart_data(chart)
+        return len(categories) + 1, len(series) + 1
+    except Exception as e:
+        logger.warning("Could not read the old chart data: %s", e)
+        return 0, 0
+
+
+def _clear_beyond(ws, old, last_row, last_col) -> None:
+    """Clear what the old data left below and to the right of the new data.
 
     Done once the chart points at the new range, so it never shows them.
     """
+    rows, cols = old
     try:
-        used = ws.UsedRange
-        rows = used.Row + used.Rows.Count - 1
-        cols = used.Column + used.Columns.Count - 1
         if rows > last_row:
             ws.Range(ws.Cells(last_row + 1, 1), ws.Cells(rows, max(cols, last_col))).Clear()
         if cols > last_col:
@@ -994,6 +1002,7 @@ def _clear_beyond(ws, last_row, last_col) -> None:
 
 def _set_chart_data_through_excel(slide, shape, categories, series):
     chart = shape.Chart
+    old = _old_extent(chart)
 
     # Activate starts an Excel; not while the last chart's is ending (#299).
     held.wait_until_ended()
@@ -1032,7 +1041,7 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
         last_col = len(series) + 1
         data_range = refs.add(ws.Range(ws.Cells(1, 1), ws.Cells(last_row, last_col)))
         _set_source_data(chart, "Sheet1!" + data_range.Address)
-        _clear_beyond(ws, last_row, last_col)
+        _clear_beyond(ws, old, last_row, last_col)
     finally:
         try:
             closed = _close_chart_workbook(chart, wb, keep=refs)
