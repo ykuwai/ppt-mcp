@@ -23,6 +23,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,9 @@ if sys.platform == "win32":
     SetClipboardData = user32.SetClipboardData
     SetClipboardData.argtypes = [wt.UINT, wt.HANDLE]
     SetClipboardData.restype = wt.HANDLE
+    RegisterClipboardFormat = user32.RegisterClipboardFormatW
+    RegisterClipboardFormat.argtypes = [wt.LPCWSTR]
+    RegisterClipboardFormat.restype = wt.UINT
     GetClipboardFormatName = user32.GetClipboardFormatNameW
     GetClipboardFormatName.argtypes = [wt.UINT, wt.LPWSTR, ctypes.c_int]
     GetClipboardFormatName.restype = ctypes.c_int
@@ -337,6 +341,34 @@ def restore(saved: SavedClipboard) -> list[str]:
                 GlobalFree(handle)
                 lost.append(format_name(fmt))
     return lost
+
+
+def put(format_name: str, data: bytes) -> None:
+    """Put ``data`` on the clipboard as the format named ``format_name``,
+    in place of everything there."""
+    fmt = RegisterClipboardFormat(format_name)
+    if not fmt:
+        raise OSError(f"Could not register the clipboard format {format_name!r}")
+    with opened():
+        EmptyClipboard()
+        handle = global_block(data)
+        if not SetClipboardData(fmt, handle):
+            GlobalFree(handle)
+            raise OSError(f"Could not put {format_name!r} on the clipboard")
+
+
+def get(format_name: str) -> Optional[bytes]:
+    """The clipboard's data in the format named ``format_name``, or None when
+    it holds none. A memory block can be larger than what was put in it, so
+    the bytes may run on past the data."""
+    fmt = RegisterClipboardFormat(format_name)
+    if not fmt:
+        return None
+    with opened():
+        handle = GetClipboardData(fmt)
+        if not handle:
+            return None
+        return global_bytes(handle)
 
 
 @contextmanager

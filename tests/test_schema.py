@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = ROOT / "src"
 SERVER_PY = SRC_DIR / "server.py"
 PPT_COM_DIR = SRC_DIR / "ppt_com"
-README_MD = ROOT / "README.md"
+TOOL_LIST_MD = ROOT / "TOOLS.md"
 SCRIPTS_DIR = ROOT / "scripts"
 
 TOOL_NAME_RE = re.compile(r'name="(ppt_\w+)"')
@@ -98,24 +98,24 @@ class TestNoDuplicateTools:
         assert duplicates == {}, f"Duplicate tool names: {duplicates}"
 
 
-class TestToolCountMatchesReadme:
-    """The total tool count in source must match the count in README.md."""
+class TestToolCountMatchesToolList:
+    """The total tool count in source must match the count in TOOLS.md."""
 
-    def test_tool_count_matches_readme(self):
+    def test_tool_count_matches_tool_list(self):
         # Catalog mode's three tools reach the others rather than adding to
         # what the server can do, and exist only with PPT_TOOL_MODE=catalog.
         catalog = {"ppt_describe", "ppt_run", "ppt_run_steps"}
         source_count = len([n for n in _all_tool_names() if n not in catalog])
 
-        readme_text = README_MD.read_text(encoding="utf-8")
-        # README contains a summary row like: | | **146** | |
-        count_match = re.search(r'\|\s*\*\*(\d+)\*\*\s*\|', readme_text)
-        assert count_match, "Could not find tool count in README.md"
-        readme_count = int(count_match.group(1))
+        list_text = TOOL_LIST_MD.read_text(encoding="utf-8")
+        # The list ends in a summary row like: | | **146** | |
+        count_match = re.search(r'\|\s*\*\*(\d+)\*\*\s*\|', list_text)
+        assert count_match, "Could not find tool count in TOOLS.md"
+        list_count = int(count_match.group(1))
 
-        assert source_count == readme_count, (
+        assert source_count == list_count, (
             f"Source files define {source_count} tools, "
-            f"but README.md claims {readme_count}"
+            f"but TOOLS.md claims {list_count}"
         )
 
 

@@ -200,6 +200,15 @@ class TestHeadersAndFooters:
         with pytest.raises(ValueError, match="date format"):
             _date_format_keyword(9999)
 
+    def test_a_date_format_the_mac_lacks_changes_no_slide(self):
+        from ppt_mac.themes import _set_headers_footers_impl
+
+        with _fake_deck(slide_count=2) as deck:
+            with pytest.raises(ValueError, match="date format"):
+                _set_headers_footers_impl("Draft", None, None, True, 9, None)
+
+        assert deck.slides[1].headers_and_footers.footer.header_footer_text.writes == []
+
 
 @macos_only
 class TestBatchCarriesWhatAnOperationSaid:
@@ -582,8 +591,8 @@ class TestEveryReadmeCountsTheSame:
         import re
 
         refusing = self._documented_refusals()
-        for name in ("README.md", "README.ja.md", "README.zh-CN.md",
-                     "README.es.md", "README.pt-BR.md", "README.he.md"):
+        for name in ("README.md", "i18n/README.ja.md", "i18n/README.zh-CN.md",
+                     "i18n/README.es.md", "i18n/README.pt-BR.md", "i18n/README.he.md"):
             text = pathlib.Path(name).read_text(encoding="utf-8")
             said = re.findall(r"<!--mac-refusals-->(\d+)<!--/mac-refusals-->", text)
             assert said, f"{name} no longer says how many refuse"

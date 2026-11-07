@@ -35,6 +35,14 @@ Most of what goes wrong shows on one of them only.
   the change still lands.
 - On macOS, do not trust a reference PowerPoint hands back. Count, then
   address by index; see MACOS_PORT.md.
+- On macOS, a tool listed in `backend/vba/routes.py` runs its Windows
+  implementation through PowerPoint's VBA (`backend.vba`) when the add-in
+  loads, and its Apple Event one otherwise, so a change to that Windows
+  implementation runs on the Mac too and is tested on both. When such a
+  change uses an object-model member the add-in does not yet write out,
+  `tests/test_vba_bridge.py` says so: run `scripts/gen_vba_calls.py`. A change
+  to the add-in's `.bas` sources means rebuilding it on Windows
+  (`scripts/build_mac_vba_addin.py`) and raising `BRIDGE_VERSION`.
 - On macOS, what Apple Events cannot reach (charts, freeforms, groups and
   their members) goes through the clipboard package (`ppt_mac/gvml_paste.py`):
   the user's clipboard is taken first and put back after, and a paste is
@@ -44,10 +52,12 @@ Most of what goes wrong shows on one of them only.
 
 - Read and write text files with `encoding="utf-8"`. On a Japanese Windows the
   default is cp932, and a bare `open()` or `read_text()` fails there only.
-- A change to what a tool does or takes goes into `README.md` and each
-  translation, `README.<language>.md` (ja, zh-CN, es, pt-BR, he). Do not type a
-  tool count by hand: `uv run python scripts/sync_readmes.py` writes them all,
-  and `tests/test_readmes.py` fails when one is stale.
+- A change to what a tool does or takes goes into `TOOLS.md`, which is in
+  English only. A change to how the server is set up or used goes into
+  `README.md` and each translation, `i18n/README.<language>.md` (ja, zh-CN, es,
+  pt-BR, he). Do not type a tool count by hand:
+  `uv run python scripts/sync_readmes.py` writes them all, and
+  `tests/test_readmes.py` fails when one is stale.
 
 ## Tests
 

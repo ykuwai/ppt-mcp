@@ -13,6 +13,7 @@ meant to fail reports success and changes nothing, which is what the silent
 no-op refusals exist to catch.
 """
 
+import inspect
 import sys
 
 import pytest
@@ -53,7 +54,12 @@ class TestImplementationsAreSwapped:
         ]
         assert swapped, "the mac module defines no implementations at all"
         for name in swapped:
-            assert getattr(com, name) is getattr(mac, name)
+            impl = getattr(com, name)
+            # A tool with a VBA route is the Apple Event one behind a router
+            # (backend.vba), which unwraps to it.
+            if hasattr(impl, "vba_route"):
+                impl = inspect.unwrap(impl)
+            assert impl is getattr(mac, name)
 
 
 # ---------------------------------------------------------------------------
@@ -623,6 +629,21 @@ class TestEditOps:
         assert "-1728" in result["reason"]
         assert "paste" not in deck.order
         assert deck.shapes[1] == ["Title"]
+        assert deck.shapes[2] == []
+
+    def test_another_deck_in_front_stops_it_before_the_copy(self, monkeypatch):
+        """PowerPoint for Mac pastes into its front window; the check is in
+        ppt_mac.gvml_paste (tests/test_mac_gvml.py). Here: it runs first, and a
+        refusal leaves the clipboard and both slides alone."""
+        from ppt_mac import edit_ops
+
+        refusal = {"error": "ppt_copy_shape_to_slide needs 'Deck' in PowerPoint's front window"}
+        monkeypatch.setattr(edit_ops, "front_refusal", lambda pres, tool, alternatives=(): refusal)
+        with _fake_deck(slides=2, shapes={1: ["Title"], 2: []}) as deck:
+            result = edit_ops._copy_shape_to_slide_impl(1, "Title", 2)
+
+        assert result is refusal
+        assert deck.order == []
         assert deck.shapes[2] == []
 
     def test_a_paste_that_added_nothing_refuses(self):

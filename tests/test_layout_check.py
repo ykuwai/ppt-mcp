@@ -4297,6 +4297,40 @@ class TestAltTextFromTheFile:
             "Body": {"scale": 0.625, "smallest": 14.0}}
 
 
+class TestFileFactsByShapeId:
+    """PowerPoint for Windows names a shape in English through COM, and saves
+    the name in the UI's language (#327)."""
+
+    def test_the_file_s_facts_are_kept_by_id_as_well(self, tmp_path):
+        from utils.package import package_facts
+        path = deck_file(tmp_path, [described_pic("図 4")], {"rId1": ("a.png", png(160, 90))})
+        facts = package_facts(path, [1])
+        assert facts["described"][1] == {"図 4": False}
+        assert facts["ids"]["described"][1] == {4: False}
+        assert facts["ids"]["pixels"][1] == {4: (160, 90)}
+
+    def test_a_shape_named_otherwise_through_com_is_matched_by_id(self):
+        slides = [{"slide_index": 1, "shapes": [
+            {"name": "Picture 4", "id": 4, "type": msoPicture}]}]
+        facts = {"described": {1: {"図 4": False}}, "pixels": {1: {"図 4": (160, 90)}},
+                 "ids": {"described": {1: {4: False}}, "pixels": {1: {4: (160, 90)}}}}
+        layout_check._with_package(slides, facts)
+        [shape] = slides[0]["shapes"]
+        assert shape["described"] is False
+        assert shape["pixels"] == (160, 90)
+
+    def test_without_an_id_the_name_still_matches(self):
+        slides = [{"slide_index": 1, "shapes": [{"name": "Photo", "type": msoPicture}]}]
+        layout_check._with_package(slides, {"described": {1: {"Photo": False}}})
+        assert slides[0]["shapes"][0]["described"] is False
+
+    def test_the_id_wins_over_a_name_another_shape_has(self):
+        slides = [{"slide_index": 1, "shapes": [{"name": "A", "id": 7, "type": msoPicture}]}]
+        facts = {"described": {1: {"A": True}}, "ids": {"described": {1: {7: False}}}}
+        layout_check._with_package(slides, facts)
+        assert slides[0]["shapes"][0]["described"] is False
+
+
 class TestMissingAltText:
     def test_a_picture_without_it_is_reported_with_the_call_that_sets_it(self, monkeypatch):
         monkeypatch.setattr(layout_check, "IS_MACOS", False)

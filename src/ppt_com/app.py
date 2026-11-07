@@ -143,7 +143,23 @@ def _list_presentations_impl() -> dict:
             state = None
         if state is not None:
             presentations[-1]["pending_updates"] = state["pending_updates"]
-    return {"presentations": presentations, "count": len(presentations)}
+    result = {"presentations": presentations, "count": len(presentations)}
+    # Decks in Protected View are not in Presentations; they can be closed
+    # by name, and nothing else is done to them.
+    from ppt_com.presentation import protected_view_windows
+
+    read_only = []
+    try:
+        for window in protected_view_windows(app):
+            deck = window.Presentation
+            read_only.append({"name": deck.Name, "full_name": deck.FullName})
+    except Exception as e:  # noqa: BLE001 - said in the result, not taken for none
+        result["protected_view_unknown"] = (
+            f"Could not read the files open in Protected View ({e}), so any "
+            "there are not listed.")
+    if read_only:
+        result["protected_view"] = read_only
+    return result
 
 
 @shows_powerpoint

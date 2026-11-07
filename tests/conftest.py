@@ -13,6 +13,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 # change it. tests/test_tool_catalog.py sets the mode itself.
 os.environ["PPT_TOOL_MODE"] = "full"
 
+# The VBA route loads an add-in into the PowerPoint that is running, so it is
+# off for the suite; tests/test_vba_bridge.py turns it on against fakes.
+os.environ["PPT_MAC_VBA"] = "off"
+
 
 if sys.platform == "darwin":
 

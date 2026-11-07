@@ -2221,6 +2221,30 @@ def _set_textframe_impl(slide_index, shape_name_or_index,
     if not shape.HasTextFrame:
         raise ValueError(f"Shape '{shape.Name}' does not have a text frame")
 
+    # Every name is checked before the first write, so a wrong one changes nothing.
+    orient_val = auto_size_val = anchor_val = None
+    if orientation is not None:
+        orient_val = ORIENTATION_MAP.get(orientation)
+        if orient_val is None:
+            raise ValueError(
+                f"Invalid orientation '{orientation}'. "
+                f"Valid values: {list(ORIENTATION_MAP.keys())}"
+            )
+    if auto_size is not None:
+        auto_size_val = AUTO_SIZE_MAP.get(auto_size)
+        if auto_size_val is None:
+            raise ValueError(
+                f"Invalid auto_size '{auto_size}'. "
+                f"Valid values: {list(AUTO_SIZE_MAP.keys())}"
+            )
+    if vertical_anchor is not None:
+        anchor_val = VERTICAL_ANCHOR_MAP.get(vertical_anchor.lower())
+        if anchor_val is None:
+            raise ValueError(
+                f"Invalid vertical_anchor '{vertical_anchor}'. "
+                f"Must be one of: {sorted(VERTICAL_ANCHOR_MAP)}"
+            )
+
     tf = shape.TextFrame
 
     if margin_left is not None:
@@ -2233,32 +2257,14 @@ def _set_textframe_impl(slide_index, shape_name_or_index,
         tf.MarginBottom = margin_bottom
     if word_wrap is not None:
         tf.WordWrap = msoTrue if word_wrap else msoFalse
-    if orientation is not None:
-        orient_val = ORIENTATION_MAP.get(orientation)
-        if orient_val is None:
-            raise ValueError(
-                f"Invalid orientation '{orientation}'. "
-                f"Valid values: {list(ORIENTATION_MAP.keys())}"
-            )
+    if orient_val is not None:
         tf.Orientation = orient_val
 
     # Use TextFrame2 for auto_size (supports shrink_to_fit)
-    if auto_size is not None:
-        auto_size_val = AUTO_SIZE_MAP.get(auto_size)
-        if auto_size_val is None:
-            raise ValueError(
-                f"Invalid auto_size '{auto_size}'. "
-                f"Valid values: {list(AUTO_SIZE_MAP.keys())}"
-            )
+    if auto_size_val is not None:
         shape.TextFrame2.AutoSize = auto_size_val
 
-    if vertical_anchor is not None:
-        anchor_val = VERTICAL_ANCHOR_MAP.get(vertical_anchor.lower())
-        if anchor_val is None:
-            raise ValueError(
-                f"Invalid vertical_anchor '{vertical_anchor}'. "
-                f"Must be one of: {sorted(VERTICAL_ANCHOR_MAP)}"
-            )
+    if anchor_val is not None:
         tf.VerticalAnchor = anchor_val
 
     return {

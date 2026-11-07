@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English (en)</a> · <strong>日本語 (ja)</strong> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
+  <a href="../README.md">English (en)</a> · <strong>日本語 (ja)</strong> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ 主な特徴
 
 - **リアルタイム制御** — 起動中のPowerPointを直接操作。変更がその場で画面に反映される
-- **<!--categories-->26<!--/categories-->カテゴリ・<!--tools-->157<!--/tools-->ツール** — スライド、シェイプ、テキスト、テーブル、グラフ、アニメーション、SmartArt、メディア、フリーフォームパスなど
+- **幅広い機能** — スライド、シェイプ、テキスト、テーブル、グラフ、アニメーション、SmartArt、メディア、フリーフォームパスなど
 - **AIエージェントに安全** — `ppt_activate_presentation` で操作対象ファイルを固定。誤って別のプレゼンを編集するミスを防止
 - **[Google Material Symbols](https://fonts.google.com/icons) アイコン** — 2,500以上のアイコンをキーワード検索し、テーマカラーでSVG挿入
 - **テーマカラー連携** — 塗りつぶし・線・影・光彩・文字の色を、RGB値のハードコードではなく `accent1`、`accent2` などのテーマカラー名で指定。テーマを変えると図形の色も追従
@@ -135,35 +135,7 @@ uv sync
 
 ## 🛠️ ツール一覧
 
-| カテゴリ | ツール数 | 主な機能 |
-|---------|-------:|---------|
-| **アプリケーション** | 5 | PowerPoint接続、アプリ情報、アクティブウィンドウ、ウィンドウ状態、プレゼン一覧 |
-| **プレゼンテーション** | 8 | 作成（テンプレート対応）、開く（ローカルファイル、Windows では SharePoint / OneDrive の URL も可）、保存、閉じる、情報取得、操作対象指定、テンプレート一覧 |
-| **スライド** | 10 | 追加、削除（一括）、複製（位置指定・複数）、移動（一括）、コピー（プレゼン間）、一覧、情報取得、ノート、ナビゲーション |
-| **シェイプ** | 10 | 図形/テキストボックス/画像/線の追加（Z順序指定つき、テキストの下に置くことも可）、一覧、情報取得（位置・塗り・線・テキストフレーム）、更新（単体/複数/スライド全体、絶対値・相対値）、削除、Z順序 |
-| **テキスト** | 10 | テキスト設定（全体/書式を保ったまま一部/ラン単位）、取得（寸法とはみ出し判定つき）、書式設定（単一スパン/一括）、段落書式、箇条書き、検索置換（グループ内も可）、テキストフレーム、全テキストMarkdown抽出、組版チェック |
-| **プレースホルダー** | 6 | 一覧、情報取得、テキスト設定 |
-| **書式設定** | 3 | 塗りつぶし、線、影（図形またはテキストに適用） |
-| **テーブル** | 13 | テーブル追加、セル取得/設定、一括データ設定、セル結合/分割、行/列の追加/削除、スタイル、レイアウト、罫線 |
-| **エクスポート** | 4 | PDF、画像、スライドプレビュー、クリップボードコピー |
-| **スライドショー** | 6 | 開始、停止、次へ、前へ、スライド移動、状態取得 |
-| **グラフ** | 7 | グラフ追加（Windows では 3-D など一部の種類を除き Excel を起動しない）、データ設定/取得（Windows では設定のとき、できる場合は Excel を起動せずグラフを複製に差し替え（図形 ID が変わる）、設定後にグラフを読み返し、データが入っていなければエラー、Excel がラベルを読み替えたときは warning）、書式設定、軸書式設定、系列設定、種類変更 |
-| **アニメーション** | 6 | トランジション、アニメーション追加/一覧/更新/削除/全削除（入口・退出・強調・モーションパス・インタラクティブシーケンス対応） |
-| **テーマ** | 4 | テーマ適用、テーマカラー取得/設定、ヘッダー/フッター設定 |
-| **グループ** | 3 | グループ化、グループ解除、グループ項目取得 |
-| **コネクタ** | 2 | 追加、書式設定 |
-| **ハイパーリンク** | 3 | 追加、取得、削除 |
-| **セクション** | 3 | 追加、一覧、管理 |
-| **プロパティ** | 2 | プレゼンテーションメタデータの設定/取得 |
-| **メディア** | 3 | ビデオ、オーディオ、メディア設定 |
-| **SmartArt** | 3 | 追加、編集、レイアウト一覧 |
-| **編集操作** | 6 | 元に戻す、やり直し（操作対象のプレゼンに対して）、スライド間シェイプ/書式コピー |
-| **レイアウト** | 8 | 整列、分散配置、スライドサイズ、背景、反転、シェイプ結合、レイアウトチェック |
-| **視覚効果** | 3 | グロー、反射（図形またはテキストに適用）、ぼかし |
-| **コメント** | 3 | 追加、一覧、削除 |
-| **高度な操作** | 19 | タグ、フォントの一覧(資料で使っているもの、このパソコンにあるもの)と一括設定/置換、トリミング、画像フォーマット、シェイプエクスポート、表示/非表示、選択、ビュー、アニメーションコピー、URL画像、SVGアイコン、アイコン検索、縦横比ロック、一括書式設定、デフォルト図形スタイル設定 |
-| **フリーフォーム** | 7 | パス形状の作成、ノード位置の取得/移動、ノードの挿入/削除、編集タイプ変更、セグメントタイプ変更 |
-| | **157** | |
+ツールの全一覧は、カテゴリごとに [TOOLS.md](../TOOLS.md)（英語）にまとめています。
 
 ## 💡 プロンプト例
 
@@ -178,9 +150,9 @@ uv sync
 <details>
 <summary>スライドを見る</summary>
 <br>
-<img src="assets/examples/example1/Slide1.png" width="640">
-<img src="assets/examples/example1/Slide2.png" width="640">
-<img src="assets/examples/example1/Slide3.png" width="640">
+<img src="../assets/examples/example1/Slide1.png" width="640">
+<img src="../assets/examples/example1/Slide2.png" width="640">
+<img src="../assets/examples/example1/Slide3.png" width="640">
 </details>
 
 ---
@@ -192,10 +164,10 @@ uv sync
 <details>
 <summary>スライドを見る</summary>
 <br>
-<img src="assets/examples/example2/Slide1.png" width="640">
-<img src="assets/examples/example2/Slide2.png" width="640">
-<img src="assets/examples/example2/Slide3.png" width="640">
-<img src="assets/examples/example2/Slide4.png" width="640">
+<img src="../assets/examples/example2/Slide1.png" width="640">
+<img src="../assets/examples/example2/Slide2.png" width="640">
+<img src="../assets/examples/example2/Slide3.png" width="640">
+<img src="../assets/examples/example2/Slide4.png" width="640">
 </details>
 
 ---
@@ -207,11 +179,11 @@ uv sync
 <details>
 <summary>スライドを見る</summary>
 <br>
-<img src="assets/examples/example3/Slide1.png" width="640">
-<img src="assets/examples/example3/Slide2.png" width="640">
-<img src="assets/examples/example3/Slide3.png" width="640">
-<img src="assets/examples/example3/Slide4.png" width="640">
-<img src="assets/examples/example3/Slide5.png" width="640">
+<img src="../assets/examples/example3/Slide1.png" width="640">
+<img src="../assets/examples/example3/Slide2.png" width="640">
+<img src="../assets/examples/example3/Slide3.png" width="640">
+<img src="../assets/examples/example3/Slide4.png" width="640">
+<img src="../assets/examples/example3/Slide5.png" width="640">
 </details>
 
 ---
@@ -361,7 +333,7 @@ ESCは変更を確定せずにキャンセルするため、意図しない操�
 
 PowerPointが起動していないときにツールが必要とすると（`ppt_create_presentation`、`ppt_open_presentation`、`ppt_connect`）、サーバーがPowerPointを起動します。macOSではバックグラウンドで起動し、作業中のアプリから前面を奪いません。
 
-サーバーが起動したPowerPointで、閉じた結果プレゼンテーションが1つも残らないとき、`ppt_close_presentation` はPowerPointも終了し、その旨（`powerpoint_quit`）を返します。自分で起動したPowerPointは終了されません。プレゼンテーションが開いたままのもの（Windowsでは保護ビューで開いているファイルも含む）も終了されません。続けて別のプレゼンテーションを開くときなどは、`keep_powerpoint_open=true` で起動したままにできます。ツールがPowerPointを再び起動するまでは、PowerPointを必要とするツールは、空の一覧ではなく「PowerPointが起動していない」と答えます。
+サーバーが起動したPowerPointで、閉じた結果プレゼンテーションが1つも残らないとき、`ppt_close_presentation` はPowerPointも終了し、その旨（`powerpoint_quit`）を返します。自分で起動したPowerPointは終了されません。プレゼンテーションが開いたままのもの（Windowsでは保護ビューで開いているファイルも含む）も終了されません。続けて別のプレゼンテーションを開くときなどは、`keep_powerpoint_open=true` で起動したままにできます。ツールがPowerPointを再び起動するまでは、PowerPointを必要とするツールは、空の一覧ではなく「PowerPointが起動していない」と答えます。 Windows では、保護ビューで開いているファイルは `ppt_list_presentations` の `protected_view` に並び、`ppt_close_presentation` に名前を渡すと保存せずに閉じます。
 
 ### モデルと同じデッキで作業する
 
@@ -397,7 +369,7 @@ PowerPointが起動していないときにツールが必要とすると（`ppt
 
 ### ツール一覧：カタログモード
 
-クライアントは、一覧にあるすべてのツールの説明を毎回のリクエストで送ります。このサーバーの<!--tools-->157<!--/tools-->個のツールは約112kトークンになり、128kや200kのウィンドウでは作業を始める前に大きな部分を占めます。サーバーの `env` に `PPT_TOOL_MODE=catalog` を設定すると、サーバーは次の3つのツールだけを一覧に載せ（約700トークン）、モデルはそれを通じて残りのツールを使います：
+クライアントは、一覧にあるすべてのツールの説明を毎回のリクエストで送ります。このサーバーのツールは約112kトークンになり、128kや200kのウィンドウでは作業を始める前に大きな部分を占めます。サーバーの `env` に `PPT_TOOL_MODE=catalog` を設定すると、サーバーは次の3つのツールだけを一覧に載せ（約700トークン）、モデルはそれを通じて残りのツールを使います：
 
 | ツール | 内容 |
 |---|---|
@@ -424,21 +396,40 @@ PowerPointが起動していないときにツールが必要とすると（`ppt
 ## 🍎 macOS 対応
 
 **macOS で断るツールは <!--mac-refusals-->11<!--/mac-refusals--> です。残りは動きます。**その <!--mac-refusals-->11<!--/mac-refusals--> は
-[MACOS_PORT.md](MACOS_PORT.md) の 6.1 に名前で並べてあり、
+[MACOS_PORT.md](../MACOS_PORT.md) の 6.1 に名前で並べてあり、
 その一覧が古びないようにテストで見張っています。
 
 ツールも引数も返り値も Windows と同じです。違うのは PowerPoint for Mac の
 スクリプト辞書が届く範囲だけで、届かないところではツールがそう答えます。
 黙って何もしなかったことにはしません。
 
+**PowerPoint for Mac の VBA はもっと先まで届きます。使うかどうかは選べます。**サーバーは
+小さなアドイン `ppt-mcp-bridge` を PowerPoint に読み込み、スクリプト辞書に
+言葉がないところは Windows のコードをそのアドイン経由で動かします。タグ、
+`ppt_select_shapes`、`ppt_set_table_style`、アニメーションを1つだけ削除・コピー、
+フリーフォームの頂点の編集タイプ、グラフの書式・軸・系列・種類・データのツール（データはグラフの Excel ブックに書き込み、
+Windows と同じくその間だけ Excel にブックが開きます）、フリーフォームの頂点のツールとグループ化、
+グループの中のテキスト、テンプレートのレイアウトを名前で指定したスライドの追加、
+スライドの複製とコピー、SmartArt の編集（テキスト、ノード、色、スタイル）、
+それに Mac では断っている引数（スクリーンチップ、位置を指定した表の行や列、
+別の図形のクリックで始まるアニメーション、反射の大きさ、テキストへの光彩・影・
+反射、はみ出したテキストの縮小、音量・ミュート・フェード、グラフのスタイルと
+凡例・タイトルの配置）です。これらは図形をその場で直すので、アニメーションは
+残り、クリップボードにも触れません。アドインは呼び出しを取り次ぐだけで、
+ソースは `src/backend/vba` にあります。PowerPoint は確認なしに読み込み、
+PowerPoint を終了するまで有効で、あとには何も残りません。ポリシーでマクロが
+無効になっているときなど、読み込めない場合は以下のとおりに動きます。確認なしに
+読み込まれるマクロなので、既定ではオフです。使うときはサーバーの `env` に
+`PPT_MAC_VBA=on` を設定してください。
+
 macOS でできないこと。
 
-- **フリーフォームの頂点の編集タイプ。** 角、スムーズ、対称という区別は
+- **アドインがないときは、フリーフォームの頂点の編集タイプ。** 角、スムーズ、対称という区別は
   スクリプトから届く場所のどこにも記録されていません。代わりにハンドルの
   頂点を動かしてください
-- **アニメーションを1つだけ削除。** スライドごと消すことはできます
-- **タグ、`ppt_select_shapes`、`ppt_set_table_style`、`ppt_execute_mso`。**
-  どれも辞書に届く手段がありません
+- **`ppt_execute_mso`。** アドインがないときは、**タグ、`ppt_select_shapes`、
+  `ppt_set_table_style`、アニメーションを1つだけ削除**もできません (スライド
+  ごと消すことはできます)。どれも辞書に届く手段がありません
 
 細かい違い。
 
@@ -446,18 +437,20 @@ macOS でできないこと。
   PowerPoint に届くのは一度に1つだけなので、残りは後ろに並んで待ちます。
   出てくる順番は届いた順のままです。待たされすぎた呼び出しは取り下げられ、
   何も変えないままそう答えます
-- 対応するものがない引数を渡すと、その引数を名指しして断ります。
+- アドインがないときは、対応するものがない引数を渡すと、その引数を名指しして断ります。
   たとえばハイパーリンクのスクリーンチップです。外して呼び直せば通ります
 - **動画と音声はファイルを埋め込みます。リンクはできません。**再生の設定は
-  8つのうち繰り返しと再生していないときに隠すの2つだけです。隠す方は
+  8つのうち繰り返しと再生していないときに隠すの2つだけで、アドインがあれば
+  音量、ミュート、フェードも使えます。隠す方は
   アニメーションのあるスライドでは断ります。書き込むとそのスライドの
   アニメーションを作り替えてしまうからです
 - PowerPoint はサンドボックスの中にいて任意のフォルダーに書けないので、
   書き出しは PowerPoint 自身の容器を経由して取り出します
-- **テンプレート独自のレイアウトは、保存済みのファイルから名前で探します。**
-  新しいデッキで `ppt_add_slide` にレイアウト名を渡す前に保存してください。
-  PowerPoint for Mac はスクリプトにレイアウト名を教えないため、そのレイアウトの
-  スライドを貼り付けて追加します（1 秒ほどかかります）
+- **アドインがないときは、テンプレート独自のレイアウトを保存済みのファイルから
+  名前で探します。**新しいデッキで `ppt_add_slide` にレイアウト名を渡す前に
+  保存してください。PowerPoint for Mac はスクリプトにレイアウト名を教えないため、
+  そのレイアウトのスライドを貼り付けて追加します（1 秒ほどかかります）。
+  アドインがあれば、保存していなくても開いているデッキからレイアウトを探します
 - スライド画像は PNG 書き出しではなく PDF から描画しています。
   プレビューはどちらのプラットフォームでも 1 ポイントあたり 2 ピクセルです
 - 自動化の許可はサーバーを起動したアプリに紐づきます。別のターミナルや
@@ -466,28 +459,33 @@ macOS でできないこと。
   サンドボックスの確認が出たときに、PowerPoint が開いている書類を全部閉じて
   そのまま終了した例があります
   ([#191](https://github.com/ykuwai/ppt-mcp/issues/191))
-- **グラフとフリーフォームとグループ化はクリップボード経由です。**操作の間だけ
-  クリップボードを借りて、終わったら元に戻します。辞書にこの3つを表す言葉が
-  ないので、こうして届かせています
-- **すでにあるグラフやパスを直すと、図形が作り直されます。**グラフのデータ、
+- **グラフの追加はクリップボード経由です。**アドインがないときは、
+  ほかのグラフのツール、フリーフォーム、グループ化もそうです。操作の間だけ
+  クリップボードを借りて、終わったら元に戻します。辞書にこれらを表す言葉が
+  ないので、こうして届かせています。PowerPoint for Mac は最前面のウィンドウに
+  貼り付けるので、デッキを2つ開いているときは最前面のデッキにしか使えません。
+  もう一方に対してはツールがそう答えて何も変えません。`ppt_activate_presentation`
+  で最前面に出せます
+- **アドインがないときは、すでにあるグラフやパスを直すと、図形が作り直されます。**
+  アドインがあっても、バブルチャートのサイズを設定すると作り直されます。グラフのデータ、
   種類、タイトル、凡例、軸、系列のツールと、頂点のツールは、図形をコピーして
   書き換え、貼り直してから元を消します。名前、位置、重なり順は保たれますが、
   その図形についていたアニメーションは残らず、いくつ消えたかを返り値で
-  伝えます。グラフの描画サイズに依存する引数 (`chart_style`、凡例と
+  伝えます。アドインがないときは、グラフの描画サイズに依存する引数 (`chart_style`、凡例と
   タイトルの座標、8方向の凡例位置) は引数名を挙げて
   断ります
-- **グループの中のテキストも同じように直します。**`ppt_set_text` (全体、
-  または1行の中の一部) と `ppt_format_text` は、グループの中の図形に名前か
-  パス (`"Group 4/TextBox 3"`) で届きます。グループをコピーし、その図形を
-  書き換えて貼り直します。中の図形の名前は保たれ、グループのアニメーションは
-  上と同じく残りません
+- **グループの中のテキスト**には、`ppt_set_text` (全体、または1行の中の一部) と
+  `ppt_format_text` で、図形の名前かパス (`"Group 4/TextBox 3"`) で届きます。
+  アドインがあればその図形をその場で直します。アドインがないときはグループを
+  コピーし、その図形を書き換えて貼り直します。中の図形の名前は保たれ、
+  グループのアニメーションは上と同じく残りません
 - アイコンは挿入前に `sips` で PNG にしています。PowerPoint for Mac は SVG を
   読めないからです。macOS 13 以降が必要で、それより古いと空の四角ではなく
   理由を書いた拒否が返ります
 
 ## 🤝 コントリビュート
 
-プルリクエストを歓迎します。`develop` 向けに、1つの話題ごとに、テストを添えて出してください。詳しくは [CONTRIBUTING.md](CONTRIBUTING.md)（英語）にあります。
+プルリクエストを歓迎します。`develop` 向けに、1つの話題ごとに、テストを添えて出してください。詳しくは [CONTRIBUTING.md](../CONTRIBUTING.md)（英語）にあります。
 
 ## 📄 ライセンス
 

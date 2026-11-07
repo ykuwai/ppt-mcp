@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <strong>Português (pt-BR)</strong> · <a href="README.he.md">עברית (he)</a>
+  <a href="../README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <strong>Português (pt-BR)</strong> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ Principais recursos
 
 - **Controle em tempo real**: age direto sobre o PowerPoint em execução, e as mudanças aparecem na tela na mesma hora
-- **<!--tools-->157<!--/tools--> ferramentas em <!--categories-->26<!--/categories--> categorias**: slides, formas, texto, tabelas, gráficos, animações, SmartArt, mídia, formas livres e mais
+- **Ampla cobertura**: slides, formas, texto, tabelas, gráficos, animações, SmartArt, mídia, formas livres e mais
 - **Seguro para agentes de IA**: `ppt_activate_presentation` prende todas as ferramentas a um arquivo específico, evitando edições acidentais na apresentação errada
 - **Ícones do [Google Material Symbols](https://fonts.google.com/icons)**: busque entre mais de 2.500 ícones por palavra-chave e insira como SVG com as cores do tema
 - **Cores do tema**: passe `accent1`, `accent2` etc. em qualquer lugar que aceite cor de preenchimento, linha, sombra, brilho ou texto, em vez de valores RGB fixos; as formas acompanham o tema quando ele muda
@@ -136,35 +136,7 @@ uv sync
 
 ## 🛠️ Categorias de ferramentas
 
-| Categoria | Ferramentas | Descrição |
-|----------|------:|-------------|
-| **Aplicativo** | 5 | Conectar ao PowerPoint, informações do app, janela ativa, estado da janela, listar apresentações |
-| **Apresentação** | 8 | Criar (com modelos), abrir (um arquivo local ou, no Windows, uma URL do SharePoint ou do OneDrive), salvar, fechar, informações, definir o alvo, listar modelos |
-| **Slides** | 10 | Adicionar, excluir (em lote), duplicar (por posição/vários), mover (em lote), copiar (entre apresentações), listar, informações, anotações, navegação |
-| **Formas** | 10 | Adicionar formas/caixas de texto/imagens/linhas (com posição na ordem Z, inclusive atrás do texto), listar, informações (posição, preenchimento, linha, quadro de texto), atualizar (uma forma, um conjunto ou o slide inteiro, em valor absoluto ou por deslocamento), excluir, ordem Z |
-| **Texto** | 10 | Definir texto (o quadro inteiro, um trecho mantendo a formatação, ou em partes), obter texto (com medição e transbordamento), formatar um trecho ou vários em lote, formato de parágrafo, marcadores, localizar/substituir (inclusive dentro de grupos), quadro de texto, extrair todo o texto como Markdown, verificação tipográfica |
-| **Espaços reservados** | 6 | Listar, obter e definir o conteúdo dos espaços reservados |
-| **Formatação** | 3 | Preenchimento, linha, sombra (na forma ou no texto dela) |
-| **Tabelas** | 13 | Adicionar tabelas, obter/definir células, definir dados em lote, mesclar/dividir células, adicionar/excluir linhas/colunas, estilos, layout, bordas |
-| **Exportação** | 4 | PDF, imagens, prévia do slide, cópia para a área de transferência |
-| **Apresentação de slides** | 6 | Iniciar, parar, próximo, anterior, ir para um slide, status |
-| **Gráficos** | 7 | Adicionar gráficos (no Windows, exceto os 3D e alguns tipos menos comuns, sem abrir o Excel), definir/obter dados (no Windows, ao definir, o gráfico é trocado por uma cópia com outro id de forma, sem abrir o Excel quando dá, e lido de volta; dados que não entraram são um erro, e um rótulo que o Excel leu de outro jeito é um aviso), formatar, formatar eixo, séries, trocar o tipo |
-| **Animação** | 6 | Transições, adicionar/listar/atualizar/remover/limpar animações (entrada, saída, ênfase, trajetória de movimento, sequências interativas) |
-| **Temas** | 4 | Aplicar temas, obter/definir cores do tema, cabeçalhos/rodapés |
-| **Grupos** | 3 | Agrupar, desagrupar, obter os itens do grupo |
-| **Conectores** | 2 | Adicionar, formatar |
-| **Hiperlinks** | 3 | Adicionar, obter, remover |
-| **Seções** | 3 | Adicionar, listar, gerenciar |
-| **Propriedades** | 2 | Definir/obter os metadados da apresentação |
-| **Mídia** | 3 | Vídeo, áudio, configurações de mídia |
-| **SmartArt** | 3 | Adicionar, modificar, listar layouts |
-| **Operações de edição** | 6 | Desfazer e refazer (na apresentação alvo), copiar formas/formatação entre slides |
-| **Layout** | 8 | Alinhar, distribuir, tamanho do slide, plano de fundo, espelhar, mesclar formas, verificação de layout |
-| **Efeitos** | 3 | Brilho e reflexo (na forma ou no texto dela), bordas suaves |
-| **Comentários** | 3 | Adicionar, listar, excluir |
-| **Avançado** | 19 | Tags, fontes (listar as da apresentação ou as deste computador, definir padrões, substituir em massa), recorte, formato de imagem, exportar forma, visibilidade, seleção, modo de exibição, copiar animação, imagem a partir de URL, ícones SVG, busca de ícones, travar proporção, aplicar em lote, estilo padrão de forma |
-| **Forma livre** | 7 | Construir formas livres, obter/definir a posição dos nós, inserir/excluir nós, tipo de edição do nó, tipo de segmento |
-| | **157** | |
+A lista completa de ferramentas, por categoria, está em [TOOLS.md](../TOOLS.md) (em inglês).
 
 ## 💡 Exemplos de prompts
 
@@ -179,9 +151,9 @@ Basta descrever o que você quer em linguagem comum, sem precisar de código.
 <details>
 <summary>Ver slides</summary>
 <br>
-<img src="assets/examples/example1/Slide1.png" width="640">
-<img src="assets/examples/example1/Slide2.png" width="640">
-<img src="assets/examples/example1/Slide3.png" width="640">
+<img src="../assets/examples/example1/Slide1.png" width="640">
+<img src="../assets/examples/example1/Slide2.png" width="640">
+<img src="../assets/examples/example1/Slide3.png" width="640">
 </details>
 
 ---
@@ -193,10 +165,10 @@ Basta descrever o que você quer em linguagem comum, sem precisar de código.
 <details>
 <summary>Ver slides</summary>
 <br>
-<img src="assets/examples/example2/Slide1.png" width="640">
-<img src="assets/examples/example2/Slide2.png" width="640">
-<img src="assets/examples/example2/Slide3.png" width="640">
-<img src="assets/examples/example2/Slide4.png" width="640">
+<img src="../assets/examples/example2/Slide1.png" width="640">
+<img src="../assets/examples/example2/Slide2.png" width="640">
+<img src="../assets/examples/example2/Slide3.png" width="640">
+<img src="../assets/examples/example2/Slide4.png" width="640">
 </details>
 
 ---
@@ -208,11 +180,11 @@ Basta descrever o que você quer em linguagem comum, sem precisar de código.
 <details>
 <summary>Ver slides</summary>
 <br>
-<img src="assets/examples/example3/Slide1.png" width="640">
-<img src="assets/examples/example3/Slide2.png" width="640">
-<img src="assets/examples/example3/Slide3.png" width="640">
-<img src="assets/examples/example3/Slide4.png" width="640">
-<img src="assets/examples/example3/Slide5.png" width="640">
+<img src="../assets/examples/example3/Slide1.png" width="640">
+<img src="../assets/examples/example3/Slide2.png" width="640">
+<img src="../assets/examples/example3/Slide3.png" width="640">
+<img src="../assets/examples/example3/Slide4.png" width="640">
+<img src="../assets/examples/example3/Slide5.png" width="640">
 </details>
 
 ---
@@ -362,7 +334,7 @@ ESC cancela sem confirmar nada, então não há efeitos colaterais destrutivos. 
 
 Se nenhum PowerPoint estiver em execução quando uma ferramenta precisar de um (`ppt_create_presentation`, `ppt_open_presentation`, `ppt_connect`), o servidor o inicia. No macOS, ele é iniciado em segundo plano e não tira o foco do app em que você está trabalhando.
 
-Quando um fechamento não deixa nenhuma apresentação aberta num PowerPoint que o servidor iniciou, `ppt_close_presentation` também encerra o PowerPoint e avisa (`powerpoint_quit`). Um PowerPoint que você mesmo abriu nunca é encerrado, nem um que ainda tenha uma apresentação aberta (no Windows, também um arquivo aberto no Modo de Exibição Protegido). Passe `keep_powerpoint_open=true` para mantê-lo em execução, por exemplo para abrir outra apresentação logo em seguida. Até que uma ferramenta inicie o PowerPoint de novo, as ferramentas que precisam dele respondem que o PowerPoint não está em execução, onde antes teriam devolvido uma lista vazia.
+Quando um fechamento não deixa nenhuma apresentação aberta num PowerPoint que o servidor iniciou, `ppt_close_presentation` também encerra o PowerPoint e avisa (`powerpoint_quit`). Um PowerPoint que você mesmo abriu nunca é encerrado, nem um que ainda tenha uma apresentação aberta (no Windows, também um arquivo aberto no Modo de Exibição Protegido). Passe `keep_powerpoint_open=true` para mantê-lo em execução, por exemplo para abrir outra apresentação logo em seguida. Até que uma ferramenta inicie o PowerPoint de novo, as ferramentas que precisam dele respondem que o PowerPoint não está em execução, onde antes teriam devolvido uma lista vazia. No Windows, um arquivo aberto no Modo de Exibição Protegido aparece em `ppt_list_presentations` sob `protected_view`, e `ppt_close_presentation` o fecha pelo nome, sem salvar.
 
 ### Trabalhando na mesma apresentação que o modelo
 
@@ -398,7 +370,7 @@ Cada escrita leva a janela da apresentação ao slide em que ela atua, para voc�
 
 ### A lista de ferramentas: modo catálogo
 
-Um cliente envia a descrição de cada ferramenta que lista em toda requisição, e as <!--tools-->157<!--/tools--> deste servidor somam cerca de 112 mil tokens, uma boa parte de uma janela de 128 mil ou 200 mil antes de qualquer trabalho. Com `PPT_TOOL_MODE=catalog` no `env` do servidor, ele lista apenas três ferramentas, cerca de 700 tokens, e o modelo chega às demais por meio delas:
+Um cliente envia a descrição de cada ferramenta que lista em toda requisição, e as deste servidor somam cerca de 112 mil tokens, uma boa parte de uma janela de 128 mil ou 200 mil antes de qualquer trabalho. Com `PPT_TOOL_MODE=catalog` no `env` do servidor, ele lista apenas três ferramentas, cerca de 700 tokens, e o modelo chega às demais por meio delas:
 
 | Ferramenta | O que faz |
 |---|---|
@@ -425,19 +397,43 @@ O que o modo catálogo sacrifica é o controle por ferramenta no cliente: aprova
 ## 🍎 Suporte ao macOS
 
 **<!--mac-refusals-->11<!--/mac-refusals--> ferramentas recusam no macOS. As demais funcionam.** As <!--mac-refusals-->11<!--/mac-refusals--> estão listadas pelo nome na
-seção 6.1 de [MACOS_PORT.md](MACOS_PORT.md), e um teste garante que essa lista esteja correta.
+seção 6.1 de [MACOS_PORT.md](../MACOS_PORT.md), e um teste garante que essa lista esteja correta.
 
 As mesmas ferramentas, os mesmos argumentos, as mesmas respostas. O que muda é
 o que o dicionário de scripts do PowerPoint para Mac consegue alcançar, e onde
 ele não alcança algo a ferramenta avisa em vez de fazer algo inesperado.
 
+**O VBA do PowerPoint para Mac alcança mais, e pode ser ativado.** O servidor
+carrega no PowerPoint um pequeno suplemento, `ppt-mcp-bridge`, e roda por meio
+dele o código do Windows para o que o dicionário de scripts não tem palavras:
+tags, `ppt_select_shapes`, `ppt_set_table_style`, remover e copiar uma única
+animação, o tipo de edição de um nó de forma livre, as ferramentas de
+formatação, eixo, séries, tipo e dados do gráfico (os
+dados pela pasta de trabalho do Excel do gráfico, que abre no Excel por um
+instante, como no Windows), as de
+nós de forma livre e o agrupamento, o texto dentro de um grupo, os layouts de
+um modelo pelo nome, duplicar e copiar slides, editar um SmartArt (texto, nós, cores e estilo), e os
+argumentos que o Mac recusa de outro
+modo (a dica de tela, uma linha ou coluna de tabela numa posição, uma animação
+disparada pelo clique em outra forma, os tamanhos do reflexo, brilho, sombra e
+reflexo no texto, reduzir o texto para caber, volume, mudo e esmaecimentos, o
+estilo do gráfico e a posição da legenda e do título). Essas ferramentas editam
+a forma no lugar, então ela mantém as animações, e a área de transferência não
+é tocada. O suplemento só repassa essas chamadas; o código-fonte está em
+`src/backend/vba`. O PowerPoint o carrega sem perguntar, ele dura até o
+PowerPoint fechar e não deixa nada para trás. Onde não puder ser carregado, por
+exemplo quando uma política desativa as macros, as ferramentas funcionam como
+descrito abaixo. Ele vem desativado por padrão, porque é
+código de macro carregado sem aviso. Defina `PPT_MAC_VBA=on` no `env` do servidor
+para usá-lo.
+
 Não disponível no macOS:
 
-- **O tipo de edição de um nó de forma livre.** Canto, suave e simétrico não
+- **Sem o suplemento, o tipo de edição de um nó de forma livre.** Canto, suave e simétrico não
   ficam guardados em nenhum lugar que um script alcance; mova as alças do nó.
-- **Remover uma única animação.** Limpar as animações de um slide funciona.
-- **Tags, `ppt_select_shapes`, `ppt_set_table_style` e `ppt_execute_mso`.**
-  Nada no dicionário chega a nenhum deles.
+- **`ppt_execute_mso`**, e sem o suplemento também **tags, `ppt_select_shapes`,
+  `ppt_set_table_style` e remover uma única animação** (limpar as animações de
+  um slide funciona). Nada no dicionário chega a eles.
 
 Diferenças menores:
 
@@ -445,21 +441,23 @@ Diferenças menores:
   uma requisição por vez chega ao PowerPoint, então as outras ficam na fila
   atrás dela e saem na ordem em que chegaram. Uma chamada que espera demais é
   retirada e avisa, sem ter mudado nada.
-- Algumas ferramentas aceitam um argumento que não tem equivalente, como a dica
+- Sem o suplemento, algumas ferramentas aceitam um argumento que não tem equivalente, como a dica
   de tela de um hiperlink. Essas recusam com uma mensagem que nomeia o
   argumento, então basta removê-lo e tentar de novo.
 - **Vídeo e áudio entram incorporados, nunca vinculados**, e das oito
-  configurações de reprodução só existem repetir e ocultar o quadro. Ocultar o
+  configurações de reprodução só existem repetir e ocultar o quadro, e com o
+  suplemento também volume, mudo e esmaecimentos. Ocultar o
   quadro é recusado num slide que já tem animações, porque gravar essa opção
   as reescreve.
 - As exportações passam pelo contêiner do próprio PowerPoint e depois são
   movidas, porque o aplicativo roda em sandbox e não consegue gravar em
   qualquer pasta.
-- **Os layouts próprios de um modelo são encontrados pelo nome no arquivo
-  salvo da apresentação**, então salve uma apresentação nova antes de pedir um
-  layout pelo nome a `ppt_add_slide`. O PowerPoint para Mac não informa o nome
-  de nenhum layout a um script, então o slide é colado já no layout, o que leva
-  cerca de um segundo.
+- **Sem o suplemento, os layouts próprios de um modelo são encontrados pelo
+  nome no arquivo salvo da apresentação**, então salve uma apresentação nova
+  antes de pedir um layout pelo nome a `ppt_add_slide`. O PowerPoint para Mac
+  não informa o nome de nenhum layout a um script, então o slide é colado já no
+  layout, o que leva cerca de um segundo. Com o suplemento, o layout é
+  encontrado na apresentação aberta, salva ou não.
 - As imagens dos slides são geradas a partir de um PDF em vez de exportadas
   como PNG. Uma prévia tem 2 pixels por ponto nas duas plataformas.
 - A permissão de automação pertence ao aplicativo que iniciou o servidor, então
@@ -468,23 +466,29 @@ Diferenças menores:
   PowerPoint fechar todos os documentos abertos e depois sair quando um aviso
   de sandbox apareceu por trás de um script
   ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Gráficos, formas livres e agrupamento passam pela área de transferência**,
-  o que significa que a operação a ocupa por um instante e depois devolve o que
-  havia nela. É assim que esses três chegam a um dicionário que não tem
-  palavras para eles.
-- **Editar um gráfico ou forma livre existente recria a forma.** As
+- **Adicionar um gráfico passa pela área de
+  transferência**, e sem o suplemento também as demais ferramentas de gráfico,
+  as formas livres e o agrupamento. A operação ocupa a área de transferência por
+  um instante e depois devolve o que havia nela. É assim que chegam a um
+  dicionário que não tem palavras para eles. O PowerPoint para Mac cola na
+  janela da frente, então com duas apresentações abertas eles funcionam na da
+  frente; para a outra, a ferramenta avisa e não muda nada, e
+  `ppt_activate_presentation` a traz para a frente.
+- **Sem o suplemento, editar um gráfico ou forma livre existente recria a
+  forma**, e com ele, definir os tamanhos de um gráfico de bolhas ainda recria. As
   ferramentas de dados, tipo, título, legenda, eixo e séries do gráfico, e as
   ferramentas de nós, copiam a forma, reescrevem e colam de volta, e depois
   excluem a original. O nome, a posição e a ordem Z são mantidos; as animações
-  da forma não, e o resultado informa quantas se perderam. Alguns argumentos de
+  da forma não, e o resultado informa quantas se perderam. Sem o suplemento, alguns argumentos de
   formatação que dependem do tamanho renderizado do gráfico (`chart_style`, as
   coordenadas da legenda e do título, as predefinições de legenda em 8
   direções) são recusados pelo nome.
-- **O texto dentro de um grupo é editado do mesmo jeito.** `ppt_set_text` (o
-  texto inteiro, ou um trecho dentro de uma linha) e `ppt_format_text` chegam a
-  um membro do grupo pelo nome dele ou pelo caminho (`"Group 4/TextBox 3"`); o
-  grupo é copiado, o membro reescrito e o grupo colado de volta. Os membros
-  mantêm os nomes, e o grupo perde as animações, como acima.
+- **O texto dentro de um grupo** é alcançado pelo nome do membro ou pelo
+  caminho (`"Group 4/TextBox 3"`), com `ppt_set_text` (o texto inteiro, ou um
+  trecho dentro de uma linha) e `ppt_format_text`. Com o suplemento, o membro é
+  editado no lugar. Sem ele, o grupo é copiado, o membro reescrito e o grupo
+  colado de volta: os membros mantêm os nomes, e o grupo perde as animações,
+  como acima.
 - Os ícones são rasterizados com `sips` antes de serem inseridos, porque o
   PowerPoint para Mac não consegue ler SVG. Isso exige macOS 13 ou posterior;
   sistemas mais antigos recebem uma recusa explicando o motivo em vez de uma
@@ -492,7 +496,7 @@ Diferenças menores:
 
 ## 🤝 Como contribuir
 
-Pull requests são bem-vindos. Baseie-os em `develop`, um assunto por PR, com testes; o [CONTRIBUTING.md](CONTRIBUTING.md) traz o resto.
+Pull requests são bem-vindos. Baseie-os em `develop`, um assunto por PR, com testes; o [CONTRIBUTING.md](../CONTRIBUTING.md) traz o resto.
 
 ## 📄 Licença
 

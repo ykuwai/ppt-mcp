@@ -17,8 +17,8 @@ Not waiting at all went too far. A chart's workbook is opened in an Excel of
 its own, and an Excel started while the one before it is still ending crashes,
 measured straight through pywin32 too. Waiting for each Excel as its last
 reference went had kept them one at a time. A new chart is now written without
-Excel where python-pptx can write it (ppt_com/chart_file.py); for the types it
-cannot, ``wait_until_ended`` waits, before ``AddChart2``, for the Excel behind
+Excel where gvml can write it, and pasted (ppt_com/chart_defaults.py); for the
+types it cannot, ``wait_until_ended`` waits, before ``AddChart2``, for the Excel behind
 every held set to end, for ``WAIT_LIMIT`` seconds at most.
 """
 

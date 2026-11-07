@@ -5324,10 +5324,18 @@ def _directions(tr):
     return directions
 
 
+def _shape_id(shape):
+    try:
+        return shape.Id
+    except Exception:  # noqa: BLE001 - matched by name then
+        return None
+
+
 def _geometry_facts(shape, z):
     """Where a shape is and what kind of shape it is."""
     facts = {
         "name": shape.Name,
+        "id": _shape_id(shape),
         "z": z,
         "type": shape.Type,
         "left": round(shape.Left, 2),
@@ -6093,24 +6101,34 @@ def _has_charts(slides):
 def _with_package(slides, facts):
     """Give each picture its image's proportions and each chart its data,
     where they are known."""
+    by_id = facts.get("ids") or {}
     for slide in slides:
         index = slide["slide_index"]
-        aspects = (facts.get("pictures") or {}).get(index) or {}
-        pixels = (facts.get("pixels") or {}).get(index) or {}
-        charts = (facts.get("charts") or {}).get(index) or {}
-        described = (facts.get("described") or {}).get(index) or {}
-        scales = (facts.get("text_scale") or {}).get(index) or {}
+
+        def entries(kind, index=index):
+            return ((facts.get(kind) or {}).get(index) or {},
+                    (by_id.get(kind) or {}).get(index) or {})
+
+        aspects, pixels, charts = entries("pictures"), entries("pixels"), entries("charts")
+        described, scales = entries("described"), entries("text_scale")
         for shape in slide["shapes"]:
-            if shape["name"] in described:
-                shape["described"] = described[shape["name"]]
-            if shape["name"] in scales and shape.get("text"):
-                shape["shrunk"] = scales[shape["name"]]
-            if shape.get("type") in _PICTURES and shape["name"] in pixels:
-                shape["pixels"] = pixels[shape["name"]]
-            if shape.get("type") in _PICTURES and shape["name"] in aspects:
-                shape["natural_aspect"] = aspects[shape["name"]]
-            elif shape.get("type") == msoChart and shape["name"] in charts:
-                shape["chart"] = charts[shape["name"]]
+            # By id first: a name read through COM may not be the one saved.
+            def known(found, shape=shape):
+                named, numbered = found
+                if shape.get("id") in numbered:
+                    return numbered[shape["id"]]
+                return named.get(shape["name"])
+
+            if known(described) is not None:
+                shape["described"] = known(described)
+            if known(scales) is not None and shape.get("text"):
+                shape["shrunk"] = known(scales)
+            if shape.get("type") in _PICTURES and known(pixels) is not None:
+                shape["pixels"] = known(pixels)
+            if shape.get("type") in _PICTURES and known(aspects) is not None:
+                shape["natural_aspect"] = known(aspects)
+            elif shape.get("type") == msoChart and known(charts) is not None:
+                shape["chart"] = known(charts)
 
 
 def _read_package(indices, charts=False):

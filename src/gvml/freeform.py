@@ -302,6 +302,23 @@ def _point_at(path: Path, slot: tuple) -> Point:
     return seg[1] if role == "c1" else seg[2]
 
 
+def _segment_of(path: Path, slot: tuple) -> Optional[int]:
+    """The segment a node stands for, as PowerPoint's object model has it.
+
+    An anchor stands for the segment that ends at it, and the first node for
+    the first segment; a control point for its own curve. That is what
+    ``ShapeNode.SegmentType`` reports and what ``ShapeNodes.SetSegmentType``
+    changes, measured the same through COM on Windows and through VBA on the
+    Mac (PowerPoint 16.0.20326 and 16.114). Microsoft's page for
+    SetSegmentType says "the segment that follows the specified node"; the
+    object model does not do that, and the tools follow the object model.
+    """
+    i, role = slot
+    if role == "start":
+        return 0 if path.segments else None
+    return i
+
+
 def nodes_of(paths: Sequence[Path]) -> List[dict]:
     """The Windows node list of one or more paths, numbered continuously."""
     nodes: List[dict] = []
@@ -313,7 +330,11 @@ def nodes_of(paths: Sequence[Path]) -> List[dict]:
             index = len(nodes) + 1
             x, y = round(p[0], 2), round(p[1], 2)
             follows = path.segments[i + 1] if i + 1 < len(path.segments) else None
-            if role in ("c1", "c2") or follows is None:
+            own = _segment_of(path, slot)
+            # A closed path's closing node repeats the start, and Windows
+            # cannot read its metadata either.
+            closing = path.closed and k == len(slots) - 1 and p == path.start
+            if role in ("c1", "c2") or own is None or closing:
                 nodes.append({
                     "index": index, "x": x, "y": y,
                     "editing_type": "inaccessible",
@@ -322,11 +343,11 @@ def nodes_of(paths: Sequence[Path]) -> List[dict]:
                 })
             else:
                 incoming = path.segments[i][2] if i >= 0 and path.segments[i][0] == "curve" else None
-                outgoing = follows[1] if follows[0] == "curve" else None
+                outgoing = follows[1] if follows is not None and follows[0] == "curve" else None
                 nodes.append({
                     "index": index, "x": x, "y": y,
                     "editing_type": _editing_type(incoming, p, outgoing),
-                    "segment_type": follows[0],
+                    "segment_type": path.segments[own][0],
                 })
     return nodes
 
@@ -336,9 +357,9 @@ def read_nodes(sp: ET.Element) -> List[dict]:
 
     Each dict has ``index``, ``x``, ``y`` in points on the slide, and
     ``editing_type`` and ``segment_type``. ``segment_type`` on an anchor is
-    the segment that follows it, which is what ``ShapeNode.SegmentType``
-    reports; a control point, and the last node of a path, which nothing
-    follows, report ``inaccessible`` with the note Windows gives.
+    the segment that ends at it, and on the first node the first segment,
+    which is what ``ShapeNode.SegmentType`` reports (see ``_segment_of``); a
+    control point reports ``inaccessible`` with the note Windows gives.
     """
     return nodes_of(_parse_paths(sp))
 
@@ -479,14 +500,15 @@ def delete_node(path: Path, index: int) -> Path:
 
 
 def set_segment_type(path: Path, index: int, seg_int: int) -> Path:
-    """Switch the segment after a node between line and curve. A control
-    point stands for its own curve. A new curve puts its handles a third
-    and two thirds of the way along the chord, so the outline does not
-    move until a handle does."""
-    i, role = _check_index(path, index)
-    target = i if role in ("c1", "c2") else i + 1
-    if target >= len(path.segments):
-        raise ValueError(f"node_index {index} is the last node; no segment follows it.")
+    """Switch a node's segment between line and curve: the segment that
+    ends at an anchor, the first segment for node 1, a control point's own
+    curve (see ``_segment_of``). A new curve puts its handles a third and
+    two thirds of the way along the chord, so the outline does not move
+    until a handle does."""
+    slot = _check_index(path, index)
+    target = _segment_of(path, slot)
+    if target is None:
+        raise ValueError(f"node_index {index} has no segment; the path is a single point.")
     new = path.copy()
     seg = new.segments[target]
     if seg_int == SEGMENT_LINE:

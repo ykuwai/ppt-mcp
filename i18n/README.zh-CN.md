@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <strong>简体中文 (zh-CN)</strong> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
+  <a href="../README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <strong>简体中文 (zh-CN)</strong> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ 主要特性
 
 - **实时控制** — 直接操作运行中的 PowerPoint，改动立即显示在屏幕上
-- **<!--categories-->26<!--/categories--> 个类别共 <!--tools-->157<!--/tools--> 个工具** — 幻灯片、形状、文本、表格、图表、动画、SmartArt、媒体、任意多边形路径等
+- **功能全面** — 幻灯片、形状、文本、表格、图表、动画、SmartArt、媒体、任意多边形路径等
 - **对 AI 智能体安全** — `ppt_activate_presentation` 把所有工具锁定到指定文件，避免误改其他演示文稿
 - **[Google Material Symbols](https://fonts.google.com/icons) 图标** — 按关键词搜索 2,500 多个图标，以 SVG 形式插入并使用主题色
 - **感知主题色** — 凡是接受填充、线条、阴影、发光或文字颜色的地方，都可以传 `accent1`、`accent2` 等，而不必写死 RGB 值；主题更换后，形状也会随之变化
@@ -133,35 +133,7 @@ uv sync
 
 ## 🛠️ 工具类别
 
-| 类别 | 工具数 | 说明 |
-|----------|------:|-------------|
-| **应用** | 5 | 连接 PowerPoint、应用信息、活动窗口、窗口状态、列出演示文稿 |
-| **演示文稿** | 8 | 新建（支持模板）、打开（本地文件，Windows 上也可以是 SharePoint 或 OneDrive 的 URL）、保存、关闭、信息、指定操作目标、列出模板 |
-| **幻灯片** | 10 | 添加、删除（批量）、复制（指定位置/多张）、移动（批量）、跨演示文稿复制、列表、信息、备注、导航 |
-| **形状** | 10 | 添加形状/文本框/图片/线条（可指定叠放次序，包括置于文字下方）、列表、信息（位置、填充、线条、文本框）、更新（单个、多个或整张幻灯片，绝对值或偏移量）、删除、叠放次序 |
-| **文本** | 10 | 设置文本（整个文本框、保留格式修改一段，或按文本段）、获取文本（含尺寸测量和溢出判断）、设置一段或批量设置格式、段落格式、项目符号、查找替换（可深入组合内部）、文本框设置、以 Markdown 提取全部文本、排版检查 |
-| **占位符** | 6 | 列出、获取、设置占位符内容 |
-| **格式** | 3 | 填充、线条、阴影（作用于形状或其文字） |
-| **表格** | 13 | 添加表格、获取/设置单元格、批量设置数据、合并/拆分单元格、添加/删除行列、样式、布局、边框 |
-| **导出** | 4 | PDF、图片、幻灯片预览、复制到剪贴板 |
-| **放映** | 6 | 开始、结束、下一张、上一张、跳转到指定幻灯片、状态 |
-| **图表** | 7 | 添加图表（在 Windows 上，除 3D 等少数类型外不启动 Excel）、设置/获取数据（在 Windows 上，设置时尽量不启动 Excel，而是换成图表的副本（形状 ID 会变），设置后会读回图表，数据未写入时报错，Excel 把标签理解成别的值时给出 warning）、格式、坐标轴格式、数据系列、更改类型 |
-| **动画** | 6 | 切换效果，动画的添加/列出/更新/删除/清除（进入、退出、强调、动作路径、交互式序列） |
-| **主题** | 4 | 应用主题、获取/设置主题色、页眉/页脚 |
-| **组合** | 3 | 组合、取消组合、获取组合内的项目 |
-| **连接符** | 2 | 添加、格式 |
-| **超链接** | 3 | 添加、获取、删除 |
-| **节** | 3 | 添加、列出、管理 |
-| **属性** | 2 | 设置/获取演示文稿元数据 |
-| **媒体** | 3 | 视频、音频、媒体设置 |
-| **SmartArt** | 3 | 添加、修改、列出布局 |
-| **编辑操作** | 6 | 撤销和重做（针对目标演示文稿）、在幻灯片之间复制形状/格式 |
-| **布局** | 8 | 对齐、分布、幻灯片大小、背景、翻转、合并形状、布局检查 |
-| **效果** | 3 | 发光和映像（作用于形状或其文字）、柔化边缘 |
-| **批注** | 3 | 添加、列出、删除 |
-| **高级** | 19 | 标记、字体（列出演示文稿中或本机上的字体、设置默认字体、批量替换）、裁剪、图片格式、导出形状、显示/隐藏、选择、视图、复制动画、从 URL 插入图片、SVG 图标、图标搜索、锁定纵横比、批量应用格式、默认形状样式 |
-| **任意多边形** | 7 | 构建任意多边形路径、获取/设置节点位置、插入/删除节点、节点编辑类型、线段类型 |
-| | **157** | |
+全部工具按类别列在 [TOOLS.md](../TOOLS.md)（英文）中。
 
 ## 💡 提示词示例
 
@@ -176,9 +148,9 @@ uv sync
 <details>
 <summary>查看幻灯片</summary>
 <br>
-<img src="assets/examples/example1/Slide1.png" width="640">
-<img src="assets/examples/example1/Slide2.png" width="640">
-<img src="assets/examples/example1/Slide3.png" width="640">
+<img src="../assets/examples/example1/Slide1.png" width="640">
+<img src="../assets/examples/example1/Slide2.png" width="640">
+<img src="../assets/examples/example1/Slide3.png" width="640">
 </details>
 
 ---
@@ -190,10 +162,10 @@ uv sync
 <details>
 <summary>查看幻灯片</summary>
 <br>
-<img src="assets/examples/example2/Slide1.png" width="640">
-<img src="assets/examples/example2/Slide2.png" width="640">
-<img src="assets/examples/example2/Slide3.png" width="640">
-<img src="assets/examples/example2/Slide4.png" width="640">
+<img src="../assets/examples/example2/Slide1.png" width="640">
+<img src="../assets/examples/example2/Slide2.png" width="640">
+<img src="../assets/examples/example2/Slide3.png" width="640">
+<img src="../assets/examples/example2/Slide4.png" width="640">
 </details>
 
 ---
@@ -205,11 +177,11 @@ uv sync
 <details>
 <summary>查看幻灯片</summary>
 <br>
-<img src="assets/examples/example3/Slide1.png" width="640">
-<img src="assets/examples/example3/Slide2.png" width="640">
-<img src="assets/examples/example3/Slide3.png" width="640">
-<img src="assets/examples/example3/Slide4.png" width="640">
-<img src="assets/examples/example3/Slide5.png" width="640">
+<img src="../assets/examples/example3/Slide1.png" width="640">
+<img src="../assets/examples/example3/Slide2.png" width="640">
+<img src="../assets/examples/example3/Slide3.png" width="640">
+<img src="../assets/examples/example3/Slide4.png" width="640">
+<img src="../assets/examples/example3/Slide5.png" width="640">
 </details>
 
 ---
@@ -359,7 +331,7 @@ ESC 只是取消而不会提交，所以没有破坏性的副作用。在无人�
 
 如果某个工具需要 PowerPoint（`ppt_create_presentation`、`ppt_open_presentation`、`ppt_connect`）时它没有在运行，服务器会启动它。在 macOS 上它在后台启动，不会抢走你正在使用的应用的前台位置。
 
-当关闭操作使服务器启动的 PowerPoint 中不再有打开的演示文稿时，`ppt_close_presentation` 会一并退出 PowerPoint，并在结果中注明（`powerpoint_quit`）。你自己启动的 PowerPoint 永远不会被退出，仍有演示文稿打开着的也不会（在 Windows 上，包括在受保护的视图中打开的文件）。传入 `keep_powerpoint_open=true` 可以让它保持运行，比如想紧接着打开另一个演示文稿时。在某个工具再次启动 PowerPoint 之前，需要它的工具会回复 PowerPoint 未运行，而不是返回一个空列表。
+当关闭操作使服务器启动的 PowerPoint 中不再有打开的演示文稿时，`ppt_close_presentation` 会一并退出 PowerPoint，并在结果中注明（`powerpoint_quit`）。你自己启动的 PowerPoint 永远不会被退出，仍有演示文稿打开着的也不会（在 Windows 上，包括在受保护的视图中打开的文件）。传入 `keep_powerpoint_open=true` 可以让它保持运行，比如想紧接着打开另一个演示文稿时。在某个工具再次启动 PowerPoint 之前，需要它的工具会回复 PowerPoint 未运行，而不是返回一个空列表。在 Windows 上，以受保护的视图打开的文件会列在 `ppt_list_presentations` 的 `protected_view` 下，`ppt_close_presentation` 可按名称关闭它，不会保存。
 
 ### 与模型在同一个演示文稿中工作
 
@@ -395,7 +367,7 @@ ESC 只是取消而不会提交，所以没有破坏性的副作用。在无人�
 
 ### 工具列表：目录模式
 
-客户端每次请求都会附上它所列出的每个工具的说明，而本服务器的 <!--tools-->157<!--/tools--> 个工具约有 112k 个 token，还没开始干活就占去 128k 或 200k 上下文窗口的一大块。在服务器的 `env` 中设置 `PPT_TOOL_MODE=catalog` 后，服务器只列出三个工具，约 700 个 token，模型通过它们调用其余工具：
+客户端每次请求都会附上它所列出的每个工具的说明，而本服务器的工具约有 112k 个 token，还没开始干活就占去 128k 或 200k 上下文窗口的一大块。在服务器的 `env` 中设置 `PPT_TOOL_MODE=catalog` 后，服务器只列出三个工具，约 700 个 token，模型通过它们调用其余工具：
 
 | 工具 | 作用 |
 |---|---|
@@ -422,51 +394,64 @@ ESC 只是取消而不会提交，所以没有破坏性的副作用。在无人�
 ## 🍎 macOS 支持
 
 **在 macOS 上有 <!--mac-refusals-->11<!--/mac-refusals--> 个工具会拒绝执行，其余都能用。** 这 <!--mac-refusals-->11<!--/mac-refusals--> 个工具的名称列在
-[MACOS_PORT.md](MACOS_PORT.md) 第 6.1 节，并有测试保证该列表准确无误。
+[MACOS_PORT.md](../MACOS_PORT.md) 第 6.1 节，并有测试保证该列表准确无误。
 
 工具相同，参数相同，返回结果也相同。不同之处在于 Mac 版 PowerPoint 的脚本字典能触及哪些功能；
 遇到触及不到的地方，工具会明确说明，而不是做出意料之外的事。
 
+**Mac 版 PowerPoint 的 VBA 能触及更多，可以选择启用。** 服务器会把一个小型加载项
+`ppt-mcp-bridge` 载入 PowerPoint，对脚本字典中没有对应词汇的功能，通过它运行 Windows 版的代码：
+标记、`ppt_select_shapes`、`ppt_set_table_style`、删除和复制单个动画、任意多边形节点的编辑类型、图表的格式、坐标轴、
+数据系列、类型和数据工具（数据写入图表的 Excel 工作簿，和 Windows 上一样，Excel 中会短暂打开该工作簿）、任意多边形的节点工具和组合、组合内的文字、按名称使用模板版式添加幻灯片、复制和拷贝幻灯片、编辑 SmartArt（文字、节点、颜色和样式），以及 Mac 上原本会拒绝的参数（屏幕提示、
+在指定位置插入表格行或列、由另一个形状的单击触发的动画、映像的尺寸、文字上的发光、阴影和映像、
+缩小文字以适应、音量、静音和淡入淡出、图表样式以及图例和标题的位置）。这些操作会就地修改形状，
+因此动画得以保留，也不会动用剪贴板。加载项只负责转交这些调用，源码在 `src/backend/vba`。
+PowerPoint 载入它时不会弹出提示，它在 PowerPoint 退出前一直有效，之后不留下任何东西。
+如果无法载入，例如宏被策略禁用时，工具会按下面所述的方式工作。由于它是无需确认即可载入的宏，
+默认关闭。若要使用，请在服务器的 `env` 中设置 `PPT_MAC_VBA=on`。
+
 macOS 上不可用的功能：
 
-- **任意多边形节点的编辑类型。** 角部、平滑和对称这几种类型没有存放在脚本能访问的地方；
+- **没有加载项时，任意多边形节点的编辑类型。** 角部、平滑和对称这几种类型没有存放在脚本能访问的地方；
   请改为移动节点的控制柄。
-- **删除单个动画。** 清除一张幻灯片的全部动画是可以的。
-- **标记、`ppt_select_shapes`、`ppt_set_table_style` 和 `ppt_execute_mso`。**
+- **`ppt_execute_mso`**，以及在没有加载项时的**标记、`ppt_select_shapes`、
+  `ppt_set_table_style` 和删除单个动画**（清除一张幻灯片的全部动画是可以的）。
   脚本字典中没有任何内容能触及它们。
 
 较小的差异：
 
 - **请依次调用工具，不要在同一轮中同时调用多个。** PowerPoint 一次只能接收一个请求，
   其余请求会排在后面，按到达的顺序依次处理。等待过久的调用会被撤回并说明原因，不会造成任何改动。
-- 有少数工具接受在 Mac 上没有对应功能的参数，例如超链接的屏幕提示。这类调用会拒绝执行，
+- 没有加载项时，有少数工具接受在 Mac 上没有对应功能的参数，例如超链接的屏幕提示。这类调用会拒绝执行，
   并在消息中指出是哪个参数，去掉该参数重试即可。
-- **视频和音频只能嵌入，不能链接**，八项播放设置中只有循环播放和隐藏画面框可用。
+- **视频和音频只能嵌入，不能链接**，八项播放设置中只有循环播放和隐藏画面框可用，有加载项时音量、静音和淡入淡出也可用。
   已有动画的幻灯片上会拒绝隐藏画面框，因为写入这项设置会重写这些动画。
 - 导出的文件会先放在 PowerPoint 自己的容器中再移出来，因为该应用运行在沙盒中，
   无法写入任意文件夹。
-- **模板自带的版式是按名称从演示文稿已保存的文件中查找的**，所以在让 `ppt_add_slide`
+- **没有加载项时，模板自带的版式是按名称从演示文稿已保存的文件中查找的**，所以在让 `ppt_add_slide`
   按名称使用某个版式之前，请先保存新建的演示文稿。Mac 版 PowerPoint 不向脚本提供版式名称，
-  因此新幻灯片是连同其版式一起粘贴进来的，大约需要一秒。
+  因此新幻灯片是连同其版式一起粘贴进来的，大约需要一秒。有加载项时，无论是否保存，都直接在打开的演示文稿中查找版式。
 - 幻灯片图像是从 PDF 渲染得到的，而不是导出为 PNG。两个平台上的预览都是每磅 2 像素。
 - 自动化授权属于启动服务器的那个应用，所以从另一个终端或编辑器运行时，会再次弹出授权提示。
 - 请尽早保存演示文稿，并在每个阶段性节点保存。这样做没有任何代价，而且曾经出现过沙盒提示在脚本背后弹出时，
   PowerPoint 关闭所有打开的文档后退出的情况（[#191](https://github.com/ykuwai/ppt-mcp/issues/191)）。
-- **图表、任意多边形路径和组合通过剪贴板实现**，也就是说操作期间会暂时占用剪贴板，
-  完成后再恢复原有内容。脚本字典里没有描述这三者的词汇，只能这样实现。
-- **编辑已有的图表或路径会重新创建形状。** 图表数据、类型、标题、图例、坐标轴和数据系列工具，
+- **添加图表通过剪贴板实现**，没有加载项时，其他图表工具、任意多边形路径和组合也是如此。
+  也就是说操作期间会暂时占用剪贴板，完成后再恢复原有内容。脚本字典里没有描述它们的词汇，只能这样实现。Mac 版 PowerPoint
+  总是粘贴到最前面的窗口，所以打开两个演示文稿时，这些操作只能用于最前面的那个；对另一个，
+  工具会说明原因且不做任何改动，可以用 `ppt_activate_presentation` 把它放到最前面。
+- **没有加载项时，编辑已有的图表或路径会重新创建形状**；有加载项时，设置气泡图的气泡大小仍会如此。图表数据、类型、标题、图例、坐标轴和数据系列工具，
   以及节点工具，会复制形状、改写后粘贴回去，再删除原来的形状。名称、位置和叠放次序会保留；
-  形状上的动画则不会，结果中会注明丢失了几个。少数依赖图表渲染尺寸的格式参数
+  形状上的动画则不会，结果中会注明丢失了几个。没有加载项时，少数依赖图表渲染尺寸的格式参数
   （`chart_style`、图例和标题的坐标、8 个方向的图例预设）会被点名拒绝。
-- **组合内的文字也以同样方式编辑。** `ppt_set_text`（整段文字，或某一行中的一段）
-  和 `ppt_format_text` 可以通过名称或路径（`"Group 4/TextBox 3"`）访问组合中的成员；
-  组合会被复制，成员被改写，然后组合被粘贴回去。成员保留各自的名称，组合则会像上面那样丢失动画。
+- **组合内的文字**可以用 `ppt_set_text`（整段文字，或某一行中的一段）和 `ppt_format_text`
+  通过名称或路径（`"Group 4/TextBox 3"`）访问。有加载项时，成员会被就地修改。没有加载项时，
+  组合会被复制，成员被改写，然后组合被粘贴回去：成员保留各自的名称，组合则会像上面那样丢失动画。
 - 图标在插入前会先用 `sips` 栅格化，因为 Mac 版 PowerPoint 无法读取 SVG。这需要 macOS 13
   或更高版本；在更旧的系统上会拒绝执行并说明原因，而不是插入一个空白框。
 
 ## 🤝 参与贡献
 
-欢迎提交拉取请求。请基于 `develop` 分支，每个请求只涉及一个主题，并附带测试；其余说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎提交拉取请求。请基于 `develop` 分支，每个请求只涉及一个主题，并附带测试；其余说明见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
 ## 📄 许可证
 

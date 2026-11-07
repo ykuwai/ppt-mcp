@@ -26,7 +26,10 @@ curve; see ``gvml/freeform.py``. The procedure and its checks are in
 shape, rewrite its ``a:custGeom`` (``gvml/freeform.py``), paste the result
 beside the original, read it back to confirm the path is the one written,
 and only then delete the original and walk the new shape back to its z order
-(``gvml_paste.replace_shape``). The shape that results is a new object with
+(``gvml_paste.replace_shape``). A node stands for the segment
+``ShapeNodes.SetSegmentType`` gives it, the same on Windows and through VBA
+on the Mac: the one ending at an anchor, the first for node 1, a control
+point's own curve (``gvml.freeform._segment_of``). The shape that results is a new object with
 the old name, and ``warnings`` says so, along with how many animation effects
 went with the original. ``ppt_set_node_editing_type`` stays refused: corner,
 smooth and symmetric are not in the dictionary and not in the XML either.
@@ -50,6 +53,7 @@ from ppt_mac.gvml_paste import (
     Clipboard,
     Refused,
     copy_shape_package,
+    front_refusal,
     paste_package,
     replace_shape,
     strip_ids,
@@ -150,6 +154,11 @@ def _edit_path(tool_name, slide_index, shape_name, shape_index, edit, describe):
     _check_freeform(shape)
     index = _shape_index(slide, None, shape_name=shape_name, shape_index=shape_index)
     name = shape.name()
+
+    # Before the first copy, so a refusal leaves the clipboard alone.
+    refused = front_refusal(pres, tool_name, _EDIT_ALTERNATIVES)
+    if refused is not None:
+        return json.dumps(refused)
 
     clip = Clipboard.take()
     try:
@@ -375,7 +384,9 @@ def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index
 
 
 def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg_int):
-    """Switch the segment after a node between line and curve, and paste.
+    """Switch a node's segment between line and curve, and paste: the
+    segment ending at an anchor, the first for node 1, a control point's own
+    curve, as ShapeNodes.SetSegmentType picks it.
 
     A new curve puts its handles a third and two thirds of the way along
     the chord, so the outline does not move until a handle does. The node
@@ -385,18 +396,18 @@ def _set_segment_type_impl(slide_index, shape_name, shape_index, node_index, seg
         return _gvml_freeform.set_segment_type(path, node_index, seg_int)
 
     def describe(old, new, nodes):
+        from ppt_com.freeform import NODES_MOVED_NOTE
+
         old_count = _gvml_freeform.node_count(old)
         result = {
             "node_index": node_index,
             "segment_type": _gvml_freeform.SEGMENT_NAMES.get(seg_int, str(seg_int)),
             "old_node_count": old_count,
             "new_node_count": len(nodes),
+            "nodes": nodes,
         }
         if old_count != len(nodes):
-            result["note"] = (
-                "Node count changed — switching line↔curve adds or removes control-point nodes. "
-                "Re-call ppt_get_shape_nodes to see updated indices."
-            )
+            result["note"] = NODES_MOVED_NOTE
         return result
 
     return _edit_path("ppt_set_segment_type", slide_index, shape_name, shape_index, edit, describe)

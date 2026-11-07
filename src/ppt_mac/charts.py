@@ -53,6 +53,7 @@ from ppt_mac.gvml_paste import (
     Clipboard,
     Refused,
     copy_shape_package,
+    front_refusal,
     paste_package,
     replace_shape,
     strip_ids,
@@ -195,6 +196,11 @@ def _edit_chart(tool_name, slide_index, shape_name_or_index, edit, verify, descr
     name = shape.name()
     left, top = shape.left_position(), shape.top()
 
+    # Before the first copy, so a refusal leaves the clipboard alone.
+    refused = front_refusal(pres, tool_name, _SHAPE_TOOLS[1:]) if requested else None
+    if refused is not None:
+        return refused
+
     clip = Clipboard.take()
     kept = None
     try:
@@ -317,6 +323,14 @@ def _add_chart_impl(slide_index, chart_type, left, top, width, height):
     }, clip, pasted.warnings)
 
 
+def _same_label(wrote: str, read: str) -> bool:
+    """Whether a label reads back as written; x values read back as numbers."""
+    try:
+        return wrote == read or float(wrote) == float(read)
+    except ValueError:
+        return False
+
+
 def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     """Rewrite the series caches in the chart's XML and paste it back.
 
@@ -335,7 +349,8 @@ def _set_chart_data_impl(slide_index, shape_name_or_index, categories, series):
     def verify(readback, _state):
         got = _gvml_charts.read_chart(readback)
         want_cats = [str(c) for c in categories]
-        if got["categories"] != want_cats:
+        if not (len(got["categories"]) == len(want_cats)
+                and all(map(_same_label, want_cats, got["categories"]))):
             return f"categories read back as {got['categories']}, not {want_cats}"
         want = [(s["name"], [None if v is None else float(v) for v in s["values"]]) for s in series]
         have = [(s["name"], s["values"]) for s in got["series"]]

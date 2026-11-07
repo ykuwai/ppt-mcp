@@ -51,6 +51,7 @@ from backend.mac_ae import (
     elements,
     error_number,
     is_missing,
+    ppt,
     shapes_of,
     target_window,
 )
@@ -213,6 +214,41 @@ def _remove_landed(slide, before: int) -> List[str]:
     return [s.name() for s in shapes_of(slide)[before:]]
 
 
+def front_refusal(pres, tool_name: str, alternatives=()) -> Optional[dict]:
+    """A refusal when another deck's window is in front of ``pres``, else None.
+
+    `paste object` pastes into PowerPoint's front document window, whichever
+    window's view it is sent to: measured on 16.114 with two decks open, a
+    paste sent to the view of the deck behind landed in the deck in front.
+    The check that reads the target slide afterwards then found nothing and
+    called it a silent no-op, while the shape stayed behind in the other deck.
+    Bringing the deck's window forward would bring PowerPoint to the front of
+    whatever the user is doing, so the tool refuses before anything is
+    written, and says how to bring the deck forward. When the front window
+    cannot be read, the paste goes ahead and is checked afterwards, as before.
+    """
+    try:
+        # The application's front window, not a deck's own: `first` is the
+        # front of PowerPoint's window order.
+        front = ppt._get_app_impl().document_windows.first.presentation
+        if front.full_name() == pres.full_name():
+            return None
+        front_name, name = front.name(), pres.name()
+    except Exception:  # noqa: BLE001 - cannot tell; the paste is checked afterwards
+        return None
+    return _refusal(
+        tool_name,
+        f"PowerPoint for Mac pastes into its front window, whichever deck the "
+        f"paste is sent to, and the front window shows '{front_name}', not "
+        f"'{name}'. Pasting would have put the result into '{front_name}', so "
+        "nothing was pasted and the clipboard was not touched.",
+        [f"ppt_activate_presentation with '{name}' (it brings PowerPoint to the "
+         "front), then this tool again", f"close '{front_name}' if it is not needed"]
+        + list(alternatives),
+        error=f"{tool_name} needs '{name}' in PowerPoint's front window",
+    )
+
+
 def paste_package(
     pres, slide, slide_index: int, raw: bytes, clip: Clipboard, tool_name: str,
     expected_type, left: float, top: float, alternatives: Optional[List[str]] = None,
@@ -238,6 +274,10 @@ def paste_package(
             alternatives,
             error=f"{tool_name} built a package it could not trust",
         )) from exc
+
+    refused = front_refusal(pres, tool_name, alternatives)
+    if refused is not None:
+        raise Refused(refused)
 
     before = count(slide.shapes)
     mine = clip.write(raw)
@@ -546,10 +586,6 @@ def replace_shape(
 def strip_ids(package: Package) -> None:
     """Drop the creation ids from a package about to be pasted beside its
     original, in place. See ``gvml.shapes.strip_creation_ids``."""
-    from gvml import canvas as _canvas
     from gvml import shapes as _shapes
 
-    root = ET.fromstring(package.drawing())
-    for element in _canvas.children(_canvas.canvas_of(root)):
-        _shapes.strip_creation_ids(element)
-    package.parts[package.drawing_part()] = _canvas.serialize_drawing(root).encode("utf-8")
+    _shapes.strip_package_ids(package)

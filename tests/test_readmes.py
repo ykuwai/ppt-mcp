@@ -9,6 +9,7 @@ that the Hebrew one reads right to left.
 """
 
 import importlib.util
+import posixpath
 import re
 from pathlib import Path
 
@@ -33,21 +34,26 @@ def tool_count():
     return len([n for n in names if n not in CATALOG])
 
 
-@pytest.mark.parametrize("lang", sorted(READMES))
-def test_the_tool_table_adds_up_to_the_real_count(lang):
-    totals = re.findall(r"\|\s*\*\*(\d+)\*\*\s*\|", text(lang))
-    assert totals, f"{READMES[lang]} has no total row in its tool table"
+def tool_list():
+    return (ROOT / sync_readmes.TOOL_LIST).read_text(encoding="utf-8")
+
+
+def test_the_tool_table_adds_up_to_the_real_count():
+    totals = re.findall(r"\|\s*\*\*(\d+)\*\*\s*\|", tool_list())
+    assert totals, "TOOLS.md has no total row in its tool table"
     assert int(totals[-1]) == tool_count()
 
 
-@pytest.mark.parametrize("lang", sorted(READMES))
-def test_the_rows_of_the_tool_table_add_up_to_its_total(lang):
-    body = text(lang)
-    start = body.index("## 🛠️")
-    table = body[start:body.index("\n## ", start + 1)]
-    rows = re.findall(r"^\| \*\*[^|]+\*\* \| (\d+) \|", table, re.MULTILINE)
+def test_the_rows_of_the_tool_table_add_up_to_its_total():
+    body = tool_list()
+    rows = re.findall(r"^\| \*\*[^|]+\*\* \| (\d+) \|", body, re.MULTILINE)
     total = int(re.findall(r"\|\s*\*\*(\d+)\*\*\s*\|", body)[-1])
     assert sum(int(r) for r in rows) == total
+
+
+@pytest.mark.parametrize("lang", sorted(READMES))
+def test_each_links_the_tool_list(lang):
+    assert re.search(r"\((\.\./)?TOOLS\.md\)", text(lang))
 
 
 @pytest.mark.parametrize("lang", [lang for lang in READMES if lang != "en"])
@@ -78,16 +84,17 @@ def test_each_has_the_same_language_bar(lang):
         if other == lang:
             assert "<strong>" in body and f"({other})</strong>" in body, f"{READMES[lang]} does not name itself in its language bar"
         else:
-            assert f'href="{name}"' in body, f"{READMES[lang]} does not link to {name}"
+            link = posixpath.relpath(name, posixpath.dirname(READMES[lang]) or ".")
+            assert f'href="{link}"' in body, f"{READMES[lang]} does not link to {name}"
             assert f"({other})</a>" in body, f"{READMES[lang]} does not give {name}'s code in its language bar"
 
 
 def test_the_numbers_are_up_to_date():
-    """The tool counts in every README match the code. If this fails, run
-    ``uv run python scripts/sync_readmes.py``."""
+    """The tool counts in the tool list and every README match the code. If
+    this fails, run ``uv run python scripts/sync_readmes.py``."""
     numbers = sync_readmes.counts()
     refusals = sync_readmes.mac_refusals()
-    stale = [name for name in READMES.values()
+    stale = [name for name in [*READMES.values(), sync_readmes.TOOL_LIST]
              if sync_readmes.synced((ROOT / name).read_text(encoding="utf-8"), numbers, name, refusals)
              != (ROOT / name).read_text(encoding="utf-8")]
     assert not stale, f"Stale numbers in {stale}. Run: uv run python scripts/sync_readmes.py"
@@ -109,8 +116,20 @@ def test_each_has_the_same_sections(lang):
 
 @pytest.mark.parametrize("lang", sorted(READMES))
 def test_the_same_pictures_and_examples_are_shown(lang):
-    pictures = sorted(re.findall(r'src="(assets/[^"]+)"', text(lang)))
+    pictures = sorted(re.findall(r'src="(?:\.\./)?(assets/[^"]+)"', text(lang)))
     assert pictures == sorted(re.findall(r'src="(assets/[^"]+)"', text("en")))
+
+
+@pytest.mark.parametrize("lang", sorted(READMES))
+def test_every_relative_link_reaches_a_file(lang):
+    """The translations sit in a folder of their own, so what they link to is
+    one level up."""
+    body = text(lang)
+    links = re.findall(r"\]\(([^)\s]+)\)", body) + re.findall(r'(?:src|href)="([^"]+)"', body)
+    base = (ROOT / READMES[lang]).parent
+    for link in links:
+        if not link.startswith(("http", "#", "mailto:")):
+            assert (base / link.split("#")[0]).exists(), f"{READMES[lang]} links to {link}"
 
 
 @pytest.mark.parametrize("lang", sorted(READMES))
@@ -129,4 +148,4 @@ def test_the_hebrew_readme_reads_right_to_left():
 def test_the_hebrew_readme_links_resolve_to_its_own_anchors():
     body = text("he")
     for anchor in re.findall(r"\]\(#([^)]+)\)", body):
-        assert f'id="{anchor}"' in body, f"README.he.md links to #{anchor}, which it does not have"
+        assert f'id="{anchor}"' in body, f"{READMES['he']} links to #{anchor}, which it does not have"

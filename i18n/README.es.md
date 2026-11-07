@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <strong>Español (es)</strong> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
+  <a href="../README.md">English (en)</a> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <strong>Español (es)</strong> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078d4.svg" alt="Platform">
   <a href="https://pepy.tech/projects/ppt-mcp"><img src="https://static.pepy.tech/personalized-badge/ppt-mcp?period=total&units=ABBREVIATION&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="Downloads"></a>
 </p>
@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ Características principales
 
 - **Control en tiempo real**: manipula directamente una instancia de PowerPoint en ejecución; los cambios aparecen al instante en pantalla
-- **<!--tools-->157<!--/tools--> herramientas en <!--categories-->26<!--/categories--> categorías**: diapositivas, formas, texto, tablas, gráficos, animaciones, SmartArt, multimedia, trazados de forma libre y más
+- **Amplia cobertura**: diapositivas, formas, texto, tablas, gráficos, animaciones, SmartArt, multimedia, trazados de forma libre y más
 - **Seguro para agentes de IA**: `ppt_activate_presentation` fija todas las herramientas a un archivo concreto y evita editar por error la presentación equivocada
 - **Iconos de [Google Material Symbols](https://fonts.google.com/icons)**: busca entre más de 2500 iconos por palabra clave y los inserta como SVG con colores del tema
 - **Colores del tema**: pasa `accent1`, `accent2`, etc. en cualquier lugar donde se acepte un color de relleno, línea, sombra, resplandor o texto, en vez de valores RGB fijos; las formas siguen al tema cuando este cambia
@@ -137,35 +137,7 @@ uv sync
 
 ## 🛠️ Categorías de herramientas
 
-| Categoría | Herramientas | Descripción |
-|----------|------:|-------------|
-| **Aplicación** | 5 | Conectar con PowerPoint, información de la aplicación, ventana activa, estado de la ventana, listar presentaciones |
-| **Presentación** | 8 | Crear (con plantillas), abrir (un archivo local o, en Windows, una URL de SharePoint u OneDrive), guardar, cerrar, información, activar destino, listar plantillas |
-| **Diapositivas** | 10 | Añadir, eliminar (en bloque), duplicar (por posición/varias), mover (en bloque), copiar (entre presentaciones), listar, información, notas, navegación |
-| **Formas** | 10 | Añadir formas/cuadros de texto/imágenes/líneas (con posición en el orden Z, incluso detrás del texto), listar, información (posición, relleno, línea, marco de texto), actualizar (una forma, un conjunto o toda la diapositiva, en valor absoluto o por desplazamiento), eliminar, orden Z |
-| **Texto** | 10 | Escribir texto (el marco entero, un fragmento conservando su formato, o por segmentos), leer texto (con medidas y desbordamiento), dar formato a uno o varios fragmentos a la vez, formato de párrafo, viñetas, buscar/reemplazar (opcionalmente dentro de grupos), marco de texto, extraer todo el texto como Markdown, revisión tipográfica |
-| **Marcadores de posición** | 6 | Listar, leer y escribir el contenido de los marcadores de posición |
-| **Formato** | 3 | Relleno, línea, sombra (en la forma o en su texto) |
-| **Tablas** | 13 | Añadir tablas, leer/escribir celdas, escribir datos en bloque, combinar/dividir celdas, añadir/eliminar filas/columnas, estilos, diseño, bordes |
-| **Exportación** | 4 | PDF, imágenes, vista previa de diapositiva, copia al portapapeles |
-| **Presentación con diapositivas** | 6 | Iniciar, detener, siguiente, anterior, ir a diapositiva, estado |
-| **Gráficos** | 7 | Añadir gráficos (en Windows, salvo los 3D y algunos tipos poco comunes, sin abrir Excel), escribir/leer datos (en Windows, al escribirlos el gráfico se cambia por una copia con otro id de forma, sin abrir Excel cuando se puede, y se vuelve a leer; los datos que no quedaron son un error y una etiqueta que Excel interpretó de otro modo es un aviso), formato, formato de ejes, series, cambiar tipo |
-| **Animación** | 6 | Transiciones, añadir/listar/actualizar/quitar/borrar animaciones (entrada, salida, énfasis, trayectoria de movimiento, secuencias interactivas) |
-| **Temas** | 4 | Aplicar temas, leer/escribir colores del tema, encabezados/pies de página |
-| **Grupos** | 3 | Agrupar, desagrupar, leer los elementos del grupo |
-| **Conectores** | 2 | Añadir, dar formato |
-| **Hipervínculos** | 3 | Añadir, leer, quitar |
-| **Secciones** | 3 | Añadir, listar, gestionar |
-| **Propiedades** | 2 | Escribir/leer los metadatos de la presentación |
-| **Multimedia** | 3 | Vídeo, audio, configuración multimedia |
-| **SmartArt** | 3 | Añadir, modificar, listar diseños |
-| **Operaciones de edición** | 6 | Deshacer y rehacer (en la presentación de destino), copiar formas/formato entre diapositivas |
-| **Diseño** | 8 | Alinear, distribuir, tamaño de diapositiva, fondo, voltear, combinar formas, revisión del diseño |
-| **Efectos** | 3 | Resplandor y reflejo (en la forma o en su texto), bordes suaves |
-| **Comentarios** | 3 | Añadir, listar, eliminar |
-| **Avanzado** | 19 | Etiquetas, fuentes (listar las de la presentación o las de este equipo, fijar las predeterminadas, reemplazar en bloque), recorte, formato de imagen, exportar formas, visibilidad, selección, vista, copiar animaciones, imagen desde URL, iconos SVG, búsqueda de iconos, bloqueo de proporciones, aplicar en bloque, estilo de forma predeterminado |
-| **Forma libre** | 7 | Crear trazados de forma libre, leer/escribir posiciones de nodos, insertar/eliminar nodos, tipo de edición de nodos, tipo de segmento |
-| | **157** | |
+La lista completa de herramientas, por categoría, está en [TOOLS.md](../TOOLS.md) (en inglés).
 
 ## 💡 Ejemplos de instrucciones
 
@@ -180,9 +152,9 @@ Describe lo que quieres con tus propias palabras; no hace falta escribir código
 <details>
 <summary>Ver diapositivas</summary>
 <br>
-<img src="assets/examples/example1/Slide1.png" width="640">
-<img src="assets/examples/example1/Slide2.png" width="640">
-<img src="assets/examples/example1/Slide3.png" width="640">
+<img src="../assets/examples/example1/Slide1.png" width="640">
+<img src="../assets/examples/example1/Slide2.png" width="640">
+<img src="../assets/examples/example1/Slide3.png" width="640">
 </details>
 
 ---
@@ -194,10 +166,10 @@ Describe lo que quieres con tus propias palabras; no hace falta escribir código
 <details>
 <summary>Ver diapositivas</summary>
 <br>
-<img src="assets/examples/example2/Slide1.png" width="640">
-<img src="assets/examples/example2/Slide2.png" width="640">
-<img src="assets/examples/example2/Slide3.png" width="640">
-<img src="assets/examples/example2/Slide4.png" width="640">
+<img src="../assets/examples/example2/Slide1.png" width="640">
+<img src="../assets/examples/example2/Slide2.png" width="640">
+<img src="../assets/examples/example2/Slide3.png" width="640">
+<img src="../assets/examples/example2/Slide4.png" width="640">
 </details>
 
 ---
@@ -209,11 +181,11 @@ Describe lo que quieres con tus propias palabras; no hace falta escribir código
 <details>
 <summary>Ver diapositivas</summary>
 <br>
-<img src="assets/examples/example3/Slide1.png" width="640">
-<img src="assets/examples/example3/Slide2.png" width="640">
-<img src="assets/examples/example3/Slide3.png" width="640">
-<img src="assets/examples/example3/Slide4.png" width="640">
-<img src="assets/examples/example3/Slide5.png" width="640">
+<img src="../assets/examples/example3/Slide1.png" width="640">
+<img src="../assets/examples/example3/Slide2.png" width="640">
+<img src="../assets/examples/example3/Slide3.png" width="640">
+<img src="../assets/examples/example3/Slide4.png" width="640">
+<img src="../assets/examples/example3/Slide5.png" width="640">
 </details>
 
 ---
@@ -363,7 +335,7 @@ ESC cancela sin confirmar nada, así que no hay efectos secundarios destructivos
 
 Si no hay ningún PowerPoint en ejecución cuando una herramienta lo necesita (`ppt_create_presentation`, `ppt_open_presentation`, `ppt_connect`), el servidor lo inicia. En macOS se inicia en segundo plano y no le quita el primer plano a la app en la que estás trabajando.
 
-Cuando al cerrar no queda ninguna presentación abierta en un PowerPoint que inició el servidor, `ppt_close_presentation` cierra también PowerPoint y lo indica (`powerpoint_quit`). Un PowerPoint que iniciaste tú nunca se cierra, ni tampoco uno que aún tiene una presentación abierta (en Windows, o un archivo abierto en Vista protegida). Pasa `keep_powerpoint_open=true` para mantenerlo en ejecución, por ejemplo para abrir otra presentación justo después. Hasta que una herramienta vuelva a iniciar PowerPoint, las herramientas que lo necesitan responden que PowerPoint no está en ejecución, donde de otro modo habrían devuelto una lista vacía.
+Cuando al cerrar no queda ninguna presentación abierta en un PowerPoint que inició el servidor, `ppt_close_presentation` cierra también PowerPoint y lo indica (`powerpoint_quit`). Un PowerPoint que iniciaste tú nunca se cierra, ni tampoco uno que aún tiene una presentación abierta (en Windows, o un archivo abierto en Vista protegida). Pasa `keep_powerpoint_open=true` para mantenerlo en ejecución, por ejemplo para abrir otra presentación justo después. Hasta que una herramienta vuelva a iniciar PowerPoint, las herramientas que lo necesitan responden que PowerPoint no está en ejecución, donde de otro modo habrían devuelto una lista vacía. En Windows, un archivo abierto en Vista protegida aparece en `ppt_list_presentations` bajo `protected_view`, y `ppt_close_presentation` lo cierra por su nombre, sin guardarlo.
 
 ### Trabajar en la misma presentación que el modelo
 
@@ -399,7 +371,7 @@ Cada escritura lleva la ventana de la presentación a la diapositiva en la que t
 
 ### La lista de herramientas: modo catálogo
 
-Un cliente envía la descripción de cada herramienta que lista con cada petición, y las <!--tools-->157<!--/tools--> de este servidor suman unos 112k tokens, una buena parte de una ventana de 128k o 200k antes de empezar a trabajar. Con `PPT_TOOL_MODE=catalog` en el `env` del servidor, el servidor lista solo tres herramientas, unos 700 tokens, y el modelo llega al resto a través de ellas:
+Un cliente envía la descripción de cada herramienta que lista con cada petición, y las de este servidor suman unos 112k tokens, una buena parte de una ventana de 128k o 200k antes de empezar a trabajar. Con `PPT_TOOL_MODE=catalog` en el `env` del servidor, el servidor lista solo tres herramientas, unos 700 tokens, y el modelo llega al resto a través de ellas:
 
 | Herramienta | Qué hace |
 |---|---|
@@ -426,22 +398,47 @@ Lo que se pierde en modo catálogo es el control por herramienta en el cliente: 
 ## 🍎 Compatibilidad con macOS
 
 **<!--mac-refusals-->11<!--/mac-refusals--> herramientas se niegan a funcionar en macOS. El resto funciona.** Las <!--mac-refusals-->11<!--/mac-refusals--> aparecen por nombre en
-la sección 6.1 de [MACOS_PORT.md](MACOS_PORT.md), y una prueba se encarga de que esa lista sea exacta.
+la sección 6.1 de [MACOS_PORT.md](../MACOS_PORT.md), y una prueba se encarga de que esa lista sea exacta.
 
 Las mismas herramientas, los mismos argumentos, las mismas respuestas. Lo que
 cambia es lo que alcanza el diccionario de scripting de PowerPoint para Mac, y
 cuando no alcanza algo, la herramienta lo dice en lugar de hacer algo
 inesperado.
 
+**El VBA de PowerPoint para Mac llega más lejos, y se puede activar.** El
+servidor carga en PowerPoint un pequeño complemento, `ppt-mcp-bridge`, y ejecuta
+a través de él el código de Windows para lo que el diccionario de scripting no
+tiene palabras: etiquetas, `ppt_select_shapes`, `ppt_set_table_style`, quitar y
+copiar una sola animación, el tipo de edición de un nodo de forma libre, las
+herramientas de formato, ejes, series, tipo y
+datos del gráfico (los datos a través del libro de Excel del gráfico, que se
+abre un momento en Excel, como en Windows), las de nodos de forma libre y la agrupación, el texto dentro de un
+grupo, los diseños de una plantilla por nombre, duplicar y copiar
+diapositivas, editar un SmartArt (su texto, nodos, colores y estilo), y los
+argumentos que el
+Mac rechaza de otro modo (la información en pantalla, una fila o columna de
+tabla en una posición, una animación que se inicia al hacer clic en otra forma,
+los tamaños del reflejo, el resplandor, la sombra y el reflejo sobre el texto,
+reducir el texto para que quepa, el volumen, el silencio y los fundidos, el
+estilo del gráfico y la posición de la leyenda y del título). Esas herramientas
+editan la forma en su sitio, así que conserva sus animaciones, y no tocan el
+portapapeles. El complemento solo transmite esas llamadas; su código fuente está
+en `src/backend/vba`. PowerPoint lo carga sin preguntar, dura hasta que
+PowerPoint se cierra y no deja nada atrás. Donde no puede cargarse, por ejemplo
+si una directiva desactiva las macros, las herramientas funcionan como se
+describe abajo. Está desactivado por defecto, porque es
+código de macros que se carga sin preguntar. Pon `PPT_MAC_VBA=on` en el `env`
+del servidor para usarlo.
+
 No disponible en macOS:
 
-- **El tipo de edición de un nodo de forma libre.** Esquina, suave y simétrico
+- **Sin el complemento, el tipo de edición de un nodo de forma libre.** Esquina, suave y simétrico
   no se guardan en ningún lugar al que llegue un script; mueve en su lugar los
   controladores del nodo.
-- **Quitar una sola animación.** Borrar todas las animaciones de una
-  diapositiva sí funciona.
-- **Etiquetas, `ppt_select_shapes`, `ppt_set_table_style` y `ppt_execute_mso`.**
-  Nada en el diccionario llega a ninguna de ellas.
+- **`ppt_execute_mso`**, y sin el complemento también **las etiquetas,
+  `ppt_select_shapes`, `ppt_set_table_style` y quitar una sola animación**
+  (borrar todas las animaciones de una diapositiva sí funciona). Nada en el
+  diccionario llega a ellas.
 
 Diferencias menores:
 
@@ -449,21 +446,23 @@ Diferencias menores:
   una petición a la vez llega a PowerPoint, así que las demás se ponen en cola
   detrás y salen en el orden en que llegaron, sea cual sea. Una llamada que
   espera demasiado se retira y lo indica, sin haber cambiado nada.
-- Unas pocas herramientas aceptan un argumento que no tiene equivalente, por
+- Sin el complemento, unas pocas herramientas aceptan un argumento que no tiene equivalente, por
   ejemplo la información en pantalla de un hipervínculo. Esas se niegan con un
   mensaje que nombra el argumento, así que basta con quitarlo y reintentar.
 - **El vídeo y el audio se insertan incrustados, nunca vinculados**, y de los
   ocho ajustes de reproducción solo existen la repetición en bucle y ocultar el
-  fotograma. Ocultar el fotograma se rechaza en una diapositiva que ya tiene
+  fotograma, y con el complemento también el volumen, el silencio y los
+  fundidos. Ocultar el fotograma se rechaza en una diapositiva que ya tiene
   animaciones, porque escribirlo las reescribe.
 - Las exportaciones se preparan en el contenedor propio de PowerPoint y luego se
   mueven fuera, porque la aplicación está aislada (sandbox) y no puede escribir
   en cualquier carpeta.
-- **Los diseños propios de una plantilla se buscan por nombre en el archivo
-  guardado de la presentación**, así que guarda una presentación nueva antes de
-  pedirle a `ppt_add_slide` uno por nombre. PowerPoint para Mac no da a un
-  script el nombre de ningún diseño, así que la diapositiva se pega con su
-  diseño, lo que tarda alrededor de un segundo.
+- **Sin el complemento, los diseños propios de una plantilla se buscan por
+  nombre en el archivo guardado de la presentación**, así que guarda una
+  presentación nueva antes de pedirle a `ppt_add_slide` uno por nombre.
+  PowerPoint para Mac no da a un script el nombre de ningún diseño, así que la
+  diapositiva se pega con su diseño, lo que tarda alrededor de un segundo. Con
+  el complemento, el diseño se busca en la presentación abierta, guardada o no.
 - Las imágenes de las diapositivas se generan a partir de un PDF en lugar de
   exportarse como PNG. Una vista previa tiene 2 píxeles por punto en ambas
   plataformas.
@@ -474,25 +473,30 @@ Diferencias menores:
   a PowerPoint cerrar todos los documentos abiertos y salir cuando aparecía un
   aviso del sandbox detrás de un script
   ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Los gráficos, los trazados de forma libre y la agrupación pasan por el
-  portapapeles**, lo que significa que la operación lo ocupa un momento y luego
-  restaura lo que había. Así es como esas tres operaciones llegan a un
-  diccionario que no tiene palabras para ellas.
-- **Editar un gráfico o un trazado existente vuelve a crear la forma.** Las
+- **Añadir un gráfico pasa por el portapapeles**, y sin el
+  complemento también las demás herramientas de gráficos, los trazados de forma
+  libre y la agrupación. La operación ocupa el portapapeles un momento y luego
+  restaura lo que había. Así es como llegan a un diccionario que no tiene
+  palabras para ellas. PowerPoint para Mac pega en su ventana del frente, así
+  que con dos presentaciones abiertas funcionan en la del frente; para la otra,
+  la herramienta lo dice y no cambia nada, y `ppt_activate_presentation` la trae
+  al frente.
+- **Sin el complemento, editar un gráfico o un trazado existente vuelve a crear
+  la forma**, y con él, fijar los tamaños de un gráfico de burbujas todavía lo hace. Las
   herramientas de datos, tipo, título, leyenda, ejes y series del gráfico, y
   las de nodos, copian la forma, la reescriben, la vuelven a pegar y luego
   eliminan la original. Se conservan el nombre, la posición y el orden Z; las
-  animaciones de la forma no, y el resultado indica cuántas se perdieron. Unos
-  pocos argumentos de formato que dependen del tamaño con que se dibuja el
+  animaciones de la forma no, y el resultado indica cuántas se perdieron. Sin el
+  complemento, unos pocos argumentos de formato que dependen del tamaño con que se dibuja el
   gráfico (`chart_style`, las coordenadas de la leyenda y del título, las
   posiciones predefinidas de la leyenda en 8 direcciones) se rechazan por
   nombre.
-- **El texto dentro de un grupo se edita de la misma manera.** `ppt_set_text`
-  (el texto completo, o un fragmento dentro de una línea) y `ppt_format_text`
-  llegan a un miembro del grupo por su nombre o por su ruta
-  (`"Group 4/TextBox 3"`); el grupo se copia, el miembro se reescribe y el
-  grupo se vuelve a pegar. Los miembros conservan sus nombres, y el grupo pierde
-  sus animaciones, como arriba.
+- **El texto dentro de un grupo** se alcanza por el nombre del miembro o por
+  su ruta (`"Group 4/TextBox 3"`), con `ppt_set_text` (el texto completo, o un
+  fragmento dentro de una línea) y `ppt_format_text`. Con el complemento, el
+  miembro se edita en su sitio. Sin él, el grupo se copia, el miembro se
+  reescribe y el grupo se vuelve a pegar: los miembros conservan sus nombres, y
+  el grupo pierde sus animaciones, como arriba.
 - Los iconos se rasterizan con `sips` antes de insertarse, porque PowerPoint
   para Mac no puede leer un SVG. Esto requiere macOS 13 o posterior; los
   sistemas más antiguos reciben un rechazo que indica el motivo en lugar de un
@@ -500,7 +504,7 @@ Diferencias menores:
 
 ## 🤝 Contribuir
 
-Las pull requests son bienvenidas. Deben partir de `develop`, tratar un solo tema e incluir pruebas; [CONTRIBUTING.md](CONTRIBUTING.md) explica el resto.
+Las pull requests son bienvenidas. Deben partir de `develop`, tratar un solo tema e incluir pruebas; [CONTRIBUTING.md](../CONTRIBUTING.md) explica el resto.
 
 ## 📄 Licencia
 

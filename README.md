@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>English (en)</strong> · <a href="README.ja.md">日本語 (ja)</a> · <a href="README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="README.es.md">Español (es)</a> · <a href="README.pt-BR.md">Português (pt-BR)</a> · <a href="README.he.md">עברית (he)</a>
+  <strong>English (en)</strong> · <a href="i18n/README.ja.md">日本語 (ja)</a> · <a href="i18n/README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="i18n/README.es.md">Español (es)</a> · <a href="i18n/README.pt-BR.md">Português (pt-BR)</a> · <a href="i18n/README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 ## ✨ Key Features
 
 - **Real-time control** — Directly manipulates a running PowerPoint instance; changes appear instantly on screen
-- **<!--tools-->157<!--/tools--> tools across <!--categories-->26<!--/categories--> categories** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
+- **Broad coverage** — Slides, shapes, text, tables, charts, animations, SmartArt, media, freeform paths, and more
 - **Safe for AI agents** — `ppt_activate_presentation` locks all tools to a specific file, preventing accidental edits to the wrong presentation
 - **[Google Material Symbols](https://fonts.google.com/icons) icons** — Search 2,500+ icons by keyword and insert as SVG with theme colors
 - **Theme color awareness** — Pass `accent1`, `accent2`, etc. wherever a fill, line, shadow, glow or text color is taken, instead of hardcoded RGB values; the shapes follow the theme when it changes
@@ -135,35 +135,7 @@ uv sync
 
 ## 🛠️ Tool Categories
 
-| Category | Tools | Description |
-|----------|------:|-------------|
-| **App** | 5 | Connect to PowerPoint, app info, active window, window state, list presentations |
-| **Presentation** | 8 | Create (with templates), open (a local file, or on Windows a SharePoint or OneDrive URL), save, close, info, activate target, list templates |
-| **Slides** | 10 | Add, delete (bulk), duplicate (positional/multi), move (bulk), copy (cross-presentation), list, info, notes, navigation |
-| **Shapes** | 10 | Add shapes/textboxes/pictures/lines (with z-order placement, including behind the text), list, info (position, fill, line, text frame), update (one shape, a set, or the whole slide, absolute or by offset), delete, z-order |
-| **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups), textframe, extract all text as Markdown, typography check |
-| **Placeholders** | 6 | List, get, set placeholder content |
-| **Formatting** | 3 | Fill, line, shadow (on the shape or on its text) |
-| **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
-| **Export** | 4 | PDF, images, slide preview, clipboard copy |
-| **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
-| **Charts** | 7 | Add charts (on Windows, all but the 3-D and a few rarer types without starting Excel), set/get data (on Windows, setting it swaps in a copy of the chart under a new shape id without starting Excel where it can, then reads the chart back, and data that did not land is an error while a label Excel read differently is a warning), format, format axis, series, change type |
-| **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
-| **Themes** | 4 | Apply themes, get/set theme colors, headers/footers |
-| **Groups** | 3 | Group, ungroup, get group items |
-| **Connectors** | 2 | Add, format |
-| **Hyperlinks** | 3 | Add, get, remove |
-| **Sections** | 3 | Add, list, manage |
-| **Properties** | 2 | Set/get presentation metadata |
-| **Media** | 3 | Video, audio, media settings |
-| **SmartArt** | 3 | Add, modify, list layouts |
-| **Edit Operations** | 6 | Undo and redo (on the target presentation), copy shapes/formatting between slides |
-| **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check |
-| **Effects** | 3 | Glow and reflection (on the shape or on its text), soft edge |
-| **Comments** | 3 | Add, list, delete |
-| **Advanced** | 19 | Tags, fonts (list the deck's or this computer's, set defaults, bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
-| **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
-| | **157** | |
+The full list of tools, by category, is in [TOOLS.md](TOOLS.md).
 
 ## 💡 Example Prompts
 
@@ -361,7 +333,7 @@ ESC cancels without committing, so there are no destructive side effects. This i
 
 If no PowerPoint is running when a tool needs one (`ppt_create_presentation`, `ppt_open_presentation`, `ppt_connect`), the server starts it. On macOS it starts in the background and does not take the front from the app you are working in.
 
-When a close leaves no presentation open in a PowerPoint the server started, `ppt_close_presentation` quits PowerPoint too and says so (`powerpoint_quit`). A PowerPoint you started yourself is never quit, and neither is one that still has a presentation open (on Windows, or a file open in Protected View). Pass `keep_powerpoint_open=true` to keep it running, for example to open another presentation straight away. Until a tool starts PowerPoint again, tools that need it answer that PowerPoint is not running, where they would otherwise have reported an empty list.
+When a close leaves no presentation open in a PowerPoint the server started, `ppt_close_presentation` quits PowerPoint too and says so (`powerpoint_quit`). A PowerPoint you started yourself is never quit, and neither is one that still has a presentation open (on Windows, or a file open in Protected View). Pass `keep_powerpoint_open=true` to keep it running, for example to open another presentation straight away. Until a tool starts PowerPoint again, tools that need it answer that PowerPoint is not running, where they would otherwise have reported an empty list. On Windows, a file open in Protected View is listed by `ppt_list_presentations` under `protected_view`, and `ppt_close_presentation` closes it by its name, without saving.
 
 ### Working in the same deck as the model
 
@@ -397,7 +369,7 @@ Each write moves the deck's window to the slide it works on, so you can see wher
 
 ### The tool list: catalog mode
 
-A client sends the description of every tool it lists with every request, and this server's <!--tools-->157<!--/tools--> come to about 112k tokens, a large part of a 128k or 200k window before any work. With `PPT_TOOL_MODE=catalog` in the server's `env`, the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
+A client sends the description of every tool it lists with every request, and this server's tools come to about 112k tokens, a large part of a 128k or 200k window before any work. With `PPT_TOOL_MODE=catalog` in the server's `env`, the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
 
 | Tool | What it does |
 |---|---|
@@ -430,13 +402,35 @@ The same tools, the same arguments, the same answers. What differs is what
 PowerPoint for Mac's scripting dictionary can reach, and where it cannot reach
 something the tool says so rather than doing something unexpected.
 
+**PowerPoint for Mac's VBA reaches further, and can be turned on.** The
+server loads a small add-in, `ppt-mcp-bridge`, into PowerPoint and runs the
+Windows code through it for what the scripting dictionary has no words for:
+tags, `ppt_select_shapes`, `ppt_set_table_style`, removing and copying one
+animation, a freeform node's editing type, the chart formatting, axis, series, type and
+data tools (the data
+through the chart's Excel workbook, which opens in Excel for a moment, as on
+Windows), the freeform node
+tools and grouping, text inside a group, a template's layouts by name,
+duplicating and copying slides, editing a SmartArt (its text, nodes, colours
+and style), and the arguments the Mac otherwise refuses (a screen tip,
+a table row or column at a position, a click trigger on another shape,
+reflection sizes, glow, shadow and reflection on text, shrinking text to fit,
+volume, mute and fades, a chart style and the legend and title placement).
+Those edit the shape in place, so it keeps its animations, and the clipboard is
+not touched. The add-in only passes those calls on; its source is in
+`src/backend/vba`. PowerPoint loads it without a prompt, it lasts until
+PowerPoint quits, and nothing of it stays behind. Where it cannot be loaded,
+where macros are turned off by policy for instance, the tools work as described
+below. It is off by
+default, because it is macro code loaded without a prompt. Set `PPT_MAC_VBA=on`
+in the server's `env` to use it.
+
 Not available on macOS:
 
-- **A freeform node's editing type.** Corner, smooth and symmetric are not
-  stored anywhere a script can reach; move the node's handles instead.
-- **Removing one animation.** Clearing a slide's animations works.
-- **Tags, `ppt_select_shapes`, `ppt_set_table_style` and `ppt_execute_mso`.**
-  Nothing in the dictionary reaches any of them.
+- **`ppt_execute_mso`**, and without the add-in also **a freeform node's
+  editing type** (move the node's handles instead), **tags,
+  `ppt_select_shapes`, `ppt_set_table_style` and removing one animation**
+  (clearing a slide's animations works). Nothing in the dictionary reaches them.
 
 Smaller differences:
 
@@ -444,18 +438,20 @@ Smaller differences:
   request at a time reaches PowerPoint, so the rest queue behind it and come
   out in whatever order they arrived. A call left waiting too long is taken
   back and says so, having changed nothing.
-- A few tools accept an argument that has no counterpart, a screen tip on a
-  hyperlink for instance. Those refuse with a message naming the argument, so
-  dropping it and retrying works.
+- Without the add-in, a few tools accept an argument that has no counterpart,
+  a screen tip on a hyperlink for instance. Those refuse with a message naming
+  the argument, so dropping it and retrying works.
 - **Video and audio go in embedded, never linked**, and of the eight playback
-  settings only looping and hiding the frame exist. Hiding the frame is refused
-  on a slide that already has animations, because writing it rewrites them.
+  settings only looping and hiding the frame exist, and with the add-in volume,
+  mute and fades. Hiding the frame is refused on a slide that already has
+  animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.
-- **A template's own layouts are found by name in the deck's saved file**, so
-  save a new deck before asking `ppt_add_slide` for one by name. PowerPoint for
-  Mac names no layouts to a script, so the slide is pasted in on its layout,
-  which takes about a second.
+- **Without the add-in, a template's own layouts are found by name in the
+  deck's saved file**, so save a new deck before asking `ppt_add_slide` for one
+  by name. PowerPoint for Mac names no layouts to a script, so the slide is
+  pasted in on its layout, which takes about a second. With the add-in the
+  layout is found in the open deck, saved or not.
 - Slide images are rendered from a PDF rather than exported as PNG. A preview
   is 2 pixels per point on both platforms.
 - Automation consent belongs to whichever application launched the server, so
@@ -463,21 +459,26 @@ Smaller differences:
 - Save the deck early and at each break. It costs nothing, and PowerPoint has
   been seen to close every open document and then exit when a sandbox prompt
   went up behind a script ([#191](https://github.com/ykuwai/ppt-mcp/issues/191)).
-- **Charts, freeform paths and grouping go through the clipboard**, which
-  means the operation takes it for a moment and puts back what was there. This
-  is how those three reach a dictionary that has no words for them.
-- **Editing an existing chart or path recreates the shape.** The chart data,
-  type, title, legend, axis and series tools, and the node tools, copy the
-  shape, rewrite it and paste it back, then delete the original. The name,
+- **Adding a chart goes through the clipboard**, and without the add-in so do
+  the other chart tools, freeform paths and grouping.
+  The operation takes the clipboard for a moment and puts back what was there.
+  This is how they reach a dictionary that has no words for them. PowerPoint
+  for Mac pastes into its front window, so with two decks open these work on
+  the deck in front; for the other, the tool says so and changes nothing, and
+  `ppt_activate_presentation` brings it to the front.
+- **Without the add-in, editing an existing chart or path recreates the
+  shape**, and with it, setting a bubble chart's sizes still does. The tool copies the
+  shape, rewrites it and pastes it back, then deletes the original. The name,
   position and z order are kept; animations on the shape are not, and the
-  result says how many were lost. A few formatting arguments that depend on
-  the chart's rendered size (`chart_style`, legend and title coordinates,
-  the 8-direction legend presets) are refused by name.
-- **Text inside a group is edited the same way.** `ppt_set_text` (the whole
-  text, or a span inside one line) and `ppt_format_text` reach a group's
-  member by its name, or by its path (`"Group 4/TextBox 3"`); the group is
-  copied, the member rewritten and the group pasted back. The members keep
-  their names, and the group loses its animations, as above.
+  result says how many were lost. Without the add-in, a few formatting
+  arguments that depend on the chart's rendered size (`chart_style`, legend and
+  title coordinates, the 8-direction legend presets) are refused by name.
+- **Text inside a group** is reached by the member's name, or by its path
+  (`"Group 4/TextBox 3"`), with `ppt_set_text` (the whole text, or a span
+  inside one line) and `ppt_format_text`. With the add-in the member is edited
+  in place. Without it the group is copied, the member rewritten and the group
+  pasted back: the members keep their names, and the group loses its
+  animations, as above.
 - Icons are rasterised with `sips` before they are inserted, because
   PowerPoint for Mac cannot read an SVG. That needs macOS 13 or newer; older
   systems get a refusal naming the reason rather than a blank box.

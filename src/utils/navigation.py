@@ -3,7 +3,7 @@
 import logging
 import os
 
-from backend import IS_MACOS, ppt
+from backend import IS_MACOS, ppt, vba
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ def goto_slide(app, slide_index: int, force: bool = False) -> None:
     if not FOLLOW_EDITS and not force:
         return
     try:
-        if IS_MACOS:
+        if IS_MACOS and not vba.active():
             # Navigate the target deck's own window rather than the frontmost
             # one. There is an `active window` here too, but it raises whenever
             # PowerPoint's start gallery is in front, and it can belong to a
@@ -85,7 +85,7 @@ def shown_slide(window):
     selection on Windows: they read it first, so ``return_to`` can put it back.
     """
     try:
-        if IS_MACOS:
+        if IS_MACOS and not vba.active():
             return window.view.slide.slide_index()
         return window.View.Slide.SlideIndex
     except Exception:
@@ -101,7 +101,7 @@ def return_to(window, slide_index) -> None:
     if FOLLOW_EDITS or slide_index is None:
         return
     try:
-        if IS_MACOS:
+        if IS_MACOS and not vba.active():
             window.view.go_to_slide(number=slide_index)
         else:
             window.View.GotoSlide(slide_index)

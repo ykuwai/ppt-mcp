@@ -231,7 +231,7 @@ round trip.
 | **export one shape to PNG, into the container** | **0.15 s, 28 KB verified** |
 | **insert a movie or a sound from a path, verified as `shape type media`** | **`make new media2 object`, embedded in `ppt/media/` at the file's own byte size** |
 | a chart already in the deck, seen as a shape | name, type and geometry all readable |
-| **a chart, a freeform or a group, pasted from a DrawingML package we wrote** | **`paste object` takes `com.microsoft.Art--GVML-ClipFormat` in 5 to 65 ms; the shape reports its own type; the clipboard is put back afterwards** |
+| **a chart, a freeform or a group, pasted from a DrawingML package we wrote** | **`paste object` takes `com.microsoft.Art--GVML-ClipFormat` in 5 to 65 ms; the shape reports its own type; the clipboard is put back afterwards.** It pastes into PowerPoint's front window, whichever window's view it is sent to: with two decks open, a paste meant for the deck behind landed in the deck in front. So a shape is pasted only into the deck in front, and a call for another deck is refused before anything is written, pointing to `ppt_activate_presentation` |
 | **a chart's numbers or a freeform's points, read from the package `copy shape` writes** | **`chart1.xml` carries the caches with no workbook; `a:custGeom` carries every point** |
 
 Per operation cost on the live object model settles around **0.5 ms for a simple
@@ -516,7 +516,7 @@ This is the honest part. These are not workarounds waiting to be found.
 |---|---|---|---|
 | Charts | full `Chart` object model, drives a live Excel for the data sheet | **no `chart` class**. A chart is added by writing its XML and pasting it through the clipboard, and its data is read the same way ([the GVML design on #211](https://github.com/ykuwai/ppt-mcp/issues/211#issuecomment-5635265420)). An existing chart is edited by copying it, rewriting its `chart1.xml` and pasting it back over the original, which keeps name, position and z order and loses animations, said in `warnings` | `charts.py` 1,126 |
 | SmartArt | `SmartArt` object model | **no class, no command**. A graphic's clipboard package carries its data model and its layout, colour and style definitions, and PowerPoint for Mac installs every definition it offers as a file of that same XML (`SmartArt.framework/…/Resources/lo`, `cs`, `qs`). So nodes are written, added, deleted and formatted in the data model, a layout, colour scheme or style is swapped by putting the installed file in place of the part, and a new graphic is those parts around a fresh data model; PowerPoint lays it out on the paste. The layouts are the Mac's own: 158 of them are shared with Windows, 18 are only on Windows and 4 only on the Mac, so a layout index comes from `ppt_list_smartart_layouts` on the Mac. Colour scheme and style indices match Windows | `smartart.py`, `smartart_defs.py` |
-| Freeform paths | `Shapes.BuildFreeform` | **no builder**. A path is written as `a:custGeom` and pasted through the clipboard, and read back the same way. Nodes are moved, inserted, deleted and switched between line and curve by rewriting the path and pasting it back over the original. The editing type (corner, smooth, symmetric) is not in the XML either and stays refused | `freeform.py` 765 |
+| Freeform paths | `Shapes.BuildFreeform` | **no builder**. A path is written as `a:custGeom` and pasted through the clipboard, and read back the same way. Nodes are moved, inserted, deleted and switched between line and curve by rewriting the path and pasting it back over the original. A node picks the segment `ShapeNodes.SetSegmentType` picks on Windows: the one ending at an anchor, the first for node 1, a control point's own curve (Microsoft's page says "the segment that follows", which the object model does not do) The editing type (corner, smooth, symmetric) is not in the XML either and stays refused | `freeform.py` 765 |
 | Grouping | `ShapeRange.Group` | **no `select` command, so no shape range**. The members are copied off the slide one by one, wrapped in one `a:grpSp` and pasted back as a group; the originals are deleted only once the group is verified. A member's text is written the same way (#220): `ppt_set_text` with a member's name, or `Group/Member`, copies the group, rewrites that member's text (the whole of it, or a span inside one line) and pastes the group back, members' names kept; `ppt_format_text` sets a member's runs the same way | `groups.py` |
 | Slide image export | `Slide.Export(path, "PNG")` | no `export` command exists in the dictionary at all. Solved another way, by exporting the deck to PDF and rendering pages with Quartz, which is what shipped | `export.py` 848 |
 | Line visibility | `Shape.Line.Visible = False` | `line format` has **no `visible` property**. Weight 0 and transparency 1.0 both apply cleanly and are the practical stand-ins | every tool taking `line_visible` |
@@ -534,7 +534,10 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**157 tools. 146 do the job. 11 always refuse.**
+**157 tools. 146 do the job. 11 always refuse.** These are the counts without
+the VBA bridge (6.3); with it, seven of the eleven work (tags, selecting
+shapes, table styles, removing and copying one animation, a freeform node's
+editing type), and so do most refused arguments.
 
 | Why | Tools |
 |---|---|
@@ -638,17 +641,117 @@ What it took, and what it found:
   here, against 162 layout files in the install.
 
 So the VBA route reaches SmartArt and not charts, and costs a macro prompt on
-every open of the file that carries the macro. Nothing uses it: charts,
-SmartArt and freeform paths are all made through the clipboard (the table
-above) with no prompt. Not tried: delivering the macro as an add-in (`.ppam`) with
-`register add in`, which changes PowerPoint's add-in list for good, and
-running a macro in one open file against another.
+every open of the file that carries the macro. Charts, SmartArt and freeform
+paths are all made through the clipboard (the table above) with no prompt.
+What this spike did not try, delivering the macro as an add-in (`.ppam`) with
+`register add in`, turned out to have no prompt and to change nothing for good;
+6.3 is the route built on it.
 
 The constraints weighed before the spike still stand. Macro security consent
 is a real user facing cost, and an MCP server that asks people to lower it is
 a hard sell. Anything richer than the arguments has to come back out of band.
 And it can only run a macro that is already in an open file: the old
 `do visual basic`, which compiled a string, is gone from the dictionary.
+
+### 6.3 The VBA bridge
+
+An add-in that PowerPoint for Windows compiled loads into PowerPoint for Mac
+without a prompt: `register add in` and `loaded`, through Apple Events. The
+registration lasts until PowerPoint quits, and nothing of it is written to
+Office's settings, so it is made again on the first call that needs it in each
+PowerPoint session (about 75 ms). A project PowerPoint for Mac compiles itself
+from source, as in the spike above, is not reliable: it failed to load again
+after a VBA reset and at launch, each time with a dialog on the user's
+PowerPoint.
+
+`ppt-mcp-bridge.ppam` (`src/backend/vba`) holds two modules and no logic of its
+own. `run VB macro` sends it a batch of calls, each an object handle, a member
+name and arguments; it runs them with `CallByName`, keeps the objects they
+return by handle, and writes the answers to a file in PowerPoint's container.
+On the Python side `backend.vba.Proxy` makes those handles behave as pywin32's
+COM objects, with PowerPoint for Windows' type library (`com_members.json`)
+saying which names are properties and which methods. So the *Windows*
+implementation of a tool runs unchanged; `backend/vba/routes.py` lists which,
+and `use_mac_impls` puts a router in front of the Apple Event implementation
+that takes the VBA route when the call needs it and the add-in loads, and the
+Apple Event route otherwise. It is off by default, because the add-in is macro
+code PowerPoint loads without a prompt; `PPT_MAC_VBA=on` turns it on.
+
+What it took to make it dependable:
+
+- **Arguments go hex encoded as UTF-16.** `run VB macro` passes its parameters
+  through an 8-bit encoding, so Hebrew, CJK and emoji arrived as `?`.
+- **The answer file says the call is done, not the event's reply.** With the
+  window hidden, PowerPoint ran the macro to the end and never answered the
+  Apple Event; the event is now sent without waiting for a reply.
+- **Every entry point traps its errors from its first line.** An untrapped
+  VBA error stops PowerPoint on a modal dialog.
+- **An argument is passed by value** (`ArgOf(...)` inline): an array taken from
+  an array element arrived by reference and failed.
+- **`CallByName` reports a PowerPoint failure as 440, "Automation error"**,
+  without PowerPoint's own text. A call written out (`o.Item(a)`) keeps it, so
+  `scripts/gen_vba_calls.py` writes one out for every member the routed tools
+  use (about 300, `PptMcpCalls*.bas`), and `CallByName` runs only the rest. A
+  row inserted past the end of a table now answers, as on Windows, "Rows.Add :
+  Integer out of range. 9 is not in BeforeRow's valid range of 1 to 2."
+- **Chart data goes through Excel, and needs a refresh.** `ppt_set_chart_data`
+  writes the chart's workbook (`ChartData.Workbook`), which keeps the chart
+  itself, where the Windows code's other way would replace it with a copy. On
+  the Mac the chart shows the new data only after `Chart.Refresh`, and
+  `SetSourceData` is called plainly, without pywin32's workaround. Excel's
+  type library for the workbook, its sheets and ranges comes from the copy
+  PowerPoint for Mac ships (`--excel-tlb`). Tried with Excel already running;
+  with Excel not running, `ChartData.Activate` starts it.
+- **Handles to a closed deck's SmartArt break SmartArt.** While the add-in
+  holds handles to a SmartArt in a deck, closing that deck makes every
+  SmartArt call after it fail, "Automation error" and then "Access denied" or
+  "Permission denied" (70), in any deck, until the handles are let go of.
+  Every call lets go of its handles when it ends, and one that could not is
+  made up for at the start of the next. Test harnesses that kept handles
+  between runs met it as an intermittent failure that only a restart cured.
+- **A node's editing type behaves as on Windows, index shifts included.**
+  Smoothing a node turns its segments into curves and inserts their control
+  points, which renumbers the nodes after it; after `ppt_set_segment_type`
+  makes a segment a curve, the next index is a control point, and smoothing
+  that one straightens the curve again. The same steps run through COM on
+  Windows and through VBA on the Mac gave identical nodes at every step,
+  down to which control points' editing type cannot be read.
+- **The deck is looked up only when the Windows code asks for it.** With no
+  deck open, the Apple Event side hands back a missing value rather than an
+  error, and some calls need no deck.
+- **Temporary files the Windows code writes must be in PowerPoint's
+  container**, or macOS asks the user for access. `ppt_copy_slide` saves a
+  snapshot of the source deck to insert slides from, so while a call runs
+  through VBA, Python's temporary folder is `ppt-mcp/tmp` in the container.
+
+Checked on PowerPoint for Mac 16.114, through the server, by reading the saved
+file back: every routed tool did what it says, each edited shape kept its id
+and its animations (the clipboard route loses both), and the clipboard was not
+touched once. A call costs about 5 to 40 ms; a tool, about half a second.
+
+Left on the Apple Event route, with the reason:
+
+| Tool or argument | Why |
+|---|---|
+| `ppt_merge_shapes` | PowerPoint for Mac's VBA has no `MergeShapes` either (438) |
+| `ppt_execute_mso` | `CommandBars.GetEnabledMso` fails in its VBA (450) |
+| `ppt_start_undo_entry` | No `StartNewUndoEntry` (438) |
+| `ppt_set_window_state` | `Application.WindowState` takes the value and changes nothing |
+| `ppt_add_chart` | No `AddChart2` (438) |
+| bubble sizes on `ppt_set_chart_data` | Through VBA the data goes through the chart's Excel workbook, which takes names and values only |
+| `ppt_list_smartart_layouts`, `ppt_add_smartart`, `change_layout` on `ppt_modify_smartart` | Layouts are picked by index from the Mac's list of the 162 it installs, which needs no deck open. Its VBA knows 159, in another order, and none until a deck is open. Colour schemes and styles come in the same order on both sides, so the other SmartArt edits go through VBA |
+| `link_to_file` on video and audio | A linked file outside PowerPoint's container raises a sandbox prompt |
+| trimming media | Not yet checked through VBA, so it stays refused |
+
+Building the add-in needs PowerPoint for Windows, with "Trust access to the VBA
+project object model" turned on for the build only:
+`scripts/build_mac_vba_addin.py` does that and puts the setting back once
+PowerPoint has quit (PowerPoint writes it back on its way out).
+`scripts/dump_com_members.py` writes `com_members.json`, and
+`scripts/gen_vba_calls.py` the generated modules (a test fails when they fall
+behind the code the routed tools use). A change to the `.bas` sources needs
+both the add-in rebuilt and `BRIDGE_VERSION` raised in the source and in
+`backend/vba/__init__.py`; a test keeps them together.
 
 ---
 

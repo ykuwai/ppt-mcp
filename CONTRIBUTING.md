@@ -30,10 +30,11 @@ to take in when it says plainly what it changes and where it was tried.
 3. **Try it on a real PowerPoint, if you can,** on the platform it touches, and
    say which (version and OS) in the description. Close only the decks you
    opened.
-4. **Keep the READMEs in step.** `README.md` is the English original, and
-   `README.<language>.md` are its translations (ja, zh-CN, es, pt-BR, he). A
-   change to what a tool does or takes goes into all of them; a coding agent
-   can do the translations. Never type a tool count by hand: run
+4. **Keep the docs in step.** A change to what a tool does or takes goes into
+   `TOOLS.md`, which is in English only. `README.md` is the English
+   original, and `i18n/README.<language>.md` are its translations (ja, zh-CN, es,
+   pt-BR, he). A change to how the server is set up or used goes into all of
+   them; a coding agent can do the translations. Never type a tool count by hand: run
    `uv run python scripts/sync_readmes.py`, which writes every count from the
    code. `tests/test_readmes.py` checks the counts, the settings and the
    sections.
@@ -58,7 +59,8 @@ know what to look at.
 
 ## Review
 
-Every pull request gets an automatic review from Claude Code. For a pull
-request from a fork it runs once the author has had a pull request merged
+Every pull request gets an automatic review from Claude Code when it is
+opened or marked ready, not on every push. After larger changes, ask for
+another with a comment that mentions @claude. For a pull request from a fork it runs once the author has had a pull request merged
 here; before that a maintainer starts it. Its findings are a starting point,
 not a verdict: answer them in the thread, with a fix or a reason.
