@@ -974,3 +974,18 @@ class TestTheBatchCannotBeWidened:
         assert "If Not GoodId(id) Then Exit Sub" in bridge
         assert 'Case "run", "quit", "addins", "comaddins", "vbe", "automationsecurity"' in bridge
         assert "Refuse o, f(2)" in bridge.split("Sub Dispatch")[1]
+
+
+def test_separator_text_is_refused_before_the_tool_starts(route):
+    """A tool makes several calls; one refused halfway would leave the earlier
+    ones done, so the arguments are checked before any of them."""
+    impl, calls, *_ = route
+    with pytest.raises(ValueError, match="control characters"):
+        impl(1, "Box", screen_tip="a\x1db")
+    assert calls == []
+
+
+def test_separator_text_inside_a_list_or_dict_is_refused():
+    with pytest.raises(ValueError):
+        vba._check_text([{"name": "S", "values": ["x\x1ey"]}])
+    vba._check_text([{"name": "S", "values": [1, 2]}, "plain"])

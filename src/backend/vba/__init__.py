@@ -174,6 +174,24 @@ def _find(members, name):
 # ---------------------------------------------------------------------------
 # The bridge
 # ---------------------------------------------------------------------------
+def _check_text(value) -> None:
+    """Refuse text holding the batch's separators, in a value or anything in it.
+
+    The separators frame the batch, so text carrying one could add a call of
+    its own, and the add-in would cut it short anyway.
+    """
+    if isinstance(value, str):
+        if any(c in value for c in (RS, US, GS)):
+            raise ValueError("Text sent through the VBA bridge cannot hold the "
+                             "control characters U+001D, U+001E or U+001F.")
+    elif isinstance(value, dict):
+        for item in value.values():
+            _check_text(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _check_text(item)
+
+
 class Bridge:
     """Sends batches of calls to the add-in and reads its answers."""
 
@@ -247,12 +265,8 @@ class Bridge:
 
     @staticmethod
     def _text(value) -> str:
-        # The separators frame the batch, so text carrying one could add a
-        # call of its own, and the add-in would cut it short anyway.
         text = str(value)
-        if any(c in text for c in (RS, US, GS)):
-            raise ValueError("Text sent through the VBA bridge cannot hold the "
-                             "control characters U+001D, U+001E or U+001F.")
+        _check_text(text)
         return text
 
     def run(self, requests):
@@ -655,6 +669,10 @@ def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], b
             return mac_impl(*args, **kwargs)
         if not ENABLED:
             return _noted(mac_impl(*args, **kwargs), OFF_NOTE, OFF_RECREATED_NOTE)
+        # Checked before anything is written: a tool makes several calls, and
+        # one refused halfway would leave the earlier ones done.
+        for value in bound.arguments.values():
+            _check_text(value)
         from backend import ppt
 
         try:
