@@ -1386,17 +1386,27 @@ class TestBatchCallsMatchTheImplementations:
 class TestWhatTheCodexReviewFound:
     """Three defects found by review on #210, each with the evidence for it."""
 
-    def test_a_jpg_export_holds_jpeg_bytes(self, tmp_path):
+    def test_a_jpg_export_holds_jpeg_bytes(self, tmp_path, monkeypatch):
         """The format was accepted, named in the file, and then ignored.
 
         `uti` was worked out from the caller's `format` and never reached
         Quartz, which had "public.png" written into it, so a file called
         Slide1.jpg held PNG bytes. Anything decoding by the format it asked
         for refuses that.
+
+        The images are staged in tmp_path. Staged in PowerPoint's own
+        folder, as the export does, they were left there by every run.
         """
         import Quartz
 
+        from ppt_mac import export as mac_export
         from ppt_mac.export import _render_pdf_pages
+
+        staged = iter(range(100))
+        monkeypatch.setattr(
+            mac_export, "_staging_path",
+            lambda suffix: str(tmp_path / f"staged{next(staged)}{suffix}"),
+        )
 
         pdf = str(tmp_path / "probe.pdf")
         box = Quartz.CGRectMake(0, 0, 200, 100)
@@ -1417,6 +1427,7 @@ class TestWhatTheCodexReviewFound:
             pdf, [1], uti="public.jpeg", suffix=".jpg"
         )[0]
         assert open(jpg, "rb").read(2) == b"\xff\xd8", "a .jpg holding PNG bytes"
+        assert {png, jpg} <= {str(p) for p in tmp_path.iterdir()}
 
     def test_two_decks_of_one_name_get_two_staged_paths(self, monkeypatch, tmp_path):
         """A basename is not unique, and both halves of the bug followed.

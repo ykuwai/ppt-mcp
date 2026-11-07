@@ -9,7 +9,7 @@ import logging
 import os
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from utils.offload import run_offloaded
 from backend import ppt
@@ -70,11 +70,11 @@ class SetMediaSettingsInput(BaseModel):
     muted: Optional[bool] = Field(default=None, description="Mute the media")
     start_point: Optional[int] = Field(
         default=None, ge=0,
-        description="Trim start point in milliseconds",
+        description="Trim start, in milliseconds from the start of the clip. Must be before the end of the trim.",
     )
     end_point: Optional[int] = Field(
         default=None, ge=0,
-        description="Trim end point in milliseconds",
+        description="Trim end, in milliseconds from the start of the clip. At most the clip's length.",
     )
     fade_in: Optional[int] = Field(
         default=None, ge=0,
@@ -88,6 +88,16 @@ class SetMediaSettingsInput(BaseModel):
     hide_while_not_playing: Optional[bool] = Field(
         default=None, description="Hide the media icon/frame while not playing",
     )
+
+    @model_validator(mode="after")
+    def _trim_in_order(self):
+        if (self.start_point is not None and self.end_point is not None
+                and self.start_point >= self.end_point):
+            raise ValueError(
+                f"start_point ({self.start_point} ms) must be before end_point "
+                f"({self.end_point} ms)."
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -157,12 +167,18 @@ def _set_media_settings_impl(
 
     # MediaFormat settings
     media = shape.MediaFormat
+    # The trim is checked before anything is written, so a trim PowerPoint
+    # would refuse leaves the volume and the rest as they were.
+    trim = None
+    if start_point is not None or end_point is not None:
+        trim = _trim_steps(media, start_point, end_point)
     if volume is not None:
         media.Volume = volume
     if muted is not None:
         media.Muted = muted
-    if start_point is not None:
-        media.SetDisplayPictureFromPoint(start_point)
+    if trim is not None:
+        for name, value in trim:
+            setattr(media, name, value)
     if fade_in is not None:
         media.FadeInDuration = fade_in
     if fade_out is not None:
@@ -178,10 +194,48 @@ def _set_media_settings_impl(
     except Exception:
         pass
 
-    return {
+    result = {
         "success": True,
         "shape_name": shape.Name,
     }
+    if trim is not None:
+        wanted = dict(trim)
+        got = {"StartPoint": media.StartPoint, "EndPoint": media.EndPoint}
+        if got != wanted:
+            raise RuntimeError(
+                f"PowerPoint kept the trim at {got['StartPoint']} to {got['EndPoint']} ms, "
+                f"not {wanted['StartPoint']} to {wanted['EndPoint']} ms."
+            )
+        result.update(start_point=got["StartPoint"], end_point=got["EndPoint"],
+                      length=media.Length)
+    return result
+
+
+def _trim_steps(media, start_point, end_point):
+    """The trim to write, as (property, value) pairs in an order PowerPoint takes.
+
+    PowerPoint refuses a StartPoint at or past the current EndPoint, and an
+    EndPoint at or before the current StartPoint, or past the clip's length.
+    So the whole trim is checked here against the clip first, and the end is
+    written first when the new start is at or past the current end.
+    """
+    length = media.Length
+    current_start, current_end = media.StartPoint, media.EndPoint
+    start = current_start if start_point is None else start_point
+    end = current_end if end_point is None else end_point
+    if end > length:
+        raise ValueError(
+            f"end_point {end} ms is past the end of the clip, which is {length} ms long."
+        )
+    if start >= end:
+        raise ValueError(
+            f"The trim would start at {start} ms and end at {end} ms; the start must "
+            f"be before the end (the clip is {length} ms long, currently trimmed to "
+            f"{current_start} to {current_end} ms)."
+        )
+    if start >= current_end:
+        return [("EndPoint", end), ("StartPoint", start)]
+    return [("StartPoint", start), ("EndPoint", end)]
 
 
 # ---------------------------------------------------------------------------
