@@ -416,8 +416,8 @@ um modelo pelo nome, duplicar e copiar slides, editar um SmartArt (texto, nós, 
 argumentos que o Mac recusa de outro
 modo (a dica de tela, uma linha ou coluna de tabela numa posição, uma animação
 disparada pelo clique em outra forma, os tamanhos do reflexo, brilho, sombra e
-reflexo no texto, reduzir o texto para caber, volume, mudo e esmaecimentos, o
-estilo do gráfico e a posição da legenda e do título). Essas ferramentas editam
+reflexo no texto, reduzir o texto para caber, volume, mudo, corte e esmaecimentos,
+o estilo do gráfico e a posição da legenda e do título). Essas ferramentas editam
 a forma no lugar, então ela mantém as animações, e a área de transferência não
 é tocada. O suplemento só repassa essas chamadas; o código-fonte está em
 `src/backend/vba`. O PowerPoint o carrega sem perguntar, ele dura até o
@@ -446,7 +446,7 @@ Diferenças menores:
   argumento, então basta removê-lo e tentar de novo.
 - **Vídeo e áudio entram incorporados, nunca vinculados**, e das oito
   configurações de reprodução só existem repetir e ocultar o quadro, e com o
-  suplemento também volume, mudo e esmaecimentos. Ocultar o
+  suplemento também volume, mudo, corte e esmaecimentos. Ocultar o
   quadro é recusado num slide que já tem animações, porque gravar essa opção
   as reescreve.
 - As exportações passam pelo contêiner do próprio PowerPoint e depois são

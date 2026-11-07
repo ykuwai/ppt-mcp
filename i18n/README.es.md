@@ -419,8 +419,8 @@ argumentos que el
 Mac rechaza de otro modo (la información en pantalla, una fila o columna de
 tabla en una posición, una animación que se inicia al hacer clic en otra forma,
 los tamaños del reflejo, el resplandor, la sombra y el reflejo sobre el texto,
-reducir el texto para que quepa, el volumen, el silencio y los fundidos, el
-estilo del gráfico y la posición de la leyenda y del título). Esas herramientas
+reducir el texto para que quepa, el volumen, el silencio, el recorte y los fundidos,
+el estilo del gráfico y la posición de la leyenda y del título). Esas herramientas
 editan la forma en su sitio, así que conserva sus animaciones, y no tocan el
 portapapeles. El complemento solo transmite esas llamadas; su código fuente está
 en `src/backend/vba`. PowerPoint lo carga sin preguntar, dura hasta que
@@ -451,8 +451,8 @@ Diferencias menores:
   mensaje que nombra el argumento, así que basta con quitarlo y reintentar.
 - **El vídeo y el audio se insertan incrustados, nunca vinculados**, y de los
   ocho ajustes de reproducción solo existen la repetición en bucle y ocultar el
-  fotograma, y con el complemento también el volumen, el silencio y los
-  fundidos. Ocultar el fotograma se rechaza en una diapositiva que ya tiene
+  fotograma, y con el complemento también el volumen, el silencio, el
+  recorte y los fundidos. Ocultar el fotograma se rechaza en una diapositiva que ya tiene
   animaciones, porque escribirlo las reescribe.
 - Las exportaciones se preparan en el contenedor propio de PowerPoint y luego se
   mueven fuera, porque la aplicación está aislada (sandbox) y no puede escribir

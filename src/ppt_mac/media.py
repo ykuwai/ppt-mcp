@@ -349,7 +349,10 @@ def _set_media_settings_impl(
             "shape anywhere in its dictionary; the words do not exist, so "
             f"{', '.join(absent)} cannot be honoured and nothing was changed. "
             "Loop and hide while not playing do exist and this tool sets both. "
-            "Trim and fade have to be done to the file before it is inserted.",
+            "PowerPoint's VBA does have all six: with PPT_MAC_VBA=on in the "
+            "server's env, the server loads its add-in and sets them through "
+            "it. Otherwise trim and fade have to be done to the file before "
+            "it is inserted.",
             [
                 "ppt_set_media_settings with only loop and "
                 "hide_while_not_playing",
