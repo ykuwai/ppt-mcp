@@ -200,6 +200,15 @@ class TestHeadersAndFooters:
         with pytest.raises(ValueError, match="date format"):
             _date_format_keyword(9999)
 
+    def test_a_date_format_the_mac_lacks_changes_no_slide(self):
+        from ppt_mac.themes import _set_headers_footers_impl
+
+        with _fake_deck(slide_count=2) as deck:
+            with pytest.raises(ValueError, match="date format"):
+                _set_headers_footers_impl("Draft", None, None, True, 9, None)
+
+        assert deck.slides[1].headers_and_footers.footer.header_footer_text.writes == []
+
 
 @macos_only
 class TestBatchCarriesWhatAnOperationSaid:
