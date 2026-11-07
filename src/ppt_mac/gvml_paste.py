@@ -586,10 +586,6 @@ def replace_shape(
 def strip_ids(package: Package) -> None:
     """Drop the creation ids from a package about to be pasted beside its
     original, in place. See ``gvml.shapes.strip_creation_ids``."""
-    from gvml import canvas as _canvas
     from gvml import shapes as _shapes
 
-    root = ET.fromstring(package.drawing())
-    for element in _canvas.children(_canvas.canvas_of(root)):
-        _shapes.strip_creation_ids(element)
-    package.parts[package.drawing_part()] = _canvas.serialize_drawing(root).encode("utf-8")
+    _shapes.strip_package_ids(package)

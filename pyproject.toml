@@ -56,11 +56,6 @@ dependencies = [
     # PowerPoint for Mac has no slide export command, so slide images are
     # rendered from the deck's PDF export with Quartz (#187).
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
-    # A new chart is written with python-pptx and brought in from a file,
-    # because one added with AddChart2 starts an Excel, and Excels started
-    # one after another crash (#299). Windows only: the Mac adds charts
-    # through its clipboard (ppt_mac/gvml_paste.py).
-    "python-pptx>=1.0.2; sys_platform == 'win32'",
 ]
 
 [project.urls]
