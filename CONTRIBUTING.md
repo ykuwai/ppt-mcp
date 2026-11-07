@@ -58,7 +58,8 @@ know what to look at.
 
 ## Review
 
-Every pull request gets an automatic review from Claude Code. For a pull
-request from a fork it runs once the author has had a pull request merged
+Every pull request gets an automatic review from Claude Code when it is
+opened or marked ready, not on every push. After larger changes, ask for
+another with a comment that mentions @claude. For a pull request from a fork it runs once the author has had a pull request merged
 here; before that a maintainer starts it. Its findings are a starting point,
 not a verdict: answer them in the thread, with a fix or a reason.

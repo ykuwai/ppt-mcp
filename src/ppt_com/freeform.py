@@ -227,7 +227,10 @@ class SetSegmentTypeInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index.")
     shape_name: Optional[str] = Field(default=None, description="Shape name (preferred).")
     shape_index: Optional[int] = Field(default=None, ge=1, description="1-based shape index.")
-    node_index: int = Field(..., ge=1, description="1-based node index. The segment AFTER this node is changed.")
+    node_index: int = Field(..., ge=1, description=(
+        "1-based node index. An anchor changes the segment that ends at it, node 1 the first "
+        "segment, and a control point its own curve."
+    ))
     segment_type: str = Field(
         ...,
         description="New segment type: 'line' or 'curve'.",
@@ -427,6 +430,30 @@ def _delete_node_impl(slide_index, shape_name, shape_index, node_index):
     })
 
 
+CORNER_CRASH_ERROR = (
+    "node_index 2 is a control point of the first segment, which is a curve, and making "
+    "that point a corner makes PowerPoint quit (measured on Windows, 16.0.20326, and on "
+    "the Mac, 16.114). To straighten the curve, call ppt_set_segment_type with "
+    "node_index=1 and segment_type='line'; to make the start a corner, use node_index=1."
+)
+
+
+def _refuse_known_crash(nodes_com, node_index: int, et_int: int) -> None:
+    """Refuse the one SetEditingType call known to crash PowerPoint.
+
+    ``SetEditingType(2, corner)`` while node 2 is a control point, that is
+    while the first segment is a curve, ends the PowerPoint process ("The
+    remote procedure call failed" on Windows, Microsoft Error Reporting on the
+    Mac), every time, however the curve was made. Corner on any other control
+    point straightens its curve, and auto, smooth and symmetric on node 2 work.
+    Node 1's ``SegmentType`` is the first segment's.
+    """
+    if node_index != 2 or et_int != EDITING_TYPE_MAP["corner"] or nodes_com.Count < 3:
+        return
+    if nodes_com.Item(1).SegmentType == SEGMENT_TYPE_MAP["curve"]:
+        raise ValueError(CORNER_CRASH_ERROR)
+
+
 def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index, et_int):
     app = ppt._get_app_impl()
     goto_slide(app, slide_index)
@@ -439,6 +466,7 @@ def _set_node_editing_type_impl(slide_index, shape_name, shape_index, node_index
     if node_index > nodes_com.Count:
         raise ValueError(f"node_index {node_index} out of range (shape has {nodes_com.Count} nodes).")
 
+    _refuse_known_crash(nodes_com, node_index, et_int)
     nodes_com.SetEditingType(node_index, et_int)
     try:
         new_et = nodes_com.Item(node_index).EditingType
@@ -702,6 +730,9 @@ def register_tools(mcp):
         - 'smooth': Smooth curve — handles stay collinear but can differ in length.
         - 'symmetric': Symmetric curve — handles stay collinear and equal in length.
 
+        'corner' on node 2 is refused while the first segment is a curve (node 2
+        is then its control point): PowerPoint quits on that call.
+
         Note: Changing to smooth/symmetric may reposition adjacent control-point
         nodes. If the target node is a control point, the adjacent vertex node's
         type is changed instead.
@@ -729,11 +760,16 @@ def register_tools(mcp):
         },
     )
     async def tool_ppt_set_segment_type(params: SetSegmentTypeInput) -> str:
-        """Change the segment type of the segment following a freeform node.
+        """Change a freeform segment between line and curve.
+
+        node_index picks the segment the way PowerPoint does: an anchor
+        stands for the segment that ends at it, node 1 for the first segment,
+        and a curve's control point for that curve. This is the segment
+        ppt_get_shape_nodes reports as the node's segment_type.
 
         Segment types:
-        - 'line': Straight line to the next vertex.
-        - 'curve': Bézier curve to the next vertex.
+        - 'line': Straight line between the two vertices.
+        - 'curve': Bézier curve between the two vertices.
 
         WARNING: Switching between 'line' and 'curve' may change the total
         node count because Bézier curves require two extra control-point nodes.
