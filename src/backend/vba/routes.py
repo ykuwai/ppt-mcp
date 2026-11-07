@@ -35,10 +35,10 @@ def reflection_details(arguments) -> bool:
 
 
 def media_levels(arguments) -> bool:
-    # Volume, mute and fades. Trimming stays where it is: it has not been
-    # checked through VBA yet.
-    return (given("volume", "muted", "fade_in", "fade_out")(arguments)
-            and arguments.get("start_point") is None and arguments.get("end_point") is None)
+    # Volume, mute, trimming and fades: MediaFormat, which the Mac's VBA has
+    # and its dictionary does not. Looping and hiding the frame alone stay on
+    # the Apple Event route, which sets them.
+    return given("volume", "muted", "start_point", "end_point", "fade_in", "fade_out")(arguments)
 
 
 def shrink_to_fit(arguments) -> bool:

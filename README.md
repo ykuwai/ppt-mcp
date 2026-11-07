@@ -415,7 +415,7 @@ duplicating and copying slides, editing a SmartArt (its text, nodes, colours
 and style), and the arguments the Mac otherwise refuses (a screen tip,
 a table row or column at a position, a click trigger on another shape,
 reflection sizes, glow, shadow and reflection on text, shrinking text to fit,
-volume, mute and fades, a chart style and the legend and title placement).
+volume, mute, trimming and fades, a chart style and the legend and title placement).
 Those edit the shape in place, so it keeps its animations, and the clipboard is
 not touched. The add-in only passes those calls on; its source is in
 `src/backend/vba`. PowerPoint loads it without a prompt, it lasts until
@@ -443,7 +443,7 @@ Smaller differences:
   the argument, so dropping it and retrying works.
 - **Video and audio go in embedded, never linked**, and of the eight playback
   settings only looping and hiding the frame exist, and with the add-in volume,
-  mute and fades. Hiding the frame is refused on a slide that already has
+  mute, trimming and fades. Hiding the frame is refused on a slide that already has
   animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.
