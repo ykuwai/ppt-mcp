@@ -2,16 +2,21 @@
 """Time ppt_get_all_text and ppt_check_layout on a deck built the same way
 everywhere, so numbers from different machines can be compared.
 
-    uv run python scripts/bench_get_all_text.py [--slides 50] [--runs 2] [--save-copy]
+    uv run --with python-pptx python scripts/bench_get_all_text.py [--slides 50] [--runs 2] [--save-copy] [--keep]
 
-It starts the server's worker in this process, creates a new deck, and builds
-each slide from the same parts: a title with an accent bar, three bullets with
-one bold and one italic word, a 4×4 table, a picture, a three-stage diagram
-grouped with its arrows, and six filled text boxes. Then
-it times each tool `--runs` times through the server's own call_tool, as a
-client's call goes, and closes the deck it made without saving. No other deck
-is touched. A PowerPoint the script had to start is quit with that close, as
-the server does.
+It writes the deck as a .pptx with python-pptx, which is not one of the
+server's dependencies (hence `--with`), so every machine opens the same file
+and nothing is built call by call. Each slide has the same parts: a title with
+an accent bar, three bullets with one bold and one italic word, a 4×4 table in
+set colours, a picture, a three-stage diagram grouped with its arrows, and six
+filled text boxes.
+
+It starts the server's worker in this process, opens that file, times each
+tool `--runs` times through the server's own call_tool, as a client's call
+goes, then closes it without saving and deletes the file. No other deck is
+touched. A PowerPoint the script had to start is quit with that close, as the
+server does. On the Mac the files go in PowerPoint's container, where it reads
+and writes without asking for access.
 
 `--keep` leaves the deck open afterwards, unsaved, to look at.
 
@@ -99,87 +104,87 @@ def _picture(path):
         out.write(chunk(b"IEND", b""))
 
 
-def _slide_steps(i, picture):
-    """One slide's parts. Step numbers matter: later steps name the shapes
-    earlier ones made ("$2.placeholder_name")."""
-    def stage(left, text):
-        return {"tool": "ppt_add_shape", "params": {
-            "slide_index": i, "shape_type": "rounded_rectangle", "left": left, "top": 300, "width": 180,
-            "height": 80, "text": text, "font_size": 16, "bold": True, "font_color": "#FFFFFF",
-            "fill_color": ACCENT, "line_visible": False}}
+def _write_deck(path, slides, picture):
+    """Write the deck as a .pptx with python-pptx: the same file on every
+    machine, in well under a second, rather than building it call by call."""
+    from pptx import Presentation
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import PP_ALIGN
+    from pptx.util import Pt
 
-    def arrow(left):
-        return {"tool": "ppt_add_shape", "params": {
-            "slide_index": i, "shape_type": "right_arrow", "left": left, "top": 325, "width": 36,
-            "height": 30, "fill_color": DARK, "line_visible": False}}
+    rgb = lambda hex_: RGBColor.from_string(hex_.lstrip("#"))  # noqa: E731
 
-    def card(k):
-        return {"tool": "ppt_add_textbox", "params": {
-            "slide_index": i, "left": 40 + 150 * k, "top": 420, "width": 140, "height": 70,
-            "text": f"Note {k + 1}\nSlide {i} detail", "font_size": 12, "font_color": DARK}}
+    def fill(shape, colour):
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = rgb(colour)
+        shape.line.fill.background()
+        shape.shadow.inherit = False
 
-    return [
-        {"tool": "ppt_set_placeholder_text", "params": {                                      # 1
-            "slide_index": i, "placeholder_type": "title", "text": f"Quarter {i} results"}},
-        {"tool": "ppt_set_placeholder_text", "params": {                                      # 2
-            "slide_index": i, "placeholder_type": "body",
-            "text": "Revenue grew in every region\nCosts fell sharply after the move\nHeadcount stayed steady"}},
-        {"tool": "ppt_update_shape", "params": {                                              # 3
-            "slide_index": i, "shape_name": "$2.placeholder_name", "left": 40, "top": 110, "width": 440, "height": 170}},
-        {"tool": "ppt_format_text_range", "params": {                                         # 4
-            "slide_index": i, "shape_name_or_index": "$2.placeholder_name", "search_text": "fell", "bold": True}},
-        {"tool": "ppt_format_text_range", "params": {                                         # 5
-            "slide_index": i, "shape_name_or_index": "$2.placeholder_name", "search_text": "sharply", "italic": True}},
-        {"tool": "ppt_add_shape", "params": {                                                 # 6
-            "slide_index": i, "shape_type": "rectangle", "left": 0, "top": 34, "width": 14, "height": 56,
-            "fill_color": ACCENT, "line_visible": False}},
-        {"tool": "ppt_add_table", "params": {                                                 # 7
-            "slide_index": i, "rows": 4, "cols": 4, "left": 500, "top": 115, "width": 420, "height": 150}},
-        {"tool": "ppt_set_table_data", "params": {                                            # 8
-            "slide_index": i, "shape_name_or_index": "$7.shape_name",
-            "data": [["Region", "Q1", "Q2", "Q3"], ["North", "120", "135", "150"],
-                     ["South", "98", "104", "117"], ["West", "143", "139", "161"]]}},
-        {"tool": "ppt_add_picture", "params": {                                               # 9
-            "slide_index": i, "file_path": picture, "left": 40, "top": 300, "width": 200, "height": 100}},
-        stage(260, "Plan"), arrow(448), stage(492, "Build"), arrow(680), stage(724, "Ship"),  # 10 to 14
-        {"tool": "ppt_group_shapes", "params": {                                              # 15
-            "slide_index": i, "shape_names": [f"${n}.shape_name" for n in range(10, 15)]}},
-        *[card(k) for k in range(6)],                                                         # 16 to 21
-        *[{"tool": "ppt_set_fill", "params": {                                                # 22 to 27
-            "slide_index": i, "shape_name_or_index": f"${16 + k}.shape_name", "color": LIGHT}} for k in range(6)],
-        {"tool": "ppt_format_text", "params": {                                               # 28
-            "slide_index": i, "shape_name_or_index": "$2.placeholder_name", "font_size": 22, "color": DARK}},
-        {"tool": "ppt_update_shape", "params": {                                              # 29
-            "slide_index": i, "shape_name": "$1.placeholder_name", "left": 40, "top": 28, "width": 880, "height": 68}},
-        {"tool": "ppt_format_text", "params": {                                               # 30
-            "slide_index": i, "shape_name_or_index": "$1.placeholder_name", "font_size": 36, "bold": True,
-            "color": DARK}},
-        # The table in the deck's own colours, not Office's default style.
-        {"tool": "ppt_set_table_style", "params": {                                           # 31
-            "slide_index": i, "shape_name_or_index": "$7.shape_name", "style_id": NO_STYLE}},
-        *[{"tool": "ppt_set_table_cell", "params": {
-            "slide_index": i, "shape_name_or_index": "$7.shape_name", "row": row, "col": col,
-            "fill_color": fill, "color": "#FFFFFF" if row == 1 else DARK, "bold": row == 1}}
-          for row, fill in ((1, DARK), (2, "#FFFFFF"), (3, LIGHT), (4, "#FFFFFF")) for col in range(1, 5)],
-        {"tool": "ppt_set_table_borders", "params": {
-            "slide_index": i, "shape_name_or_index": "$7.shape_name", "sides": ["top", "left", "bottom", "right"], "visible": False}},
-    ]
-
-
-async def create():
-    made = await run("ppt_create_presentation", {})
-    if not isinstance(made, dict) or "name" not in made:
-        raise SystemExit(f"Could not create a deck: {made}")
-    return made["name"]
-
-
-async def build(deck, slides, picture):
-    await run("ppt_add_slide", {"layout": 2, "count": slides}, deck)
+    deck = Presentation()
+    deck.slide_width, deck.slide_height = Pt(960), Pt(540)
     for i in range(1, slides + 1):
-        report = await _call("ppt_run_steps", {"steps": _slide_steps(i, picture), "presentation": deck})
-        failed = [s for s in report.get("steps", []) if s.get("error")] if isinstance(report, dict) else [report]
-        if failed:
-            raise SystemExit(f"Building slide {i} failed: {failed[0]}")
+        slide = deck.slides.add_slide(deck.slide_layouts[1])  # Title and Content
+        title, body = slide.shapes.title, slide.placeholders[1]
+        title.left, title.top, title.width, title.height = Pt(40), Pt(28), Pt(880), Pt(68)
+        title.text = f"Quarter {i} results"
+        title.text_frame.paragraphs[0].alignment = PP_ALIGN.LEFT
+        run = title.text_frame.paragraphs[0].runs[0]
+        run.font.size, run.font.bold, run.font.color.rgb = Pt(36), True, rgb(DARK)
+
+        body.left, body.top, body.width, body.height = Pt(40), Pt(110), Pt(440), Pt(170)
+        lines = [[("Revenue grew in every region", {})],
+                 [("Costs ", {}), ("fell", {"bold": True}), (" ", {}), ("sharply", {"italic": True}),
+                  (" after the move", {})],
+                 [("Headcount stayed steady", {})]]
+        frame = body.text_frame
+        for n, parts in enumerate(lines):
+            paragraph = frame.paragraphs[0] if n == 0 else frame.add_paragraph()
+            for text, style in parts:
+                run = paragraph.add_run()
+                run.text = text
+                run.font.size, run.font.color.rgb = Pt(22), rgb(DARK)
+                run.font.bold, run.font.italic = style.get("bold"), style.get("italic")
+
+        fill(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, Pt(34), Pt(14), Pt(56)), ACCENT)
+
+        frame = slide.shapes.add_table(4, 4, Pt(500), Pt(115), Pt(420), Pt(150))
+        # "No Style, No Grid", then each cell coloured: not Office's default blue.
+        frame._element.graphic.graphicData.tbl.tblPr.find(
+            "{http://schemas.openxmlformats.org/drawingml/2006/main}tableStyleId").text = NO_STYLE
+        data = [["Region", "Q1", "Q2", "Q3"], ["North", "120", "135", "150"],
+                ["South", "98", "104", "117"], ["West", "143", "139", "161"]]
+        for r, row in enumerate(data):
+            for c, text in enumerate(row):
+                cell = frame.table.cell(r, c)
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = rgb((DARK, "#FFFFFF", LIGHT, "#FFFFFF")[r])
+                cell.text = text
+                run = cell.text_frame.paragraphs[0].runs[0]
+                run.font.size, run.font.bold = Pt(16), r == 0
+                run.font.color.rgb = rgb("#FFFFFF" if r == 0 else DARK)
+
+        slide.shapes.add_picture(picture, Pt(40), Pt(300), Pt(200), Pt(100))
+
+        group = slide.shapes.add_group_shape()
+        for left, text in ((260, "Plan"), (492, "Build"), (724, "Ship")):
+            stage = group.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Pt(left), Pt(300), Pt(180), Pt(80))
+            fill(stage, ACCENT)
+            stage.text = text
+            stage.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+            run = stage.text_frame.paragraphs[0].runs[0]
+            run.font.size, run.font.bold, run.font.color.rgb = Pt(16), True, rgb("#FFFFFF")
+        for left in (448, 680):
+            fill(group.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, Pt(left), Pt(325), Pt(36), Pt(30)), DARK)
+
+        for k in range(6):
+            card = slide.shapes.add_textbox(Pt(40 + 150 * k), Pt(420), Pt(140), Pt(70))
+            fill(card, LIGHT)
+            card.text_frame.text = f"Note {k + 1}\nSlide {i} detail"
+            for paragraph in card.text_frame.paragraphs:
+                for run in paragraph.runs:
+                    run.font.size, run.font.color.rgb = Pt(12), rgb(DARK)
+    deck.save(path)
 
 
 async def timed(tool, params, deck, runs):
@@ -234,30 +239,35 @@ def _fmt(times):
 
 async def main(args):
     info = await run("ppt_get_app_info", {})
-    print("Building the deck...", flush=True)
+    folder = _copy_folder()
+    path = os.path.join(folder, "ppt-mcp-bench.pptx")
+    picture = os.path.join(folder, "ppt-mcp-bench-picture.png")
     start = time.perf_counter()
-    deck = await create()
+    _picture(picture)
+    try:
+        _write_deck(path, args.slides, picture)
+    finally:
+        os.remove(picture)
+    print(f"Wrote {args.slides} slides in {time.perf_counter() - start:.1f} s", flush=True)
+    opened = await run("ppt_open_presentation", {"file_path": path})
+    if not isinstance(opened, dict) or "name" not in opened:
+        os.remove(path)
+        raise SystemExit(f"Could not open the deck: {opened}")
+    deck = opened["name"]
     rows = []
     try:
-        picture = os.path.join(_copy_folder(), "ppt-mcp-bench-picture.png")
-        _picture(picture)
-        try:
-            await build(deck, args.slides, picture)
-        finally:
-            os.remove(picture)
-        print(f"Built {args.slides} slides in {time.perf_counter() - start:.0f} s", flush=True)
         times, text = await timed("ppt_get_all_text", {}, deck, args.runs)
         rows.append(("ppt_get_all_text", _fmt(times), f"{len(str(text))} characters"))
         times, _ = await timed("ppt_check_layout", {}, deck, args.runs)
         rows.append(("ppt_check_layout", _fmt(times), ""))
         if args.save_copy:
-            path = os.path.join(_copy_folder(), "ppt-mcp-bench-copy.pptx")
+            copy = os.path.join(folder, "ppt-mcp-bench-copy.pptx")
             try:
                 times, same = [], True
                 for _ in range(args.runs):
                     start = time.perf_counter()
-                    took, unchanged = _save_copy(path)
-                    paragraphs = _paragraphs(path)
+                    _, unchanged = _save_copy(copy)
+                    paragraphs = _paragraphs(copy)
                     times.append(time.perf_counter() - start)
                     same = same and unchanged
                 rows.append(("SaveCopyAs + XML", _fmt(times),
@@ -265,13 +275,14 @@ async def main(args):
             except Exception as exc:  # noqa: BLE001 - reported as the row
                 rows.append(("SaveCopyAs + XML", "failed", f"{type(exc).__name__}: {exc}"))
             finally:
-                if os.path.exists(path):
-                    os.remove(path)
+                if os.path.exists(copy):
+                    os.remove(copy)
     finally:
         if args.keep:
-            print(f"Left {deck} open (--keep).")
+            print(f"Left {deck} open (--keep), from {path}.")
         else:
             await run("ppt_close_presentation", {"save_changes": False, "presentation_name": deck}, deck)
+            os.remove(path)
 
     bridge = ""
     if sys.platform == "darwin":
