@@ -25,7 +25,7 @@ ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/catego
 | **Media** | 3 | Video, audio, media settings (on macOS, trimming with `start_point` and `end_point` goes through the VBA add-in, and is refused without it) |
 | **SmartArt** | 3 | Add, modify, list layouts |
 | **Edit Operations** | 6 | Undo and redo (on the target presentation), copy shapes/formatting between slides |
-| **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check |
+| **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check (including slips of typing: a word twice, two spaces, a space before a comma or full stop) |
 | **Effects** | 3 | Glow and reflection (on the shape or on its text), soft edge |
 | **Comments** | 3 | Add, list, delete |
 | **Advanced** | 19 | Tags, fonts (list the deck's or this computer's, set defaults, bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |

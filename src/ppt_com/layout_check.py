@@ -3443,12 +3443,17 @@ def _sample_text(slide_index, shapes):
 # A space before a comma or a full stop that ends a word; the other marks are
 # left out, since French sets a space before ";:!?" on purpose.
 _REPEATED_WORD = re.compile(r"(?<!\w)([^\W\d_]+) +\1(?!\w)", re.IGNORECASE)
-_MEANT_TWICE = frozenset({"had", "that", "bye", "no", "very", "so", "ha", "bora", "walla"})
+_MEANT_TWICE = frozenset({
+    "had", "that", "bye", "no", "very", "so", "ha", "bora", "walla",
+    "much", "far", "is",  # "much much better", "far far away", "what it is is"
+    "nous", "vous",  # French reflexives: "nous nous voyons"
+    "die", "der", "das",  # German, an article then a relative pronoun
+})
 _DOUBLE_SPACE = re.compile(r"(?<=\w) {2,}(?=\w)")
 _SPACE_BEFORE_MARK = re.compile(r"(?<=\w) +[,.](?=\s|$)")
 
 
-def _typos(slide_index, shapes):
+def _typos(slide_index, shapes, in_groups=False):
     """Slips of typing: a word twice in a row, two spaces between words, a
     space before a comma or a full stop.
 
@@ -3456,6 +3461,13 @@ def _typos(slide_index, shapes):
     PowerPoint. A slide is read at a glance, and a slip on it is seen by
     everyone in the room. One finding a shape for each kind of slip, on its
     first one.
+
+    Each fix is the ppt_find_replace_text call that corrects it, with
+    whole_words for a doubled word, so "the the" is not also found in "the
+    theory", and with
+    include_groups for a shape inside a group (``in_groups``), which that
+    tool skips otherwise. The text kept is cut at ``_CONTENT_KEPT`` characters,
+    so its last word, which may be cut short, is not read.
     """
     what = {"repeated_word": "a word twice in a row", "double_space": "two spaces between words",
             "space_before_punctuation": "a space before punctuation"}
@@ -3464,13 +3476,21 @@ def _typos(slide_index, shapes):
         content = (shape.get("text") or {}).get("content") or ""
         if not content or not shape.get("visible", True):
             continue
+        if len(content) >= _CONTENT_KEPT:
+            content = re.sub(r"\S*$", "", content)
         name = shape["name"]
+        groups = " include_groups=true" if in_groups else ""
         for kind, sample, corrected, severity in _slips(re.split(r"[\r\n\v]", content)):
+            # Only a doubled word needs whole words: the other samples are
+            # corrected the same wherever else they are found, and can end in
+            # a mark, which the Mac's whole-word search (\b) never matches.
+            whole = " whole_words=true" if kind == "repeated_word" else ""
             findings.append(_finding(
                 slide_index, "typo", [name],
                 f"'{name}' has {what[kind]}: \"{sample}\".",
                 f"ppt_find_replace_text find_text={sample!r} replace_text={corrected!r} "
-                f"shape_name={name!r} slide_indices=[{slide_index}] match_case=true, unless it is meant.",
+                f"shape_name={name!r} slide_indices=[{slide_index}] match_case=true{whole}"
+                f"{groups}, unless it is meant.",
                 severity=severity, typo=kind, sample=sample,
             ))
     return findings
@@ -4427,7 +4447,7 @@ def _inside_groups(index, slide, slide_w, slide_h, trust_template=True):
     findings = (_overflow(index, inner, layout)
                 + contrast
                 + _sample_text(index, inner)
-                + _typos(index, inner)
+                + _typos(index, inner, in_groups=True)
                 + _number_order(index, inner)
                 + _text_direction(index, inner)
                 + _mixed_direction(index, inner)

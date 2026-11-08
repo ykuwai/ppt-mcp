@@ -1975,6 +1975,35 @@ class TestTypos:
             "typo", typo, sample, severity)
         assert f"find_text={sample!r}" in finding["fix"]
 
+    def test_the_fix_finds_whole_words_only(self):
+        # Without whole_words, "the the" -> "the" also turns "the theory"
+        # into "theory".
+        box = textbox("t", 100, 100, 400, 40)
+        box["text"]["content"] = "We ran the the test on the theory"
+        [finding] = check(box)
+        assert "whole_words=true" in finding["fix"]
+        assert "include_groups" not in finding["fix"]
+
+    def test_a_slip_ending_in_a_mark_is_fixed_without_whole_words(self):
+        # The Mac's whole-word search puts \b at each end, and "fell ,"
+        # ends where no \b can follow.
+        box = textbox("t", 100, 100, 400, 40)
+        for words in ("Costs fell , as planned", "Sales grew  12% this year"):
+            box["text"]["content"] = words
+            [finding] = check(box)
+            assert "whole_words" not in finding["fix"]
+
+    def test_a_word_cut_short_where_the_text_kept_ends_is_not_a_slip(self):
+        # The text kept stops at _CONTENT_KEPT characters, here inside
+        # "the theory", which then reads as "the the".
+        from ppt_com.layout_check import _CONTENT_KEPT
+
+        words = " ".join(f"w{i}" for i in range(_CONTENT_KEPT))
+        box = textbox("t", 100, 100, 400, 40)
+        box["text"]["content"] = (words[:_CONTENT_KEPT - 8] + " the the")[:_CONTENT_KEPT]
+        assert len(box["text"]["content"]) == _CONTENT_KEPT
+        assert [f for f in check(box) if f["type"] == "typo"] == []
+
     def test_the_fix_names_the_corrected_text(self):
         box = textbox("t", 100, 100, 400, 40)
         for words, corrected in (("in the the end", "'the'"), ("grew  12%", "'grew 12%'"), ("fell , then", "'fell,'")):
@@ -1989,6 +2018,8 @@ class TestTypos:
         "Pourquoi ? Parce que ; voilà !", "Trailing space ", "Tab\tseparated",
         "The theme", "Ends with a full stop.", "Name\t\tValue", "Total\tTotal",
         "Origins  ·  The plant  ·  Numbers", "Step 1  →  Step 2", "Total:  12",
+        "Much much better", "Far far away", "What it is is clear", "Nous nous voyons demain",
+        "Die Frau, die die Zeitung liest",
     ])
     def test_meant_text_is_not(self, words):
         box = textbox("t", 100, 100, 400, 40)
@@ -3871,6 +3902,14 @@ class TestInsideGroups:
             child["z"] = 2 + order / 1000
         page["inner"] = list(children)
         return page
+
+    def test_a_typo_inside_a_group_is_fixed_inside_the_group(self):
+        # ppt_find_replace_text skips grouped shapes unless told otherwise.
+        words = textbox("TextBox 2", 110, 110, 300, 40)
+        words["text"]["content"] = "Sales grew in the the third quarter"
+        [finding] = [f for f in slide_findings(self.grouped(words), W, H) if f["type"] == "typo"]
+        assert finding["shapes"] == ["Group 4/TextBox 2"]
+        assert "include_groups=true" in finding["fix"]
 
     def test_stand_in_words_inside_a_group_are_reported_by_their_path(self):
         words = textbox("TextBox 2", 110, 110, 300, 40)
