@@ -12,6 +12,7 @@ import inspect
 import json
 import re
 import sys
+import time
 import threading
 import types
 import zipfile
@@ -558,6 +559,7 @@ class FakeAppRef:
 @pytest.fixture
 def session(monkeypatch, tmp_path):
     monkeypatch.setattr(vba, "INSTALL_DIR", tmp_path / "ppt-mcp")
+    monkeypatch.setattr(vba, "CONTAINER", tmp_path)
     versions = []
 
     class Pinging:
@@ -611,6 +613,63 @@ class TestLoading:
             with pytest.raises(vba.VbaUnavailable, match="sandbox said no"):
                 s.bridge(object())
         assert len(tries) == 1
+
+
+class TestAContainerThatDoesNotAnswer:
+    """While macOS asks the user whether this app may reach PowerPoint's data,
+    every file call into its container waits for the answer (2026-11-08: each
+    add-in call then waited out the worker's 69 s budget, one after another).
+    The add-in is then left alone, and only the first call waits."""
+
+    def test_a_look_that_does_not_come_back_is_given_up_on(self, monkeypatch):
+        gate = threading.Event()
+        monkeypatch.setattr(vba.os, "listdir", lambda folder: gate.wait(5))
+        start = time.monotonic()
+        reason = vba._container_reachable(timeout=0.2)
+        gate.set()
+        assert "did not answer" in reason and time.monotonic() - start < 1
+
+    def test_a_refusal_says_so(self, monkeypatch):
+        def denied(folder):
+            raise PermissionError(1, "Operation not permitted")
+        monkeypatch.setattr(vba.os, "listdir", denied)
+        assert "PermissionError" in vba._container_reachable(timeout=1)
+
+    def test_a_container_not_made_yet_is_fine(self, tmp_path):
+        assert vba._container_reachable(tmp_path / "not yet", timeout=1) is None
+
+    def test_then_the_add_in_is_not_loaded_and_later_calls_do_not_look_again(self, session, monkeypatch):
+        s, _, _ = session
+        looks = []
+
+        def held_up(*a, **k):
+            looks.append(1)
+            return "PowerPoint's folder did not answer within 2s"
+        monkeypatch.setattr(vba, "_container_reachable", held_up)
+        app_ref = _app_ref(FakeAppRef(loaded=False))
+        for _ in range(3):
+            with pytest.raises(vba.VbaUnavailable, match="did not answer"):
+                s.bridge(app_ref)
+        assert len(looks) == 1 and app_ref.registered == []
+
+    def test_a_call_still_out_on_the_add_in_keeps_the_next_off_it(self, session):
+        s, _, _ = session
+        s.in_flight = True  # its worker was abandoned inside it
+        with pytest.raises(vba.VbaUnavailable, match="has not come back"):
+            s.bridge(_app_ref(FakeAppRef(loaded=False)))
+
+    def test_a_call_that_timed_out_keeps_the_next_off_the_add_in(self, monkeypatch):
+        s = vba._Session()
+        monkeypatch.setattr(vba, "_SESSION", s)
+
+        def times_out(*a, **k):
+            raise vba.BridgeTimeout("PowerPoint did not answer the VBA bridge within 60s.")
+        monkeypatch.setattr(vba, "_run_on_excel_or_not", times_out)
+        with pytest.raises(vba.BridgeTimeout):
+            vba._run(object(), lambda: None, (), {})
+        assert s.in_flight is False
+        with pytest.raises(vba.VbaUnavailable, match="did not answer the VBA bridge"):
+            s.bridge(object())
 
 
 # ---------------------------------------------------------------------------

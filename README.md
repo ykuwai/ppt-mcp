@@ -423,7 +423,10 @@ a copy of the file stays in PowerPoint's own folder. While it is loaded, other
 programs allowed to control PowerPoint can call it too, but only within
 PowerPoint's object model, and it refuses to run macros, quit or reach add-ins. Where it cannot be loaded,
 where macros are turned off by policy for instance, the tools work as described
-below. It is on by
+below. macOS may ask once whether the app that runs the server may reach data
+from other apps; allow it, as the add-in answers through PowerPoint's folder.
+Until it is answered, or if it is refused, the tools work as described below
+after a two-second wait. It is on by
 default; `PPT_MAC_VBA=off` in the server's `env` turns it off. A call the
 add-in would have taken then says so, in its `hint` or `warnings`, as it does
 when the add-in cannot be loaded.

@@ -426,7 +426,10 @@ programas autorizados a controlar o PowerPoint também podem chamá-lo, mas só
 dentro do modelo de objetos do PowerPoint, e ele se recusa a executar macros,
 fechar o PowerPoint ou acessar suplementos. Onde não puder ser carregado, por
 exemplo quando uma política desativa as macros, as ferramentas funcionam como
-descrito abaixo. Ele vem ativado por padrão;
+descrito abaixo. O macOS pode perguntar uma vez se o app que executa o servidor
+pode acessar dados de outros apps; permita, porque o suplemento responde pela
+pasta do PowerPoint. Até que seja respondido, ou se for recusado, as ferramentas
+funcionam como descrito abaixo depois de esperar dois segundos. Ele vem ativado por padrão;
 `PPT_MAC_VBA=off` no `env` do servidor o desativa. Uma chamada que o suplemento
 teria atendido diz isso então no `hint` ou em `warnings`, como quando o
 suplemento não pode ser carregado.
