@@ -101,6 +101,14 @@ class TestTheProtocol:
         assert when == datetime.datetime(2026, 11, 8, 1, 35, 21, tzinfo=datetime.timezone.utc)
         assert str(when) == "2026-11-08 01:35:21+00:00"  # what the Windows side lists
 
+    def test_a_date_with_the_locales_time_separator_is_still_a_date(self, tmp_path):
+        # Format$ writes ":" as the time separator of the Mac's region.
+        import datetime
+
+        bridge, _, _ = bridge_answering(tmp_path, "ok" + US + "date" + US + "Date" + US + "2026-11-08 01.35.21" + RS)
+        [when] = bridge.run([("app", "g", "DateTime")])
+        assert when == datetime.datetime(2026, 11, 8, 1, 35, 21, tzinfo=datetime.timezone.utc)
+
     def test_the_add_in_sends_a_date_in_a_fixed_form_not_the_locales(self):
         source = (Path("src/backend/vba") / "PptMcpBridge.bas").read_text(encoding="utf-8")
         describe = source[source.index("Private Function Describe"):]

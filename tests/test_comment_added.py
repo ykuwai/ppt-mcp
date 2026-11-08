@@ -78,8 +78,53 @@ def test_a_comment_made_as_asked_has_no_note(slide):
                    "left": 200, "top": 150}
 
 
+def test_a_comment_powerpoint_did_not_add_is_an_error(slide):
+    comments = slide(Comments())
+    comments.Add = lambda *a: None  # PowerPoint answered, and added nothing
+    comments.Add2 = lambda *a: None
+    with pytest.raises(RuntimeError, match="did not add the comment"):
+        add(1, "Check this", "Tester", "TT", 0, 0)
+
+
 def test_a_comment_that_cannot_be_found_again_answers_as_before(slide):
     comments = slide(Comments())
-    comments.Add = lambda *a: None  # PowerPoint added nothing anyone can see
-    comments.Add2 = lambda *a: None
+    real_add = comments.Add
+
+    def add_changed(left, top, author, initials, text):
+        real_add(left, top, author, initials, "something else")
+    comments.Add = add_changed
+    comments.Add2 = lambda *a: add_changed(*a[:5])
     assert add(1, "Check this", "Tester", "TT", 0, 0) == {"success": True, "text": "Check this", "author": "Tester"}
+
+
+def test_a_read_back_that_fails_does_not_fail_a_comment_that_was_added(slide):
+    # The caller would retry, and leave two.
+    comments = slide(Comments())
+    real_add = comments.Add
+
+    class Unreadable:
+        Text = "Check this"
+
+        @property
+        def Author(self):
+            raise RuntimeError("busy")
+
+    def add_unreadable(*a):
+        real_add(*a)
+        comments.items[-1] = Unreadable()
+    comments.Add = add_unreadable
+    comments.Add2 = lambda *a: add_unreadable(*a[:5])
+    out = add(1, "Check this", "Tester", "TT", 0, 0)
+    assert out["success"] is True and "would not say" in out["note"]
+    assert comments.Count == 1
+
+
+def test_a_comment_with_a_line_break_is_found_again(slide):
+    comments = slide(Comments())
+    real_add = comments.Add
+
+    def stored_with_cr(left, top, author, initials, text):
+        real_add(left, top, author, initials, text.replace("\n", "\r"))
+    comments.Add = stored_with_cr
+    comments.Add2 = lambda *a: stored_with_cr(*a[:5])
+    assert add(1, "One\nTwo", "Tester", "TT", 0, 0)["author"] == "Alon"

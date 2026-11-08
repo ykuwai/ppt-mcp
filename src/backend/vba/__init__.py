@@ -42,6 +42,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
@@ -327,7 +328,9 @@ class Bridge:
             # As pywin32 hands a COM date over: the time PowerPoint holds,
             # labelled UTC. In VBA's own text it would follow the Mac's
             # locale, "08/11/2026 1:35:21", day or month first.
-            return datetime.datetime.strptime(f[2], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+            # Format$ writes a colon as the locale's time separator, "01.35.21".
+            parts = [int(n) for n in re.findall(r"\d+", f[2])]
+            return datetime.datetime(*parts[:6], tzinfo=datetime.timezone.utc)
         if kind == "obj":
             return Proxy(self, f[2], f[1])
         if kind == "array1":
