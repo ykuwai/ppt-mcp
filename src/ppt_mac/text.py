@@ -443,28 +443,10 @@ def _runs_to_markdown(paragraph) -> str:
 
 
 def _format_runs(raw) -> str:
-    """Runs as Markdown, consecutive ones with the same emphasis merged."""
-    merged = []
-    for r in raw:
-        if merged and merged[-1]["bold"] == r["bold"] and merged[-1]["italic"] == r["italic"]:
-            merged[-1]["text"] += r["text"]
-        else:
-            merged.append(dict(r))
+    """Runs as Markdown: ppt_com.text.format_runs, shared with Windows."""
+    from ppt_com.text import format_runs
 
-    # Format
-    parts = []
-    for m in merged:
-        t = m["text"]
-        if m["bold"] and m["italic"]:
-            parts.append(f"***{t}***")
-        elif m["bold"]:
-            parts.append(f"**{t}**")
-        elif m["italic"]:
-            parts.append(f"*{t}*")
-        else:
-            parts.append(t)
-
-    return "".join(parts)
+    return format_runs(raw)
 
 
 def _plain_text(text_range) -> str:

@@ -847,7 +847,18 @@ def _runs_to_markdown(paragraph) -> str:
         except Exception:
             continue
 
-    # Merge consecutive runs with identical formatting
+    return format_runs(raw)
+
+
+def format_runs(raw) -> str:
+    """Runs as Markdown, consecutive ones with the same emphasis merged.
+
+    A run's spaces at either end go outside its markers: emphasis that
+    starts or ends with a space is not emphasis in Markdown, so " sharply"
+    in italics written as "* sharply*" showed its asterisks, and
+    "**fell*** sharply*" lost the italics. A run of spaces alone is left
+    plain.
+    """
     merged = []
     for r in raw:
         if merged and merged[-1]["bold"] == r["bold"] and merged[-1]["italic"] == r["italic"]:
@@ -855,19 +866,16 @@ def _runs_to_markdown(paragraph) -> str:
         else:
             merged.append(dict(r))
 
-    # Format
     parts = []
     for m in merged:
-        t = m["text"]
-        if m["bold"] and m["italic"]:
-            parts.append(f"***{t}***")
-        elif m["bold"]:
-            parts.append(f"**{t}**")
-        elif m["italic"]:
-            parts.append(f"*{t}*")
-        else:
-            parts.append(t)
-
+        text = m["text"]
+        marks = "***" if m["bold"] and m["italic"] else "**" if m["bold"] else "*" if m["italic"] else ""
+        core = text.strip()
+        if not marks or not core:
+            parts.append(text)
+            continue
+        start = text.index(core)
+        parts.append(f"{text[:start]}{marks}{core}{marks}{text[start + len(core):]}")
     return "".join(parts)
 
 
