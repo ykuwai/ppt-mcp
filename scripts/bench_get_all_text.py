@@ -238,7 +238,6 @@ def _fmt(times):
 
 
 async def main(args):
-    info = await run("ppt_get_app_info", {})
     folder = _copy_folder()
     path = os.path.join(folder, "ppt-mcp-bench.pptx")
     picture = os.path.join(folder, "ppt-mcp-bench-picture.png")
@@ -253,7 +252,9 @@ async def main(args):
     if not isinstance(opened, dict) or "name" not in opened:
         os.remove(path)
         raise SystemExit(f"Could not open the deck: {opened}")
-    deck = opened["name"]
+    deck = opened.get("full_name") or opened["name"]
+    # Asked once PowerPoint is surely running: before, it can answer an error.
+    info = await run("ppt_get_app_info", {})
     rows = []
     try:
         times, text = await timed("ppt_get_all_text", {}, deck, args.runs)
@@ -281,8 +282,13 @@ async def main(args):
         if args.keep:
             print(f"Left {deck} open (--keep), from {path}.")
         else:
-            await run("ppt_close_presentation", {"save_changes": False, "presentation_name": deck}, deck)
-            os.remove(path)
+            # By `presentation`, which finds the deck by its full name too:
+            # its Name alone can change while it is open.
+            closed = await run("ppt_close_presentation", {"save_changes": False}, deck)
+            if isinstance(closed, dict) and closed.get("success"):
+                os.remove(path)
+            else:
+                print(f"Could not close {deck}, so it is still open: {closed}")
 
     bridge = ""
     if sys.platform == "darwin":
