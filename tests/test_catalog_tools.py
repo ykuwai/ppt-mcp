@@ -550,3 +550,38 @@ class TestOnTheServer:
         with pytest.raises(Exception, match="slide_index"):
             anyio.run(lambda: _server().ppt_run("ppt_add_textbox", {
                 "slide_index": 0, "left": 0, "top": 0, "width": 1, "height": 1}))
+
+
+# ---------------------------------------------------------------------------
+# Through the server, as a client calls them
+# ---------------------------------------------------------------------------
+class TestThroughTheServer:
+    """A client reaches ppt_run and ppt_run_steps through the server's
+    call_tool, which takes a `presentation` argument out of a call before the
+    tool runs. Theirs has to reach them: they hand it to the tool they run."""
+
+    @pytest.fixture
+    def catalog(self, probes):
+        srv = probes.mcp
+        srv.tool(name="ppt_run")(probes.ppt_run)
+        srv.tool(name="ppt_run_steps")(probes.ppt_run_steps)
+        return probes
+
+    def call(self, server, name, arguments):
+        result = run(server.mcp.call_tool, name, arguments)
+        blocks = result.content if hasattr(result, "content") else (result[0] if isinstance(result, tuple) else result)
+        return json.loads(text_of(blocks))
+
+    def test_ppt_run_takes_its_presentation_to_the_tool(self, catalog):
+        out = self.call(catalog, "ppt_run", {"tool": "ppt_echo", "params": {}, "presentation": "a.pptx"})
+        assert out["deck"] == "a.pptx"
+        assert call_presentation.get() is None
+
+    def test_ppt_run_steps_takes_its_presentation_to_every_step(self, catalog):
+        report = self.call(catalog, "ppt_run_steps", {
+            "steps": [{"tool": "ppt_echo"}, {"tool": "ppt_echo", "presentation": "b.pptx"}],
+            "presentation": "a.pptx"})
+        assert [s["result"]["deck"] for s in report["steps"]] == ["a.pptx", "b.pptx"]
+
+    def test_a_direct_call_still_takes_its_presentation(self, catalog):
+        assert self.call(catalog, "ppt_echo", {"params": {}, "presentation": "c.pptx"})["deck"] == "c.pptx"

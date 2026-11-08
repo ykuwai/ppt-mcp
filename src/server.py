@@ -201,7 +201,11 @@ class _PowerPointServer(MCPServer):
 
     async def call_tool(self, name, arguments, *args, **kwargs):
         wanted = None
-        if isinstance(arguments, dict) and PRESENTATION_ARG in arguments:
+        # ppt_run and ppt_run_steps take `presentation` as an argument of
+        # their own and hand it to the tool they run; taken out here, the call
+        # they made went to whatever deck was in front instead.
+        if (isinstance(arguments, dict) and PRESENTATION_ARG in arguments
+                and name not in _CATALOG_TOOLS):
             arguments = dict(arguments)
             wanted = arguments.pop(PRESENTATION_ARG)
             if wanted is not None and not isinstance(wanted, str):
