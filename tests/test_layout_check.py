@@ -1984,6 +1984,15 @@ class TestTypos:
         assert "whole_words=true" in finding["fix"]
         assert "include_groups" not in finding["fix"]
 
+    def test_a_slip_ending_in_a_mark_is_fixed_without_whole_words(self):
+        # The Mac's whole-word search puts \b at each end, and "fell ,"
+        # ends where no \b can follow.
+        box = textbox("t", 100, 100, 400, 40)
+        for words in ("Costs fell , as planned", "Sales grew  12% this year"):
+            box["text"]["content"] = words
+            [finding] = check(box)
+            assert "whole_words" not in finding["fix"]
+
     def test_a_word_cut_short_where_the_text_kept_ends_is_not_a_slip(self):
         # The text kept stops at _CONTENT_KEPT characters, here inside
         # "the theory", which then reads as "the the".

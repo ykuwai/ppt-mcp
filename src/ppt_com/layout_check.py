@@ -3463,7 +3463,8 @@ def _typos(slide_index, shapes, in_groups=False):
     first one.
 
     Each fix is the ppt_find_replace_text call that corrects it, with
-    whole_words, so "the the" is not also found in "the theory", and with
+    whole_words for a doubled word, so "the the" is not also found in "the
+    theory", and with
     include_groups for a shape inside a group (``in_groups``), which that
     tool skips otherwise. The text kept is cut at ``_CONTENT_KEPT`` characters,
     so its last word, which may be cut short, is not read.
@@ -3480,11 +3481,15 @@ def _typos(slide_index, shapes, in_groups=False):
         name = shape["name"]
         groups = " include_groups=true" if in_groups else ""
         for kind, sample, corrected, severity in _slips(re.split(r"[\r\n\v]", content)):
+            # Only a doubled word needs whole words: the other samples are
+            # corrected the same wherever else they are found, and can end in
+            # a mark, which the Mac's whole-word search (\b) never matches.
+            whole = " whole_words=true" if kind == "repeated_word" else ""
             findings.append(_finding(
                 slide_index, "typo", [name],
                 f"'{name}' has {what[kind]}: \"{sample}\".",
                 f"ppt_find_replace_text find_text={sample!r} replace_text={corrected!r} "
-                f"shape_name={name!r} slide_indices=[{slide_index}] match_case=true whole_words=true"
+                f"shape_name={name!r} slide_indices=[{slide_index}] match_case=true{whole}"
                 f"{groups}, unless it is meant.",
                 severity=severity, typo=kind, sample=sample,
             ))
