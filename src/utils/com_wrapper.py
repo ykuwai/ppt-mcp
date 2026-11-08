@@ -203,6 +203,23 @@ _OBJECT_AT = re.compile(r"with obj at (0x[0-9A-Fa-f]+)>")
 # held belong to one that has gone; they are let go of and read anew.
 _TYPE_INFOS_KEPT = 256
 _type_infos_here = threading.local()
+# The type libraries whose type informations are kept: PowerPoint's and
+# Office's. Not Excel's, which a chart's workbook brings in: letting go of a
+# reference into an Excel that is ending waits for it, up to a minute, and
+# utils/held_refs.py (#299) keeps them away from the worker for that reason.
+_KEPT_LIBRARIES = frozenset({
+    "{91493440-5A91-11CF-8700-00AA0060263B}",  # PowerPoint
+    "{2DF8D04C-5BFA-101B-BDE5-00AA0044DE52}",  # Office
+})
+
+
+def _of_powerpoint(typeinfo) -> bool:
+    """Whether a type information comes from PowerPoint's or Office's library."""
+    try:
+        library = typeinfo.GetContainingTypeLib()[0]
+        return str(library.GetLibAttr()[0]).upper() in _KEPT_LIBRARIES
+    except Exception:  # noqa: BLE001 - then it is not kept, and asked each time
+        return False
 
 
 def _interface_of(typeinfo):
@@ -213,7 +230,8 @@ def _interface_of(typeinfo):
     pywin32 holds. While it is kept, COM hands this apartment the same proxy
     for that type information, and no other object can be given its address,
     so the address answers the interface without a call into PowerPoint. A
-    type information whose address cannot be read is asked, as before.
+    type information whose address cannot be read is asked, as before, and so
+    is one from any library but PowerPoint's and Office's (``_KEPT_LIBRARIES``).
     """
     found = _OBJECT_AT.search(repr(typeinfo))
     if found is None:
@@ -225,6 +243,8 @@ def _interface_of(typeinfo):
     if entry is not None:
         return entry[1]
     interface = typeinfo.GetTypeAttr()[0]
+    if not _of_powerpoint(typeinfo):
+        return interface
     if len(kept) >= _TYPE_INFOS_KEPT:
         kept.clear()
     kept[found.group(1)] = (typeinfo, interface)
@@ -256,7 +276,7 @@ def wrap_known_interfaces(client, shared, gencache, com_error, null_iid) -> None
     one makepy has a class for all take pywin32's own path, unchanged.
 
     The GetTypeAttr is asked once per type information, not once per object:
-    ``_type_infos`` keeps each type information it has read, so PowerPoint
+    ``_interface_of`` keeps each type information of PowerPoint's it has read, so PowerPoint
     hands every later object of that interface the same one, and its address
     finds the interface. A layout check of a 50-slide deck went from 8.1-8.8 s
     to 6.9-7.1 s (best of four, two rounds) with the same answer.
