@@ -509,6 +509,12 @@ def _resolve_presentation(
             available.append(f"  [{i}] {name}")
             if name == presentation_name:
                 matches.append((i, pres))
+        if not matches:
+            # A new deck's Name follows its first slide's title once it has
+            # one, and its FullName keeps the name it was created with, the
+            # one a caller was told (#371).
+            matches = [(i, app.Presentations(i)) for i in range(1, count + 1)
+                       if app.Presentations(i).FullName == presentation_name]
         if len(matches) == 1:
             return matches[0][1]
         if len(matches) > 1:
