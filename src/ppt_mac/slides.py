@@ -95,7 +95,9 @@ def _slide_count(pres) -> int:
     Named rather than inlined because several callers here take a parameter
     called ``count``, which would otherwise shadow the helper of that name.
     """
-    return count(pres.slides)
+    from backend.mac_ae import slide_total
+
+    return slide_total(pres)
 
 
 def _shape_count(container) -> int:

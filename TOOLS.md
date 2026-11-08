@@ -1,14 +1,14 @@
 # Tools
 
-ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/categories--> categories. Each tool's own description, which your client shows, says what it takes. On macOS some tools work differently or refuse: [MACOS_PORT.md](MACOS_PORT.md) lists them.
+ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/categories--> categories. Each tool's own description, which your client shows, says what it takes. On macOS some tools work differently or refuse: [MACOS_PORT.md](MACOS_PORT.md) lists them. There, a call that PowerPoint for Mac's VBA add-in would have taken but that ran without it, because `PPT_MAC_VBA=off` or because the add-in could not be loaded, says so: a refusal carries a `hint` naming the reason, and a shape that had to be recreated gets a warning that the add-in would have edited it in place.
 
 | Category | Tools | Description |
 |----------|------:|-------------|
-| **App** | 5 | Connect to PowerPoint, app info, active window, window state, list presentations |
-| **Presentation** | 8 | Create (with templates), open (a local file, or on Windows a SharePoint or OneDrive URL), save, close, info, activate target, list templates |
+| **App** | 5 | Connect to PowerPoint, app info, active window, window state (on macOS, normal and maximized on the front deck's window; minimized is refused), list presentations |
+| **Presentation** | 8 | Create (with templates), open (a local file, or on Windows a SharePoint or OneDrive URL), save, close (quitting a PowerPoint the server started once its last deck is closed, and saying so, or saying it is still shutting down), info, activate target, list templates |
 | **Slides** | 10 | Add, delete (bulk), duplicate (positional/multi), move (bulk), copy (cross-presentation), list, info, notes, navigation |
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines (with z-order placement, including behind the text), list, info (position, fill, line, text frame), update (one shape, a set, or the whole slide, absolute or by offset), delete, z-order |
-| **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups), textframe, extract all text as Markdown, typography check |
+| **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups, whole words including phrases with spaces), textframe, extract all text as Markdown, typography check |
 | **Placeholders** | 6 | List, get, set placeholder content |
 | **Formatting** | 3 | Fill, line, shadow (on the shape or on its text) |
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
@@ -22,10 +22,10 @@ ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/catego
 | **Hyperlinks** | 3 | Add, get, remove |
 | **Sections** | 3 | Add, list, manage |
 | **Properties** | 2 | Set/get presentation metadata |
-| **Media** | 3 | Video, audio, media settings |
+| **Media** | 3 | Video, audio, media settings (on macOS, trimming with `start_point` and `end_point` goes through the VBA add-in, and is refused without it) |
 | **SmartArt** | 3 | Add, modify, list layouts |
 | **Edit Operations** | 6 | Undo and redo (on the target presentation), copy shapes/formatting between slides |
-| **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check |
+| **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check (including slips of typing: a word twice, two spaces, a space before a comma or full stop) |
 | **Effects** | 3 | Glow and reflection (on the shape or on its text), soft edge |
 | **Comments** | 3 | Add, list, delete |
 | **Advanced** | 19 | Tags, fonts (list the deck's or this computer's, set defaults, bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |

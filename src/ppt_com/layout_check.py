@@ -216,7 +216,7 @@ _UNKNOWN_BACKDROP_TYPES = frozenset({
 # allowed to be unfinished, so those wait for ppt_check_layout.
 SHAPE_FINDINGS = frozenset({
     "off_slide", "overflow", "overlap", "low_contrast", "cramped_text",
-    "narrow_margin", "misaligned", "uneven_sizes", "sample_text", "number_order",
+    "narrow_margin", "misaligned", "uneven_sizes", "sample_text", "typo", "number_order",
     "text_direction", "mixed_direction", "stretched_picture", "title_edge", "font_missing",
     "small_text", "blurry_picture",
 })
@@ -227,7 +227,7 @@ _ORDER = (
     "small_text", "cramped_text", "chart_overlap",
     "narrow_margin", "misaligned", "title_edge", "uneven_spacing", "uneven_sizes",
     "number_order", "text_direction", "mixed_direction", "font_missing", "empty_placeholder",
-    "sample_text",
+    "sample_text", "typo",
     "chart_sample_data", "missing_alt_text",
     "missing_title", "duplicate_titles",
     "inconsistent_titles",
@@ -3435,6 +3435,94 @@ def _sample_text(slide_index, shapes):
     return findings
 
 
+# Slips of typing, each looked for within one line. A word typed twice
+# ("the the"), but not a number, and not one of the words English doubles on
+# purpose. Two spaces between two words, but not around a separator
+# ("Origins  ·  The plant"), which is set that way on purpose, not the spaces
+# that indent a line, and no tabs, which line up columns.
+# A space before a comma or a full stop that ends a word; the other marks are
+# left out, since French sets a space before ";:!?" on purpose.
+_REPEATED_WORD = re.compile(r"(?<!\w)([^\W\d_]+) +\1(?!\w)", re.IGNORECASE)
+_MEANT_TWICE = frozenset({
+    "had", "that", "bye", "no", "very", "so", "ha", "bora", "walla",
+    "much", "far", "is",  # "much much better", "far far away", "what it is is"
+    "nous", "vous",  # French reflexives: "nous nous voyons"
+    "die", "der", "das",  # German, an article then a relative pronoun
+})
+_DOUBLE_SPACE = re.compile(r"(?<=\w) {2,}(?=\w)")
+_SPACE_BEFORE_MARK = re.compile(r"(?<=\w) +[,.](?=\s|$)")
+
+
+def _typos(slide_index, shapes, in_groups=False):
+    """Slips of typing: a word twice in a row, two spaces between words, a
+    space before a comma or a full stop.
+
+    Read from the text the check already has, so it costs no call into
+    PowerPoint. A slide is read at a glance, and a slip on it is seen by
+    everyone in the room. One finding a shape for each kind of slip, on its
+    first one.
+
+    Each fix is the ppt_find_replace_text call that corrects it, with
+    whole_words for a doubled word, so "the the" is not also found in "the
+    theory", and with
+    include_groups for a shape inside a group (``in_groups``), which that
+    tool skips otherwise. The text kept is cut at ``_CONTENT_KEPT`` characters,
+    so its last word, which may be cut short, is not read.
+    """
+    what = {"repeated_word": "a word twice in a row", "double_space": "two spaces between words",
+            "space_before_punctuation": "a space before punctuation"}
+    findings = []
+    for shape in shapes:
+        content = (shape.get("text") or {}).get("content") or ""
+        if not content or not shape.get("visible", True):
+            continue
+        if len(content) >= _CONTENT_KEPT:
+            content = re.sub(r"\S*$", "", content)
+        name = shape["name"]
+        groups = " include_groups=true" if in_groups else ""
+        for kind, sample, corrected, severity in _slips(re.split(r"[\r\n\v]", content)):
+            # Only a doubled word needs whole words: the other samples are
+            # corrected the same wherever else they are found, and can end in
+            # a mark, which the Mac's whole-word search (\b) never matches.
+            whole = " whole_words=true" if kind == "repeated_word" else ""
+            findings.append(_finding(
+                slide_index, "typo", [name],
+                f"'{name}' has {what[kind]}: \"{sample}\".",
+                f"ppt_find_replace_text find_text={sample!r} replace_text={corrected!r} "
+                f"shape_name={name!r} slide_indices=[{slide_index}] match_case=true{whole}"
+                f"{groups}, unless it is meant.",
+                severity=severity, typo=kind, sample=sample,
+            ))
+    return findings
+
+
+def _slips(lines):
+    """The first slip of each kind in these lines: (kind, the text found,
+    the text it should be, severity)."""
+    for line in lines:
+        for m in _REPEATED_WORD.finditer(line):
+            if m.group(1).lower() not in _MEANT_TWICE:
+                yield "repeated_word", m.group(0), m.group(1), "warning"
+                break
+        else:
+            continue
+        break
+    for line in lines:
+        m = _DOUBLE_SPACE.search(line)
+        if m:
+            # The words either side, so that the text found is found again.
+            left = re.search(r"\S*$", line[:m.start()]).group(0)
+            right = re.match(r"\S*", line[m.end():]).group(0)
+            yield "double_space", left + m.group(0) + right, left + " " + right, "info"
+            break
+    for line in lines:
+        m = _SPACE_BEFORE_MARK.search(line)
+        if m:
+            left = re.search(r"\S*$", line[:m.start()]).group(0)
+            yield "space_before_punctuation", left + m.group(0), left + m.group(0).strip(), "info"
+            break
+
+
 # The bidi classes of letters: a paragraph takes its direction from its first
 # one. Digits have none of their own.
 _LEFT_TO_RIGHT = frozenset({"L"})
@@ -4264,6 +4352,7 @@ def slide_findings(slide, slide_w, slide_h, only=None, trust_template=True):
         + _off_centre_labels(index, layout)
         + _uneven_sizes(index, layout)
         + _sample_text(index, shapes)
+        + _typos(index, shapes)
         + _chart_sample_data(index, shapes)
         + _fonts(index, shapes, slide.get("theme_fonts"))
         + _stretched(index, shapes, slide_w * slide_h)
@@ -4358,6 +4447,7 @@ def _inside_groups(index, slide, slide_w, slide_h, trust_template=True):
     findings = (_overflow(index, inner, layout)
                 + contrast
                 + _sample_text(index, inner)
+                + _typos(index, inner, in_groups=True)
                 + _number_order(index, inner)
                 + _text_direction(index, inner)
                 + _mixed_direction(index, inner)
@@ -6447,6 +6537,8 @@ def register_tools(mcp):
         - empty_placeholder: a placeholder left without text
         - sample_text: text a template or a draft left to be replaced, such
           as lorem ipsum, "Your title here", "[Company name]" or "XX%"
+        - typo: a word typed twice ("the the"), two spaces between words, or
+          a space before a comma or a full stop
         - small_text: text under 10 pt, at the size it is drawn
         - blurry_picture: a picture drawn larger than its image's pixels
         - chart_overlap: data labels on each other, or a legend or title on

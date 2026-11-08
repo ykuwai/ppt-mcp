@@ -100,7 +100,7 @@ class TestTheToolsSayWhenItWasLeftOpen:
         shown = SimpleNamespace(Name="S", Values=(1.0,), XValues=("Q1",))
         chart.SeriesCollection = lambda *i: shown if i else SimpleNamespace(Count=1)
         shape = SimpleNamespace(Name="Chart 1", ZOrderPosition=1, Chart=chart, HasChart=True)
-        sheet = SimpleNamespace(Cells=lambda *a: SimpleNamespace(Value=None),
+        sheet = SimpleNamespace(Cells=lambda *a: SimpleNamespace(Value=None, Clear=lambda: None),
                                 Range=lambda *a: SimpleNamespace(Address="$A$1:$B$2"))
         workbook.Worksheets = lambda i: sheet
         shapes = SimpleNamespace(AddChart2=lambda *a: shape)
@@ -572,3 +572,49 @@ class TestTheOldDataIsClearedAfterTheNew:
         from ppt_com.charts import _clear_beyond
 
         _clear_beyond(SimpleNamespace(), (6, 5), 4, 3)  # no Range: logged, not raised
+
+
+class TestCellsAreWrittenWithoutNone:
+    """Through PowerPoint for Mac's VBA, Excel refuses a None written to a
+    cell (error 1004), which made every chart data write fail there. Cells to
+    be left empty are cleared instead."""
+
+    def sheet(self):
+        from types import SimpleNamespace
+
+        cells = {}
+
+        class Cell:
+            def __init__(self, r, c):
+                self.at = (r, c)
+
+            @property
+            def Value(self):
+                return cells.get(self.at)
+
+            @Value.setter
+            def Value(self, value):
+                if value is None:
+                    raise RuntimeError("(-2147352567, 'Exception occurred.', (0, 'VBAProject', "
+                                       "'Application-defined or object-defined error', '', 0, 1004), None)")
+                cells[self.at] = value
+
+            def Clear(self):
+                cells[self.at] = "<cleared>"
+
+        return SimpleNamespace(Cells=lambda r, c: Cell(r, c)), cells
+
+    def test_the_data_is_written_and_the_corner_cleared(self):
+        from ppt_com.charts import _write_chart_cells
+
+        ws, cells = self.sheet()
+        _write_chart_cells(ws, ["X", "Y"], [{"name": "S", "values": [1, 2]}])
+        assert cells == {(1, 1): "<cleared>", (2, 1): "X", (3, 1): "Y", (1, 2): "S", (2, 2): 1, (3, 2): 2}
+
+    def test_a_short_series_has_its_remaining_rows_cleared(self):
+        from ppt_com.charts import _write_chart_cells
+
+        ws, cells = self.sheet()
+        _write_chart_cells(ws, ["A", "B", "C"], [{"name": "Long", "values": [3, 4, 5]},
+                                                {"name": "Short", "values": [1]}])
+        assert [cells[(r, 3)] for r in (1, 2, 3, 4)] == ["Short", 1, "<cleared>", "<cleared>"]

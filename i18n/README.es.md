@@ -371,7 +371,7 @@ Cada escritura lleva la ventana de la presentación a la diapositiva en la que t
 
 ### La lista de herramientas: modo catálogo
 
-Un cliente envía la descripción de cada herramienta que lista con cada petición, y las de este servidor suman unos 112k tokens, una buena parte de una ventana de 128k o 200k antes de empezar a trabajar. Con `PPT_TOOL_MODE=catalog` en el `env` del servidor, el servidor lista solo tres herramientas, unos 700 tokens, y el modelo llega al resto a través de ellas:
+Un cliente envía la descripción de cada herramienta que lista con cada petición, y las de este servidor suman unos 112k tokens, una buena parte de una ventana de 128k o 200k antes de empezar a trabajar. De forma predeterminada, el servidor lista solo tres herramientas, unos 700 tokens, y el modelo llega al resto a través de ellas:
 
 | Herramienta | Qué hace |
 |---|---|
@@ -381,7 +381,7 @@ Un cliente envía la descripción de cada herramienta que lista con cada petici�
 
 Las herramientas en sí son las mismas, con los mismos argumentos, comprobaciones y respuestas, y `presentation` se pasa de la misma manera. El modelo consulta `ppt_describe` antes de usar una herramienta por primera vez, lo que cuesta una llamada. Al crear la misma presentación de 12 diapositivas con Claude Code, el contexto llegó como máximo a 136k tokens en modo catálogo frente a 206k con todas las herramientas listadas, y la ejecución costó un tercio menos.
 
-Lo que se pierde en modo catálogo es el control por herramienta en el cliente: aprobar o bloquear una herramienta por su nombre, y su indicación de solo lectura, se aplican a las tres herramientas de arriba y no a cada una. Por eso no es el modo predeterminado: cada herramienta se lista con su propio nombre salvo que el ajuste pida otra cosa, que es también lo que indica `PPT_TOOL_MODE=full`. Un valor distinto de `catalog` o `full` se ignora con un aviso, y se listan todas las herramientas.
+Lo que se pierde en modo catálogo es el control por herramienta en el cliente: aprobar o bloquear una herramienta por su nombre, y su indicación de solo lectura, se aplican a las tres herramientas de arriba y no a cada una. Un cliente que depende de eso pone `PPT_TOOL_MODE=full` en el `env` del servidor, y cada herramienta se lista con su propio nombre, como abajo; `PPT_TOOL_MODE=catalog` es el modo predeterminado. Un valor distinto de `catalog` o `full` se ignora con un aviso, y se usa el modo catálogo.
 
 ```json
 {
@@ -389,7 +389,7 @@ Lo que se pierde en modo catálogo es el control por herramienta en el cliente: 
     "powerpoint": {
       "command": "uvx",
       "args": ["ppt-mcp"],
-      "env": { "PPT_TOOL_MODE": "catalog" }
+      "env": { "PPT_TOOL_MODE": "full" }
     }
   }
 }
@@ -397,7 +397,7 @@ Lo que se pierde en modo catálogo es el control por herramienta en el cliente: 
 
 ## 🍎 Compatibilidad con macOS
 
-**<!--mac-refusals-->11<!--/mac-refusals--> herramientas se niegan a funcionar en macOS. El resto funciona.** Las <!--mac-refusals-->11<!--/mac-refusals--> aparecen por nombre en
+**Con el complemento VBA, activado por defecto, 3 herramientas se niegan a funcionar en macOS; sin él, <!--mac-refusals-->10<!--/mac-refusals-->. El resto funciona.** Las <!--mac-refusals-->10<!--/mac-refusals--> aparecen por nombre en
 la sección 6.1 de [MACOS_PORT.md](../MACOS_PORT.md), y una prueba se encarga de que esa lista sea exacta.
 
 Las mismas herramientas, los mismos argumentos, las mismas respuestas. Lo que
@@ -405,7 +405,7 @@ cambia es lo que alcanza el diccionario de scripting de PowerPoint para Mac, y
 cuando no alcanza algo, la herramienta lo dice en lugar de hacer algo
 inesperado.
 
-**El VBA de PowerPoint para Mac llega más lejos, y se puede activar.** El
+**El VBA de PowerPoint para Mac llega más lejos.** El
 servidor carga en PowerPoint un pequeño complemento, `ppt-mcp-bridge`, y ejecuta
 a través de él el código de Windows para lo que el diccionario de scripting no
 tiene palabras: etiquetas, `ppt_select_shapes`, `ppt_set_table_style`, quitar y
@@ -419,16 +419,23 @@ argumentos que el
 Mac rechaza de otro modo (la información en pantalla, una fila o columna de
 tabla en una posición, una animación que se inicia al hacer clic en otra forma,
 los tamaños del reflejo, el resplandor, la sombra y el reflejo sobre el texto,
-reducir el texto para que quepa, el volumen, el silencio y los fundidos, el
-estilo del gráfico y la posición de la leyenda y del título). Esas herramientas
+reducir el texto para que quepa, el volumen, el silencio, el recorte y los fundidos,
+el estilo del gráfico y la posición de la leyenda y del título). Esas herramientas
 editan la forma en su sitio, así que conserva sus animaciones, y no tocan el
 portapapeles. El complemento solo transmite esas llamadas; su código fuente está
-en `src/backend/vba`. PowerPoint lo carga sin preguntar, dura hasta que
-PowerPoint se cierra y no deja nada atrás. Donde no puede cargarse, por ejemplo
+en `src/backend/vba`. PowerPoint lo carga sin preguntar y lo mantiene hasta que se cierra;
+una copia del archivo queda en la carpeta propia de PowerPoint. Mientras está
+cargado, otros programas autorizados a controlar PowerPoint también pueden
+llamarlo, pero solo dentro del modelo de objetos de PowerPoint, y se niega a
+ejecutar macros, cerrar PowerPoint o acceder a complementos. Donde no puede cargarse, por ejemplo
 si una directiva desactiva las macros, las herramientas funcionan como se
-describe abajo. Está desactivado por defecto, porque es
-código de macros que se carga sin preguntar. Pon `PPT_MAC_VBA=on` en el `env`
-del servidor para usarlo.
+describe abajo. macOS puede preguntar una vez si la app que ejecuta el servidor
+puede acceder a datos de otras apps; permítelo, porque el complemento responde a
+través de la carpeta de PowerPoint. Hasta que se responda, o si se rechaza, las
+herramientas funcionan como se describe abajo tras esperar dos segundos. Está activado por defecto;
+`PPT_MAC_VBA=off` en el `env` del servidor lo desactiva. Una llamada que el
+complemento habría atendido lo dice entonces en su `hint` o en `warnings`, igual
+que cuando el complemento no puede cargarse.
 
 No disponible en macOS:
 
@@ -451,8 +458,8 @@ Diferencias menores:
   mensaje que nombra el argumento, así que basta con quitarlo y reintentar.
 - **El vídeo y el audio se insertan incrustados, nunca vinculados**, y de los
   ocho ajustes de reproducción solo existen la repetición en bucle y ocultar el
-  fotograma, y con el complemento también el volumen, el silencio y los
-  fundidos. Ocultar el fotograma se rechaza en una diapositiva que ya tiene
+  fotograma, y con el complemento también el volumen, el silencio, el
+  recorte y los fundidos. Ocultar el fotograma se rechaza en una diapositiva que ya tiene
   animaciones, porque escribirlo las reescribe.
 - Las exportaciones se preparan en el contenedor propio de PowerPoint y luego se
   mueven fuera, porque la aplicación está aislada (sandbox) y no puede escribir

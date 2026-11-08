@@ -179,6 +179,7 @@ them in one place.
 | `shape.rotation` raises `AttributeError` | the dictionary defines both an enumerator and a property named `rotation`, and appscript resolves the collision toward the enumerator | reach the property by raw code. Verified working, set 33 and read 33.0 back |
 | `line_format.dash_style` raises `AttributeError` | same collision class, the `line dash style …` enumerators take the name | raw code `b'LFds'` |
 | PowerPoint stops answering | a modal sheet, or an operation that wedged it | every call carries `timeout=`, which appscript supports on every command |
+| A call right after the server quits PowerPoint fails with -600, or its deck lands in a new PowerPoint left running as the user's | `quit` returns while PowerPoint is still shutting down, so the next call finds it running | the close that quits PowerPoint waits until that process has gone (`quit_and_wait`) |
 
 The raw code route is small enough to state in full.
 
@@ -534,8 +535,8 @@ through a text style's `ruler`.
 The table above is by area. This is the list a user actually wants, and it is
 checked against the code by a test, so it cannot quietly go stale.
 
-**157 tools. 146 do the job. 11 always refuse.** These are the counts without
-the VBA bridge (6.3); with it, seven of the eleven work (tags, selecting
+**157 tools. 147 do the job. 10 always refuse.** These are the counts without
+the VBA bridge (6.3); with it, seven of the ten work (tags, selecting
 shapes, table styles, removing and copying one animation, a freeform node's
 editing type), and so do most refused arguments.
 
@@ -547,10 +548,9 @@ editing type), and so do most refused arguments.
 | Deleting one effect answers -50 and clearing its shape costs the slide | `ppt_remove_animation`, `ppt_copy_animation` |
 | No table style, only the text direction | `ppt_set_table_style` |
 | No ExecuteMso and no StartNewUndoEntry | `ppt_execute_mso`, `ppt_start_undo_entry` |
-| No application window state, only each deck's window position and size | `ppt_set_window_state` |
 | No Boolean merge verbs (union, combine, intersect, subtract, fragment), and no shape range to merge | `ppt_merge_shapes` |
 
-A further **18 tools work and refuse one argument**, with `error` naming
+A further **19 tools work and refuse one argument**, with `error` naming
 the argument rather than the tool, so dropping it and calling again works.
 `ppt_add_hyperlink` cannot take a `screen_tip`, `ppt_add_table_row` and
 `ppt_add_table_column` cannot insert at a `position`, `ppt_add_animation`
@@ -561,7 +561,10 @@ fade, `ppt_format_chart` cannot take `chart_style` (choosing a style rewrites
 the chart's own formatting from the style's definition, which the clipboard
 route would have to redo), the legend and title coordinates or an
 8-direction `legend_position` (they are computed from the chart's rendered
-size, which the XML does not carry), `ppt_set_textframe`
+size, which the XML does not carry), `ppt_set_window_state` cannot take
+`window_state='minimized'` (it maximises and restores the front deck's window
+through the window's `zoomed`; `miniaturized` reads empty and does nothing),
+`ppt_set_textframe`
 cannot take `auto_size='shrink_to_fit'` (PowerPoint for Mac refuses to set it
 from a script, under either of its names). `ppt_set_glow`, `ppt_set_shadow` and `ppt_set_reflection` take a `target`, and whether `target='text'` works depends on whether the font carries that effect in the dictionary; where it does not, the tool refuses the argument by name rather than quietly setting the shape effect instead. The rest are
 checks that report a write which did not land rather than a capability that
@@ -674,8 +677,10 @@ saying which names are properties and which methods. So the *Windows*
 implementation of a tool runs unchanged; `backend/vba/routes.py` lists which,
 and `use_mac_impls` puts a router in front of the Apple Event implementation
 that takes the VBA route when the call needs it and the add-in loads, and the
-Apple Event route otherwise. It is off by default, because the add-in is macro
-code PowerPoint loads without a prompt; `PPT_MAC_VBA=on` turns it on.
+Apple Event route otherwise. It is on by default and `PPT_MAC_VBA=off` turns it
+off; a call the add-in would have taken then says so (`routed` puts a `hint` on a
+refusal and a warning on a recreated shape), as it does when the add-in cannot
+be loaded.
 
 What it took to make it dependable:
 
@@ -702,6 +707,24 @@ What it took to make it dependable:
   type library for the workbook, its sheets and ranges comes from the copy
   PowerPoint for Mac ships (`--excel-tlb`). Tried with Excel already running;
   with Excel not running, `ChartData.Activate` starts it.
+- **Excel comes to the front, and stays running.** `ChartData.Activate` brings
+  Excel to the front on every call, and an Excel it started is not quit when
+  the workbook closes. So after each chart call through the add-in that
+  opened a chart's workbook, an Excel that took the front is hidden, and one
+  the call started is quit once the workbook is closed, unless it shows a
+  window, which can only be one the user opened in it meanwhile
+  (`backend/mac_excel.py`, through `NSRunningApplication` and the window list,
+  so with no Automation prompt for Excel). An Excel the user started is left
+  running, and a call that opened no workbook leaves Excel alone.
+- **macOS can hold up every look into PowerPoint's folder.** It may ask
+  whether the app that runs the server may reach data from other apps, and
+  until the user answers, each file call into PowerPoint's container waits
+  inside the call (2026-11-08, with the add-in loaded: every call through it
+  waited out the worker's 69 s budget, one after another). So before the add-in
+  is used, the container is looked at on a thread of its own for two seconds
+  (`_container_reachable`); one that does not answer, or refuses, leaves the
+  add-in alone for `RETRY_AFTER`, and so does a call that timed out or never
+  came back.
 - **Handles to a closed deck's SmartArt break SmartArt.** While the add-in
   holds handles to a SmartArt in a deck, closing that deck makes every
   SmartArt call after it fail, "Automation error" and then "Access denied" or
@@ -736,12 +759,11 @@ Left on the Apple Event route, with the reason:
 | `ppt_merge_shapes` | PowerPoint for Mac's VBA has no `MergeShapes` either (438) |
 | `ppt_execute_mso` | `CommandBars.GetEnabledMso` fails in its VBA (450) |
 | `ppt_start_undo_entry` | No `StartNewUndoEntry` (438) |
-| `ppt_set_window_state` | `Application.WindowState` takes the value and changes nothing |
+| `ppt_set_window_state` | `Application.WindowState` takes the value and changes nothing, and a deck window's `WindowState` zooms but reads back normal; the Apple Event route does maximised and normal through `zoomed`, and minimised has no way in |
 | `ppt_add_chart` | No `AddChart2` (438) |
 | bubble sizes on `ppt_set_chart_data` | Through VBA the data goes through the chart's Excel workbook, which takes names and values only |
 | `ppt_list_smartart_layouts`, `ppt_add_smartart`, `change_layout` on `ppt_modify_smartart` | Layouts are picked by index from the Mac's list of the 162 it installs, which needs no deck open. Its VBA knows 159, in another order, and none until a deck is open. Colour schemes and styles come in the same order on both sides, so the other SmartArt edits go through VBA |
 | `link_to_file` on video and audio | A linked file outside PowerPoint's container raises a sandbox prompt |
-| trimming media | Not yet checked through VBA, so it stays refused |
 
 Building the add-in needs PowerPoint for Windows, with "Trust access to the VBA
 project object model" turned on for the build only:

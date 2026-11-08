@@ -9,6 +9,7 @@ import functools
 import gc
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -195,6 +196,68 @@ class _TypeCompWhenAsked:
         yield self.typecomp
 
 
+# "<PyITypeInfo at 0x... with obj at 0x...>": the second is the interface
+# pointer itself, which pywin32 gives no other way.
+_OBJECT_AT = re.compile(r"with obj at (0x[0-9A-Fa-f]+)>")
+# Past this many, PowerPoint has been started again and the type informations
+# held belong to one that has gone; they are let go of and read anew.
+_TYPE_INFOS_KEPT = 256
+_type_infos_here = threading.local()
+# The type libraries whose type informations are kept: PowerPoint's and
+# Office's. Not Excel's, which a chart's workbook brings in: letting go of a
+# reference into an Excel that is ending waits for it, up to a minute, and
+# utils/held_refs.py (#299) keeps them away from the worker for that reason.
+_KEPT_LIBRARIES = frozenset({
+    "{91493440-5A91-11CF-8700-00AA0060263B}",  # PowerPoint
+    "{2DF8D04C-5BFA-101B-BDE5-00AA0044DE52}",  # Office
+})
+
+
+def _of_powerpoint(typeinfo) -> bool:
+    """Whether a type information comes from PowerPoint's or Office's library."""
+    try:
+        library = typeinfo.GetContainingTypeLib()[0]
+        return str(library.GetLibAttr()[0]).upper() in _KEPT_LIBRARIES
+    except Exception:  # noqa: BLE001 - then it is not kept, and asked each time
+        return False
+
+
+def _interface_of(typeinfo):
+    """The interface a type information describes, read once per type
+    information on this thread.
+
+    Each one read is kept, with its interface, by the address of the pointer
+    pywin32 holds. While it is kept, COM hands this apartment the same proxy
+    for that type information, and no other object can be given its address,
+    so the address answers the interface without a call into PowerPoint. A
+    type information whose address cannot be read is asked, as before, and so
+    is one from any library but PowerPoint's and Office's (``_KEPT_LIBRARIES``).
+    """
+    found = _OBJECT_AT.search(repr(typeinfo))
+    if found is None:
+        return typeinfo.GetTypeAttr()[0]
+    kept = getattr(_type_infos_here, "kept", None)
+    if kept is None:
+        kept = _type_infos_here.kept = {}
+    entry = kept.get(found.group(1))
+    if entry is not None:
+        return entry[1]
+    interface = typeinfo.GetTypeAttr()[0]
+    if not _of_powerpoint(typeinfo):
+        return interface
+    if len(kept) >= _TYPE_INFOS_KEPT:
+        kept.clear()
+    kept[found.group(1)] = (typeinfo, interface)
+    return interface
+
+
+def forget_type_infos() -> None:
+    """Let go of the type informations this thread keeps, before its
+    apartment ends: a COM reference let go of after CoUninitialize can crash
+    the process."""
+    _type_infos_here.__dict__.pop("kept", None)
+
+
 def wrap_known_interfaces(client, shared, gencache, com_error, null_iid) -> None:
     """Wrap an object of an interface already seen in two round trips, not four.
 
@@ -211,6 +274,12 @@ def wrap_known_interfaces(client, shared, gencache, com_error, null_iid) -> None
     ITypeComp left until a name needs binding. The first object of an
     interface, an object with no type information, one that says IID_NULL and
     one makepy has a class for all take pywin32's own path, unchanged.
+
+    The GetTypeAttr is asked once per type information, not once per object:
+    ``_interface_of`` keeps each type information of PowerPoint's it has read, so PowerPoint
+    hands every later object of that interface the same one, and its address
+    finds the interface. A layout check of a 50-slide deck went from 8.1-8.8 s
+    to 6.9-7.1 s (best of four, two rounds) with the same answer.
     """
     cdispatch = client.CDispatch
     original = cdispatch._wrap_dispatch_
@@ -218,7 +287,7 @@ def wrap_known_interfaces(client, shared, gencache, com_error, null_iid) -> None
     def _wrap_dispatch_(self, ob, userName=None, returnCLSID=None):
         try:
             typeinfo = ob.GetTypeInfo()
-            interface = typeinfo.GetTypeAttr()[0] if typeinfo is not None else None
+            interface = _interface_of(typeinfo) if typeinfo is not None else None
         except (com_error, AttributeError):
             return original(self, ob, userName, returnCLSID)
         if interface is None or interface == null_iid:
@@ -923,6 +992,7 @@ class PowerPointCOMWrapper:
             # not clear it on the way out.
             if generation == self._generation:
                 self._cleanup_com()
+            forget_type_infos()
             pythoncom.CoUninitialize()
 
     def execute(self, func: Callable, *args: Any,

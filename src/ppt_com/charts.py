@@ -12,6 +12,7 @@ You MUST close it with wb.Close(False) in a finally block to prevent leaked
 Excel processes.
 """
 
+import contextvars
 import json
 import logging
 import sys
@@ -382,6 +383,12 @@ def _get_chart_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 # COM implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
+# The Mac's VBA bridge puts away the Excel a chart's workbook brought up
+# (backend/mac_excel.py), but only after a call that opened one. It sets this
+# to its record of the call, and _close_chart_workbook, which every workbook
+# opened here goes through, notes on it what happened.
+excel_call = contextvars.ContextVar("excel_call", default=None)
+
 WORKBOOK_LEFT_OPEN = (
     "The chart's data workbook could not be closed, so Excel's 'Chart in "
     "Microsoft PowerPoint' window may still be open. Close it before adding or "
@@ -443,6 +450,9 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5, keep=None)
     ``ChartData.Activate`` does for a chart just added. Each workbook got here
     goes into ``keep``, an ``_ExcelRefs``, when one is given.
     """
+    call = excel_call.get()
+    if call is not None:
+        call.opened = True
     last = None
     for attempt in range(attempts):
         if attempt:
@@ -460,6 +470,8 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5, keep=None)
             # Only its text: the error's frames would hold the workbook.
             last = f"{type(e).__name__}: {e}"
     logger.warning("Could not close a chart's data workbook after %d tries: %s", attempts, last)
+    if call is not None:
+        call.left_open = True
     return False
 
 
@@ -1007,6 +1019,35 @@ def _clear_beyond(ws, old, last_row, last_col) -> None:
         logger.warning("Could not clear the old chart data: %s", e)
 
 
+def _write_chart_cells(ws, categories, series) -> None:
+    """Write categories down column A and each series in a column after it.
+
+    The cells are written over rather than cleared first, so the chart never
+    points at an empty sheet while Excel is busy (#343, #323). A cell to be
+    left empty is cleared, not given None: through PowerPoint for Mac's VBA a
+    None reaches Excel as a value it refuses (error 1004, "Application-defined
+    or object-defined error"), and every chart data write failed there. Clear
+    is what the VBA bridge already writes out (as for _clear_beyond).
+    """
+    ws.Cells(1, 1).Clear()
+
+    # Write categories in column A starting at row 2
+    for i, cat in enumerate(categories):
+        ws.Cells(i + 2, 1).Value = cat
+
+    # Write series headers (row 1) and values (rows 2+)
+    for s_idx, s in enumerate(series):
+        col = s_idx + 2  # columns B, C, D, ...
+        ws.Cells(1, col).Value = s["name"]
+        # Every row is written, so a short series leaves no old value behind.
+        values = list(s["values"]) + [None] * (len(categories) - len(s["values"]))
+        for i, val in enumerate(values):
+            if val is None:
+                ws.Cells(i + 2, col).Clear()
+            else:
+                ws.Cells(i + 2, col).Value = val
+
+
 def _set_chart_data_through_excel(slide, shape, categories, series):
     chart = shape.Chart
     old = _old_extent(chart)
@@ -1028,22 +1069,7 @@ def _set_chart_data_through_excel(slide, shape, categories, series):
         raise
     try:
         ws = refs.add(wb.Worksheets(1))
-        # The cells are written over rather than cleared first, so the chart
-        # never points at an empty sheet while Excel is busy (#343, #323).
-        ws.Cells(1, 1).Value = None
-
-        # Write categories in column A starting at row 2
-        for i, cat in enumerate(categories):
-            ws.Cells(i + 2, 1).Value = cat
-
-        # Write series headers (row 1) and values (rows 2+)
-        for s_idx, s in enumerate(series):
-            col = s_idx + 2  # columns B, C, D, ...
-            ws.Cells(1, col).Value = s["name"]
-            # Every row is written, so a short series leaves no old value behind.
-            values = list(s["values"]) + [None] * (len(categories) - len(s["values"]))
-            for i, val in enumerate(values):
-                ws.Cells(i + 2, col).Value = val
+        _write_chart_cells(ws, categories, series)
 
         # Set the chart's source data range.
         last_row = len(categories) + 1

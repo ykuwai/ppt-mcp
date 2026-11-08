@@ -12,6 +12,7 @@ import inspect
 import json
 import re
 import sys
+import time
 import threading
 import types
 import zipfile
@@ -89,6 +90,7 @@ class TestTheProtocol:
         assert out[4] == 12.5 and out[5] is None
         macro, body = seen[0]
         assert macro == vba.DISPATCH
+        assert target.sent[0]["params"][b"tpAE"][-1] == bridge.owner, "the batch names its server (#347)"
         assert body.split(RS)[3] == US.join(["app", "c", "Item", "i:1"])
 
     def test_arguments_are_typed(self):
@@ -329,6 +331,79 @@ class TestTheRouter:
         monkeypatch.setattr(vba, "ENABLED", False)
         assert impl(2, "Box", screen_tip="tip") == {"via": "apple events"}
 
+
+REFUSED = {"error": "ppt_add_hyperlink cannot take screen_tip on macOS", "reason": "no words", "platform": "macOS"}
+RECREATED = {"success": True, "warnings": ["'Chart 1' was recreated by paste; name, position and z order kept, animations not."]}
+
+
+class TestTheAnswerSaysWhyTheAddInDidNotTakeIt:
+    """A call the add-in would have taken, run on the Apple Event route, says
+    so: a refusal would otherwise read as "the Mac cannot", and a recreated
+    shape as the only way to edit it."""
+
+    def router(self, monkeypatch, answer, *, enabled=True, available=True):
+        import backend
+
+        monkeypatch.setattr(vba, "ENABLED", enabled)
+
+        def get_bridge(app_ref):
+            if not available:
+                raise vba.VbaUnavailable("macros are turned off by policy")
+            raise AssertionError("the add-in was asked for")
+
+        monkeypatch.setattr(vba._SESSION, "bridge", get_bridge)
+        monkeypatch.setattr(backend, "ppt", type("P", (), {"_get_app_impl": lambda self: "app"})())
+
+        def com_impl(slide_index, screen_tip=None):
+            raise AssertionError("the Windows code ran")
+
+        def mac_impl(slide_index, screen_tip=None):
+            return answer() if callable(answer) else answer
+
+        return vba.routed(com_impl, mac_impl, routes.given("screen_tip"))
+
+    def test_turned_off_a_refusal_says_how_to_turn_it_on(self, monkeypatch):
+        out = self.router(monkeypatch, dict(REFUSED), enabled=False)(1, screen_tip="tip")
+        assert out["error"] == REFUSED["error"] and out["hint"] == vba.OFF_NOTE
+        assert "PPT_MAC_VBA=off" in out["hint"]
+
+    def test_turned_off_a_recreated_shape_says_it_could_have_been_kept(self, monkeypatch):
+        out = self.router(monkeypatch, lambda: {**RECREATED, "warnings": list(RECREATED["warnings"])},
+                          enabled=False)(1, screen_tip="tip")
+        assert out["warnings"][-1] == vba.OFF_RECREATED_NOTE and len(out["warnings"]) == 2
+
+    def test_a_refusal_given_as_json_text_stays_json_text(self, monkeypatch):
+        out = self.router(monkeypatch, json.dumps(REFUSED), enabled=False)(1, screen_tip="tip")
+        assert json.loads(out)["hint"] == vba.OFF_NOTE
+
+    def test_an_existing_hint_is_kept(self, monkeypatch):
+        out = self.router(monkeypatch, {**REFUSED, "hint": "Drop screen_tip."}, enabled=False)(1, screen_tip="tip")
+        assert out["hint"].startswith("Drop screen_tip. ") and out["hint"].endswith(vba.OFF_NOTE)
+
+    def test_on_but_not_loaded_says_why(self, monkeypatch):
+        out = self.router(monkeypatch, dict(REFUSED), available=False)(1, screen_tip="tip")
+        assert "could not be loaded (macros are turned off by policy)" in out["hint"]
+
+    def test_a_plain_success_is_left_as_it_was(self, monkeypatch):
+        assert self.router(monkeypatch, {"success": True}, enabled=False)(1, screen_tip="tip") == {"success": True}
+
+    def test_a_failure_that_is_not_a_refusal_gets_no_note(self, monkeypatch):
+        """A slide that does not exist fails the same way through the add-in."""
+        failed = {"error": "Slide 9 does not exist"}
+        out = self.router(monkeypatch, dict(failed), enabled=False)(9, screen_tip="tip")
+        assert out == failed
+
+    def test_turned_off_the_condition_is_asked_only_for_a_note(self, monkeypatch):
+        asked = []
+        monkeypatch.setattr(vba, "ENABLED", False)
+        impl = vba.routed(lambda slide_index: None, lambda slide_index: {"success": True},
+                          lambda arguments: asked.append(arguments) or True)
+        assert impl(1) == {"success": True} and asked == []
+
+    def test_a_call_the_add_in_would_not_take_gets_no_note(self, monkeypatch):
+        out = self.router(monkeypatch, dict(REFUSED), enabled=False)(1)
+        assert "hint" not in out
+
     def test_a_failure_in_the_windows_code_is_raised_and_not_retried(self, route, monkeypatch):
         impl, calls, bridge, _, mac_impl = route
 
@@ -385,7 +460,9 @@ class TestTheRoutes:
         assert routes.reflection_details({"target": "text"})
         assert not routes.reflection_details({"reflection_type": 1, "target": "shape"})
         assert routes.media_levels({"volume": 0.5})
-        assert not routes.media_levels({"volume": 0.5, "start_point": 100}), "trimming stays where it is"
+        assert routes.media_levels({"volume": 0.5, "start_point": 100})
+        assert routes.media_levels({"start_point": 100})
+        assert routes.media_levels({"end_point": 2000})
         assert not routes.media_levels({"loop": True})
         assert routes.shrink_to_fit({"auto_size": "shrink_to_fit"})
         assert not routes.shrink_to_fit({"auto_size": "none"})
@@ -482,6 +559,7 @@ class FakeAppRef:
 @pytest.fixture
 def session(monkeypatch, tmp_path):
     monkeypatch.setattr(vba, "INSTALL_DIR", tmp_path / "ppt-mcp")
+    monkeypatch.setattr(vba, "CONTAINER", tmp_path)
     versions = []
 
     class Pinging:
@@ -537,6 +615,63 @@ class TestLoading:
         assert len(tries) == 1
 
 
+class TestAContainerThatDoesNotAnswer:
+    """While macOS asks the user whether this app may reach PowerPoint's data,
+    every file call into its container waits for the answer (2026-11-08: each
+    add-in call then waited out the worker's 69 s budget, one after another).
+    The add-in is then left alone, and only the first call waits."""
+
+    def test_a_look_that_does_not_come_back_is_given_up_on(self, monkeypatch):
+        gate = threading.Event()
+        monkeypatch.setattr(vba.os, "listdir", lambda folder: gate.wait(5))
+        start = time.monotonic()
+        reason = vba._container_reachable(timeout=0.2)
+        gate.set()
+        assert "did not answer" in reason and time.monotonic() - start < 1
+
+    def test_a_refusal_says_so(self, monkeypatch):
+        def denied(folder):
+            raise PermissionError(1, "Operation not permitted")
+        monkeypatch.setattr(vba.os, "listdir", denied)
+        assert "PermissionError" in vba._container_reachable(timeout=1)
+
+    def test_a_container_not_made_yet_is_fine(self, tmp_path):
+        assert vba._container_reachable(tmp_path / "not yet", timeout=1) is None
+
+    def test_then_the_add_in_is_not_loaded_and_later_calls_do_not_look_again(self, session, monkeypatch):
+        s, _, _ = session
+        looks = []
+
+        def held_up(*a, **k):
+            looks.append(1)
+            return "PowerPoint's folder did not answer within 2s"
+        monkeypatch.setattr(vba, "_container_reachable", held_up)
+        app_ref = _app_ref(FakeAppRef(loaded=False))
+        for _ in range(3):
+            with pytest.raises(vba.VbaUnavailable, match="did not answer"):
+                s.bridge(app_ref)
+        assert len(looks) == 1 and app_ref.registered == []
+
+    def test_a_call_still_out_on_the_add_in_keeps_the_next_off_it(self, session):
+        s, _, _ = session
+        s.in_flight = True  # its worker was abandoned inside it
+        with pytest.raises(vba.VbaUnavailable, match="has not come back"):
+            s.bridge(_app_ref(FakeAppRef(loaded=False)))
+
+    def test_a_call_that_timed_out_keeps_the_next_off_the_add_in(self, monkeypatch):
+        s = vba._Session()
+        monkeypatch.setattr(vba, "_SESSION", s)
+
+        def times_out(*a, **k):
+            raise vba.BridgeTimeout("PowerPoint did not answer the VBA bridge within 60s.")
+        monkeypatch.setattr(vba, "_run_on_excel_or_not", times_out)
+        with pytest.raises(vba.BridgeTimeout):
+            vba._run(object(), lambda: None, (), {})
+        assert s.in_flight is False
+        with pytest.raises(vba.VbaUnavailable, match="did not answer the VBA bridge"):
+            s.bridge(object())
+
+
 # ---------------------------------------------------------------------------
 # What ships
 # ---------------------------------------------------------------------------
@@ -556,7 +691,7 @@ class TestShipped:
         assert 'Attribute VB_Name = "PptMcpHandles"' in handles
         # Every entry point traps its errors from its first line: an untrapped
         # one stops PowerPoint on a dialog.
-        assert "Sub Dispatch(id As String, batch As String)\n    Dim" in bridge
+        assert "Sub Dispatch(id As String, batch As String, who As String)\n    Dim" in bridge
         assert "On Error GoTo fail" in bridge.split("Sub Dispatch")[1].split("For k")[0]
 
     def test_the_member_table_knows_properties_from_methods(self):
@@ -780,10 +915,10 @@ def test_a_nodes_editing_type_takes_the_route():
 
 
 class TestTheRouteIsAChoice:
-    """The add-in is macro code loaded without a prompt, so it is off unless asked for."""
+    """On unless PPT_MAC_VBA=off; a value that is no setting is the default."""
 
     @pytest.mark.parametrize("value, on", [
-        ("on", True), ("1", True), ("off", False), ("", False), ("maybe", False),
+        ("on", True), ("1", True), ("", True), ("off", False), ("NO", False), ("maybe", False),
     ])
     def test_the_setting(self, value, on):
         assert vba._setting(value) is on
@@ -873,3 +1008,56 @@ def test_the_dispatcher_passes_as_many_arguments_as_the_calls_take():
     assert f"Case 9: Assign r, CallByName(o, f(2), ct, {nine})" in bridge
     calls = (VBA_DIR / "PptMcpCallsI.bas").read_text(encoding="utf-8")
     assert f"o.Insert({nine})" in calls, "a corner curve's nine"
+
+
+class TestEachServerLetsGoOfItsOwn:
+    """Two servers on one PowerPoint share the add-in's table (#347)."""
+
+    def test_two_bridges_name_themselves_apart(self, tmp_path):
+        a, _, _ = bridge_answering(tmp_path)
+        b, _, _ = bridge_answering(tmp_path)
+        assert a.owner != b.owner
+
+    def test_the_add_in_releases_by_owner(self):
+        handles = (VBA_DIR / "PptMcpHandles.bas").read_text(encoding="utf-8")
+        bridge = (VBA_DIR / "PptMcpBridge.bas").read_text(encoding="utf-8")
+        assert "ReleaseAll" not in handles + bridge
+        assert "Release who" in bridge.split("Sub Dispatch")[1]
+        assert "owned.Add keys & h & Chr$(29), owner" in handles
+
+
+class TestTheBatchCannotBeWidened:
+    """Text with the add-in's separators cannot add a call of its own."""
+
+    @pytest.mark.parametrize("text", ["a\x1eapp\x1fc\x1fRun\x1fs:M", "a\x1fb", "a\x1db"])
+    def test_separators_in_text_are_refused(self, tmp_path, text):
+        bridge, target, _ = bridge_answering(tmp_path, "ok" + US + "empty" + RS)
+        with pytest.raises(ValueError, match="control characters"):
+            bridge.run([("h1", "l", "Text", text)])
+        assert target.sent == [], "nothing reached PowerPoint"
+
+    def test_lists_still_pass(self, tmp_path):
+        bridge, _, seen = bridge_answering(tmp_path, "ok" + US + "empty" + RS)
+        bridge.run([("h1", "c", "Add", ["a", "b"], [1, 2])])
+        assert seen
+
+    def test_the_add_in_checks_the_id_and_refuses_risky_members(self):
+        bridge = (VBA_DIR / "PptMcpBridge.bas").read_text(encoding="utf-8")
+        assert "If Not GoodId(id) Then Exit Sub" in bridge
+        assert 'Case "run", "quit", "addins", "comaddins", "vbe", "automationsecurity"' in bridge
+        assert "Refuse o, f(2)" in bridge.split("Sub Dispatch")[1]
+
+
+def test_separator_text_is_refused_before_the_tool_starts(route):
+    """A tool makes several calls; one refused halfway would leave the earlier
+    ones done, so the arguments are checked before any of them."""
+    impl, calls, *_ = route
+    with pytest.raises(ValueError, match="control characters"):
+        impl(1, "Box", screen_tip="a\x1db")
+    assert calls == []
+
+
+def test_separator_text_inside_a_list_or_dict_is_refused():
+    with pytest.raises(ValueError):
+        vba._check_text([{"name": "S", "values": ["x\x1ey"]}])
+    vba._check_text([{"name": "S", "values": [1, 2]}, "plain"])

@@ -25,9 +25,13 @@ built from the ``.bas`` sources next to it by ``scripts/build_mac_vba_addin.py``
 and ``com_members.json`` by ``scripts/dump_com_members.py``.
 
 Which tools take this route is in ``routes.py``. A routed tool falls back to
-its Apple Event implementation whenever the add-in cannot be loaded. The route
-is off unless ``PPT_MAC_VBA=on``, since the add-in is macro code PowerPoint
-loads without a prompt, and that should be the user's choice.
+its Apple Event implementation whenever the add-in cannot be loaded, and its
+answer then says why (``routed``). The route is on unless ``PPT_MAC_VBA=off``.
+The add-in is macro code PowerPoint loads without a prompt. It lasts until
+PowerPoint quits, and its file stays in PowerPoint's container. While loaded,
+any program allowed to send PowerPoint Apple Events can call it too, but only
+on PowerPoint's object model, and it refuses Application.Run, Quit, AddIns,
+COMAddIns, VBE and AutomationSecurity.
 """
 
 import contextlib
@@ -50,7 +54,7 @@ HERE = Path(__file__).resolve().parent
 ADDIN_FILE = HERE / "ppt-mcp-bridge.ppam"
 ADDIN_NAME = "ppt-mcp-bridge"
 # Must match BRIDGE_VERSION in PptMcpBridge.bas; a test keeps them together.
-BRIDGE_VERSION = "6"
+BRIDGE_VERSION = "7"
 DISPATCH = "PptMcpBridge.Dispatch"
 PING = "PptMcpBridge.Ping"
 # PowerPoint is sandboxed. Its ~/Documents is this folder, which is where the
@@ -59,7 +63,16 @@ PING = "PptMcpBridge.Ping"
 CONTAINER = Path.home() / "Library" / "Containers" / "com.microsoft.Powerpoint" / "Data" / "Documents"
 INSTALL_DIR = CONTAINER / "ppt-mcp"
 CALL_TIMEOUT = 60.0
-RETRY_AFTER = 30.0
+# Loading the add-in answers in well under a second. Where macros are blocked
+# it never answers, so it is not waited on for a whole call's time, nor tried
+# again on every call.
+PING_TIMEOUT = 10.0
+RETRY_AFTER = 300.0
+# How long the container may take to answer before the add-in is not used.
+# While macOS asks the user whether this app may reach another app's data,
+# every file call into the container waits for the answer, inside the call,
+# where the bridge's own timeout never gets a turn; a denial answers EPERM.
+REACH_TIMEOUT = 2.0
 RS, US, GS = "\x1e", "\x1f", "\x1d"
 # PowerPoint's own event for `run VB macro`. appscript has no term for it.
 RUN_VB_MACRO = b"sPPTrVbM"
@@ -71,15 +84,38 @@ SEND_FLAGS = 64 | 1
 
 def _setting(value: str) -> bool:
     value = value.strip().lower()
-    if value in ("on", "true", "1", "yes"):
+    if value in ("", "on", "true", "1", "yes"):
         return True
-    if value in ("", "off", "false", "0", "no"):
+    if value in ("off", "false", "0", "no"):
         return False
-    logger.warning("PPT_MAC_VBA=%r is not a setting; use 'on' or 'off' (the default). Using 'off'.", value)
+    # Whoever set it meant something other than the default, and turning
+    # macro code on is not something to do by mistake.
+    logger.warning("PPT_MAC_VBA=%r is not a setting; use 'on' (the default) or 'off'. Using 'off'.", value)
     return False
 
 
-ENABLED = _setting(os.getenv("PPT_MAC_VBA", "off"))
+ENABLED = _setting(os.getenv("PPT_MAC_VBA", "on"))
+
+# What a call the add-in would have taken says when it ran on the Apple Event
+# route instead. Without it, a refusal reads as "the Mac cannot do this", and
+# a shape the clipboard recreated as the only way to edit it.
+OFF_NOTE = (
+    "PowerPoint for Mac's VBA does this, through the add-in this server loads, "
+    "but PPT_MAC_VBA=off turns that off here. Remove the setting from the "
+    "server's env, or set it to on, and restart the server."
+)
+OFF_RECREATED_NOTE = (
+    "With PPT_MAC_VBA on (the default, off here), this edit is made in place "
+    "through PowerPoint for Mac's VBA, and the shape keeps its id and animations."
+)
+
+
+def _unavailable_note(error: Exception) -> str:
+    return (
+        f"PPT_MAC_VBA is on, but the add-in could not be loaded ({error}), so "
+        "this ran on the Apple Event route, where PowerPoint for Mac's "
+        "dictionary reaches less."
+    )
 
 
 class VbaUnavailable(RuntimeError):
@@ -151,6 +187,24 @@ def _find(members, name):
 # ---------------------------------------------------------------------------
 # The bridge
 # ---------------------------------------------------------------------------
+def _check_text(value) -> None:
+    """Refuse text holding the batch's separators, in a value or anything in it.
+
+    The separators frame the batch, so text carrying one could add a call of
+    its own, and the add-in would cut it short anyway.
+    """
+    if isinstance(value, str):
+        if any(c in value for c in (RS, US, GS)):
+            raise ValueError("Text sent through the VBA bridge cannot hold the "
+                             "control characters U+001D, U+001E or U+001F.")
+    elif isinstance(value, dict):
+        for item in value.values():
+            _check_text(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _check_text(item)
+
+
 class Bridge:
     """Sends batches of calls to the add-in and reads its answers."""
 
@@ -159,6 +213,9 @@ class Bridge:
         self.answers = Path(answers)
         self.timeout = timeout
         self.calls = 0
+        # The add-in keeps every server's handles in one table, and lets go of
+        # only the ones listed under this name (#347).
+        self.owner = uuid.uuid4().hex[:12]
         # Set when letting go of the handles failed; the next call does it
         # first. Handles to a closed deck's SmartArt make every SmartArt call
         # after it fail ("Access denied", or "Permission denied", 70) until
@@ -216,18 +273,24 @@ class Bridge:
         if isinstance(value, (list, tuple)):
             if value and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in value):
                 return "N:" + GS.join(repr(x) for x in value)
-            return "a:" + GS.join(str(x) for x in value)
-        return "s:" + str(value)
+            return "a:" + GS.join(Bridge._text(x) for x in value)
+        return "s:" + Bridge._text(value)
+
+    @staticmethod
+    def _text(value) -> str:
+        text = str(value)
+        _check_text(text)
+        return text
 
     def run(self, requests):
         """Run (handle, kind, member, *args) requests in order; answer their values.
 
         kind is g (get), c (call), l (let) or s (set), and r releases every
-        handle. The first failure stops the batch and is raised.
+        handle this bridge was handed. The first failure stops the batch and is raised.
         """
         body = RS.join(US.join([h, kind, member] + [self._arg(a) for a in args])
                        for h, kind, member, *args in requests)
-        text = self._call(DISPATCH, [body.encode("utf-16-be").hex().upper()])
+        text = self._call(DISPATCH, [body.encode("utf-16-be").hex().upper(), self.owner])
         out = []
         for record in filter(None, text.split(RS)):
             f = record.split(US)
@@ -371,6 +434,35 @@ class Method:
 # ---------------------------------------------------------------------------
 # Loading the add-in
 # ---------------------------------------------------------------------------
+def _container_reachable(folder=None, timeout=None) -> Optional[str]:
+    """None when PowerPoint's container answers, or why it does not.
+
+    Looked at on a thread of its own, so that a look macOS holds up while it
+    asks the user (2026-11-08: every add-in call then waited out the worker's
+    whole budget, one after another) costs ``timeout`` seconds, once.
+    """
+    folder = CONTAINER if folder is None else folder
+    timeout = REACH_TIMEOUT if timeout is None else timeout
+    answer = {}
+
+    def look():
+        try:
+            os.listdir(folder)
+            answer["ok"] = True
+        except FileNotFoundError:
+            answer["ok"] = True  # PowerPoint has not made it yet; _install will
+        except OSError as exc:
+            answer["error"] = f"{type(exc).__name__}: {exc}"
+
+    thread = threading.Thread(target=look, name="ppt-mcp-container-look", daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        return (f"PowerPoint's folder did not answer within {timeout:.0f}s; macOS may be "
+                "asking whether this app may reach PowerPoint's data")
+    return answer.get("error")
+
+
 class _Session:
     """The add-in as loaded into the running PowerPoint, used from the worker."""
 
@@ -379,6 +471,19 @@ class _Session:
         self._bridge: Optional[Bridge] = None
         self._failed_at = None
         self._reason = None
+        # Set while a call is on the add-in. Calls run one at a time, so one
+        # still set when the next comes is a call whose worker was abandoned
+        # inside it, stuck on PowerPoint or on the container.
+        self.in_flight = False
+
+    def fail(self, reason: str) -> None:
+        """Take the Apple Event route for RETRY_AFTER seconds, saying why once."""
+        with self._lock:
+            if reason != self._reason:
+                logger.warning(
+                    "The VBA bridge could not be used (%s). "
+                    "Tools that would use it take the Apple Event route.", reason)
+            self._failed_at, self._reason = time.monotonic(), reason
 
     def bridge(self, app_ref) -> Bridge:
         """A bridge to the add-in, loading it into PowerPoint first if needed.
@@ -386,9 +491,17 @@ class _Session:
         Raises VbaUnavailable when it cannot be loaded; the caller then goes
         the Apple Event way, having changed nothing.
         """
+        if self.in_flight:
+            self.fail("an earlier call to the add-in has not come back")
+            raise VbaUnavailable(self._reason)
         with self._lock:
             if self._failed_at is not None and time.monotonic() - self._failed_at < RETRY_AFTER:
                 raise VbaUnavailable(self._reason)
+        unreachable = _container_reachable()
+        if unreachable is not None:
+            self.fail(unreachable)
+            raise VbaUnavailable(unreachable)
+        with self._lock:
             try:
                 bridge = self._load(app_ref)
             except Exception as exc:  # noqa: BLE001 - every failure means the same here
@@ -417,7 +530,7 @@ class _Session:
             app_ref.register_add_in(str(installed))
             for _ in range(2):
                 addin.loaded.set(True)
-        bridge = Bridge(app_ref.AS_appdata.target())
+        bridge = Bridge(app_ref.AS_appdata.target(), timeout=PING_TIMEOUT)
         version, office = bridge.ping()
         if version != BRIDGE_VERSION:
             # An older add-in is loaded from an earlier run; load the new file.
@@ -430,6 +543,7 @@ class _Session:
                     f"PowerPoint has version {version} of the add-in loaded, not "
                     f"{BRIDGE_VERSION}; quit PowerPoint so it can load the new one")
         logger.info("VBA bridge %s loaded into PowerPoint %s", version, office)
+        bridge.timeout = CALL_TIMEOUT
         self._bridge = bridge
         return bridge
 
@@ -555,6 +669,33 @@ def _deck_for(app):
 
 
 def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
+    _SESSION.in_flight = True
+    try:
+        return _run_on_excel_or_not(bridge, com_impl, args, kwargs)
+    except BridgeTimeout as exc:
+        _SESSION.fail(str(exc))
+        raise
+    finally:
+        _SESSION.in_flight = False
+
+
+def _run_on_excel_or_not(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
+    if com_impl.__module__ != "ppt_com.charts":
+        return _run_on_bridge(bridge, com_impl, args, kwargs)
+    # A chart call can bring Excel up; it is put out of the way once the
+    # call, and the add-in's handles into it, are done (backend/mac_excel.py).
+    from backend import mac_excel
+    from ppt_com import charts
+
+    with mac_excel.out_of_the_way() as excel:
+        token = charts.excel_call.set(excel)
+        try:
+            return _run_on_bridge(bridge, com_impl, args, kwargs)
+        finally:
+            charts.excel_call.reset(token)
+
+
+def _run_on_bridge(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
     if bridge.stale:
         bridge.release()
     app = bridge.application()
@@ -572,6 +713,36 @@ def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
             logger.debug("Could not release the VBA bridge's handles", exc_info=True)
 
 
+def _noted(result, failure_note: str, recreated_note: str):
+    """``result`` of an Apple Event implementation, with a note on why the
+    add-in did not take the call.
+
+    A refusal (a failure naming its ``platform``) gets ``failure_note`` as
+    its ``hint``. A success whose shape was
+    recreated through the clipboard gets ``recreated_note`` among its
+    ``warnings``. Anything else, and anything that is not a JSON object, is
+    handed back as it was. A result given as JSON text goes back as JSON text.
+    """
+    as_text = isinstance(result, str)
+    try:
+        body = json.loads(result) if as_text else result
+    except ValueError:
+        return result
+    if not isinstance(body, dict):
+        return result
+    body = dict(body)  # a noted result is a new one; the original stays as it was
+    if "error" in body:
+        if "platform" not in body:
+            # Not a refusal: the add-in would have failed the same way.
+            return result
+        body["hint"] = f"{body['hint']} {failure_note}" if body.get("hint") else failure_note
+    elif any("was recreated" in str(w) for w in body.get("warnings") or []):
+        body["warnings"] = list(body["warnings"]) + [recreated_note]
+    else:
+        return result
+    return json.dumps(body) if as_text else body
+
+
 def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], bool]) -> Callable:
     """An implementation that takes the VBA route when it can and should.
 
@@ -583,21 +754,33 @@ def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], b
 
     @functools.wraps(mac_impl)
     def impl(*args, **kwargs):
-        if not ENABLED or active():
+        if active():
             return mac_impl(*args, **kwargs)
         try:
             bound = signature.bind(*args, **kwargs)
         except TypeError:
             return mac_impl(*args, **kwargs)
         bound.apply_defaults()
+        if not ENABLED:
+            # The condition can cost an Apple Event, so it is asked only when
+            # there is a note to add.
+            result = mac_impl(*args, **kwargs)
+            noted = _noted(result, OFF_NOTE, OFF_RECREATED_NOTE)
+            return noted if noted is not result and condition(bound.arguments) else result
         if not condition(bound.arguments):
             return mac_impl(*args, **kwargs)
+        # Checked before anything is written: a tool makes several calls, and
+        # one refused halfway would leave the earlier ones done.
+        for value in bound.arguments.values():
+            _check_text(value)
         from backend import ppt
 
         try:
             bridge = _SESSION.bridge(ppt._get_app_impl())
-        except VbaUnavailable:
-            return mac_impl(*args, **kwargs)
+        except VbaUnavailable as e:
+            # _SESSION has logged it, once for each reason.
+            note = _unavailable_note(e)
+            return _noted(mac_impl(*args, **kwargs), note, note)
         return _run(bridge, com_impl, args, kwargs)
 
     impl.vba_route = (com_impl, condition)

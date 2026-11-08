@@ -369,7 +369,7 @@ Each write moves the deck's window to the slide it works on, so you can see wher
 
 ### The tool list: catalog mode
 
-A client sends the description of every tool it lists with every request, and this server's tools come to about 112k tokens, a large part of a 128k or 200k window before any work. With `PPT_TOOL_MODE=catalog` in the server's `env`, the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
+A client sends the description of every tool it lists with every request, and this server's tools come to about 112k tokens, a large part of a 128k or 200k window before any work. By default the server lists three tools instead, about 700 tokens, and the model reaches the rest through them:
 
 | Tool | What it does |
 |---|---|
@@ -379,7 +379,7 @@ A client sends the description of every tool it lists with every request, and th
 
 The tools themselves are the same, with the same arguments, checks and answers, and `presentation` is passed the same way. The model asks `ppt_describe` before using a tool for the first time, which costs one call. Building the same 12-slide deck through Claude Code, the context peaked at 136k tokens in catalog mode against 206k with every tool listed, and the run cost a third less.
 
-What catalog mode gives up is per-tool control in the client: approving or blocking a tool by its name, and its read-only hint, apply to the three tools above rather than to each one. That is why it is not the default: every tool is listed by its own name unless the setting asks otherwise, which is also what `PPT_TOOL_MODE=full` says. A value other than `catalog` or `full` is ignored with a warning, and every tool is listed.
+What catalog mode gives up is per-tool control in the client: approving or blocking a tool by its name, and its read-only hint, apply to the three tools above rather than to each one. A client that relies on that sets `PPT_TOOL_MODE=full` in the server's `env`, and every tool is listed by its own name, as below; `PPT_TOOL_MODE=catalog` is the default. A value other than `catalog` or `full` is ignored with a warning, and catalog mode is used.
 
 ```json
 {
@@ -387,7 +387,7 @@ What catalog mode gives up is per-tool control in the client: approving or block
     "powerpoint": {
       "command": "uvx",
       "args": ["ppt-mcp"],
-      "env": { "PPT_TOOL_MODE": "catalog" }
+      "env": { "PPT_TOOL_MODE": "full" }
     }
   }
 }
@@ -395,14 +395,14 @@ What catalog mode gives up is per-tool control in the client: approving or block
 
 ## 🍎 macOS support
 
-**<!--mac-refusals-->11<!--/mac-refusals--> tools refuse on macOS. The rest work.** The <!--mac-refusals-->11<!--/mac-refusals--> are listed by name in
+**With the VBA add-in, on by default, 3 tools refuse on macOS; without it, <!--mac-refusals-->10<!--/mac-refusals--> do. The rest work.** The <!--mac-refusals-->10<!--/mac-refusals--> are listed by name in
 [MACOS_PORT.md](MACOS_PORT.md) section 6.1, and a test keeps that list honest.
 
 The same tools, the same arguments, the same answers. What differs is what
 PowerPoint for Mac's scripting dictionary can reach, and where it cannot reach
 something the tool says so rather than doing something unexpected.
 
-**PowerPoint for Mac's VBA reaches further, and can be turned on.** The
+**PowerPoint for Mac's VBA reaches further.** The
 server loads a small add-in, `ppt-mcp-bridge`, into PowerPoint and runs the
 Windows code through it for what the scripting dictionary has no words for:
 tags, `ppt_select_shapes`, `ppt_set_table_style`, removing and copying one
@@ -415,15 +415,21 @@ duplicating and copying slides, editing a SmartArt (its text, nodes, colours
 and style), and the arguments the Mac otherwise refuses (a screen tip,
 a table row or column at a position, a click trigger on another shape,
 reflection sizes, glow, shadow and reflection on text, shrinking text to fit,
-volume, mute and fades, a chart style and the legend and title placement).
+volume, mute, trimming and fades, a chart style and the legend and title placement).
 Those edit the shape in place, so it keeps its animations, and the clipboard is
 not touched. The add-in only passes those calls on; its source is in
-`src/backend/vba`. PowerPoint loads it without a prompt, it lasts until
-PowerPoint quits, and nothing of it stays behind. Where it cannot be loaded,
+`src/backend/vba`. PowerPoint loads it without a prompt and keeps it until PowerPoint quits;
+a copy of the file stays in PowerPoint's own folder. While it is loaded, other
+programs allowed to control PowerPoint can call it too, but only within
+PowerPoint's object model, and it refuses to run macros, quit or reach add-ins. Where it cannot be loaded,
 where macros are turned off by policy for instance, the tools work as described
-below. It is off by
-default, because it is macro code loaded without a prompt. Set `PPT_MAC_VBA=on`
-in the server's `env` to use it.
+below. macOS may ask once whether the app that runs the server may reach data
+from other apps; allow it, as the add-in answers through PowerPoint's folder.
+Until it is answered, or if it is refused, the tools work as described below
+after a two-second wait. It is on by
+default; `PPT_MAC_VBA=off` in the server's `env` turns it off. A call the
+add-in would have taken then says so, in its `hint` or `warnings`, as it does
+when the add-in cannot be loaded.
 
 Not available on macOS:
 
@@ -443,7 +449,7 @@ Smaller differences:
   the argument, so dropping it and retrying works.
 - **Video and audio go in embedded, never linked**, and of the eight playback
   settings only looping and hiding the frame exist, and with the add-in volume,
-  mute and fades. Hiding the frame is refused on a slide that already has
+  mute, trimming and fades. Hiding the frame is refused on a slide that already has
   animations, because writing it rewrites them.
 - Exports are staged through PowerPoint's own container and moved out, because
   the application is sandboxed and cannot write to arbitrary folders.

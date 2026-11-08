@@ -201,7 +201,12 @@ class _PowerPointServer(MCPServer):
 
     async def call_tool(self, name, arguments, *args, **kwargs):
         wanted = None
-        if isinstance(arguments, dict) and PRESENTATION_ARG in arguments:
+        # ppt_run and ppt_run_steps take `presentation` as an argument of
+        # their own and hand it to the tool they run; taken out here, the call
+        # they made went to whatever deck was in front instead. ppt_describe
+        # has no such argument, so its `presentation` is dropped as before.
+        if (isinstance(arguments, dict) and PRESENTATION_ARG in arguments
+                and name not in _PASS_PRESENTATION_ON):
             arguments = dict(arguments)
             wanted = arguments.pop(PRESENTATION_ARG)
             if wanted is not None and not isinstance(wanted, str):
@@ -234,10 +239,10 @@ class _PowerPointServer(MCPServer):
 
     async def list_tools(self, *args, **kwargs):
         tools = await super().list_tools(*args, **kwargs)
-        # Catalog mode (PPT_TOOL_MODE=catalog) lists the three tools that reach
-        # the rest; every tool stays registered, so ppt_run dispatches through
-        # call_tool above. Full mode, the default, lists every tool but those
-        # three.
+        # Catalog mode, the default, lists the three tools that reach the
+        # rest; every tool stays registered, so ppt_run dispatches through
+        # call_tool above. Full mode (PPT_TOOL_MODE=full) lists every tool but
+        # those three.
         if CATALOG_MODE:
             return [t for t in tools if t.name in _CATALOG_TOOLS]
         return [t for t in tools if t.name not in _CATALOG_TOOLS]
@@ -1107,7 +1112,7 @@ except Exception:
 
 
 # ---------------------------------------------------------------------------
-# Catalog mode, opted into with PPT_TOOL_MODE=catalog
+# Catalog mode, the default; PPT_TOOL_MODE=full lists every tool
 # ---------------------------------------------------------------------------
 # A client sends every listed tool's schema with every request, and the 157
 # come to about 112k tokens. In catalog mode the server lists three tools: one
@@ -1117,26 +1122,32 @@ except Exception:
 # validation, their checks and their layout findings are all as before. The
 # three are registered either way; full mode leaves them off the list.
 #
-# Full mode is the default: catalog mode lists other names than the tools'
-# own, so a client's rules that approve or block a tool by name would match
-# nothing once a release turned it on unasked.
+# Catalog mode is the default: the 112k tokens are paid with every request of
+# every session, and measured on the same deck catalog mode took half the
+# turns and two thirds of the cost. Its one cost is that a client's rules that
+# approve or block a tool by name see the three names instead; a client that
+# works that way sets PPT_TOOL_MODE=full.
 
 def _tool_mode(value):
     """'catalog' or 'full', from PPT_TOOL_MODE."""
     value = value.strip().lower()
-    if value == "catalog":
+    if value in ("catalog", ""):
         return "catalog"
-    if value in ("full", "all", ""):
+    if value in ("full", "all"):
         return "full"
     # Read at import, so a typo must not stop the server from starting.
+    # Full: whoever set it meant something other than the default, and a
+    # client's rules that name tools work only in full mode.
     logger.warning(
-        "PPT_TOOL_MODE=%r is not a setting; use 'full' (the default) to list every "
-        "tool, or 'catalog' to list three. Using 'full'.", value)
+        "PPT_TOOL_MODE=%r is not a setting; use 'catalog' (the default) to list "
+        "three tools, or 'full' to list every tool. Using 'full'.", value)
     return "full"
 
 
-CATALOG_MODE = _tool_mode(os.getenv("PPT_TOOL_MODE", "full")) == "catalog"
+CATALOG_MODE = _tool_mode(os.getenv("PPT_TOOL_MODE", "catalog")) == "catalog"
 _CATALOG_TOOLS = frozenset({"ppt_describe", "ppt_run", "ppt_run_steps"})
+# The catalog tools that hand `presentation` on to the tool they run.
+_PASS_PRESENTATION_ON = frozenset({"ppt_run", "ppt_run_steps"})
 
 
 def _summary(description):

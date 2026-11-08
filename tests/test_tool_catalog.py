@@ -127,13 +127,13 @@ def test_full_mode_lists_every_tool_but_the_three():
     assert not {"ppt_describe", "ppt_run", "ppt_run_steps"} & set(full["listed"])
 
 
-def test_no_setting_lists_every_tool():
-    # Catalog mode lists other names, which a client's per-tool rules would
-    # not match, so it is never turned on unasked.
+def test_no_setting_lists_the_three():
     default = _probe(None)
-    assert len(default["listed"]) == default["registered"] - 3
+    assert sorted(default["listed"]) == ["ppt_describe", "ppt_run", "ppt_run_steps"]
 
 
-def test_a_setting_that_is_not_one_falls_back_to_full():
-    mistyped = _probe("catalogue")
-    assert len(mistyped["listed"]) == mistyped["registered"] - 3
+def test_a_setting_that_is_not_one_lists_every_tool():
+    """A mistyped value meant something other than the default, and a client's
+    rules that name tools work only when every tool is listed."""
+    mistyped = _probe("ful")
+    assert len(mistyped["listed"]) > 100

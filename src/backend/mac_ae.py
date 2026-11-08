@@ -513,6 +513,40 @@ def _powerpoint_pid() -> Optional[int]:
         return None
 
 
+# How long a quit is waited out, in seconds. PowerPoint takes about a second
+# with no deck open.
+QUIT_WAIT = 15
+
+
+def quit_and_wait(app_ref, pid: Optional[int], limit: float = QUIT_WAIT,
+                  running=None, pause=None, clock=None) -> bool:
+    """Quit PowerPoint and wait until process ``pid`` has gone.
+
+    ``quit`` returns while PowerPoint is still shutting down. A call made in
+    that moment finds it running and takes it for one the user started. Either
+    it loses it part-way through (Apple Event error -600, reported as a
+    request that may have been half applied, and every call after it answered
+    that PowerPoint is not running), or the deck lands in a new PowerPoint the
+    server then leaves running as the user's. Measured 2026-11-08, a create
+    straight after the close that quit PowerPoint: 2 in 9 went wrong, one each
+    way; with the wait, 0 in 6. Answers whether it went in time; past
+    ``limit`` the quit is logged and left to finish.
+    """
+    running = running or _powerpoint_pid
+    pause = pause or time.sleep
+    clock = clock or time.monotonic
+    app_ref.quit()
+    if pid is None:
+        return True
+    deadline = clock() + limit
+    while running() == pid:
+        if clock() >= deadline:
+            logger.warning("PowerPoint (pid %s) was asked to quit and is still running after %.0f s", pid, limit)
+            return False
+        pause(0.1)
+    return True
+
+
 class PowerPointAppleEventWrapper:
     """Manages the connection to PowerPoint over Apple Events.
 
@@ -1223,6 +1257,23 @@ def target_window(pres):
     return pres.document_windows[1]
 
 
+def slide_total(pres) -> int:
+    """How many slides a deck has, asked of the deck in one event.
+
+    ``count(pres.slides)`` reads every slide to count them, about 80 ms on a
+    deck of 50 and more as it grows, and ``slide_at`` runs on nearly every
+    call. The deck answers its own count at once. A reference that no longer
+    reaches a deck raises here (-1728) where the list read answers empty, so
+    that case falls back to the list read, whose 0 ``slide_at`` turns into the
+    message for a dead reference. Any other failure of the quick count takes
+    the same, slower, route to the same number.
+    """
+    try:
+        return count_of(pres, k.slide)
+    except Exception:  # noqa: BLE001 - the list read answers it, and says why if it cannot
+        return count(pres.slides)
+
+
 def slide_at(pres, slide_index: int):
     """Return a slide reference, checking the index first.
 
@@ -1230,7 +1281,7 @@ def slide_at(pres, slide_index: int):
     somewhere later with -1728 and no mention of the index, so the range is
     checked here where the number is still in hand.
     """
-    total = count(pres.slides)
+    total = slide_total(pres)
     if total == 0:
         # `elements` turns -1728 into an empty list, so "this deck has no
         # slides" and "this reference no longer reaches a deck" arrive here
