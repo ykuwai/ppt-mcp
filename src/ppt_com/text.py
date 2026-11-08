@@ -638,7 +638,11 @@ class FindReplaceTextInput(BaseModel):
         default=False, description="If true, match is case-sensitive (COM MatchCase)."
     )
     whole_words: bool = Field(
-        default=False, description="If true, match whole words only (COM WholeWords)."
+        default=False,
+        description=(
+            "If true, match whole words only: the text found may not be part "
+            "of a longer word. Works for phrases with spaces too."
+        ),
     )
     slide_indices: Optional[List[int]] = Field(
         default=None,
@@ -2116,7 +2120,11 @@ def _find_replace_text_impl(
     find_only = replace_text is None or dry_run
 
     match_case_flag = msoTrue if match_case else msoFalse
-    whole_words_flag = msoTrue if whole_words else msoFalse
+    # PowerPoint's WholeWords finds nothing at all when the text has a space
+    # in it ("acme corp": no match, no error). A phrase is found without it,
+    # and each place is kept only if it starts and ends on a word boundary.
+    phrase = whole_words and any(c.isspace() for c in find_text)
+    whole_words_flag = msoTrue if whole_words and not phrase else msoFalse
 
     if slide_indices is not None:
         max_index = pres.Slides.Count
@@ -2142,10 +2150,14 @@ def _find_replace_text_impl(
 
             if find_only:
                 after = 0
+                content = tr.Text if phrase else None
                 while True:
                     match = tr.Find(find_text, after, match_case_flag, whole_words_flag)
                     if match is None:
                         break
+                    if phrase and not _whole_phrase_at(content, match.Start, match.Length):
+                        after = match.Start
+                        continue
                     hit = {
                         "slide_index": slide.SlideIndex,
                         "shape_name": shape.Name,
@@ -2165,9 +2177,14 @@ def _find_replace_text_impl(
                 # deletions where the replacement length is 0.
                 after = 0
                 while True:
-                    match = tr.Replace(
-                        find_text, replace_text, after, match_case_flag, whole_words_flag
-                    )
+                    if phrase:
+                        match = _replace_whole_phrase(
+                            tr, find_text, replace_text, after, match_case_flag
+                        )
+                    else:
+                        match = tr.Replace(
+                            find_text, replace_text, after, match_case_flag, whole_words_flag
+                        )
                     if match is None:
                         break
                     hit = {
@@ -2190,6 +2207,47 @@ def _find_replace_text_impl(
         "match_count": len(hits),
         "matches": hits,
     }
+
+
+def _is_word_character(c) -> bool:
+    return c.isalnum() or c == "_"
+
+
+def _whole_phrase_at(content, start, length) -> bool:
+    """Whether the text found at ``start`` (1-based) is not part of a longer
+    word: a letter, digit or underscore at either end of it has none beside
+    it. The same boundary as the Mac's ``\\b``."""
+    s0, e0 = start - 1, start - 1 + length
+    found = content[s0:e0]
+    if not found:
+        return False
+    if _is_word_character(found[0]) and s0 > 0 and _is_word_character(content[s0 - 1]):
+        return False
+    if _is_word_character(found[-1]) and e0 < len(content) and _is_word_character(content[e0]):
+        return False
+    return True
+
+
+class _Replaced:
+    """Where a replacement went, as TextRange.Replace answers it."""
+
+    def __init__(self, start, length):
+        self.Start, self.Length = start, length
+
+
+def _replace_whole_phrase(tr, find_text, replace_text, after, match_case_flag):
+    """Replace the next whole-word place of a phrase after ``after``, or
+    answer None when there is none. The text found is replaced through its
+    own range, which keeps its formatting, as Replace does."""
+    while True:
+        match = tr.Find(find_text, after, match_case_flag, msoFalse)
+        if match is None:
+            return None
+        start, length = match.Start, match.Length
+        if _whole_phrase_at(tr.Text, start, length):
+            match.Text = replace_text
+            return _Replaced(start, len(replace_text))
+        after = start
 
 
 def _build_context(full_text, start, length, n):
