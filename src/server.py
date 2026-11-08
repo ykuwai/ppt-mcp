@@ -203,9 +203,10 @@ class _PowerPointServer(MCPServer):
         wanted = None
         # ppt_run and ppt_run_steps take `presentation` as an argument of
         # their own and hand it to the tool they run; taken out here, the call
-        # they made went to whatever deck was in front instead.
+        # they made went to whatever deck was in front instead. ppt_describe
+        # has no such argument, so its `presentation` is dropped as before.
         if (isinstance(arguments, dict) and PRESENTATION_ARG in arguments
-                and name not in _CATALOG_TOOLS):
+                and name not in _PASS_PRESENTATION_ON):
             arguments = dict(arguments)
             wanted = arguments.pop(PRESENTATION_ARG)
             if wanted is not None and not isinstance(wanted, str):
@@ -1145,6 +1146,8 @@ def _tool_mode(value):
 
 CATALOG_MODE = _tool_mode(os.getenv("PPT_TOOL_MODE", "catalog")) == "catalog"
 _CATALOG_TOOLS = frozenset({"ppt_describe", "ppt_run", "ppt_run_steps"})
+# The catalog tools that hand `presentation` on to the tool they run.
+_PASS_PRESENTATION_ON = frozenset({"ppt_run", "ppt_run_steps"})
 
 
 def _summary(description):

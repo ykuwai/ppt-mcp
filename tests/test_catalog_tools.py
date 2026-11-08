@@ -585,3 +585,11 @@ class TestThroughTheServer:
 
     def test_a_direct_call_still_takes_its_presentation(self, catalog):
         assert self.call(catalog, "ppt_echo", {"params": {}, "presentation": "c.pptx"})["deck"] == "c.pptx"
+
+    def test_ppt_describe_still_takes_a_presentation_it_does_not_use(self):
+        # Clients are told to pass `presentation` on every call, and the first
+        # call of a task is ppt_describe, which has no such argument.
+        server = _server()
+        out = self.call(server, "ppt_describe", {"names": ["ppt_add_slide"], "presentation": "a.pptx"})
+        assert "ppt_add_slide" in out["tools"]
+
