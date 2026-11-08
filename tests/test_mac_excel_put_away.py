@@ -1,6 +1,7 @@
-"""backend.mac_excel: the Excel a chart call brings up on the Mac is hidden
-when it took the front, and quit when the call started it and closed the
-chart's workbook."""
+"""backend.mac_excel: after a chart call that opened a chart's workbook, the
+Excel it brought up is hidden when it took the front, and quit when the call
+started it, closed the workbook, and it shows no window of the user's. After a
+call that did not open one, Excel is left alone."""
 
 import sys
 from pathlib import Path
@@ -48,13 +49,15 @@ class World:
         self.now += s
 
 
-def _call(world, closed=True, raises=False):
+def _call(world, opened=True, left_open=False, raises=False, windows=False):
     from backend.mac_excel import out_of_the_way
 
-    with out_of_the_way(running=world.running, pause=world.pause, clock=world.clock, limit=2) as call:
+    with out_of_the_way(running=world.running, shows_a_window=lambda pid: windows,
+                        pause=world.pause, clock=world.clock, limit=2) as call:
+        call.opened = opened
+        call.left_open = left_open
         if raises:
             raise RuntimeError("Excel stopped")
-        call.workbook_closed = closed
 
 
 def test_an_excel_the_call_started_is_quit_and_waited_out():
@@ -67,7 +70,7 @@ def test_an_excel_the_call_started_is_quit_and_waited_out():
 
 def test_one_the_call_started_but_left_a_workbook_open_in_is_only_hidden():
     excel = Excel(700, active=True)
-    _call(World(None, excel), closed=False)
+    _call(World(None, excel), left_open=True)
     assert excel.calls == ["hide"]
 
 
@@ -78,13 +81,40 @@ def test_one_the_call_failed_in_is_only_hidden():
     assert excel.calls == ["hide"]
 
 
+def test_one_showing_a_window_the_user_opened_meanwhile_is_only_hidden():
+    excel = Excel(700, active=True)
+    world = World(None, excel)
+    _call(world, windows=True)
+    assert excel.calls == ["hide"]
+    assert world.now >= 3  # the closed workbook's window was given time to go
+
+
+def test_the_closed_workbooks_window_is_waited_out_before_the_quit():
+    from backend.mac_excel import out_of_the_way
+
+    excel = Excel(700, active=True)
+    world = World(None, excel, excel, None)
+    left = [True] * 10  # gone after half a second
+    with out_of_the_way(running=world.running, shows_a_window=lambda pid: bool(left and left.pop()),
+                        pause=world.pause, clock=world.clock, limit=2) as call:
+        call.opened = True
+    assert excel.calls == ["terminate"]
+
+
+def test_a_call_that_opened_no_workbook_leaves_excel_alone():
+    # The user started Excel while ppt_format_chart ran: not the call's.
+    excel = Excel(700, active=True)
+    _call(World(None, excel), opened=False)
+    assert excel.calls == []
+
+
 def test_the_users_excel_is_never_quit_and_is_hidden_only_if_it_took_the_front():
     from backend.mac_excel import out_of_the_way
 
     excel = Excel(500, active=False)
-    with out_of_the_way(running=lambda: excel) as call:
+    with out_of_the_way(running=lambda: excel, shows_a_window=lambda pid: False) as call:
         excel.active = True  # Activate brought it to the front
-        call.workbook_closed = True
+        call.opened = True
     assert excel.calls == ["hide"]
 
 
@@ -106,38 +136,80 @@ def test_no_excel_at_all_is_left_alone():
     _call(World(None))
 
 
-def test_the_left_open_words_are_in_the_charts_warning():
-    from backend.vba import LEFT_OPEN_WORDS
-    from ppt_com.charts import WORKBOOK_LEFT_OPEN
+def test_a_failed_look_before_the_call_does_not_stop_it():
+    from backend.mac_excel import out_of_the_way
 
-    assert LEFT_OPEN_WORDS in WORKBOOK_LEFT_OPEN
-    assert LEFT_OPEN_WORDS in str({"warnings": [WORKBOOK_LEFT_OPEN]})
+    def broken():
+        raise OSError("no AppKit")
+    ran = []
+    with out_of_the_way(running=broken) as call:
+        ran.append(call)
+    assert ran
 
 
-def test_a_chart_call_says_whether_it_closed_the_workbook(monkeypatch):
+class _Workbook:
+    def __init__(self, closes=True):
+        self.closes = closes
+
+    def Close(self, save):
+        if not self.closes:
+            raise RuntimeError("busy")
+
+
+def test_closing_a_charts_workbook_notes_it_on_the_call():
+    from backend.mac_excel import Call
+    from ppt_com import charts
+
+    call = Call()
+    token = charts.excel_call.set(call)
+    try:
+        assert charts._close_chart_workbook(None, _Workbook())
+        assert (call.opened, call.left_open) == (True, False)
+        stuck = type("Chart", (), {"ChartData": type("D", (), {"Workbook": _Workbook(False)})()})()
+        assert not charts._close_chart_workbook(stuck, _Workbook(False), attempts=2, wait=0)
+        assert call.left_open
+    finally:
+        charts.excel_call.reset(token)
+
+
+def test_a_chart_call_on_the_bridge_is_put_away_after_its_handles(monkeypatch):
     from backend import mac_excel, vba
+    from ppt_com import charts
 
-    used = []
+    order = []
 
     class Spy:
         def __enter__(self):
-            used.append("enter")
             self.call = mac_excel.Call()
             return self.call
 
         def __exit__(self, *exc):
-            used.append(self.call.workbook_closed)
+            order.append(("put away", self.call.opened))
+
+    class Bridge:
+        stale = False
+
+        def application(self):
+            return object()
+
+        def release(self):
+            order.append("release")
 
     monkeypatch.setattr(mac_excel, "out_of_the_way", lambda: Spy())
 
     def chart_tool():
-        return {"success": True, "warnings": [vba.LEFT_OPEN_WORDS]}
+        charts.excel_call.get().opened = True
+        order.append("tool")
     chart_tool.__module__ = "ppt_com.charts"
-    assert vba._with_excel_put_away(chart_tool, (), {})["success"]
-    assert used == ["enter", False]
-    used.clear()
+    vba._run(Bridge(), chart_tool, (), {})
+    assert order == ["tool", "release", ("put away", True)]
+    assert charts.excel_call.get() is None
 
-    def clean():
-        return {"success": True}
-    vba._with_excel_put_away(clean, (), {})
-    assert used == ["enter", True]
+    order.clear()
+
+    def other_tool():
+        assert charts.excel_call.get() is None
+        order.append("tool")
+    other_tool.__module__ = "ppt_com.shapes"
+    vba._run(Bridge(), other_tool, (), {})
+    assert order == ["tool", "release"]

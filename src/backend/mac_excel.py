@@ -7,16 +7,22 @@ window lost the front on every call. Closing the chart's workbook does not
 quit an Excel PowerPoint started either, so one was left running with no
 workbook at all (measured 2026-11-08, PowerPoint and Excel 16.114).
 
-So around each such call, ``out_of_the_way`` gives the front back: an Excel
-that took it is hidden, unless it was in front already. And an Excel that was
-not running before the call is quit once the call has finished with the
-chart's workbook closed, and waited out, so the next chart call does not reach
-an Excel that is shutting down. An Excel the user started is never quit, and
-neither is one the call failed in or left a workbook open in: its window is
-what the tool's message tells the user to close.
+So around each chart call, ``out_of_the_way`` gives the front back, but only
+when the call opened a chart's workbook (``ppt_com.charts`` notes that on the
+``Call``): a call that never touched Excel leaves it alone, whatever the user
+did with Excel meanwhile. After such a call, an Excel that took the front is
+hidden, unless it was in front already. And an Excel that was not running
+before the call is quit once the call has closed the chart's workbook, and
+waited out, so the next chart call does not reach an Excel that is shutting
+down. It is not quit when it shows a window of its own: the chart's workbook
+is closed by then, so that window is one the user opened in it while the call
+ran. An Excel the user started is never quit, and neither is one the call
+failed in or left a workbook open in: its window is what the tool's message
+tells the user to close.
 
-Neither takes an Apple Event, so neither asks the user for permission to
-control Excel: ``NSRunningApplication`` hides and quits it.
+None of this takes an Apple Event, so none of it asks the user for permission
+to control Excel: ``NSRunningApplication`` hides and quits it, and the window
+list says whether it shows a window.
 """
 
 import contextlib
@@ -29,6 +35,9 @@ logger = logging.getLogger(__name__)
 EXCEL = "com.microsoft.Excel"
 # Excel quits in about a tenth of a second with no workbook open.
 QUIT_WAIT = 10
+# The chart's workbook window stays on screen for up to about a second after
+# the workbook has closed (measured 2026-11-08, Excel 16.114).
+WINDOW_WAIT = 3
 
 
 def _running():
@@ -39,39 +48,61 @@ def _running():
     return found[0] if found else None
 
 
+def _shows_a_window(pid: int) -> bool:
+    """Whether process ``pid`` has a document window on screen."""
+    from Quartz import (CGWindowListCopyWindowInfo, kCGNullWindowID,
+                        kCGWindowListOptionOnScreenOnly)
+
+    windows = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID) or []
+    return any(w.get("kCGWindowOwnerPID") == pid and w.get("kCGWindowLayer") == 0 for w in windows)
+
+
 class Call:
-    """What the call inside ``out_of_the_way`` says about how it ended."""
+    """What the chart call inside ``out_of_the_way`` did with Excel."""
 
     def __init__(self):
-        # Set once the chart's workbook is known to be closed.
-        self.workbook_closed = False
+        # A chart's workbook was opened in Excel.
+        self.opened = False
+        # One could not be closed again.
+        self.left_open = False
 
 
 @contextlib.contextmanager
-def out_of_the_way(running=None, pause=None, clock=None, limit: float = QUIT_WAIT):
-    """Around a call that may bring Excel up: put it away again after."""
+def out_of_the_way(running=None, shows_a_window=None, pause=None, clock=None,
+                   limit: float = QUIT_WAIT):
+    """Around a chart call: put the Excel it brought up away again after."""
     running = running or _running
+    shows_a_window = shows_a_window or _shows_a_window
     pause = pause or time.sleep
     clock = clock or time.monotonic
-    before = running()
-    pid_before: Optional[int] = before.processIdentifier() if before is not None else None
-    was_front = bool(before is not None and before.isActive())
     call = Call()
     try:
+        before = running()
+        pid_before: Optional[int] = before.processIdentifier() if before is not None else None
+        was_front = bool(before is not None and before.isActive())
+    except Exception:  # noqa: BLE001 - never in the way of the call itself
+        logger.warning("Could not see whether Excel is running before a chart call", exc_info=True)
         yield call
+        return
+    failed = True
+    try:
+        yield call
+        failed = False
     finally:
         try:
-            _put_away(running, pid_before, was_front, call.workbook_closed, pause, clock, limit)
+            if call.opened:
+                quit_it = pid_before is None and not call.left_open and not failed
+                _put_away(running, shows_a_window, quit_it, was_front, pause, clock, limit)
         except Exception:  # noqa: BLE001 - never in the way of the call's own answer
             logger.warning("Could not put Excel out of the way after a chart call", exc_info=True)
 
 
-def _put_away(running, pid_before, was_front, workbook_closed, pause, clock, limit) -> None:
+def _put_away(running, shows_a_window, quit_it, was_front, pause, clock, limit) -> None:
     excel = running()
     if excel is None:
         return
-    if pid_before is None and workbook_closed:
-        pid = excel.processIdentifier()
+    pid = excel.processIdentifier()
+    if quit_it and not _window_stays(shows_a_window, pid, pause, clock):
         excel.terminate()
         deadline = clock() + limit
         while True:
@@ -87,3 +118,14 @@ def _put_away(running, pid_before, was_front, workbook_closed, pause, clock, lim
         # hide() answers False here even when it works; whether it did is
         # seen in the front app.
         excel.hide()
+
+
+def _window_stays(shows_a_window, pid, pause, clock, limit: float = WINDOW_WAIT) -> bool:
+    """Whether ``pid`` still shows a window once the closed workbook's has had
+    ``limit`` seconds to go."""
+    deadline = clock() + limit
+    while shows_a_window(pid):
+        if clock() >= deadline:
+            return True
+        pause(0.05)
+    return False
