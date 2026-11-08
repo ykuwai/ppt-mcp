@@ -296,9 +296,19 @@ class TestATypeInformationIsReadOnce:
     """utils.com_wrapper._interface_of: GetTypeAttr once per type information
     on a thread, found again by the address pywin32 shows for it."""
 
+    POWERPOINT = "{91493440-5A91-11CF-8700-00AA0060263B}"
+    EXCEL = "{00020813-0000-0000-C000-000000000046}"
+
+    class Library:
+        def __init__(self, guid):
+            self.guid = guid
+
+        def GetLibAttr(self):
+            return (self.guid, 0, 0, 0, 0, 0)
+
     class TypeInfo:
-        def __init__(self, iid, address):
-            self.iid, self.address, self.asked = iid, address, 0
+        def __init__(self, iid, address, library="{91493440-5A91-11CF-8700-00AA0060263B}"):
+            self.iid, self.address, self.library, self.asked = iid, address, library, 0
 
         def __repr__(self):
             return f"<PyITypeInfo at 0x0000011111111111 with obj at {self.address}>"
@@ -306,6 +316,26 @@ class TestATypeInformationIsReadOnce:
         def GetTypeAttr(self):
             self.asked += 1
             return (self.iid, 0, 0)
+
+        def GetContainingTypeLib(self):
+            return (TestATypeInformationIsReadOnce.Library(self.library), 0)
+
+    def test_excels_are_not_kept(self):
+        # Letting go of them can wait for an Excel that is ending (#299).
+        from utils import com_wrapper as cw
+
+        workbook = self.TypeInfo("{Workbook}", "0x00000222BBBB0001", self.EXCEL)
+        assert cw._interface_of(workbook) == "{Workbook}" == cw._interface_of(workbook)
+        assert workbook.asked == 2
+        assert "0x00000222BBBB0001" not in getattr(cw._type_infos_here, "kept", {})
+
+    def test_one_whose_library_cannot_be_read_is_not_kept(self):
+        from utils import com_wrapper as cw
+
+        odd = self.TypeInfo("{Odd}", "0x00000222CCCC0001")
+        odd.GetContainingTypeLib = lambda: (_ for _ in ()).throw(RuntimeError("no library"))
+        assert cw._interface_of(odd) == "{Odd}"
+        assert "0x00000222CCCC0001" not in getattr(cw._type_infos_here, "kept", {})
 
     @pytest.fixture(autouse=True)
     def fresh(self):
