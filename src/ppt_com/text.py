@@ -2269,11 +2269,13 @@ def _replace_whole_phrase(tr, find_text, replace_text, after, match_case_flag):
             return None
         start, length = match.Start, match.Length
         if _whole_phrase_at(tr.Text, start, length):
-            match.Text = replace_text
+            # A paragraph break goes in as PowerPoint's \r, and so is read back.
+            stored = _for_powerpoint(replace_text)
+            match.Text = stored
             # Read back: what PowerPoint holds there now, not what was asked.
-            units = _utf16_length(replace_text)
+            units = _utf16_length(stored)
             written = tr.Characters(start, units).Text if units else ""
-            if written != replace_text:
+            if written != stored:
                 raise RuntimeError(
                     f"PowerPoint did not take the replacement at character {start}: it holds "
                     f"{written!r} there, not {replace_text!r}.")

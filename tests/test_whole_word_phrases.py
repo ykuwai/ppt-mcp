@@ -156,6 +156,12 @@ def test_a_replacement_powerpoint_did_not_take_is_an_error():
         text_mod._replace_whole_phrase(tr, "acme corp", "Contoso", 0, text_mod.msoFalse)
 
 
+def test_a_paragraph_break_in_the_replacement_is_read_back_as_powerpoint_holds_it():
+    tr = TextRange("acme corp")
+    replaced = text_mod._replace_whole_phrase(tr, "acme corp", "Contoso\nLtd", 0, text_mod.msoFalse)
+    assert tr.Text == "Contoso\rLtd" and replaced.Length == 11
+
+
 def test_word_boundaries_are_counted_as_powerpoint_counts():
     at = text_mod._whole_phrase_at
     # "\U0001F680 acme corp": the phrase starts at unit 4 for PowerPoint.
