@@ -83,8 +83,22 @@ def test_one_the_call_failed_in_is_only_hidden():
 
 def test_one_showing_a_window_the_user_opened_meanwhile_is_only_hidden():
     excel = Excel(700, active=True)
-    _call(World(None, excel), windows=True)
+    world = World(None, excel)
+    _call(world, windows=True)
     assert excel.calls == ["hide"]
+    assert world.now >= 3  # the closed workbook's window was given time to go
+
+
+def test_the_closed_workbooks_window_is_waited_out_before_the_quit():
+    from backend.mac_excel import out_of_the_way
+
+    excel = Excel(700, active=True)
+    world = World(None, excel, excel, None)
+    left = [True] * 10  # gone after half a second
+    with out_of_the_way(running=world.running, shows_a_window=lambda pid: bool(left and left.pop()),
+                        pause=world.pause, clock=world.clock, limit=2) as call:
+        call.opened = True
+    assert excel.calls == ["terminate"]
 
 
 def test_a_call_that_opened_no_workbook_leaves_excel_alone():

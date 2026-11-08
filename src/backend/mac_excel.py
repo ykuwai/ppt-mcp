@@ -35,6 +35,9 @@ logger = logging.getLogger(__name__)
 EXCEL = "com.microsoft.Excel"
 # Excel quits in about a tenth of a second with no workbook open.
 QUIT_WAIT = 10
+# The chart's workbook window stays on screen for up to about a second after
+# the workbook has closed (measured 2026-11-08, Excel 16.114).
+WINDOW_WAIT = 3
 
 
 def _running():
@@ -99,7 +102,7 @@ def _put_away(running, shows_a_window, quit_it, was_front, pause, clock, limit) 
     if excel is None:
         return
     pid = excel.processIdentifier()
-    if quit_it and not shows_a_window(pid):
+    if quit_it and not _window_stays(shows_a_window, pid, pause, clock):
         excel.terminate()
         deadline = clock() + limit
         while True:
@@ -115,3 +118,14 @@ def _put_away(running, shows_a_window, quit_it, was_front, pause, clock, limit) 
         # hide() answers False here even when it works; whether it did is
         # seen in the front app.
         excel.hide()
+
+
+def _window_stays(shows_a_window, pid, pause, clock, limit: float = WINDOW_WAIT) -> bool:
+    """Whether ``pid`` still shows a window once the closed workbook's has had
+    ``limit`` seconds to go."""
+    deadline = clock() + limit
+    while shows_a_window(pid):
+        if clock() >= deadline:
+            return True
+        pause(0.05)
+    return False
