@@ -2213,11 +2213,35 @@ def _is_word_character(c) -> bool:
     return c.isalnum() or c == "_"
 
 
+def _utf16_length(text) -> int:
+    """How many UTF-16 code units ``text`` takes: how PowerPoint counts it."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _index_of_unit(content, unit) -> int:
+    """The index in ``content`` of UTF-16 code unit ``unit`` (0-based).
+
+    PowerPoint's Start and Length count UTF-16 code units, and pywin32 hands
+    the text over with each surrogate pair joined into one character, so
+    every emoji before a match puts PowerPoint's place one past Python's.
+    """
+    if content.isascii():
+        return unit
+    counted = 0
+    for index, character in enumerate(content):
+        if counted >= unit:
+            return index
+        counted += 2 if ord(character) > 0xFFFF else 1
+    return len(content)
+
+
 def _whole_phrase_at(content, start, length) -> bool:
-    """Whether the text found at ``start`` (1-based) is not part of a longer
-    word: a letter, digit or underscore at either end of it has none beside
-    it. The same boundary as the Mac's ``\\b``."""
-    s0, e0 = start - 1, start - 1 + length
+    """Whether the text found at ``start`` (1-based, as PowerPoint counts) is
+    not part of a longer word: a letter, digit or underscore at either end of
+    it has none beside it. The same boundary as the Mac's ``\\b`` where the
+    phrase starts and ends with one."""
+    s0 = _index_of_unit(content, start - 1)
+    e0 = _index_of_unit(content, start - 1 + length)
     found = content[s0:e0]
     if not found:
         return False
@@ -2246,7 +2270,14 @@ def _replace_whole_phrase(tr, find_text, replace_text, after, match_case_flag):
         start, length = match.Start, match.Length
         if _whole_phrase_at(tr.Text, start, length):
             match.Text = replace_text
-            return _Replaced(start, len(replace_text))
+            # Read back: what PowerPoint holds there now, not what was asked.
+            units = _utf16_length(replace_text)
+            written = tr.Characters(start, units).Text if units else ""
+            if written != replace_text:
+                raise RuntimeError(
+                    f"PowerPoint did not take the replacement at character {start}: it holds "
+                    f"{written!r} there, not {replace_text!r}.")
+            return _Replaced(start, units)
         after = start
 
 

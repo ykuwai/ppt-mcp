@@ -8,7 +8,7 @@ ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/catego
 | **Presentation** | 8 | Create (with templates), open (a local file, or on Windows a SharePoint or OneDrive URL), save, close, info, activate target, list templates |
 | **Slides** | 10 | Add, delete (bulk), duplicate (positional/multi), move (bulk), copy (cross-presentation), list, info, notes, navigation |
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines (with z-order placement, including behind the text), list, info (position, fill, line, text frame), update (one shape, a set, or the whole slide, absolute or by offset), delete, z-order |
-| **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups), textframe, extract all text as Markdown, typography check |
+| **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups, whole words including phrases with spaces), textframe, extract all text as Markdown, typography check |
 | **Placeholders** | 6 | List, get, set placeholder content |
 | **Formatting** | 3 | Fill, line, shadow (on the shape or on its text) |
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |

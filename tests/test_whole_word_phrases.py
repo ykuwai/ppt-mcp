@@ -17,23 +17,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from ppt_com import text as text_mod  # noqa: E402
 
 
+def _units(text):
+    return text.encode("utf-16-le")
+
+
+def _from_units(data):
+    return data.decode("utf-16-le")
+
+
 class Found:
+    """A range, counted in UTF-16 code units as PowerPoint counts."""
+
     def __init__(self, owner, start, length):
         self._owner, self.Start, self.Length = owner, start, length
 
     @property
     def Text(self):
-        return self._owner.Text[self.Start - 1:self.Start - 1 + self.Length]
+        data = _units(self._owner.Text)
+        return _from_units(data[2 * (self.Start - 1):2 * (self.Start - 1 + self.Length)])
 
     @Text.setter
     def Text(self, value):
-        o = self._owner
-        o.Text = o.Text[:self.Start - 1] + value + o.Text[self.Start - 1 + self.Length:]
+        o, data = self._owner, _units(self._owner.Text)
+        o.Text = _from_units(data[:2 * (self.Start - 1)]) + value + _from_units(
+            data[2 * (self.Start - 1 + self.Length):])
 
 
 class TextRange:
     """Find(what, after, match_case, whole_words) like PowerPoint's, for
-    plain substring search; a whole-word search of a phrase finds nothing."""
+    plain substring search, with Start and Length in UTF-16 code units; a
+    whole-word search of a phrase finds nothing."""
 
     def __init__(self, text):
         self.Text, self.finds, self.replaces = text, [], 0
@@ -43,8 +56,18 @@ class TextRange:
         if whole_words == text_mod.msoTrue and " " in what:
             return None
         hay, needle = (self.Text, what) if match_case == text_mod.msoTrue else (self.Text.lower(), what.lower())
-        at = hay.find(needle, after)
-        return None if at < 0 else Found(self, at + 1, len(what))
+        hay_units, needle_units = _units(hay), _units(needle)
+        at = 2 * after
+        while True:
+            at = hay_units.find(needle_units, at)
+            if at < 0:
+                return None
+            if at % 2 == 0:
+                return Found(self, at // 2 + 1, len(needle_units) // 2)
+            at += 1
+
+    def Characters(self, start, length):
+        return Found(self, start, length)
 
     def Replace(self, *args):
         self.replaces += 1
@@ -115,6 +138,31 @@ def test_a_single_word_still_goes_through_powerpoints_whole_words():
     tr.Replace = MagicMock(return_value=None)
     _run(tr, "acme", "x")
     assert tr.Replace.call_args.args[4] == text_mod.msoTrue
+
+
+@windows_only
+def test_an_emoji_before_a_phrase_does_not_shift_it():
+    # PowerPoint counts the rocket as two; Python sees one character.
+    tr = TextRange("\U0001F680 acme corp and \U0001F600xacme corp")
+    out = _run(tr, "acme corp", "Contoso")
+    assert out["match_count"] == 1
+    assert tr.Text == "\U0001F680 Contoso and \U0001F600xacme corp"
+
+
+def test_a_replacement_powerpoint_did_not_take_is_an_error():
+    tr = TextRange("acme corp")
+    tr.Characters = lambda start, length: MagicMock(Text="acme corp")
+    with pytest.raises(RuntimeError, match="did not take the replacement"):
+        text_mod._replace_whole_phrase(tr, "acme corp", "Contoso", 0, text_mod.msoFalse)
+
+
+def test_word_boundaries_are_counted_as_powerpoint_counts():
+    at = text_mod._whole_phrase_at
+    # "\U0001F680 acme corp": the phrase starts at unit 4 for PowerPoint.
+    assert at("\U0001F680 acme corp", 4, 9)
+    # "\U0001F600xa b": "a b" at unit 4 runs into the x before it.
+    assert not at("\U0001F600xa b", 4, 3)
+    assert text_mod._utf16_length("\U0001F680ab") == 4
 
 
 def test_word_boundaries():
