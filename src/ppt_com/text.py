@@ -1372,7 +1372,7 @@ def _set_text_impl(slide_index: int, shape_name_or_index, text,
     text = _for_powerpoint(text)
 
     if start is not None or search_text is not None:
-        start, length = _resolve_span(
+        start, length = _com_span(
             tr.Text, shape.Name, start, length, search_text, occurrence)
         # PowerPoint keeps the formatting of the characters being replaced and
         # shifts everything after them itself. An empty span inherits what is
@@ -1837,6 +1837,20 @@ def _resolve_span(full_text, shape_name, start, length, search_text, occurrence)
     return pos + 1, len(search_text)
 
 
+def _com_span(full_text, shape_name, start, length, search_text, occurrence):
+    """``_resolve_span`` in PowerPoint's units, for TextRange.Characters.
+
+    COM counts UTF-16 code units, and pywin32 hands the text over with each
+    surrogate pair joined into one character: an emoji before the text found
+    put the span one place early ("🚀 ACME Corp" formatted " ACME Cor").
+    A span given as start and length is the caller's, in PowerPoint's units.
+    """
+    start, length = _resolve_span(full_text, shape_name, start, length, search_text, occurrence)
+    if search_text is None or full_text.isascii():
+        return start, length
+    return _utf16_length(full_text[:start - 1]) + 1, _utf16_length(search_text)
+
+
 def _check_format_spec(spec):
     """Run the conversions that can refuse a value, and throw the result away.
 
@@ -1890,7 +1904,7 @@ def _format_text_ranges_impl(slide_index, shape_name_or_index, base, ranges) -> 
 
     full_text = tr.Text
     spans = [
-        _resolve_span(full_text, shape.Name, spec.get("start"),
+        _com_span(full_text, shape.Name, spec.get("start"),
                       spec.get("length"), spec.get("search_text"),
                       spec.get("occurrence", 1))
         for spec in ranges
@@ -1900,7 +1914,7 @@ def _format_text_ranges_impl(slide_index, shape_name_or_index, base, ranges) -> 
 
     with FrozenRedraw():
         if base:
-            _format_span(shape, tr, 1, len(full_text), base)
+            _format_span(shape, tr, 1, _utf16_length(full_text), base)
         applied = [
             _format_span(shape, tr, start, length, spec)
             for (start, length), spec in zip(spans, ranges)
@@ -1920,7 +1934,7 @@ def _format_text_range_impl(slide_index, shape_name_or_index, start, length,
                               color, font_color_theme, highlight_color) -> dict:
     shape, tr = _text_frame_of(slide_index, shape_name_or_index)
 
-    start, length = _resolve_span(
+    start, length = _com_span(
         tr.Text, shape.Name, start, length, search_text, occurrence)
     applied = _format_span(shape, tr, start, length, {
         "font_name": font_name, "font_name_fareast": font_name_fareast,

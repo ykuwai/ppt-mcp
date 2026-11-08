@@ -179,3 +179,13 @@ def test_word_boundaries():
     assert at("(acme corp)", 2, 9)
     assert at("Q3-plan and q3 plan", 1, 2) and at("e-mail", 1, 6)
     assert at("x acme corp.", 3, 10)  # ends on a full stop, nothing after counts
+
+
+def test_a_span_found_by_search_text_is_counted_as_powerpoint_counts():
+    # format_text_range on "🚀 ACME Corp" made " ACME Cor" bold on Windows.
+    span = text_mod._com_span("\U0001F680 ACME Corp and acme", "TB", None, None, "ACME Corp", 1)
+    assert span == (4, 9)
+    assert text_mod._com_span("\U0001F680 a\U0001F600b", "TB", None, None, "a\U0001F600b", 1) == (4, 4)
+    # Plain text, and a span given as start and length, are left as they are.
+    assert text_mod._com_span("ACME Corp", "TB", None, None, "Corp", 1) == (6, 4)
+    assert text_mod._com_span("\U0001F680 ACME", "TB", 2, 3, None, 1) == (2, 3)
