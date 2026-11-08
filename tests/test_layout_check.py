@@ -1957,6 +1957,56 @@ class TestSampleText:
         assert check(box) == []
 
 
+
+class TestTypos:
+    @pytest.mark.parametrize("words, typo, sample, severity", [
+        ("Sales grew in the the third quarter", "repeated_word", "the the", "warning"),
+        ("Revenue Revenue up 12%", "repeated_word", "Revenue Revenue", "warning"),
+        ("עלייה של של 12%", "repeated_word", "של של", "warning"),
+        ("Sales grew  12% this year", "double_space", "grew  12%", "info"),
+        ("Costs fell , as planned", "space_before_punctuation", "fell ,", "info"),
+        ("Done .", "space_before_punctuation", "Done .", "info"),
+    ])
+    def test_slips_are_reported(self, words, typo, sample, severity):
+        box = textbox("t", 100, 100, 400, 40)
+        box["text"]["content"] = words
+        [finding] = check(box)
+        assert (finding["type"], finding["typo"], finding["sample"], finding["severity"]) == (
+            "typo", typo, sample, severity)
+        assert f"find_text={sample!r}" in finding["fix"]
+
+    def test_the_fix_names_the_corrected_text(self):
+        box = textbox("t", 100, 100, 400, 40)
+        for words, corrected in (("in the the end", "'the'"), ("grew  12%", "'grew 12%'"), ("fell , then", "'fell,'")):
+            box["text"]["content"] = words
+            [finding] = check(box)
+            assert f"replace_text={corrected}" in finding["fix"]
+
+    @pytest.mark.parametrize("words", [
+        "He had had enough", "We know that that works", "Bora Bora", "Very very good",
+        "Q3 3 3 versus 2", "Line one\rone more line", "Title\vtitle case",
+        "    Indented bullet", "Pi is 3.14 and .5 is half", "e.g. this, that.",
+        "Pourquoi ? Parce que ; voilà !", "Trailing space ", "Tab\tseparated",
+        "The theme", "Ends with a full stop.", "Name\t\tValue", "Total\tTotal",
+        "Origins  ·  The plant  ·  Numbers", "Step 1  →  Step 2", "Total:  12",
+    ])
+    def test_meant_text_is_not(self, words):
+        box = textbox("t", 100, 100, 400, 40)
+        box["text"]["content"] = words
+        assert check(box) == []
+
+    def test_each_kind_of_slip_in_a_shape_is_reported_once(self):
+        box = textbox("t", 100, 100, 400, 40)
+        box["text"]["content"] = "Costs fell , as planned\rMargins  improved  a lot, the the end, the the"
+        assert [(f["typo"], f["sample"]) for f in check(box)] == [
+            ("repeated_word", "the the"), ("double_space", "Margins  improved"),
+            ("space_before_punctuation", "fell ,")]
+
+    def test_a_write_tool_reports_it_on_its_shape(self):
+        from ppt_com.layout_check import SHAPE_FINDINGS
+
+        assert "typo" in SHAPE_FINDINGS
+
 def worded(name, top, content):
     box = textbox(name, 100, top, 600, 40)
     box["text"]["content"] = content
