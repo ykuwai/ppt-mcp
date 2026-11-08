@@ -716,6 +716,14 @@ What it took to make it dependable:
   (`backend/mac_excel.py`, through `NSRunningApplication` and the window list,
   so with no Automation prompt for Excel). An Excel the user started is left
   running, and a call that opened no workbook leaves Excel alone.
+- **`ppt_get_all_text` reads a copy.** Through the add-in, `SaveCopyAs` writes
+  the deck as it is now to a temporary file in PowerPoint's container and
+  `utils/deck_text.py` reads its XML. On a 50-slide deck that is 0.2 s, against
+  4.4 s of Apple Events on 16.97 and 112 s on 16.114, and it is the only way
+  here to see bold and italic on part of a paragraph, since a range answers
+  true when any of it is. `SaveCopyAs` refuses a file format argument
+  ("Invalid enumeration value"), so none is passed. Without the add-in, or for
+  a deck it cannot copy, the text is read shape by shape as before.
 - **macOS can hold up every look into PowerPoint's folder.** It may ask
   whether the app that runs the server may reach data from other apps, and
   until the user answers, each file call into PowerPoint's container waits
