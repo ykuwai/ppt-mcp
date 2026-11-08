@@ -12,6 +12,7 @@ You MUST close it with wb.Close(False) in a finally block to prevent leaked
 Excel processes.
 """
 
+import contextvars
 import json
 import logging
 import sys
@@ -382,6 +383,12 @@ def _get_chart_shape(slide, name_or_index: Union[str, int]):
 # ---------------------------------------------------------------------------
 # COM implementation functions (run on COM thread via ppt.execute)
 # ---------------------------------------------------------------------------
+# The Mac's VBA bridge puts away the Excel a chart's workbook brought up
+# (backend/mac_excel.py), but only after a call that opened one. It sets this
+# to its record of the call, and _close_chart_workbook, which every workbook
+# opened here goes through, notes on it what happened.
+excel_call = contextvars.ContextVar("excel_call", default=None)
+
 WORKBOOK_LEFT_OPEN = (
     "The chart's data workbook could not be closed, so Excel's 'Chart in "
     "Microsoft PowerPoint' window may still be open. Close it before adding or "
@@ -443,6 +450,9 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5, keep=None)
     ``ChartData.Activate`` does for a chart just added. Each workbook got here
     goes into ``keep``, an ``_ExcelRefs``, when one is given.
     """
+    call = excel_call.get()
+    if call is not None:
+        call.opened = True
     last = None
     for attempt in range(attempts):
         if attempt:
@@ -460,6 +470,8 @@ def _close_chart_workbook(chart, workbook=None, attempts=5, wait=0.5, keep=None)
             # Only its text: the error's frames would hold the workbook.
             last = f"{type(e).__name__}: {e}"
     logger.warning("Could not close a chart's data workbook after %d tries: %s", attempts, last)
+    if call is not None:
+        call.left_open = True
     return False
 
 

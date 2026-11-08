@@ -614,6 +614,22 @@ def _deck_for(app):
 
 
 def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
+    if com_impl.__module__ != "ppt_com.charts":
+        return _run_on_bridge(bridge, com_impl, args, kwargs)
+    # A chart call can bring Excel up; it is put out of the way once the
+    # call, and the add-in's handles into it, are done (backend/mac_excel.py).
+    from backend import mac_excel
+    from ppt_com import charts
+
+    with mac_excel.out_of_the_way() as excel:
+        token = charts.excel_call.set(excel)
+        try:
+            return _run_on_bridge(bridge, com_impl, args, kwargs)
+        finally:
+            charts.excel_call.reset(token)
+
+
+def _run_on_bridge(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
     if bridge.stale:
         bridge.release()
     app = bridge.application()
@@ -621,9 +637,7 @@ def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
         token = _CALL.set(Call(app, find_pres=lambda: _deck_for(app)))
         try:
             with _temp_files_powerpoint_can_read():
-                if com_impl.__module__ != "ppt_com.charts":
-                    return com_impl(*args, **kwargs)
-                return _with_excel_put_away(com_impl, args, kwargs)
+                return com_impl(*args, **kwargs)
         finally:
             _CALL.reset(token)
     finally:
@@ -631,25 +645,6 @@ def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
             bridge.release()
         except Exception:  # noqa: BLE001 - handles go with PowerPoint anyway
             logger.debug("Could not release the VBA bridge's handles", exc_info=True)
-
-
-# From charts.WORKBOOK_LEFT_OPEN, without the quotes str() could escape; a
-# test keeps the two together.
-LEFT_OPEN_WORDS = "data workbook could not be closed"
-
-
-def _with_excel_put_away(com_impl: Callable, args, kwargs) -> Any:
-    """A chart tool's call, with the Excel its data brought up put out of the
-    way after it (backend/mac_excel.py)."""
-    from backend import mac_excel
-
-    with mac_excel.out_of_the_way() as excel:
-        result = com_impl(*args, **kwargs)
-        # Every chart tool that opens the workbook says so when it could not
-        # close it again; then Excel stays, with the window the user is told
-        # to close.
-        excel.workbook_closed = LEFT_OPEN_WORDS not in str(result)
-        return result
 
 
 def _noted(result, failure_note: str, recreated_note: str):
