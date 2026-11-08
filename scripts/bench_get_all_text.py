@@ -15,8 +15,9 @@ It starts the server's worker in this process, opens that file, times each
 tool `--runs` times through the server's own call_tool, as a client's call
 goes, then closes it without saving and deletes the file. No other deck is
 touched. A PowerPoint the script had to start is quit with that close, as the
-server does. On the Mac the files go in PowerPoint's container, where it reads
-and writes without asking for access.
+server does. On the Mac the files go in PowerPoint's container, where
+PowerPoint reads and writes without asking; macOS may ask once whether the app
+running this script may reach another app's data.
 
 `--keep` leaves the deck open afterwards, unsaved, to look at.
 

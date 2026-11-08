@@ -716,6 +716,15 @@ What it took to make it dependable:
   (`backend/mac_excel.py`, through `NSRunningApplication` and the window list,
   so with no Automation prompt for Excel). An Excel the user started is left
   running, and a call that opened no workbook leaves Excel alone.
+- **macOS can hold up every look into PowerPoint's folder.** It may ask
+  whether the app that runs the server may reach data from other apps, and
+  until the user answers, each file call into PowerPoint's container waits
+  inside the call (2026-11-08, with the add-in loaded: every call through it
+  waited out the worker's 69 s budget, one after another). So before the add-in
+  is used, the container is looked at on a thread of its own for two seconds
+  (`_container_reachable`); one that does not answer, or refuses, leaves the
+  add-in alone for `RETRY_AFTER`, and so does a call that timed out or never
+  came back.
 - **Handles to a closed deck's SmartArt break SmartArt.** While the add-in
   holds handles to a SmartArt in a deck, closing that deck makes every
   SmartArt call after it fail, "Automation error" and then "Access denied" or

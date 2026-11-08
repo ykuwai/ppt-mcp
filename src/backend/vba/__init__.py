@@ -68,6 +68,11 @@ CALL_TIMEOUT = 60.0
 # again on every call.
 PING_TIMEOUT = 10.0
 RETRY_AFTER = 300.0
+# How long the container may take to answer before the add-in is not used.
+# While macOS asks the user whether this app may reach another app's data,
+# every file call into the container waits for the answer, inside the call,
+# where the bridge's own timeout never gets a turn; a denial answers EPERM.
+REACH_TIMEOUT = 2.0
 RS, US, GS = "\x1e", "\x1f", "\x1d"
 # PowerPoint's own event for `run VB macro`. appscript has no term for it.
 RUN_VB_MACRO = b"sPPTrVbM"
@@ -429,6 +434,35 @@ class Method:
 # ---------------------------------------------------------------------------
 # Loading the add-in
 # ---------------------------------------------------------------------------
+def _container_reachable(folder=None, timeout=None) -> Optional[str]:
+    """None when PowerPoint's container answers, or why it does not.
+
+    Looked at on a thread of its own, so that a look macOS holds up while it
+    asks the user (2026-11-08: every add-in call then waited out the worker's
+    whole budget, one after another) costs ``timeout`` seconds, once.
+    """
+    folder = CONTAINER if folder is None else folder
+    timeout = REACH_TIMEOUT if timeout is None else timeout
+    answer = {}
+
+    def look():
+        try:
+            os.listdir(folder)
+            answer["ok"] = True
+        except FileNotFoundError:
+            answer["ok"] = True  # PowerPoint has not made it yet; _install will
+        except OSError as exc:
+            answer["error"] = f"{type(exc).__name__}: {exc}"
+
+    thread = threading.Thread(target=look, name="ppt-mcp-container-look", daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        return (f"PowerPoint's folder did not answer within {timeout:.0f}s; macOS may be "
+                "asking whether this app may reach PowerPoint's data")
+    return answer.get("error")
+
+
 class _Session:
     """The add-in as loaded into the running PowerPoint, used from the worker."""
 
@@ -437,6 +471,19 @@ class _Session:
         self._bridge: Optional[Bridge] = None
         self._failed_at = None
         self._reason = None
+        # Set while a call is on the add-in. Calls run one at a time, so one
+        # still set when the next comes is a call whose worker was abandoned
+        # inside it, stuck on PowerPoint or on the container.
+        self.in_flight = False
+
+    def fail(self, reason: str) -> None:
+        """Take the Apple Event route for RETRY_AFTER seconds, saying why once."""
+        with self._lock:
+            if reason != self._reason:
+                logger.warning(
+                    "The VBA bridge could not be used (%s). "
+                    "Tools that would use it take the Apple Event route.", reason)
+            self._failed_at, self._reason = time.monotonic(), reason
 
     def bridge(self, app_ref) -> Bridge:
         """A bridge to the add-in, loading it into PowerPoint first if needed.
@@ -444,9 +491,17 @@ class _Session:
         Raises VbaUnavailable when it cannot be loaded; the caller then goes
         the Apple Event way, having changed nothing.
         """
+        if self.in_flight:
+            self.fail("an earlier call to the add-in has not come back")
+            raise VbaUnavailable(self._reason)
         with self._lock:
             if self._failed_at is not None and time.monotonic() - self._failed_at < RETRY_AFTER:
                 raise VbaUnavailable(self._reason)
+        unreachable = _container_reachable()
+        if unreachable is not None:
+            self.fail(unreachable)
+            raise VbaUnavailable(unreachable)
+        with self._lock:
             try:
                 bridge = self._load(app_ref)
             except Exception as exc:  # noqa: BLE001 - every failure means the same here
@@ -614,6 +669,17 @@ def _deck_for(app):
 
 
 def _run(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
+    _SESSION.in_flight = True
+    try:
+        return _run_on_excel_or_not(bridge, com_impl, args, kwargs)
+    except BridgeTimeout as exc:
+        _SESSION.fail(str(exc))
+        raise
+    finally:
+        _SESSION.in_flight = False
+
+
+def _run_on_excel_or_not(bridge: Bridge, com_impl: Callable, args, kwargs) -> Any:
     if com_impl.__module__ != "ppt_com.charts":
         return _run_on_bridge(bridge, com_impl, args, kwargs)
     # A chart call can bring Excel up; it is put out of the way once the
