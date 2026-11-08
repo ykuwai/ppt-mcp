@@ -79,6 +79,24 @@ Public Function CallA(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallA = False
                 End Select
             End If
+        Case "Add2"
+            If kind = "l" Then
+                o.Add2 = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.Add2 = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.Add2
+                    Case 1: Assign r, o.Add2(ArgOf(f(3)))
+                    Case 2: Assign r, o.Add2(ArgOf(f(3)), ArgOf(f(4)))
+                    Case 3: Assign r, o.Add2(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)))
+                    Case 4: Assign r, o.Add2(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)))
+                    Case 5: Assign r, o.Add2(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)))
+                    Case 6: Assign r, o.Add2(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)))
+                    Case 7: Assign r, o.Add2(ArgOf(f(3)), ArgOf(f(4)), ArgOf(f(5)), ArgOf(f(6)), ArgOf(f(7)), ArgOf(f(8)), ArgOf(f(9)))
+                    Case Else: CallA = False
+                End Select
+            End If
         Case "AddChart2"
             If kind = "l" Then
                 o.AddChart2 = ArgOf(f(3))
@@ -406,6 +424,28 @@ Public Function CallA(o As Object, kind As String, m As String, f() As String, n
                     Case 0: Assign r, o.ApplyStyle
                     Case 1: Assign r, o.ApplyStyle(ArgOf(f(3)))
                     Case 2: Assign r, o.ApplyStyle(ArgOf(f(3)), ArgOf(f(4)))
+                    Case Else: CallA = False
+                End Select
+            End If
+        Case "Author"
+            If kind = "l" Then
+                o.Author = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.Author = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.Author
+                    Case Else: CallA = False
+                End Select
+            End If
+        Case "AuthorInitials"
+            If kind = "l" Then
+                o.AuthorInitials = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.AuthorInitials = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.AuthorInitials
                     Case Else: CallA = False
                 End Select
             End If
