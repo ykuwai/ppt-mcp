@@ -228,7 +228,7 @@ _ORDER = (
     "narrow_margin", "misaligned", "title_edge", "uneven_spacing", "uneven_sizes",
     "number_order", "text_direction", "mixed_direction", "font_missing", "empty_placeholder",
     "sample_text", "typo",
-    "chart_sample_data", "missing_alt_text",
+    "chart_sample_data", "missing_alt_text", "vague_link",
     "missing_title", "duplicate_titles",
     "inconsistent_titles",
     "inconsistent_body_text",
@@ -3523,6 +3523,39 @@ def _slips(lines):
             break
 
 
+# Link words that say nothing about where the link goes. A screen reader can
+# list a slide's links by their words alone, and a reader scanning the slide
+# looks for them too (WCAG 2.4.4).
+_VAGUE_LINK_WORDS = frozenset({
+    "here", "click here", "click", "this", "this link", "link", "read more",
+    "more", "learn more", "click here for more", "go", "details", "more info",
+})
+
+
+def _vague_links(slide_index, shapes):
+    """A link whose words say nothing out of context: "click here", "more".
+
+    Known only from the saved file, which ppt_check_layout reads; a write
+    tool's own check does not, so this is not one of SHAPE_FINDINGS.
+    """
+    findings = []
+    for shape in shapes:
+        for words in shape.get("links") or ():
+            plain = re.sub(r"[\s.,:;!?…\"'“”‘’()\[\]→»›>-]+", " ", words).strip().lower()
+            if plain not in _VAGUE_LINK_WORDS:
+                continue
+            name = shape["name"]
+            findings.append(_finding(
+                slide_index, "vague_link", [name],
+                f"A link in '{name}' reads \"{words}\", which does not say where it goes.",
+                f"Put the link on words that name its destination (\"the 2026 annual report\", "
+                f"not \"{words}\"): ppt_find_replace_text to reword it, then ppt_add_hyperlink "
+                f"on '{name}' if the link has to move.",
+                severity="info", sample=words,
+            ))
+    return findings
+
+
 # The bidi classes of letters: a paragraph takes its direction from its first
 # one. Digits have none of their own.
 _LEFT_TO_RIGHT = frozenset({"L"})
@@ -4359,6 +4392,7 @@ def slide_findings(slide, slide_w, slide_h, only=None, trust_template=True):
         + _blurry(index, shapes)
         + _small_text(index, shapes)
         + _missing_alt_text(index, shapes)
+        + _vague_links(index, shapes)
         + _chart_overlaps(index, shapes)
         + _number_order(index, shapes)
         + _text_direction(index, shapes)
@@ -6173,17 +6207,6 @@ def _has_pictures(slides, names=None):
                for slide in slides for s in slide["shapes"])
 
 
-def _needs_package(slides):
-    """Whether the saved file has anything to add: pictures, charts and
-    SmartArt, and text PowerPoint shrinks to fit. PowerPoint for Mac cannot
-    say which text shrinks, and its file is read in place rather than saved
-    aside, so there any text is reason enough."""
-    return any(s.get("type") in (*_PICTURES, msoChart, msoSmartArt)
-               or (s.get("text") or {}).get("autofit") == "shrink_to_fit"
-               or (IS_MACOS and (s.get("text") or {}).get("chars"))
-               for slide in slides for s in slide["shapes"])
-
-
 def _has_charts(slides):
     return any(s.get("type") == msoChart for slide in slides for s in slide["shapes"])
 
@@ -6200,7 +6223,7 @@ def _with_package(slides, facts):
                     (by_id.get(kind) or {}).get(index) or {})
 
         aspects, pixels, charts = entries("pictures"), entries("pixels"), entries("charts")
-        described, scales = entries("described"), entries("text_scale")
+        described, scales, links = entries("described"), entries("text_scale"), entries("links")
         for shape in slide["shapes"]:
             # By id first: a name read through COM may not be the one saved.
             def known(found, shape=shape):
@@ -6213,6 +6236,8 @@ def _with_package(slides, facts):
                 shape["described"] = known(described)
             if known(scales) is not None and shape.get("text"):
                 shape["shrunk"] = known(scales)
+            if known(links):
+                shape["links"] = known(links)
             if shape.get("type") in _PICTURES and known(pixels) is not None:
                 shape["pixels"] = known(pixels)
             if shape.get("type") in _PICTURES and known(aspects) is not None:
@@ -6253,8 +6278,10 @@ def check_layout(params: CheckLayoutInput) -> str:
         if facts is None:  # a deck with no slides
             return json.dumps({"issues": [], "total": 0, "slides_checked": 0})
         slide_w, slide_h = facts["slide_width"], facts["slide_height"]
-        if _needs_package(slides):
-            _with_package(slides, _read_package(indices, charts=_has_charts(slides)))
+        # Always, for the checks that only the file can answer: where links
+        # are and what they say, which PowerPoint for Mac does not tell. A
+        # write's own check reads it only when it needs to (_issues_for).
+        _with_package(slides, _read_package(indices, charts=_has_charts(slides)))
         _with_fonts(slides, _read_fonts)
         _with_photos(slides)
         findings = []
@@ -6544,6 +6571,9 @@ def register_tools(mcp):
         - chart_overlap: data labels on each other, or a legend or title on
           the plot (Windows only)
         - missing_alt_text: a picture, chart or SmartArt with no alt text
+        - vague_link: a link whose words say nothing on their own ("click
+          here", "read more"), which is all a screen reader's list of links
+          shows
         - missing_title, duplicate_titles (whole deck only): a slide with no
           title, or slides with the same one
         A slide is judged as the slide show draws it: lines shown one at a

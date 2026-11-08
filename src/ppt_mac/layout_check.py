@@ -595,9 +595,41 @@ def _package_facts_impl(slide_indices, charts=False):
         path = None
     if path and path.lower().endswith((".pptx", ".pptm", ".potx", ".ppsx")):
         return package_facts(path, slide_indices)
+    copied = _package_of_a_copy(slide_indices)
+    if copied is not None:
+        return copied
     if not charts:
         return {}
     return {"charts": _charts_by_clipboard(pres, slide_indices)}
+
+
+def _package_of_a_copy(slide_indices):
+    """``package_facts`` from a copy the VBA add-in saves aside, or None.
+
+    The copy ppt_get_all_text reads (ppt_com.text._copy_deck_impl): written
+    through the add-in, which has SaveCopyAs, so a deck with unsaved changes
+    is judged as it is on screen, its charts read without the clipboard.
+    Without the add-in there is no copy, and the deck is judged as before.
+    """
+    import shutil
+
+    from ppt_com import text as com_text
+    from ppt_com.layout_check import package_facts
+
+    try:
+        copy = com_text._copy_deck_impl()
+    except Exception:  # noqa: BLE001 - judged without the file, as before
+        logger.debug("Could not copy the deck aside", exc_info=True)
+        return None
+    if not isinstance(copy, dict):
+        return None
+    try:
+        return package_facts(copy["path"], slide_indices)
+    except Exception:  # noqa: BLE001 - judged without the file, as before
+        logger.debug("Could not read the copy of the deck", exc_info=True)
+        return None
+    finally:
+        shutil.rmtree(copy["folder"], ignore_errors=True)
 
 
 def _charts_by_clipboard(pres, slide_indices):
