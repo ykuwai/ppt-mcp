@@ -77,6 +77,14 @@ class TestQuitIfOurs:
         quit.assert_not_called()
         assert backend.ppt._launched_by_us is False
 
+    def test_a_quit_that_did_not_end_in_time_is_not_reported_as_done(self, server_started):
+        result = backend.quit_if_ours(MagicMock(return_value=False))
+        assert result["powerpoint_quit"] is False
+        assert "still shutting down" in result["warning"]
+        # Still the one this server started, so it is not taken for the user's.
+        assert backend.ppt._launched_by_us is True
+        assert backend.ppt._app is None
+
     def test_a_quit_that_fails_does_not_fail_the_close(self, server_started):
         quit = MagicMock(side_effect=RuntimeError("busy"))
         assert backend.quit_if_ours(quit) == {}

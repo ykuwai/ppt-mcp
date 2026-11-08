@@ -95,7 +95,8 @@ def quit_if_ours(quit_app) -> dict:
     server started: the user can quit that one and start another, and the
     connection follows without saying so. ``quit_app`` is the platform's own
     call, ``app.Quit`` or ``app.quit``, looked up only when it is called; the
-    close tools call this once their last deck is gone.
+    close tools call this once their last deck is gone. A ``quit_app`` that
+    waits for PowerPoint to end answers False when it did not in time.
     """
     if not ppt._launched_by_us:
         return {}
@@ -103,13 +104,26 @@ def quit_if_ours(quit_app) -> dict:
         ppt._launched_by_us = False
         return {}
     try:
-        quit_app()
+        gone = quit_app()
     except Exception as exc:  # noqa: BLE001 - the deck is closed all the same
         logger.warning("Could not quit the PowerPoint this server started: %s", exc)
         return {}
     ppt._app = None
-    ppt._launched_by_us = False
     ppt._target_pres_full_name = None
+    if gone is False:
+        # ``quit_app`` waited for it to end and it has not: it is still the
+        # one this server started, so it stays this server's to quit rather
+        # than being taken for the user's by the next call.
+        return {
+            "powerpoint_quit": False,
+            "warning": (
+                "PowerPoint was asked to quit, as this server started it and "
+                "its last presentation is closed, and it is still shutting "
+                "down. A call made before it has gone may fail; wait a few "
+                "seconds before the next one."
+            ),
+        }
+    ppt._launched_by_us = False
     return {
         "powerpoint_quit": True,
         "note": (
