@@ -290,3 +290,90 @@ class TestWrappingAKnownInterface:
         for ob in (new, null, bare, made):
             assert wrapper._wrap_dispatch_(ob) == "pywin32's own"
         assert calls == [new, null, bare, made]
+
+
+class TestATypeInformationIsReadOnce:
+    """utils.com_wrapper._interface_of: GetTypeAttr once per type information
+    on a thread, found again by the address pywin32 shows for it."""
+
+    class TypeInfo:
+        def __init__(self, iid, address):
+            self.iid, self.address, self.asked = iid, address, 0
+
+        def __repr__(self):
+            return f"<PyITypeInfo at 0x0000011111111111 with obj at {self.address}>"
+
+        def GetTypeAttr(self):
+            self.asked += 1
+            return (self.iid, 0, 0)
+
+    @pytest.fixture(autouse=True)
+    def fresh(self):
+        from utils.com_wrapper import forget_type_infos
+
+        forget_type_infos()
+        yield
+        forget_type_infos()
+
+    def test_the_same_type_information_is_asked_once_and_kept(self):
+        from utils import com_wrapper as cw
+
+        shape = self.TypeInfo("{Shape}", "0x00000222AAAA0001")
+        fill = self.TypeInfo("{Fill}", "0x00000222AAAA0002")
+        assert [cw._interface_of(t) for t in (shape, fill, shape, shape, fill)] == [
+            "{Shape}", "{Fill}", "{Shape}", "{Shape}", "{Fill}"]
+        assert (shape.asked, fill.asked) == (1, 1)
+        # Kept alive, so COM cannot give its address to anything else.
+        assert cw._type_infos_here.kept["0x00000222AAAA0001"][0] is shape
+
+    def test_without_an_address_it_is_asked_every_time(self):
+        from utils import com_wrapper as cw
+
+        bare = type("Bare", (), {"asked": 0, "GetTypeAttr": lambda self: (setattr(self, "asked", self.asked + 1), ("{X}",))[1]})()
+        assert cw._interface_of(bare) == "{X}" and cw._interface_of(bare) == "{X}"
+        assert bare.asked == 2
+
+    def test_another_thread_keeps_its_own(self):
+        import threading
+
+        from utils import com_wrapper as cw
+
+        shape = self.TypeInfo("{Shape}", "0x00000222AAAA0001")
+        cw._interface_of(shape)
+        there = threading.Thread(target=cw._interface_of, args=(shape,))
+        there.start()
+        there.join()
+        assert shape.asked == 2
+
+    def test_too_many_are_let_go_of_and_forgetting_empties_the_thread(self, monkeypatch):
+        from utils import com_wrapper as cw
+
+        monkeypatch.setattr(cw, "_TYPE_INFOS_KEPT", 2)
+        infos = [self.TypeInfo(f"{{I{n}}}", f"0x{n:016X}") for n in range(3)]
+        for t in infos:
+            cw._interface_of(t)
+        assert list(cw._type_infos_here.kept) == [infos[2].address]
+        cw.forget_type_infos()
+        cw._interface_of(infos[2])
+        assert infos[2].asked == 2
+
+    def test_a_wrapped_object_of_a_known_interface_asks_no_type_attributes_twice(self):
+        from utils.com_wrapper import wrap_known_interfaces
+
+        typeinfo = self.TypeInfo("{Shape}", "0x00000222AAAA0009")
+
+        class Ob:
+            def GetTypeInfo(self):
+                return typeinfo
+
+        class CDispatch(TestWrappingAKnownInterface.Wrapped):
+            def _wrap_dispatch_(self, ob, userName=None, returnCLSID=None):
+                return "pywin32's own"
+
+        client = type("Client", (), {"CDispatch": CDispatch})
+        gencache = type("Gencache", (), {"GetClassForCLSID": staticmethod(lambda clsid: None)})
+        wrap_known_interfaces(client, {"{Shape}": "shape olerepr"}, gencache, ComError, NULL_IID)
+        wrapper = client.CDispatch(None, None)
+        for _ in range(5):
+            assert wrapper._wrap_dispatch_(Ob()).olerepr == "shape olerepr"
+        assert typeinfo.asked == 1
