@@ -179,6 +179,7 @@ them in one place.
 | `shape.rotation` raises `AttributeError` | the dictionary defines both an enumerator and a property named `rotation`, and appscript resolves the collision toward the enumerator | reach the property by raw code. Verified working, set 33 and read 33.0 back |
 | `line_format.dash_style` raises `AttributeError` | same collision class, the `line dash style …` enumerators take the name | raw code `b'LFds'` |
 | PowerPoint stops answering | a modal sheet, or an operation that wedged it | every call carries `timeout=`, which appscript supports on every command |
+| A call right after the server quits PowerPoint fails with -600, or its deck lands in a new PowerPoint left running as the user's | `quit` returns while PowerPoint is still shutting down, so the next call finds it running | the close that quits PowerPoint waits until that process has gone (`quit_and_wait`) |
 
 The raw code route is small enough to state in full.
 

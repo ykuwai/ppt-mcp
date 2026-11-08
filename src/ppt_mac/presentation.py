@@ -39,6 +39,7 @@ from backend.mac_ae import (
     full_names as _full_names,
     is_missing,
     ppt,
+    quit_and_wait,
     resolve_presentation as _resolve_presentation,
 )
 from backend import quit_if_ours
@@ -792,7 +793,7 @@ def _close_presentation_impl(
     if closed_copy:
         result["also_copied_to"] = closed_copy
     if not keep_powerpoint_open and not _full_names(app):
-        result.update(quit_if_ours(lambda: app.quit()))
+        result.update(quit_if_ours(lambda: quit_and_wait(app, ppt._launched_pid)))
     return result
 
 
