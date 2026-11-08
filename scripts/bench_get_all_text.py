@@ -37,6 +37,7 @@ import struct
 import sys
 import tempfile
 import time
+import uuid
 import zipfile
 import zlib
 from pathlib import Path
@@ -192,9 +193,11 @@ async def timed(tool, params, deck, runs):
     for _ in range(runs):
         start = time.perf_counter()
         answer = await run(tool, params, deck)
-        times.append(time.perf_counter() - start)
-    if isinstance(answer, dict) and answer.get("error"):
-        raise SystemExit(f"{tool} failed: {answer['error']}")
+        took = time.perf_counter() - start
+        # Each run is checked: a failed one's time is no measurement.
+        if isinstance(answer, dict) and answer.get("error"):
+            raise SystemExit(f"{tool} failed: {answer['error']}")
+        times.append(took)
     return times, answer
 
 
@@ -239,7 +242,9 @@ def _fmt(times):
 
 async def main(args):
     folder = _copy_folder()
-    path = os.path.join(folder, "ppt-mcp-bench.pptx")
+    # A name of its own each run: a deck left open by --keep under the same
+    # name would be the one opened, and measured, instead.
+    path = os.path.join(folder, f"ppt-mcp-bench-{uuid.uuid4().hex[:8]}.pptx")
     picture = os.path.join(folder, "ppt-mcp-bench-picture.png")
     start = time.perf_counter()
     _picture(picture)
