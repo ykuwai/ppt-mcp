@@ -4664,11 +4664,101 @@ class TestTextLanguagesFromTheFile:
     def test_no_tag_and_no_default_is_unknown(self, tmp_path, monkeypatch):
         assert self.languages(tmp_path, monkeypatch, None, tagged_box("Body", ("Hello", None))) == {}
 
+    def test_a_paragraph_s_tag_comes_before_the_deck_s_default(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello", None)).replace(
+            "<a:p>", '<a:p><a:pPr><a:defRPr lang="en-US"/></a:pPr>')
+        assert self.languages(tmp_path, monkeypatch, "en-IL", box) == {"Body": ["en-US"]}
+
+    def test_a_shape_s_list_style_comes_before_the_deck_s_default(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello", None)).replace(
+            "<a:bodyPr/>", '<a:bodyPr/><a:lstStyle><a:lvl1pPr><a:defRPr lang="en-US"/></a:lvl1pPr></a:lstStyle>')
+        assert self.languages(tmp_path, monkeypatch, "en-IL", box) == {"Body": ["en-US"]}
+
+    def test_a_list_style_counts_at_the_paragraph_s_own_level(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello", None)).replace(
+            "<a:bodyPr/>", '<a:bodyPr/><a:lstStyle><a:lvl2pPr><a:defRPr lang="en-US"/></a:lvl2pPr></a:lstStyle>'
+        ).replace("<a:p>", '<a:p><a:pPr lvl="1"/>')
+        assert self.languages(tmp_path, monkeypatch, "en-IL", box) == {"Body": ["en-US"]}
+
+    def test_the_deck_s_default_paragraph_style_counts_for_a_text_box(self, tmp_path, monkeypatch):
+        import test_layout_check as here
+        from utils.package import package_facts
+        monkeypatch.setattr(here, "PRESENTATION", PRESENTATION.replace(
+            "</p:presentation>",
+            '<p:defaultTextStyle xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+            '<a:defPPr><a:defRPr lang="en-IL"/></a:defPPr></p:defaultTextStyle></p:presentation>'))
+        path = deck_file(tmp_path, [tagged_box("Body", ("Hello", None))], {})
+        assert package_facts(path, [1])["languages"][1] == {"Body": ["en-IL"]}
+
+
+def placeholder_deck(tmp_path, layout_style="", master_style="", default="en-IL", kind='type="body" idx="1"'):
+    """A deck with one placeholder whose run names no language."""
+    ns = ('xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+          'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+          'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"')
+
+    def placeholder(style, words=""):
+        return (f'<p:sp><p:nvSpPr><p:cNvPr id="2" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph {kind}/></p:nvPr></p:nvSpPr>'
+                f'<p:txBody><a:bodyPr/>{style}<a:p>{words}</a:p></p:txBody></p:sp>')
+
+    def lang(value):
+        return f'<a:lvl1pPr><a:defRPr lang="{value}"/></a:lvl1pPr>' if value else "<a:lvl1pPr/>"
+
+    def rel(rid, target):
+        return f'<Relationship Id="{rid}" Target="{target}" Type="x"/>'
+
+    deck = PRESENTATION.replace(
+        "</p:presentation>",
+        '<p:defaultTextStyle xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        f'{lang(default)}</p:defaultTextStyle></p:presentation>')
+    layout_list = f"<a:lstStyle>{lang(layout_style)}</a:lstStyle>"
+    path = tmp_path / "deck.pptx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("ppt/presentation.xml", deck)
+        archive.writestr("ppt/_rels/presentation.xml.rels", RELS.format(rel("rId2", "slides/slide1.xml")))
+        archive.writestr("ppt/slides/slide1.xml", f'<p:sld {ns}><p:cSld><p:spTree>'
+                         f'{placeholder("", "<a:r><a:t>Hello</a:t></a:r>")}</p:spTree></p:cSld></p:sld>')
+        archive.writestr("ppt/slides/_rels/slide1.xml.rels", RELS.format(
+            rel("rId1", "../slideLayouts/slideLayout1.xml")))
+        archive.writestr("ppt/slideLayouts/slideLayout1.xml", f'<p:sldLayout {ns}><p:cSld><p:spTree>'
+                         f'{placeholder(layout_list)}</p:spTree></p:cSld></p:sldLayout>')
+        archive.writestr("ppt/slideLayouts/_rels/slideLayout1.xml.rels", RELS.format(
+            rel("rId1", "../slideMasters/slideMaster1.xml")))
+        archive.writestr("ppt/slideMasters/slideMaster1.xml", f'<p:sldMaster {ns}><p:cSld><p:spTree/></p:cSld>'
+                         f'<p:txStyles><p:titleStyle>{lang("de-DE")}</p:titleStyle>'
+                         f'<p:bodyStyle>{lang(master_style)}</p:bodyStyle></p:txStyles></p:sldMaster>')
+    return path
+
+
+class TestAPlaceholderSLanguage:
+    def languages(self, path):
+        from utils.package import package_facts
+        return package_facts(path, [1])["languages"][1]
+
+    def test_from_its_layout(self, tmp_path):
+        assert self.languages(placeholder_deck(tmp_path, layout_style="fr-FR")) == {"Body": ["fr-FR"]}
+
+    def test_from_the_master_s_text_style(self, tmp_path):
+        assert self.languages(placeholder_deck(tmp_path, master_style="fr-FR")) == {"Body": ["fr-FR"]}
+
+    def test_the_layout_comes_before_the_master(self, tmp_path):
+        path = placeholder_deck(tmp_path, layout_style="fr-FR", master_style="es-ES")
+        assert self.languages(path) == {"Body": ["fr-FR"]}
+
+    def test_a_title_reads_the_master_s_title_style(self, tmp_path):
+        path = placeholder_deck(tmp_path, kind='type="title"')
+        assert self.languages(path) == {"Body": ["de-DE"]}
+
+    def test_the_deck_s_default_does_not_reach_it(self, tmp_path):
+        assert self.languages(placeholder_deck(tmp_path, default="en-IL")) == {}
+
 
 class TestUncheckedLanguages:
     @pytest.mark.parametrize("tag, flagged", [
         ("en-IL", True), ("en-il", True), ("en-DE", True), ("en-US", False), ("en-GB", False),
         ("he-IL", False), ("fr-FR", False), ("sr-Latn-RS", False), ("x-none", False), ("zz-ZZ", False),
+        ("en-JM", False), ("es-UY", False), ("en-SG", False), ("en-IN", False), ("fr-MA", False),
+        ("km-KH", False), ("hsb-DE", False),
     ])
     def test_a_region_office_has_no_id_for(self, tag, flagged):
         assert layout_check.has_no_dictionary(tag) is flagged

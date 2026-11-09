@@ -21,6 +21,7 @@ _NS = {
 }
 _EMBED = "{%s}embed" % _NS["r"]
 _ID = "{%s}id" % _NS["r"]
+_A_PARAGRAPH = "{%s}p" % _NS["a"]
 _A_RUN = "{%s}r" % _NS["a"]
 _A_FIELD = "{%s}fld" % _NS["a"]
 _A_BREAK = "{%s}br" % _NS["a"]
@@ -227,8 +228,11 @@ def package_facts(path, slide_indices):
     names = ("pictures", "pixels", "charts", "described", "text_scale", "links", "languages")
     kinds = {kind: {} for kind in names}
     ids = {kind: {} for kind in names}
+    # Here because deck_text builds on this module.
+    from utils.deck_text import _Package, inherited_language
+
     with zipfile.ZipFile(path) as archive:
-        default_language = _default_language(archive)
+        styles = _Package(archive)
         for index, slide, parts in _slides(archive, slide_indices):
             aspects, sizes, data, seen, measured = _Found(), _Found(), _Found(), set(), set()
             alt, scale, named, scaled = _Found(), _Found(), set(), set()
@@ -257,7 +261,8 @@ def package_facts(path, slide_indices):
                     texts = _link_texts(element, props) if props is not None else []
                     if texts:
                         _keyed(links, props, texts, linked)
-                    spoken = _languages(element, default_language) if props is not None else []
+                    spoken = _languages(element, lambda level, shape=element: inherited_language(
+                        shape, level, styles, parts)) if props is not None else []
                     if spoken:
                         _keyed(tongues, props, spoken, tagged)
             found = {"pictures": aspects, "pixels": sizes, "charts": data,
@@ -269,26 +274,27 @@ def package_facts(path, slide_indices):
     return {**kinds, "ids": ids}
 
 
-def _default_language(archive):
-    """The language the deck gives text that names none of its own."""
-    root = ElementTree.fromstring(archive.read("ppt/presentation.xml"))
-    for props in root.iterfind("p:defaultTextStyle/*/a:defRPr", _NS):
-        if props.get("lang"):
-            return props.get("lang")
-    return None
-
-
-def _languages(shape, default):
-    """The languages a shape's text is tagged with, a run's own or, when it
-    names none, the deck's default; sorted, once each."""
+def _languages(shape, inherited):
+    """The languages a shape's text is tagged with, sorted, once each: a run's
+    own, or its paragraph's, or what ``inherited(level)`` finds. Text with
+    none of them has no language and is left out."""
+    body = shape.find("p:txBody", _NS)
+    if body is None:
+        return []
     found = set()
-    for run in shape.iterfind("p:txBody//a:r", _NS):
-        if not "".join(t.text or "" for t in run.iterfind("a:t", _NS)).strip():
-            continue
-        props = run.find("a:rPr", _NS)
-        language = props.get("lang") if props is not None else None
-        if language or default:
-            found.add(language or default)
+    for paragraph in body.iter(_A_PARAGRAPH):
+        props = paragraph.find("a:pPr", _NS)
+        level = int(props.get("lvl", "0")) + 1 if props is not None else 1
+        default = props.find("a:defRPr", _NS) if props is not None else None
+        for run in paragraph.iter(_A_RUN):
+            if not "".join(t.text or "" for t in run.iterfind("a:t", _NS)).strip():
+                continue
+            own = run.find("a:rPr", _NS)
+            language = ((own.get("lang") if own is not None else None)
+                        or (default.get("lang") if default is not None else None)
+                        or inherited(level))
+            if language:
+                found.add(language)
     return sorted(found)
 
 
