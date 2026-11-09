@@ -3,6 +3,7 @@ comment is signed by the Office user whatever author it is given, and on the
 Mac a new one belongs to the slide, not to a point on it (measured
 2026-11-08). The Windows implementation, which the Mac runs through VBA."""
 
+import datetime
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -128,3 +129,20 @@ def test_a_comment_with_a_line_break_is_found_again(slide):
     comments.Add = stored_with_cr
     comments.Add2 = lambda *a: stored_with_cr(*a[:5])
     assert add(1, "One\nTwo", "Tester", "TT", 0, 0)["author"] == "Alon"
+
+
+def test_a_listed_comment_is_dated_in_local_time_with_no_zone(slide):
+    # pywin32 and the bridge both hand over local time labelled UTC (measured
+    # 2026-11-09: 22:15 in Japan came back as 22:15:04+00:00).
+    when = datetime.datetime(2026, 11, 9, 22, 15, 4, tzinfo=datetime.timezone.utc)
+    comments = Comments(existing=["Earlier"])
+    comments.items[0].DateTime = when
+    slide(comments)
+    listed = getattr(mod._list_comments_impl, "vba_route", (mod._list_comments_impl,))[0]
+    assert listed(1)["comments"][0]["datetime"] == "2026-11-09 22:15:04"
+
+
+def test_a_comment_with_no_date_lists_an_empty_one(slide):
+    slide(Comments(existing=["Earlier"]))
+    listed = getattr(mod._list_comments_impl, "vba_route", (mod._list_comments_impl,))[0]
+    assert listed(1)["comments"][0]["datetime"] == ""
