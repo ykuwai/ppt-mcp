@@ -443,8 +443,9 @@ def _runs_to_markdown(paragraph) -> str:
 
 
 def _format_runs(raw) -> str:
-    """Runs as Markdown: ppt_com.text.format_runs, shared with Windows."""
-    from ppt_com.text import format_runs
+    """Runs as Markdown: utils.deck_text.format_runs, shared with Windows
+    and the read from a copy."""
+    from utils.deck_text import format_runs
 
     return format_runs(raw)
 
