@@ -847,28 +847,7 @@ def _runs_to_markdown(paragraph) -> str:
         except Exception:
             continue
 
-    # Merge consecutive runs with identical formatting
-    merged = []
-    for r in raw:
-        if merged and merged[-1]["bold"] == r["bold"] and merged[-1]["italic"] == r["italic"]:
-            merged[-1]["text"] += r["text"]
-        else:
-            merged.append(dict(r))
-
-    # Format
-    parts = []
-    for m in merged:
-        t = m["text"]
-        if m["bold"] and m["italic"]:
-            parts.append(f"***{t}***")
-        elif m["bold"]:
-            parts.append(f"**{t}**")
-        elif m["italic"]:
-            parts.append(f"*{t}*")
-        else:
-            parts.append(t)
-
-    return "".join(parts)
+    return deck_text.format_runs(raw)
 
 
 def _plain_text(text_range) -> str:
