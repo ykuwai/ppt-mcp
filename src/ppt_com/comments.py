@@ -150,7 +150,9 @@ def _list_comments_impl(slide_index) -> dict:
     for i in range(1, count + 1):
         comment = comments_col(i)
         try:
-            dt_str = str(comment.DateTime)
+            # The clock time PowerPoint holds. pywin32 labels it UTC, and the
+            # bridge does the same, but it is local, so the label is left off.
+            dt_str = comment.DateTime.strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
             dt_str = ""
         comments.append({
