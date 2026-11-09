@@ -71,7 +71,7 @@ macOS が確認なしに拒否することがあり、その場合はツール�
 
 **ユーザースコープ**（全プロジェクトで利用可能）
 ```bash
-claude mcp add powerpoint uvx ppt-mcp
+claude mcp add --scope user powerpoint uvx ppt-mcp
 ```
 
 **プロジェクトスコープ**（`.mcp.json` に保存、チームで共有可能）

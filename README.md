@@ -71,7 +71,7 @@ Standard config — works in Claude Desktop, Cursor, `.mcp.json`, and most other
 
 **User-scoped** (available in all projects)
 ```bash
-claude mcp add powerpoint uvx ppt-mcp
+claude mcp add --scope user powerpoint uvx ppt-mcp
 ```
 
 **Project-scoped** (stored in `.mcp.json`, shared with your team)

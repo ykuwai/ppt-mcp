@@ -65,7 +65,7 @@ https://github.com/user-attachments/assets/178b9b5b-624d-4de0-a1dd-619dc13d4bd7
 
 **ברמת המשתמש** (זמין בכל הפרויקטים)
 ```bash
-claude mcp add powerpoint uvx ppt-mcp
+claude mcp add --scope user powerpoint uvx ppt-mcp
 ```
 
 **ברמת הפרויקט** (נשמר ב־`.mcp.json` ומשותף עם הצוות)

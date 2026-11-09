@@ -69,7 +69,7 @@ Claude）需要获得“完全磁盘访问权限”才能使用这些工具。�
 
 **用户级**（所有项目可用）
 ```bash
-claude mcp add powerpoint uvx ppt-mcp
+claude mcp add --scope user powerpoint uvx ppt-mcp
 ```
 
 **项目级**（保存在 `.mcp.json` 中，可与团队共享）

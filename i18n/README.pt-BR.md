@@ -72,7 +72,7 @@ Configuração padrão, que funciona no Claude Desktop, no Cursor, em `.mcp.json
 
 **Escopo de usuário** (disponível em todos os projetos)
 ```bash
-claude mcp add powerpoint uvx ppt-mcp
+claude mcp add --scope user powerpoint uvx ppt-mcp
 ```
 
 **Escopo de projeto** (salvo em `.mcp.json` e compartilhado com o time)
