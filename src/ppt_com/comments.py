@@ -25,10 +25,12 @@ class AddCommentInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     text: str = Field(..., description="Comment text")
     author: str = Field(
-        default="AI Agent", description="Comment author name"
+        default="AI Agent",
+        description="Comment author name. PowerPoint signs a modern comment as the signed-in Office user instead; "
+                    "the answer says who signed it.",
     )
     author_initials: str = Field(
-        default="AI", description="Comment author initials"
+        default="AI", description="Comment author initials, as for author"
     )
     left: float = Field(
         default=0, description="Horizontal position in points"
@@ -76,29 +78,51 @@ def _add_comment_impl(slide_index, text, author, author_initials,
         except Exception as e:
             raise RuntimeError(f"Failed to add comment: {e}")
 
+    try:
+        unchanged = comments_col.Count == before
+    except Exception:  # noqa: BLE001 - not known, so not reported as not added
+        unchanged = False
+    if unchanged:
+        raise RuntimeError(f"PowerPoint did not add the comment to slide {slide_index}. Nothing was changed.")
+
     result = {"success": True, "text": text, "author": author}
+    try:
+        _report_what_powerpoint_made(result, comments_col, before, text, author, author_initials, left, top)
+    except Exception as exc:  # noqa: BLE001 - the comment is there: a retry would add a second
+        logger.warning("Could not read back the comment just added: %s", exc)
+        result["note"] = "The comment was added, but PowerPoint would not say how it signed or placed it."
+    return result
+
+
+def _report_what_powerpoint_made(result, comments_col, before, text, author, author_initials, left, top) -> None:
+    """Put what PowerPoint made of a new comment in ``result``. A modern
+    comment is signed by the Office user, whatever author it is given, and on
+    the Mac it belongs to the slide as a whole rather than to a point on it
+    (measured 2026-11-08)."""
     added = _added_comment(comments_col, before, text)
     if added is None:
-        return result
-    # What PowerPoint made of it. A modern comment is signed by the Office
-    # user, whatever author it is given, and on the Mac it belongs to the
-    # slide as a whole rather than to a point on it (measured 2026-11-08).
-    result.update(author=added.Author, author_initials=added.AuthorInitials,
-                  left=round(added.Left, 2), top=round(added.Top, 2))
+        return
+    signer, initials = added.Author, added.AuthorInitials
+    placed_left, placed_top = round(added.Left, 2), round(added.Top, 2)
+    result.update(author=signer, author_initials=initials, left=placed_left, top=placed_top)
     notes = []
-    if (added.Author, added.AuthorInitials) != (author, author_initials):
+    if (signer, initials) != (author, author_initials):
         result["requested_author"] = author
         notes.append(
-            f"PowerPoint signed the comment as {added.Author!r} ({added.AuthorInitials}), the "
+            f"PowerPoint signed the comment as {signer!r} ({initials}), the "
             f"Office user, not {author!r}: modern comments take their author from the "
             "signed-in account. Put a name in the text if it has to show.")
-    if abs(added.Left - left) > 1 or abs(added.Top - top) > 1:
+    if abs(placed_left - left) > 1 or abs(placed_top - top) > 1:
         notes.append(
-            f"PowerPoint placed it at {round(added.Left, 2)}, {round(added.Top, 2)}, not at "
-            f"{left}, {top}: on the Mac a new comment belongs to the slide as a whole.")
+            f"PowerPoint placed it at {placed_left}, {placed_top}, not at {left}, {top}; "
+            "a new comment can belong to the slide as a whole, as it always does on the Mac.")
     if notes:
         result["note"] = " ".join(notes)
-    return result
+
+
+def _same_text(held, asked) -> bool:
+    """Whether a comment holds this text; PowerPoint keeps a line break as \\r."""
+    return held.replace("\r", "\n") == asked.replace("\r", "\n")
 
 
 def _added_comment(comments_col, before, text):
@@ -109,7 +133,7 @@ def _added_comment(comments_col, before, text):
         return None
     for i in range(count, 0, -1):
         comment = comments_col(i)
-        if comment.Text == text:
+        if _same_text(comment.Text, text):
             return comment
     return None
 
