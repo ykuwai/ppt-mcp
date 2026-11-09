@@ -5,10 +5,10 @@ ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/catego
 | Category | Tools | Description |
 |----------|------:|-------------|
 | **App** | 5 | Connect to PowerPoint, app info, active window, window state (on macOS, normal and maximized on the front deck's window; minimized is refused), list presentations |
-| **Presentation** | 8 | Create (with templates), open (a local file, or on Windows a SharePoint or OneDrive URL), save, close (quitting a PowerPoint the server started once its last deck is closed, and saying so, or saying it is still shutting down), info, activate target, list templates |
+| **Presentation** | 8 | Create (with templates), open (a local file, or on Windows a SharePoint or OneDrive URL), save, close (quitting a PowerPoint the server started once its last deck is closed, and saying so, or saying it is still shutting down), info, activate target, list templates. A `presentation_name` matches a deck's current name first, then its full name, so on Windows a new deck can still be named as it was created after its name has followed its first title |
 | **Slides** | 10 | Add, delete (bulk), duplicate (positional/multi), move (bulk), copy (cross-presentation), list, info, notes, navigation |
 | **Shapes** | 10 | Add shapes/textboxes/pictures/lines (with z-order placement, including behind the text), list, info (position, fill, line, text frame), update (one shape, a set, or the whole slide, absolute or by offset), delete, z-order |
-| **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups, whole words including phrases with spaces), textframe, extract all text as Markdown, typography check |
+| **Text** | 10 | Set text (whole frame, one span keeping its formatting, or as runs), get text (with measurement and overflow), format one span or many in a batch, paragraph format, bullets, find/replace (optionally inside groups, whole words including phrases with spaces), textframe, extract all text as Markdown (read from a temporary copy of the deck where it can be, which on a long deck is many times faster and leaves the deck as it was; spaces at the edge of a bold or italic run are written outside its markers, so the Markdown renders), typography check |
 | **Placeholders** | 6 | List, get, set placeholder content |
 | **Formatting** | 3 | Fill, line, shadow (on the shape or on its text) |
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
@@ -27,7 +27,7 @@ ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/catego
 | **Edit Operations** | 6 | Undo and redo (on the target presentation), copy shapes/formatting between slides |
 | **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check (including slips of typing: a word twice, two spaces, a space before a comma or full stop) |
 | **Effects** | 3 | Glow and reflection (on the shape or on its text), soft edge |
-| **Comments** | 3 | Add, list, delete |
+| **Comments** | 3 | Add (the answer gives who PowerPoint signed it as, the signed-in Office user, and where it placed it; on macOS, through the VBA add-in, it belongs to the slide rather than a point on it), list (each comment's date is local time, with no zone), delete |
 | **Advanced** | 19 | Tags, fonts (list the deck's or this computer's, set defaults, bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
 | **Freeform** | 7 | Build freeform paths, get/set node positions, insert/delete nodes, node editing type, segment type |
 | | **157** | |

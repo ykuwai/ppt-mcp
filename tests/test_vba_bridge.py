@@ -93,6 +93,28 @@ class TestTheProtocol:
         assert target.sent[0]["params"][b"tpAE"][-1] == bridge.owner, "the batch names its server (#347)"
         assert body.split(RS)[3] == US.join(["app", "c", "Item", "i:1"])
 
+    def test_a_date_comes_as_pywin32_hands_one_over(self, tmp_path):
+        import datetime
+
+        bridge, _, _ = bridge_answering(tmp_path, "ok" + US + "date" + US + "Date" + US + "2026-11-08 01:35:21" + RS)
+        [when] = bridge.run([("app", "g", "DateTime")])
+        assert when == datetime.datetime(2026, 11, 8, 1, 35, 21, tzinfo=datetime.timezone.utc)
+        assert str(when) == "2026-11-08 01:35:21+00:00"  # what the Windows side lists
+
+    def test_a_date_with_the_locales_time_separator_is_still_a_date(self, tmp_path):
+        # Format$ writes ":" as the time separator of the Mac's region.
+        import datetime
+
+        bridge, _, _ = bridge_answering(tmp_path, "ok" + US + "date" + US + "Date" + US + "2026-11-08 01.35.21" + RS)
+        [when] = bridge.run([("app", "g", "DateTime")])
+        assert when == datetime.datetime(2026, 11, 8, 1, 35, 21, tzinfo=datetime.timezone.utc)
+
+    def test_the_add_in_sends_a_date_in_a_fixed_form_not_the_locales(self):
+        source = (Path("src/backend/vba") / "PptMcpBridge.bas").read_text(encoding="utf-8")
+        describe = source[source.index("Private Function Describe"):]
+        assert describe.index("vbDate") < describe.index("IsNumeric(v)")
+        assert 'Format$(v, "yyyy-mm-dd hh:nn:ss")' in describe
+
     def test_arguments_are_typed(self):
         p = vba.Proxy(None, "h3", "Shape")
         assert vba.Bridge._arg(p) == "o:h3"

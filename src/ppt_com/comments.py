@@ -25,10 +25,12 @@ class AddCommentInput(BaseModel):
     slide_index: int = Field(..., ge=1, description="1-based slide index")
     text: str = Field(..., description="Comment text")
     author: str = Field(
-        default="AI Agent", description="Comment author name"
+        default="AI Agent",
+        description="Comment author name. PowerPoint signs a modern comment as the signed-in Office user instead; "
+                    "the answer says who signed it.",
     )
     author_initials: str = Field(
-        default="AI", description="Comment author initials"
+        default="AI", description="Comment author initials, as for author"
     )
     left: float = Field(
         default=0, description="Horizontal position in points"
@@ -64,21 +66,76 @@ def _add_comment_impl(slide_index, text, author, author_initials,
     goto_slide(app, slide_index)
     pres = ppt._get_pres_impl()
     slide = pres.Slides(slide_index)
+    comments_col = slide.Comments
+    before = comments_col.Count
 
     # Try Add2 first (newer PowerPoint versions), fall back to Add
     try:
-        slide.Comments.Add2(left, top, author, author_initials, text, "AD", "")
+        comments_col.Add2(left, top, author, author_initials, text, "AD", "")
     except Exception:
         try:
-            slide.Comments.Add(left, top, author, author_initials, text)
+            comments_col.Add(left, top, author, author_initials, text)
         except Exception as e:
             raise RuntimeError(f"Failed to add comment: {e}")
 
-    return {
-        "success": True,
-        "text": text,
-        "author": author,
-    }
+    try:
+        unchanged = comments_col.Count == before
+    except Exception:  # noqa: BLE001 - not known, so not reported as not added
+        unchanged = False
+    if unchanged:
+        raise RuntimeError(f"PowerPoint did not add the comment to slide {slide_index}. Nothing was changed.")
+
+    result = {"success": True, "text": text, "author": author}
+    try:
+        _report_what_powerpoint_made(result, comments_col, before, text, author, author_initials, left, top)
+    except Exception as exc:  # noqa: BLE001 - the comment is there: a retry would add a second
+        logger.warning("Could not read back the comment just added: %s", exc)
+        result["note"] = "The comment was added, but PowerPoint would not say how it signed or placed it."
+    return result
+
+
+def _report_what_powerpoint_made(result, comments_col, before, text, author, author_initials, left, top) -> None:
+    """Put what PowerPoint made of a new comment in ``result``. A modern
+    comment is signed by the Office user, whatever author it is given, and on
+    the Mac it belongs to the slide as a whole rather than to a point on it
+    (measured 2026-11-08)."""
+    added = _added_comment(comments_col, before, text)
+    if added is None:
+        return
+    signer, initials = added.Author, added.AuthorInitials
+    placed_left, placed_top = round(added.Left, 2), round(added.Top, 2)
+    result.update(author=signer, author_initials=initials, left=placed_left, top=placed_top)
+    notes = []
+    if (signer, initials) != (author, author_initials):
+        result["requested_author"] = author
+        notes.append(
+            f"PowerPoint signed the comment as {signer!r} ({initials}), the "
+            f"Office user, not {author!r}: modern comments take their author from the "
+            "signed-in account. Put a name in the text if it has to show.")
+    if abs(placed_left - left) > 1 or abs(placed_top - top) > 1:
+        notes.append(
+            f"PowerPoint placed it at {placed_left}, {placed_top}, not at {left}, {top}; "
+            "a new comment can belong to the slide as a whole, as it always does on the Mac.")
+    if notes:
+        result["note"] = " ".join(notes)
+
+
+def _same_text(held, asked) -> bool:
+    """Whether a comment holds this text; PowerPoint keeps a line break as \\r."""
+    return held.replace("\r", "\n") == asked.replace("\r", "\n")
+
+
+def _added_comment(comments_col, before, text):
+    """The comment just added: the last one with this text, once the count
+    has grown by one, or None."""
+    count = comments_col.Count
+    if count != before + 1:
+        return None
+    for i in range(count, 0, -1):
+        comment = comments_col(i)
+        if _same_text(comment.Text, text):
+            return comment
+    return None
 
 
 def _list_comments_impl(slide_index) -> dict:
@@ -93,7 +150,9 @@ def _list_comments_impl(slide_index) -> dict:
     for i in range(1, count + 1):
         comment = comments_col(i)
         try:
-            dt_str = str(comment.DateTime)
+            # The clock time PowerPoint holds. pywin32 labels it UTC, and the
+            # bridge does the same, but it is local, so the label is left off.
+            dt_str = comment.DateTime.strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
             dt_str = ""
         comments.append({

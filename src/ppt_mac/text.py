@@ -443,28 +443,11 @@ def _runs_to_markdown(paragraph) -> str:
 
 
 def _format_runs(raw) -> str:
-    """Runs as Markdown, consecutive ones with the same emphasis merged."""
-    merged = []
-    for r in raw:
-        if merged and merged[-1]["bold"] == r["bold"] and merged[-1]["italic"] == r["italic"]:
-            merged[-1]["text"] += r["text"]
-        else:
-            merged.append(dict(r))
+    """Runs as Markdown: utils.deck_text.format_runs, shared with Windows
+    and the read from a copy."""
+    from utils.deck_text import format_runs
 
-    # Format
-    parts = []
-    for m in merged:
-        t = m["text"]
-        if m["bold"] and m["italic"]:
-            parts.append(f"***{t}***")
-        elif m["bold"]:
-            parts.append(f"**{t}**")
-        elif m["italic"]:
-            parts.append(f"*{t}*")
-        else:
-            parts.append(t)
-
-    return "".join(parts)
+    return format_runs(raw)
 
 
 def _plain_text(text_range) -> str:
@@ -783,13 +766,13 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
 
     The layout algorithm is the COM module's, unchanged; only the reads moved.
     """
-    # The row and column grouping is pure arithmetic over the dicts above, so
-    # it is shared rather than copied. Imported here rather than at module
+    # The row and column arrangement is pure arithmetic over the dicts above,
+    # so it is shared rather than copied. Imported here rather than at module
     # scope because ppt_com/text.py imports this module at the bottom of its
     # own file, so an "import ppt_mac.text first" ordering would otherwise run
     # that swap block against a module that has defined nothing yet, and the
     # swap would silently not happen. By call time both are fully loaded.
-    from ppt_com.text import _group_into_columns, _group_into_rows
+    from ppt_com.text import _arrange
 
     # Check if slide is hidden
     hidden = ""
@@ -805,50 +788,14 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
         parts.append("(no text)")
         return "\n".join(parts)
 
-    rows = _group_into_rows(shape_infos)
-    has_multi_shape_rows = any(len(row) > 1 for row in rows)
-
-    if not has_multi_shape_rows:
-        # Simple layout: all single-shape rows
-        for row in rows:
-            md = _shape_info_to_markdown(row[0])
-            if md.strip():
-                parts.append(md)
-    else:
-        # Mixed layout: interleave full-width and column groups
-        # in original Y-order.  Consecutive multi-shape rows are
-        # collected and flushed as a column group together.
-        pending_column_shapes = []
-
-        def _flush_columns():
-            """Group pending column shapes by X and append to parts."""
-            if not pending_column_shapes:
-                return
-            columns = _group_into_columns(pending_column_shapes)
-            for col_idx, col in enumerate(columns):
-                if col_idx > 0:
-                    parts.append("")  # blank line between columns
-                for info in col:
-                    md = _shape_info_to_markdown(info, subheading_level="###")
-                    if md.strip():
-                        parts.append(md)
-            pending_column_shapes.clear()
-
-        for row in rows:
-            if len(row) == 1:
-                # Flush any pending column shapes before this full-width row
-                _flush_columns()
-                md = _shape_info_to_markdown(row[0])
-                if md.strip():
-                    parts.append(md)
-            else:
-                # Collect column shapes from consecutive multi-shape rows
-                pending_column_shapes.extend(row)
-
-        # Flush remaining column shapes at the end
-        _flush_columns()
-
+    _arrange(parts, shape_infos, _shape_info_to_markdown)
     return "\n".join(parts)
+
+
+def _copy_deck_impl():
+    """None: Apple Events have no SaveCopyAs, so without the add-in the deck
+    is read shape by shape. With it, the Windows implementation runs."""
+    return None
 
 
 def _get_all_text_impl(slide_indices) -> str:

@@ -35,12 +35,14 @@ COMAddIns, VBE and AutomationSecurity.
 """
 
 import contextlib
+import datetime
 import contextvars
 import functools
 import inspect
 import json
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
@@ -54,7 +56,7 @@ HERE = Path(__file__).resolve().parent
 ADDIN_FILE = HERE / "ppt-mcp-bridge.ppam"
 ADDIN_NAME = "ppt-mcp-bridge"
 # Must match BRIDGE_VERSION in PptMcpBridge.bas; a test keeps them together.
-BRIDGE_VERSION = "7"
+BRIDGE_VERSION = "8"
 DISPATCH = "PptMcpBridge.Dispatch"
 PING = "PptMcpBridge.Ping"
 # PowerPoint is sandboxed. Its ~/Documents is this folder, which is where the
@@ -322,6 +324,13 @@ class Bridge:
             return f[1] == "1"
         if kind == "num":
             return float(f[2]) if f[1] in ("Single", "Double", "Currency", "Decimal") else int(f[2])
+        if kind == "date":
+            # As pywin32 hands a COM date over: the time PowerPoint holds,
+            # labelled UTC. In VBA's own text it would follow the Mac's
+            # locale, "08/11/2026 1:35:21", day or month first.
+            # Format$ writes a colon as the locale's time separator, "01.35.21".
+            parts = [int(n) for n in re.findall(r"\d+", f[2])]
+            return datetime.datetime(*parts[:6], tzinfo=datetime.timezone.utc)
         if kind == "obj":
             return Proxy(self, f[2], f[1])
         if kind == "array1":

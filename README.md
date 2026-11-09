@@ -71,7 +71,7 @@ Standard config — works in Claude Desktop, Cursor, `.mcp.json`, and most other
 
 **User-scoped** (available in all projects)
 ```bash
-claude mcp add powerpoint uvx ppt-mcp
+claude mcp add --scope user powerpoint uvx ppt-mcp
 ```
 
 **Project-scoped** (stored in `.mcp.json`, shared with your team)
@@ -423,7 +423,7 @@ a copy of the file stays in PowerPoint's own folder. While it is loaded, other
 programs allowed to control PowerPoint can call it too, but only within
 PowerPoint's object model, and it refuses to run macros, quit or reach add-ins. Where it cannot be loaded,
 where macros are turned off by policy for instance, the tools work as described
-below. macOS may ask once whether the app that runs the server may reach data
+below. macOS may ask whether the app that runs the server may reach data
 from other apps; allow it, as the add-in answers through PowerPoint's folder.
 Until it is answered, or if it is refused, the tools work as described below
 after a two-second wait. It is on by

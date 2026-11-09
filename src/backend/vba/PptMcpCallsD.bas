@@ -15,6 +15,17 @@ Public Function CallD(o As Object, kind As String, m As String, f() As String, n
                     Case Else: CallD = False
                 End Select
             End If
+        Case "DateTime"
+            If kind = "l" Then
+                o.DateTime = ArgOf(f(3))
+            ElseIf kind = "s" Then
+                Set o.DateTime = ArgOf(f(3))
+            Else
+                Select Case n
+                    Case 0: Assign r, o.DateTime
+                    Case Else: CallD = False
+                End Select
+            End If
         Case "Delete"
             If kind = "l" Then
                 o.Delete = ArgOf(f(3))

@@ -6,7 +6,7 @@ Attribute VB_Name = "PptMcpBridge"
 ' one place both sides can reach. Every entry point traps its errors, because
 ' an untrapped one would stop PowerPoint on a dialog.
 Option Explicit
-Public Const BRIDGE_VERSION As String = "7"
+Public Const BRIDGE_VERSION As String = "8"
 Private Function GoodId(id As String) As Boolean
     ' The id names the answer file, so it is twelve hex digits and nothing
     ' else: no wildcard or path can reach Kill, Open or Name.
@@ -87,6 +87,8 @@ Private Function Describe(v As Variant) As String
         Describe = "null"
     ElseIf VarType(v) = vbBoolean Then
         Describe = "bool" & Chr$(31) & IIf(v, "1", "0")
+    ElseIf VarType(v) = vbDate Then
+        Describe = "date" & Chr$(31) & "Date" & Chr$(31) & Format$(v, "yyyy-mm-dd hh:nn:ss")
     ElseIf IsArray(v) Then
         Describe = DescribeArray(v)
     ElseIf IsNumeric(v) And VarType(v) <> vbString Then

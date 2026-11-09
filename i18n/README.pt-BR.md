@@ -72,7 +72,7 @@ Configuração padrão, que funciona no Claude Desktop, no Cursor, em `.mcp.json
 
 **Escopo de usuário** (disponível em todos os projetos)
 ```bash
-claude mcp add powerpoint uvx ppt-mcp
+claude mcp add --scope user powerpoint uvx ppt-mcp
 ```
 
 **Escopo de projeto** (salvo em `.mcp.json` e compartilhado com o time)
@@ -426,7 +426,7 @@ programas autorizados a controlar o PowerPoint também podem chamá-lo, mas só
 dentro do modelo de objetos do PowerPoint, e ele se recusa a executar macros,
 fechar o PowerPoint ou acessar suplementos. Onde não puder ser carregado, por
 exemplo quando uma política desativa as macros, as ferramentas funcionam como
-descrito abaixo. O macOS pode perguntar uma vez se o app que executa o servidor
+descrito abaixo. O macOS pode perguntar se o app que executa o servidor
 pode acessar dados de outros apps; permita, porque o suplemento responde pela
 pasta do PowerPoint. Até que seja respondido, ou se for recusado, as ferramentas
 funcionam como descrito abaixo depois de esperar dois segundos. Ele vem ativado por padrão;

@@ -118,10 +118,17 @@ ROUTES = {
     ("ppt_com.groups", "_group_shapes_impl"): ALWAYS,
     ("ppt_com.groups", "_get_group_items_impl"): ALWAYS,
     ("ppt_com.slides", "_duplicate_slide_impl"): ALWAYS,
+    # Modern comments, the only kind PowerPoint makes now, are not in the
+    # dictionary: a slide's `comment` elements answer none of them, and
+    # `make` is refused. VBA's Comments has them, with author and date.
+    ("ppt_com.comments", "_add_comment_impl"): ALWAYS,
+    ("ppt_com.comments", "_list_comments_impl"): ALWAYS,
+    ("ppt_com.comments", "_delete_comment_impl"): ALWAYS,
     # Editing a SmartArt, but not changing its layout (see keeps_layout).
     ("ppt_com.smartart", "_modify_smartart_impl"): keeps_layout,
     ("ppt_com.slides", "_copy_slide_impl"): ALWAYS,
     # Through the clipboard on the Mac only for a group's member.
+    ("ppt_com.text", "_copy_deck_impl"): ALWAYS,
     ("ppt_com.text", "_set_text_impl"): group_member,
     ("ppt_com.text", "_format_text_impl"): group_member,
     # A template's own layout by name: the Mac reads names from the saved file
