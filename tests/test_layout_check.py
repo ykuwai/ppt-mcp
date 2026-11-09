@@ -4592,6 +4592,18 @@ class TestLinkWordsFromTheFile:
     def test_a_shape_with_no_link_has_no_entry(self, tmp_path):
         assert self.links(tmp_path, linked_box("Body", [[("Plain text", None)]])) == {}
 
+    def test_a_soft_break_parts_the_words_of_a_shape_that_is_a_link(self, tmp_path):
+        box = linked_box("Button", [[("Read", None), ("more", None)]], whole=True)
+        assert self.links(tmp_path, box.replace("</a:r><a:r>", "</a:r><a:br/><a:r>")) == {"Button": ["Read more"]}
+
+    def test_a_soft_break_inside_a_linked_run_keeps_the_link_whole(self, tmp_path):
+        box = linked_box("Body", [[("Read", "rId2"), ("more", "rId2")]])
+        assert self.links(tmp_path, box.replace("</a:r><a:r>", "</a:r><a:br/><a:r>")) == {"Body": ["Read more"]}
+
+    def test_a_soft_break_after_a_link_is_not_part_of_it(self, tmp_path):
+        box = linked_box("Body", [[("here", "rId2"), ("next line", None)]])
+        assert self.links(tmp_path, box.replace("</a:r><a:r>", "</a:r><a:br/><a:r>")) == {"Body": ["here"]}
+
 
 class TestVagueLinks:
     @pytest.mark.parametrize("words", ["click here", "Click here.", "here", "Read more »", "LEARN MORE", "this link"])
@@ -4683,6 +4695,23 @@ class TestUncheckedLanguages:
 
     def test_text_office_checks_says_nothing(self):
         assert layout_check.unchecked_languages(self.deck()[2:]) == []
+
+    @pytest.mark.parametrize("tag, offered, not_offered", [
+        ("en-IL", "en-US or en-GB", None),
+        ("fr-IL", "such as fr-FR", "fr-US"),
+        ("de-IL", "such as de-DE", "de-US"),
+        ("ja-US", None, "ja-JA"),
+    ])
+    def test_the_fix_offers_only_a_variety_with_a_language_id(self, tag, offered, not_offered):
+        shape = textbox("Body", 100, 100, 400, 40)
+        shape["languages"] = [tag]
+        [finding] = layout_check.unchecked_languages([{"slide_index": 1, "shapes": [shape]}])
+        if offered:
+            assert offered in finding["fix"]
+        else:
+            assert "such as" not in finding["fix"]
+        if not_offered:
+            assert not_offered not in finding["fix"]
 
     def test_the_file_s_languages_reach_the_shape(self):
         shape = textbox("Body", 100, 100, 400, 40)

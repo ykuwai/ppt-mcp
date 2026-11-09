@@ -23,6 +23,7 @@ _EMBED = "{%s}embed" % _NS["r"]
 _ID = "{%s}id" % _NS["r"]
 _A_RUN = "{%s}r" % _NS["a"]
 _A_FIELD = "{%s}fld" % _NS["a"]
+_A_BREAK = "{%s}br" % _NS["a"]
 
 # PowerPoint's own mark for a picture that only decorates, which a screen
 # reader skips and so needs no alt text.
@@ -301,11 +302,16 @@ def _link_texts(shape, props):
     for paragraph in body.iterfind("a:p", _NS):
         pieces = []
         for run in paragraph:
-            if run.tag not in (_A_RUN, _A_FIELD):
+            if run.tag not in (_A_RUN, _A_FIELD, _A_BREAK):
                 continue
             link = run.find("a:rPr/a:hlinkClick", _NS)
-            pieces.append(("".join(t.text or "" for t in run.iterfind("a:t", _NS)),
-                           link.get(_ID) if link is not None else None))
+            target = link.get(_ID) if link is not None else None
+            if run.tag == _A_BREAK:
+                # Shift+Enter parts two words. A break need not carry the
+                # link itself, so it stays with the words before it.
+                pieces.append((" ", target or (pieces[-1][1] if pieces else None)))
+                continue
+            pieces.append(("".join(t.text or "" for t in run.iterfind("a:t", _NS)), target))
         paragraphs.append(pieces)
     if props.find("a:hlinkClick", _NS) is not None:
         whole = "\n".join("".join(text for text, _ in pieces) for pieces in paragraphs).strip()

@@ -3583,6 +3583,15 @@ def has_no_dictionary(tag) -> bool:
     return "-".join(parts) not in _KNOWN_LANGUAGES and parts[0] in _KNOWN_LANGUAGE_PARTS
 
 
+def _varieties_to_suggest(language):
+    """Tags to offer in place of one with no dictionary. Only ones Windows has
+    an ID for: "fr-US" would be no better than the "fr-IL" it replaces."""
+    if language == "en":
+        return ("en-US", "en-GB")
+    home = f"{language}-{language.upper()}"
+    return (home,) if home.lower() in _KNOWN_LANGUAGES else ()
+
+
 def unchecked_languages(slides):
     """One finding for the deck: text no spelling dictionary covers.
 
@@ -3599,7 +3608,8 @@ def unchecked_languages(slides):
     findings = []
     for tag, where in sorted(hits.items()):
         numbers = sorted({index for index, _ in where})
-        language = tag.split("-")[0]
+        varieties = _varieties_to_suggest(tag.split("-")[0].lower())
+        such_as = f" (for {tag}, such as {' or '.join(varieties)})" if varieties else ""
         findings.append(_finding(
             numbers[0] if len(numbers) == 1 else None, "unchecked_language",
             [name for _, name in where],
@@ -3607,8 +3617,8 @@ def unchecked_languages(slides):
             f"{tag}, a language Office has no spelling dictionary for, so none of it is ever "
             "spell-checked.",
             "In PowerPoint, select the text, then Review > Language, and pick a variety Office "
-            f"checks (for {tag}, such as {language}-US or {language}-GB). On the Mac, the region "
-            "in System Settings decides what new text is tagged with.",
+            f"checks{such_as}. On the Mac, the region in System Settings decides what new text "
+            "is tagged with.",
             severity="info", language=tag, slides=numbers,
         ))
     return findings
