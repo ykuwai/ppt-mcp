@@ -21,6 +21,8 @@ _NS = {
 }
 _EMBED = "{%s}embed" % _NS["r"]
 _ID = "{%s}id" % _NS["r"]
+_A_RUN = "{%s}r" % _NS["a"]
+_A_FIELD = "{%s}fld" % _NS["a"]
 
 # PowerPoint's own mark for a picture that only decorates, which a screen
 # reader skips and so needs no alt text.
@@ -221,13 +223,15 @@ def package_facts(path, slide_indices):
     Windows names a shape in English through COM ("Picture 5") but saves its
     name in the UI's language ("図 5"), so a name alone may not match.
     """
-    names = ("pictures", "pixels", "charts", "described", "text_scale")
+    names = ("pictures", "pixels", "charts", "described", "text_scale", "links", "languages")
     kinds = {kind: {} for kind in names}
     ids = {kind: {} for kind in names}
     with zipfile.ZipFile(path) as archive:
+        default_language = _default_language(archive)
         for index, slide, parts in _slides(archive, slide_indices):
             aspects, sizes, data, seen, measured = _Found(), _Found(), _Found(), set(), set()
             alt, scale, named, scaled = _Found(), _Found(), set(), set()
+            links, linked, tagged, tongues = _Found(), set(), set(), _Found()
             for element in slide.iter():
                 if element.tag == "{%s}pic" % _NS["p"]:
                     props = element.find("p:nvPicPr/p:cNvPr", _NS)
@@ -249,12 +253,74 @@ def package_facts(path, slide_indices):
                     fit = element.find("p:txBody/a:bodyPr/a:normAutofit", _NS)
                     if props is not None and fit is not None:
                         _keyed(scale, props, _shrunk(element, fit), scaled)
+                    texts = _link_texts(element, props) if props is not None else []
+                    if texts:
+                        _keyed(links, props, texts, linked)
+                    spoken = _languages(element, default_language) if props is not None else []
+                    if spoken:
+                        _keyed(tongues, props, spoken, tagged)
             found = {"pictures": aspects, "pixels": sizes, "charts": data,
-                     "described": alt, "text_scale": scale}
+                     "described": alt, "text_scale": scale, "links": links,
+                     "languages": tongues}
             for kind, entries in found.items():
                 kinds[kind][index] = dict(entries)
                 ids[kind][index] = entries.ids
     return {**kinds, "ids": ids}
+
+
+def _default_language(archive):
+    """The language the deck gives text that names none of its own."""
+    root = ElementTree.fromstring(archive.read("ppt/presentation.xml"))
+    for props in root.iterfind("p:defaultTextStyle/*/a:defRPr", _NS):
+        if props.get("lang"):
+            return props.get("lang")
+    return None
+
+
+def _languages(shape, default):
+    """The languages a shape's text is tagged with, a run's own or, when it
+    names none, the deck's default; sorted, once each."""
+    found = set()
+    for run in shape.iterfind("p:txBody//a:r", _NS):
+        if not "".join(t.text or "" for t in run.iterfind("a:t", _NS)).strip():
+            continue
+        props = run.find("a:rPr", _NS)
+        language = props.get("lang") if props is not None else None
+        if language or default:
+            found.add(language or default)
+    return sorted(found)
+
+
+def _link_texts(shape, props):
+    """The words each of a shape's links shows: a run of text that one link
+    covers, or the whole text of a shape that is itself a link."""
+    body = shape.find("p:txBody", _NS)
+    if body is None:
+        return []
+    paragraphs = []
+    for paragraph in body.iterfind("a:p", _NS):
+        pieces = []
+        for run in paragraph:
+            if run.tag not in (_A_RUN, _A_FIELD):
+                continue
+            link = run.find("a:rPr/a:hlinkClick", _NS)
+            pieces.append(("".join(t.text or "" for t in run.iterfind("a:t", _NS)),
+                           link.get(_ID) if link is not None else None))
+        paragraphs.append(pieces)
+    if props.find("a:hlinkClick", _NS) is not None:
+        whole = "\n".join("".join(text for text, _ in pieces) for pieces in paragraphs).strip()
+        return [whole] if whole else []
+    texts = []
+    for pieces in paragraphs:
+        current, words = None, ""
+        for text, link in pieces + [("", None)]:
+            if link is not None and link == current:
+                words += text
+                continue
+            if current is not None and words.strip():
+                texts.append(words.strip())
+            current, words = link, text
+    return texts
 
 
 def _shrunk(shape, fit):

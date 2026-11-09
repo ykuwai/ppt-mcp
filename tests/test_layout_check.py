@@ -4554,3 +4554,138 @@ class TestAShapeThatCannotBeRead:
         assert [s["name"] for s in shapes] == ["Diagram 2"]
         inner = layout_check._inner_facts(shapes, refs)
         assert [s["name"] for s in inner] == ["Diagram 2/Rectangle 1"]
+
+
+# ---------------------------------------------------------------------------
+# Link words, from the saved file
+# ---------------------------------------------------------------------------
+def linked_box(name, paragraphs, whole=False):
+    """A text box whose paragraphs are lists of (words, link id or None)."""
+    link = '<a:hlinkClick r:id="rId9"/>' if whole else ""
+    body = "".join(
+        "<a:p>" + "".join(
+            f'<a:r><a:rPr>{f"<a:hlinkClick r:id=\"{rid}\"/>" if rid else ""}</a:rPr><a:t>{words}</a:t></a:r>'
+            for words, rid in runs) + "</a:p>"
+        for runs in paragraphs)
+    return (f'<p:sp><p:nvSpPr><p:cNvPr id="6" name="{name}">{link}</p:cNvPr></p:nvSpPr>'
+            f'<p:txBody><a:bodyPr/>{body}</p:txBody></p:sp>')
+
+
+class TestLinkWordsFromTheFile:
+    def links(self, tmp_path, *boxes):
+        from utils.package import package_facts
+        return package_facts(deck_file(tmp_path, list(boxes), {}), [1])["links"][1]
+
+    def test_the_words_each_link_covers(self, tmp_path):
+        box = linked_box("Body", [[("For details ", None), ("click ", "rId2"), ("here", "rId2"), (".", None)],
+                                  [("The 2026 annual report", "rId3")]])
+        assert self.links(tmp_path, box) == {"Body": ["click here", "The 2026 annual report"]}
+
+    def test_two_links_side_by_side_stay_apart(self, tmp_path):
+        box = linked_box("Body", [[("here", "rId2"), ("there", "rId3")]])
+        assert self.links(tmp_path, box) == {"Body": ["here", "there"]}
+
+    def test_a_shape_that_is_itself_a_link_shows_all_its_words(self, tmp_path):
+        box = linked_box("Button", [[("Read more", None)]], whole=True)
+        assert self.links(tmp_path, box) == {"Button": ["Read more"]}
+
+    def test_a_shape_with_no_link_has_no_entry(self, tmp_path):
+        assert self.links(tmp_path, linked_box("Body", [[("Plain text", None)]])) == {}
+
+
+class TestVagueLinks:
+    @pytest.mark.parametrize("words", ["click here", "Click here.", "here", "Read more »", "LEARN MORE", "this link"])
+    def test_words_that_say_nothing_are_reported(self, words):
+        box = textbox("t", 100, 100, 400, 40)
+        box["links"] = ["The 2026 annual report", words]
+        [finding] = check(box)
+        assert (finding["type"], finding["sample"], finding["severity"]) == ("vague_link", words, "info")
+        assert "ppt_find_replace_text" in finding["fix"]
+
+    @pytest.mark.parametrize("words", ["The 2026 annual report", "here is the plan", "Click here to download the "
+                                       "Q3 figures", "More about pricing", "www.example.com"])
+    def test_words_that_name_the_destination_are_not(self, words):
+        box = textbox("t", 100, 100, 400, 40)
+        box["links"] = [words]
+        assert check(box) == []
+
+    def test_a_write_tool_does_not_look_for_it(self):
+        assert "vague_link" not in layout_check.SHAPE_FINDINGS
+
+    def test_the_file_s_links_reach_the_shape(self):
+        shape = textbox("Body", 100, 100, 400, 40)
+        slides = [{"slide_index": 1, "shapes": [shape]}]
+        layout_check._with_package(slides, {"links": {1: {"Body": ["here"]}}})
+        assert shape["links"] == ["here"]
+
+
+# ---------------------------------------------------------------------------
+# Text no spelling dictionary covers
+# ---------------------------------------------------------------------------
+def tagged_box(name, *runs):
+    """A text box whose runs are (words, language tag or None)."""
+    body = "".join(f'<a:r><a:rPr{f" lang=\"{lang}\"" if lang else ""}/><a:t>{words}</a:t></a:r>'
+                   for words, lang in runs)
+    return (f'<p:sp><p:nvSpPr><p:cNvPr id="7" name="{name}"/></p:nvSpPr>'
+            f'<p:txBody><a:bodyPr/><a:p>{body}</a:p></p:txBody></p:sp>')
+
+
+class TestTextLanguagesFromTheFile:
+    def languages(self, tmp_path, monkeypatch, default, *boxes):
+        import test_layout_check as here
+        from utils.package import package_facts
+        if default:
+            monkeypatch.setattr(here, "PRESENTATION", PRESENTATION.replace(
+                "</p:presentation>",
+                '<p:defaultTextStyle xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                f'<a:lvl1pPr><a:defRPr lang="{default}"/></a:lvl1pPr></p:defaultTextStyle></p:presentation>'))
+        return package_facts(deck_file(tmp_path, list(boxes), {}), [1])["languages"][1]
+
+    def test_each_run_s_own_tag(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello ", "en-IL"), ("world", "en-US"), ("  ", "fr-FR"))
+        assert self.languages(tmp_path, monkeypatch, None, box) == {"Body": ["en-IL", "en-US"]}
+
+    def test_a_run_without_one_takes_the_deck_s_default(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello", None), ("world", "en-US"))
+        assert self.languages(tmp_path, monkeypatch, "en-IL", box) == {"Body": ["en-IL", "en-US"]}
+
+    def test_no_tag_and_no_default_is_unknown(self, tmp_path, monkeypatch):
+        assert self.languages(tmp_path, monkeypatch, None, tagged_box("Body", ("Hello", None))) == {}
+
+
+class TestUncheckedLanguages:
+    @pytest.mark.parametrize("tag, flagged", [
+        ("en-IL", True), ("en-il", True), ("en-DE", True), ("en-US", False), ("en-GB", False),
+        ("he-IL", False), ("fr-FR", False), ("sr-Latn-RS", False), ("x-none", False), ("zz-ZZ", False),
+    ])
+    def test_a_region_office_has_no_id_for(self, tag, flagged):
+        assert layout_check.has_no_dictionary(tag) is flagged
+
+    def deck(self):
+        def box(name, *tags):
+            shape = textbox(name, 100, 100, 400, 40)
+            shape["languages"] = list(tags)
+            return shape
+        return [{"slide_index": 1, "shapes": [box("Title 1", "en-IL"), box("Body", "en-US")]},
+                {"slide_index": 2, "shapes": [box("Notes", "en-IL", "en-US")]},
+                {"slide_index": 3, "shapes": [box("Plain", "en-US")]}]
+
+    def test_one_finding_for_the_deck_naming_its_shapes_and_slides(self):
+        [finding] = layout_check.unchecked_languages(self.deck())
+        assert (finding["type"], finding["language"], finding["slides"], finding["shapes"]) == (
+            "unchecked_language", "en-IL", [1, 2], ["Title 1", "Notes"])
+        assert finding["slide_index"] is None and finding["severity"] == "info"
+        assert "ever spell-checked" in finding["message"] and "en-US" in finding["fix"]
+
+    def test_one_slide_is_named_as_that_slide(self):
+        [finding] = layout_check.unchecked_languages(self.deck()[:1])
+        assert finding["slide_index"] == 1
+
+    def test_text_office_checks_says_nothing(self):
+        assert layout_check.unchecked_languages(self.deck()[2:]) == []
+
+    def test_the_file_s_languages_reach_the_shape(self):
+        shape = textbox("Body", 100, 100, 400, 40)
+        layout_check._with_package([{"slide_index": 1, "shapes": [shape]}],
+                                   {"languages": {1: {"Body": ["en-IL"]}}})
+        assert shape["languages"] == ["en-IL"]

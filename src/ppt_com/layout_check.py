@@ -228,8 +228,8 @@ _ORDER = (
     "narrow_margin", "misaligned", "title_edge", "uneven_spacing", "uneven_sizes",
     "number_order", "text_direction", "mixed_direction", "font_missing", "empty_placeholder",
     "sample_text", "typo",
-    "chart_sample_data", "missing_alt_text",
-    "missing_title", "duplicate_titles",
+    "chart_sample_data", "missing_alt_text", "vague_link",
+    "missing_title", "duplicate_titles", "unchecked_language",
     "inconsistent_titles",
     "inconsistent_body_text",
 )
@@ -3523,6 +3523,97 @@ def _slips(lines):
             break
 
 
+# Link words that say nothing about where the link goes. A screen reader can
+# list a slide's links by their words alone, and a reader scanning the slide
+# looks for them too (WCAG 2.4.4).
+_VAGUE_LINK_WORDS = frozenset({
+    "here", "click here", "click", "this", "this link", "link", "read more",
+    "more", "learn more", "click here for more", "go", "details", "more info",
+})
+
+
+def _vague_links(slide_index, shapes):
+    """A link whose words say nothing out of context: "click here", "more".
+
+    Known only from the saved file, which ppt_check_layout reads; a write
+    tool's own check does not, so this is not one of SHAPE_FINDINGS.
+    """
+    findings = []
+    for shape in shapes:
+        for words in shape.get("links") or ():
+            plain = re.sub(r"[\s.,:;!?…\"'“”‘’()\[\]→»›>-]+", " ", words).strip().lower()
+            if plain not in _VAGUE_LINK_WORDS:
+                continue
+            name = shape["name"]
+            findings.append(_finding(
+                slide_index, "vague_link", [name],
+                f"A link in '{name}' reads \"{words}\", which does not say where it goes.",
+                f"Put the link on words that name its destination (\"the 2026 annual report\", "
+                f"not \"{words}\"): ppt_find_replace_text to reword it, then ppt_add_hyperlink "
+                f"on '{name}' if the link has to move.",
+                severity="info", sample=words,
+            ))
+    return findings
+
+
+def _known_languages():
+    """The language tags Windows gives a language ID, as lower-case "en-us".
+    Office spell-checks by language ID, so a regional tag outside this table
+    becomes a custom locale (0x1000 on Windows, 0x0c00 on the Mac) that has
+    no dictionary: measured 2026-11-08 with en-IL, which Word found none of
+    three misspellings in on either platform, while en-US and en-GB found all
+    three."""
+    import locale
+
+    return frozenset(name.split("@")[0].replace("_", "-").lower()
+                     for name in locale.windows_locale.values())
+
+
+_KNOWN_LANGUAGES = _known_languages()
+_KNOWN_LANGUAGE_PARTS = frozenset(tag.split("-")[0] for tag in _KNOWN_LANGUAGES)
+
+
+def has_no_dictionary(tag) -> bool:
+    """A language and region Office knows the language of but not the
+    region, such as en-IL. Only those: a tag with a script ("sr-Latn-RS") or
+    a private one ("x-none") is left alone rather than guessed at."""
+    parts = (tag or "").lower().split("-")
+    if len(parts) != 2 or len(parts[0]) not in (2, 3) or len(parts[1]) != 2:
+        return False
+    return "-".join(parts) not in _KNOWN_LANGUAGES and parts[0] in _KNOWN_LANGUAGE_PARTS
+
+
+def unchecked_languages(slides):
+    """One finding for the deck: text no spelling dictionary covers.
+
+    Text typed on a Mac whose region is one Office has no dictionary for
+    is tagged with it, en-IL for English in Israel, and Office then never
+    checks its spelling, without saying so. Known only from the saved file.
+    """
+    hits = {}
+    for slide in slides:
+        for shape in slide["shapes"]:
+            for tag in shape.get("languages") or ():
+                if has_no_dictionary(tag):
+                    hits.setdefault(tag, []).append((slide["slide_index"], shape["name"]))
+    findings = []
+    for tag, where in sorted(hits.items()):
+        numbers = sorted({index for index, _ in where})
+        language = tag.split("-")[0]
+        findings.append(_finding(
+            numbers[0] if len(numbers) == 1 else None, "unchecked_language",
+            [name for _, name in where],
+            f"Text in {len(where)} shape{'s' if len(where) != 1 else ''} on {_slides(numbers)} is tagged "
+            f"{tag}, a language Office has no spelling dictionary for, so none of it is ever "
+            "spell-checked.",
+            "In PowerPoint, select the text, then Review > Language, and pick a variety Office "
+            f"checks (for {tag}, such as {language}-US or {language}-GB). On the Mac, the region "
+            "in System Settings decides what new text is tagged with.",
+            severity="info", language=tag, slides=numbers,
+        ))
+    return findings
+
+
 # The bidi classes of letters: a paragraph takes its direction from its first
 # one. Digits have none of their own.
 _LEFT_TO_RIGHT = frozenset({"L"})
@@ -4359,6 +4450,7 @@ def slide_findings(slide, slide_w, slide_h, only=None, trust_template=True):
         + _blurry(index, shapes)
         + _small_text(index, shapes)
         + _missing_alt_text(index, shapes)
+        + _vague_links(index, shapes)
         + _chart_overlaps(index, shapes)
         + _number_order(index, shapes)
         + _text_direction(index, shapes)
@@ -6173,17 +6265,6 @@ def _has_pictures(slides, names=None):
                for slide in slides for s in slide["shapes"])
 
 
-def _needs_package(slides):
-    """Whether the saved file has anything to add: pictures, charts and
-    SmartArt, and text PowerPoint shrinks to fit. PowerPoint for Mac cannot
-    say which text shrinks, and its file is read in place rather than saved
-    aside, so there any text is reason enough."""
-    return any(s.get("type") in (*_PICTURES, msoChart, msoSmartArt)
-               or (s.get("text") or {}).get("autofit") == "shrink_to_fit"
-               or (IS_MACOS and (s.get("text") or {}).get("chars"))
-               for slide in slides for s in slide["shapes"])
-
-
 def _has_charts(slides):
     return any(s.get("type") == msoChart for slide in slides for s in slide["shapes"])
 
@@ -6200,7 +6281,8 @@ def _with_package(slides, facts):
                     (by_id.get(kind) or {}).get(index) or {})
 
         aspects, pixels, charts = entries("pictures"), entries("pixels"), entries("charts")
-        described, scales = entries("described"), entries("text_scale")
+        described, scales, links = entries("described"), entries("text_scale"), entries("links")
+        languages = entries("languages")
         for shape in slide["shapes"]:
             # By id first: a name read through COM may not be the one saved.
             def known(found, shape=shape):
@@ -6213,6 +6295,10 @@ def _with_package(slides, facts):
                 shape["described"] = known(described)
             if known(scales) is not None and shape.get("text"):
                 shape["shrunk"] = known(scales)
+            if known(links):
+                shape["links"] = known(links)
+            if known(languages):
+                shape["languages"] = known(languages)
             if shape.get("type") in _PICTURES and known(pixels) is not None:
                 shape["pixels"] = known(pixels)
             if shape.get("type") in _PICTURES and known(aspects) is not None:
@@ -6253,8 +6339,10 @@ def check_layout(params: CheckLayoutInput) -> str:
         if facts is None:  # a deck with no slides
             return json.dumps({"issues": [], "total": 0, "slides_checked": 0})
         slide_w, slide_h = facts["slide_width"], facts["slide_height"]
-        if _needs_package(slides):
-            _with_package(slides, _read_package(indices, charts=_has_charts(slides)))
+        # Always, for the checks that only the file can answer: where links
+        # are and what they say, which PowerPoint for Mac does not tell. A
+        # write's own check reads it only when it needs to (_issues_for).
+        _with_package(slides, _read_package(indices, charts=_has_charts(slides)))
         _with_fonts(slides, _read_fonts)
         _with_photos(slides)
         findings = []
@@ -6262,6 +6350,7 @@ def check_layout(params: CheckLayoutInput) -> str:
             findings += slide_findings(slide, slide_w, slide_h)
         if params.slide_index is None:
             findings += deck_findings(slides, slide_h, slide_w)
+        findings += unchecked_languages(slides)
         result = {
             "issues": findings,
             "total": len(findings),
@@ -6544,6 +6633,12 @@ def register_tools(mcp):
         - chart_overlap: data labels on each other, or a legend or title on
           the plot (Windows only)
         - missing_alt_text: a picture, chart or SmartArt with no alt text
+        - vague_link: a link whose words say nothing on their own ("click
+          here", "read more"), which is all a screen reader's list of links
+          shows
+        - unchecked_language: text tagged with a language Office has no
+          spelling dictionary for, such as English (Israel), the default on a
+          Mac set to that region: none of it is ever spell-checked
         - missing_title, duplicate_titles (whole deck only): a slide with no
           title, or slides with the same one
         A slide is judged as the slide show draws it: lines shown one at a
