@@ -329,6 +329,34 @@ def _shape(element, package, slide_rels, to_slide, found):
     found.append(_info(to_slide(box) if box else None, kind, has_table=False, paragraphs=paragraphs))
 
 
+def _language_of(props):
+    default = props.find("a:defRPr", _NS)
+    return default.get("lang") if default is not None else None
+
+
+def inherited_language(shape, level, package, slide_rels):
+    """The language of a shape's text whose run and paragraph name none.
+
+    The shape's list style, then for a placeholder the layout's, the master's
+    and the master's text styles. Measured on Windows, 2026-11-10: the deck's
+    default reaches a text box but not a placeholder, whose text has no
+    language at all when none of those gives one, so that is None.
+    """
+    body = shape.find("p:txBody", _NS)
+    chain = [body.find("a:lstStyle", _NS)] if body is not None else []
+    ph = _placeholder(shape)
+    if ph is not None:
+        in_layout, in_master, style = package.inherited(slide_rels, ph)
+        chain += [part.find("p:txBody/a:lstStyle", _NS)
+                  for part in (in_layout, in_master) if part is not None]
+        chain.append(style)
+        return _resolved(chain, level, _language_of)
+    deck = package.default_style
+    fallback = deck.find("a:defPPr", _NS) if deck is not None else None
+    return (_resolved([*chain, deck], level, _language_of)
+            or (_language_of(fallback) if fallback is not None else None))
+
+
 def read_slides(path, slide_indices=None):
     """(how many slides the deck has, {slide index: {"hidden", "shapes"}}).
 
