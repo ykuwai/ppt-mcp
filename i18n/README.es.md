@@ -73,7 +73,7 @@ Configuración estándar; funciona en Claude Desktop, Cursor, `.mcp.json` y la m
 
 **Ámbito de usuario** (disponible en todos los proyectos)
 ```bash
-claude mcp add powerpoint uvx ppt-mcp
+claude mcp add --scope user powerpoint uvx ppt-mcp
 ```
 
 **Ámbito de proyecto** (se guarda en `.mcp.json` y se comparte con tu equipo)
