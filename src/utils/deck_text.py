@@ -185,11 +185,13 @@ def _flag(props, name):
     return None
 
 
-def _run(element, text, chain, level):
+def _run(element, text, chain, level, paragraph_default):
     props = element.find("a:rPr", _NS)
     emphasis = {}
     for name, key in (("b", "bold"), ("i", "italic")):
         own = _flag(props, name)
+        if own is None:
+            own = _flag(paragraph_default, name)
         if own is None:
             own = _resolved(chain, level, lambda p, n=name: _flag(p.find("a:defRPr", _NS), n))
         emphasis[key] = bool(own)
@@ -216,15 +218,16 @@ def _paragraphs(body, chain):
         bullet = _bullet_of(props) if props is not None else None
         if bullet is None:
             bullet = _resolved(chain, level, _bullet_of)
+        default = props.find("a:defRPr", _NS) if props is not None else None
         runs = []
         for child in _children(paragraph):
             if child.tag in (_A + "r", _A + "fld"):
                 t = child.find("a:t", _NS)
                 text = (t.text or "") if t is not None else ""
                 if text:
-                    runs.append(_run(child, text, chain, level))
+                    runs.append(_run(child, text, chain, level, default))
             elif child.tag == _A + "br":
-                runs.append(_run(child, "\n", chain, level))
+                runs.append(_run(child, "\n", chain, level, default))
             elif _is_math(child):
                 text = _math_text(child)
                 if text:

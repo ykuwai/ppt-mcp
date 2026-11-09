@@ -136,6 +136,25 @@ class TestWhatASlideInherits:
         body = sp(para(run("Loud"), run(" quiet", 'b="0"')), ph='idx="1"')
         assert render(tmp_path, body, layout=layout) == ["**Loud** quiet"]
 
+    def test_a_paragraphs_own_default_sets_its_emphasis(self, tmp_path):
+        ppr = '<a:pPr><a:defRPr b="1"/></a:pPr>'
+        assert render(tmp_path, sp(para(run("Loud"), ppr=ppr) + para(run("quiet")))) == ["**Loud**\nquiet"]
+
+    def test_a_run_can_turn_its_paragraphs_default_off(self, tmp_path):
+        ppr = '<a:pPr><a:defRPr b="1"/></a:pPr>'
+        assert render(tmp_path, sp(para(run("Loud"), run(" quiet", 'b="0"'), ppr=ppr))) == ["**Loud** quiet"]
+
+    def test_a_paragraphs_default_wins_over_the_layout(self, tmp_path):
+        layout = sp(ph='idx="1"', box=(0, 0, 9, 9), body=para(run("x")),
+                    lst='<a:lvl1pPr><a:buNone/><a:defRPr b="1"/></a:lvl1pPr>')
+        ppr = '<a:pPr><a:defRPr b="0"/></a:pPr>'
+        assert render(tmp_path, sp(para(run("Calm"), ppr=ppr), ph='idx="1"'), layout=layout) == ["Calm"]
+
+    def test_a_layouts_sample_paragraph_is_not_inherited(self, tmp_path):
+        # Measured on Windows: only the layout's lstStyle reaches the slide.
+        layout = sp(ph='idx="1"', box=(0, 0, 9, 9), body=para(run("x"), ppr="<a:pPr><a:buNone/></a:pPr>"))
+        assert render(tmp_path, sp(para(run("One")), ph='idx="1"'), layout=layout) == ["- One"]
+
 
 class TestTheText:
     def test_emphasis_inside_a_paragraph(self, tmp_path):
