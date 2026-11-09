@@ -429,7 +429,7 @@ cargado, otros programas autorizados a controlar PowerPoint también pueden
 llamarlo, pero solo dentro del modelo de objetos de PowerPoint, y se niega a
 ejecutar macros, cerrar PowerPoint o acceder a complementos. Donde no puede cargarse, por ejemplo
 si una directiva desactiva las macros, las herramientas funcionan como se
-describe abajo. macOS puede preguntar una vez si la app que ejecuta el servidor
+describe abajo. macOS puede preguntar si la app que ejecuta el servidor
 puede acceder a datos de otras apps; permítelo, porque el complemento responde a
 través de la carpeta de PowerPoint. Hasta que se responda, o si se rechaza, las
 herramientas funcionan como se describe abajo tras esperar dos segundos. Está activado por defecto;

@@ -4,6 +4,8 @@ import json
 import logging
 import os
 import re
+import shutil
+import tempfile
 import time
 import unicodedata
 from typing import Annotated, List, Literal, Optional, Union
@@ -13,6 +15,7 @@ from pydantic import (
     field_validator, model_validator,
 )
 
+from utils import deck_text
 from utils.offload import run_offloaded
 from backend import ppt
 from utils.navigation import goto_slide
@@ -786,6 +789,9 @@ _SUBTITLE_PLACEHOLDER_TYPES = {4}  # Subtitle
 
 # Max slides per COM batch — keep under the 30-second COM call timeout
 _GET_ALL_TEXT_BATCH_SIZE = 15
+# A deck larger than this on disk is read shape by shape: writing a copy of
+# one full of video could take longer than a call is allowed.
+_COPY_SIZE_LIMIT = 150 * 1024 * 1024
 
 
 # ---------------------------------------------------------------------------
@@ -963,14 +969,8 @@ def _collect_text_shapes(slide) -> list:
     """
     shapes = []
 
-    def _process_shape(shape, offset_top=0.0, offset_left=0.0):
-        """Process a single shape (may be called recursively for groups).
-
-        Args:
-            shape: COM shape object
-            offset_top: Accumulated Y offset from parent groups
-            offset_left: Accumulated X offset from parent groups
-        """
+    def _process_shape(shape):
+        """Process a single shape (called again for each member of a group)."""
         # Check placeholder skip / classify in a single COM read
         is_title = False
         is_subtitle = False
@@ -984,27 +984,20 @@ def _collect_text_shapes(slide) -> list:
             except Exception:
                 pass
 
-        # Recurse into groups early (no need to build info dict)
-        # Pass group's position as offset since child coordinates are
-        # relative to the group, not the slide.
+        # Recurse into groups early (no need to build info dict). A member's
+        # Top and Left are already on the slide, not relative to its group.
         if shape.Type == msoGroup:
             try:
-                g_top = shape.Top
-                g_left = shape.Left
                 for gi in range(1, shape.GroupItems.Count + 1):
-                    _process_shape(
-                        shape.GroupItems(gi),
-                        offset_top + g_top,
-                        offset_left + g_left,
-                    )
+                    _process_shape(shape.GroupItems(gi))
             except Exception:
                 pass
             return
 
         info = {
             "shape": shape,
-            "top": shape.Top + offset_top,
-            "left": shape.Left + offset_left,
+            "top": shape.Top,
+            "left": shape.Left,
             "width": shape.Width,
             "height": shape.Height,
             "is_title": is_title,
@@ -1195,6 +1188,46 @@ def _columns_would_scramble(columns: list, rows: list) -> bool:
     return False
 
 
+def _arrange(parts: list, shape_infos: list, render) -> None:
+    """Append each shape's text to ``parts`` in reading order.
+
+    ``render(info, subheading_level)`` writes one shape. Rows are taken in
+    Y-order; a single-shape row is written where it stands, and consecutive
+    multi-shape rows are collected, then grouped by X into columns so a
+    heading and its body stay together. All-bold shapes in columns use ###.
+    """
+    rows = _group_into_rows(shape_infos)
+    pending_column_shapes = []
+
+    def _flush_columns():
+        """Group pending column shapes by X and append to parts."""
+        if not pending_column_shapes:
+            return
+        columns = _group_into_columns(pending_column_shapes)
+        for col_idx, col in enumerate(columns):
+            if col_idx > 0:
+                parts.append("")  # blank line between columns
+            for info in col:
+                md = render(info, "###")
+                if md.strip():
+                    parts.append(md)
+        pending_column_shapes.clear()
+
+    for row in rows:
+        if len(row) == 1:
+            # Flush any pending column shapes before this full-width row
+            _flush_columns()
+            md = render(row[0], "##")
+            if md.strip():
+                parts.append(md)
+        else:
+            # Collect column shapes from consecutive multi-shape rows
+            pending_column_shapes.extend(row)
+
+    # Flush remaining column shapes at the end
+    _flush_columns()
+
+
 def _slide_to_markdown(slide, slide_index: int) -> str:
     """Convert a single slide to pseudo-Markdown.
 
@@ -1219,50 +1252,83 @@ def _slide_to_markdown(slide, slide_index: int) -> str:
         parts.append("(no text)")
         return "\n".join(parts)
 
-    rows = _group_into_rows(shape_infos)
-    has_multi_shape_rows = any(len(row) > 1 for row in rows)
-
-    if not has_multi_shape_rows:
-        # Simple layout: all single-shape rows
-        for row in rows:
-            md = _shape_info_to_markdown(row[0])
-            if md.strip():
-                parts.append(md)
-    else:
-        # Mixed layout: interleave full-width and column groups
-        # in original Y-order.  Consecutive multi-shape rows are
-        # collected and flushed as a column group together.
-        pending_column_shapes = []
-
-        def _flush_columns():
-            """Group pending column shapes by X and append to parts."""
-            if not pending_column_shapes:
-                return
-            columns = _group_into_columns(pending_column_shapes)
-            for col_idx, col in enumerate(columns):
-                if col_idx > 0:
-                    parts.append("")  # blank line between columns
-                for info in col:
-                    md = _shape_info_to_markdown(info, subheading_level="###")
-                    if md.strip():
-                        parts.append(md)
-            pending_column_shapes.clear()
-
-        for row in rows:
-            if len(row) == 1:
-                # Flush any pending column shapes before this full-width row
-                _flush_columns()
-                md = _shape_info_to_markdown(row[0])
-                if md.strip():
-                    parts.append(md)
-            else:
-                # Collect column shapes from consecutive multi-shape rows
-                pending_column_shapes.extend(row)
-
-        # Flush remaining column shapes at the end
-        _flush_columns()
-
+    _arrange(parts, shape_infos, _shape_info_to_markdown)
     return "\n".join(parts)
+
+
+def _copy_deck_impl() -> Optional[dict]:
+    """Write the deck as it is now to a temporary .pptx, for reading.
+
+    Answers its path, the folder to delete after, and how many slides the
+    deck has; or None for a deck this is not for: one saved in another format,
+    whose copy would ask about macros, and one so large that writing it could
+    outlast the call. SaveCopyAs leaves the deck open, unsaved and as it was.
+    """
+    pres = ppt._get_pres_impl()
+    full_name = pres.FullName
+    if any(c in full_name for c in "/\\"):  # saved somewhere; a new deck has no path
+        if os.path.splitext(full_name)[1].lower() != ".pptx":
+            return None
+        try:
+            if os.path.getsize(full_name) > _COPY_SIZE_LIMIT:
+                return None
+        except OSError:
+            pass  # on a server, or moved: its size is not known here
+    folder = tempfile.mkdtemp(prefix="ppt-mcp-read-")
+    path = os.path.join(folder, "copy.pptx")
+    try:
+        # No format: PowerPoint for Mac's VBA refuses ppSaveAsOpenXMLPresentation
+        # here, and a deck that reached this line is written as .pptx by default.
+        pres.SaveCopyAs(path)
+        return {"path": path, "folder": folder, "slides": pres.Slides.Count}
+    except Exception:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+
+
+def _markdown_of_copy(path, slide_indices, slides) -> Optional[str]:
+    """The text of a copy from ``_copy_deck_impl``, or None if it is not the deck."""
+    total, read = deck_text.read_slides(path, slide_indices)
+    if total != slides:
+        logger.warning("The copy has %d slides and the deck %d; reading the deck itself", total, slides)
+        return None
+    out = []
+    for index in (range(1, total + 1) if slide_indices is None else slide_indices):
+        if not 1 <= index <= total:
+            out.append(f"== Slide {index} ==\n(invalid slide index, presentation has {total} slides)")
+            continue
+        slide = read[index]
+        parts = [f"== Slide {index}{' (hidden)' if slide['hidden'] else ''} =="]
+        if slide["shapes"]:
+            _arrange(parts, slide["shapes"], deck_text.shape_markdown)
+        else:
+            parts.append("(no text)")
+        out.append("\n".join(parts))
+    return "\n\n".join(out)
+
+
+def _all_text_from_a_copy(slide_indices) -> Optional[str]:
+    """The deck's text read from a copy of it, or None to read the deck itself.
+
+    Asking PowerPoint shape by shape takes seconds, and minutes on the newest
+    PowerPoint for Mac. Anything that stops the copy (no add-in on the Mac,
+    a protected deck, a file that will not parse) is only a reason to read
+    the deck the slow way, so it never fails the tool.
+    """
+    try:
+        copy = ppt.execute(_copy_deck_impl)
+    except Exception as exc:  # noqa: BLE001 - the deck is read the other way
+        logger.info("Could not copy the deck to read its text: %s", exc)
+        return None
+    if not isinstance(copy, dict):
+        return None
+    try:
+        return _markdown_of_copy(copy["path"], slide_indices, copy["slides"])
+    except Exception as exc:  # noqa: BLE001 - the deck is read the other way
+        logger.warning("Could not read the copy of the deck: %s", exc)
+        return None
+    finally:
+        shutil.rmtree(copy["folder"], ignore_errors=True)
 
 
 def _slide_count_impl() -> int:
@@ -2596,21 +2662,26 @@ def get_all_text(params: GetAllTextInput) -> str:
     Optionally writes the result to a file if output_path is specified.
     """
     try:
-        if params.slide_indices is not None:
-            indices = params.slide_indices
+        text = _all_text_from_a_copy(params.slide_indices)
+        if text is not None:
+            slide_count = text.count("\n\n== Slide ") + 1
         else:
-            # Get total slide count first
-            total = ppt.execute(_slide_count_impl)
-            indices = list(range(1, total + 1))
+            if params.slide_indices is not None:
+                indices = params.slide_indices
+            else:
+                # Get total slide count first
+                total = ppt.execute(_slide_count_impl)
+                indices = list(range(1, total + 1))
 
-        # Process in batches to stay under the 30s COM timeout
-        all_parts = []
-        for i in range(0, len(indices), _GET_ALL_TEXT_BATCH_SIZE):
-            batch = indices[i:i + _GET_ALL_TEXT_BATCH_SIZE]
-            part = ppt.execute(_get_all_text_impl, batch)
-            all_parts.append(part)
+            # Process in batches to stay under the 30s COM timeout
+            all_parts = []
+            for i in range(0, len(indices), _GET_ALL_TEXT_BATCH_SIZE):
+                batch = indices[i:i + _GET_ALL_TEXT_BATCH_SIZE]
+                part = ppt.execute(_get_all_text_impl, batch)
+                all_parts.append(part)
 
-        text = "\n\n".join(all_parts)
+            text = "\n\n".join(all_parts)
+            slide_count = len(indices)
 
         if params.output_path:
             abs_path = os.path.abspath(params.output_path)
@@ -2619,7 +2690,7 @@ def get_all_text(params: GetAllTextInput) -> str:
             return json.dumps({
                 "status": "success",
                 "output_path": abs_path,
-                "slide_count": len(indices),
+                "slide_count": slide_count,
             })
 
         return text

@@ -3,6 +3,7 @@
 everywhere, so numbers from different machines can be compared.
 
     uv run --with python-pptx python scripts/bench_get_all_text.py [--slides 50] [--runs 2] [--save-copy] [--keep]
+        [--deck my.pptx] [--compare differences.txt]
 
 It writes the deck as a .pptx with python-pptx, which is not one of the
 server's dependencies (hence `--with`), so every machine opens the same file
@@ -16,10 +17,13 @@ tool `--runs` times through the server's own call_tool, as a client's call
 goes, then closes it without saving and deletes the file. No other deck is
 touched. A PowerPoint the script had to start is quit with that close, as the
 server does. On the Mac the files go in PowerPoint's container, where
-PowerPoint reads and writes without asking; macOS may ask once whether the app
+PowerPoint reads and writes without asking; macOS may ask whether the app
 running this script may reach another app's data.
 
-`--keep` leaves the deck open afterwards, unsaved, to look at.
+`--keep` leaves the deck open afterwards, unsaved, to look at. `--deck` measures
+a copy of a .pptx of your own instead; the file itself is never opened.
+`--compare FILE` also reads the deck both ways ppt_get_all_text can, shape by
+shape and from a copy, and writes where they differ to FILE.
 
 `--save-copy` also times another way to read the text: the deck written to a
 temporary file with Presentation.SaveCopyAs, and the slides' text read from
@@ -30,10 +34,12 @@ Paste the table it prints into the issue or PR you are measuring for.
 """
 
 import argparse
+import difflib
 import json
 import os
 import platform
 import re
+import shutil
 import struct
 import sys
 import tempfile
@@ -241,19 +247,45 @@ def _fmt(times):
     return " / ".join(f"{t:.2f}" for t in times)
 
 
+def _compare(slides, out):
+    """Read the deck shape by shape and from a copy, and write the differences."""
+    from ppt_com import text as text_mod
+
+    start = time.perf_counter()
+    batches = [list(range(i, min(i + 15, slides + 1))) for i in range(1, slides + 1, 15)]
+    asked = "\n\n".join(ppt.execute(text_mod._get_all_text_impl, batch) for batch in batches)
+    asked_took = time.perf_counter() - start
+    start = time.perf_counter()
+    copied = text_mod._all_text_from_a_copy(None)
+    copied_took = time.perf_counter() - start
+    if copied is None:
+        print("The copy could not be read, so ppt_get_all_text reads the deck shape by shape here.")
+        return
+    diff = list(difflib.unified_diff(asked.split("\n"), copied.split("\n"), "shape by shape", "from a copy",
+                                     lineterm="", n=1))
+    with open(out, "w", encoding="utf-8") as f:
+        f.write("\n".join(diff) + "\n")
+    hunks = sum(1 for line in diff if line.startswith("@@"))
+    print(f"Shape by shape {asked_took:.2f} s, from a copy {copied_took:.2f} s; "
+          f"{hunks} places differ, written to {out}", flush=True)
+
+
 async def main(args):
     folder = _copy_folder()
     # A name of its own each run: a deck left open by --keep under the same
     # name would be the one opened, and measured, instead.
     path = os.path.join(folder, f"ppt-mcp-bench-{uuid.uuid4().hex[:8]}.pptx")
-    picture = os.path.join(folder, "ppt-mcp-bench-picture.png")
-    start = time.perf_counter()
-    _picture(picture)
-    try:
-        _write_deck(path, args.slides, picture)
-    finally:
-        os.remove(picture)
-    print(f"Wrote {args.slides} slides in {time.perf_counter() - start:.1f} s", flush=True)
+    if args.deck:
+        shutil.copyfile(args.deck, path)  # a copy: the deck itself is never opened
+    else:
+        picture = os.path.join(folder, "ppt-mcp-bench-picture.png")
+        start = time.perf_counter()
+        _picture(picture)
+        try:
+            _write_deck(path, args.slides, picture)
+        finally:
+            os.remove(picture)
+        print(f"Wrote {args.slides} slides in {time.perf_counter() - start:.1f} s", flush=True)
     opened = await run("ppt_open_presentation", {"file_path": path})
     if not isinstance(opened, dict) or "name" not in opened:
         os.remove(path)
@@ -261,8 +293,11 @@ async def main(args):
     deck = opened.get("full_name") or opened["name"]
     # Asked once PowerPoint is surely running: before, it can answer an error.
     info = await run("ppt_get_app_info", {})
+    slides = opened.get("slides_count", args.slides)
     rows = []
     try:
+        if args.compare:
+            _compare(slides, args.compare)
         times, text = await timed("ppt_get_all_text", {}, deck, args.runs)
         rows.append(("ppt_get_all_text", _fmt(times), f"{len(str(text))} characters"))
         times, _ = await timed("ppt_check_layout", {}, deck, args.runs)
@@ -304,7 +339,7 @@ async def main(args):
     system = f"macOS {platform.mac_ver()[0]}" if sys.platform == "darwin" else f"Windows {platform.version()}"
     print()
     print(f"{system}, PowerPoint {info.get('version') if isinstance(info, dict) else '?'}{bridge}; "
-          f"{args.slides} slides, seconds per run")
+          f"{slides} slides, seconds per run")
     print()
     print("| What | Seconds | Notes |")
     print("|---|---|---|")
@@ -318,6 +353,9 @@ if __name__ == "__main__":
     parser.add_argument("--runs", type=int, default=2)
     parser.add_argument("--save-copy", action="store_true", help="also time SaveCopyAs and reading its XML")
     parser.add_argument("--keep", action="store_true", help="leave the deck open afterwards, to look at")
+    parser.add_argument("--deck", help="measure a copy of this .pptx instead of writing one")
+    parser.add_argument("--compare", metavar="FILE",
+                        help="also read the deck shape by shape and from a copy, and write the differences here")
     ppt.start()
     try:
         anyio.run(main, parser.parse_args())

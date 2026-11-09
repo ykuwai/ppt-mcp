@@ -128,6 +128,7 @@ ROUTES = {
     ("ppt_com.smartart", "_modify_smartart_impl"): keeps_layout,
     ("ppt_com.slides", "_copy_slide_impl"): ALWAYS,
     # Through the clipboard on the Mac only for a group's member.
+    ("ppt_com.text", "_copy_deck_impl"): ALWAYS,
     ("ppt_com.text", "_set_text_impl"): group_member,
     ("ppt_com.text", "_format_text_impl"): group_member,
     # A template's own layout by name: the Mac reads names from the saved file
