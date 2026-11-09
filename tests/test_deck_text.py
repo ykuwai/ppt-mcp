@@ -176,6 +176,32 @@ class TestTheText:
         assert render(tmp_path, chosen) == ["Live"]
 
 
+class TestEquations:
+    # As PowerPoint saves one: the whole paragraph is inside AlternateContent,
+    # and the picture in the fallback carries placeholder text.
+    MATH = ('<a14:m xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main">'
+            '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+            "<m:r><m:t>E=m</m:t></m:r><m:r><m:t>c2</m:t></m:r></m:oMath></a14:m>")
+
+    def wrapped(self, inner):
+        return (f'<mc:AlternateContent><mc:Choice Requires="a14">{inner}</mc:Choice>'
+                f"<mc:Fallback>{para(run('picture of it'))}</mc:Fallback></mc:AlternateContent>")
+
+    def test_a_paragraph_wrapped_whole_keeps_its_place(self, tmp_path):
+        body = para(run("Before")) + self.wrapped(para(self.MATH)) + para(run("After"))
+        assert render(tmp_path, sp(body)) == ["Before\nE=mc2\nAfter"]
+
+    def test_an_equation_beside_words(self, tmp_path):
+        assert render(tmp_path, sp(self.wrapped(para(run("So "), self.MATH)))) == ["So E=mc2"]
+
+    def test_a_shape_holding_only_an_equation_is_read(self, tmp_path):
+        assert render(tmp_path, sp(self.wrapped(para(self.MATH)))) == ["E=mc2"]
+
+    def test_an_equation_in_a_table_cell(self, tmp_path):
+        cell = f"<a:tc><a:txBody><a:bodyPr/>{self.wrapped(para(self.MATH))}</a:txBody></a:tc>"
+        assert render(tmp_path, TestTables().table([cell])) == ["| E=mc2 |\n| --- |"]
+
+
 class TestGroups:
     def group(self, *members, off=(100, 50), ext=(200, 100), ch_off=(0, 0), ch_ext=(100, 50)):
         x = (f'<a:xfrm><a:off x="{off[0] * EMU}" y="{off[1] * EMU}"/><a:ext cx="{ext[0] * EMU}" cy="{ext[1] * EMU}"/>'
@@ -300,6 +326,28 @@ class TestAnythingThatStopsTheCopyIsNotAFailure:
 
 windows_only = pytest.mark.skipif(
     sys.platform != "win32", reason="on macOS the Apple Event impl takes the place of the COM one")
+
+
+@windows_only
+class TestGroupMembersReadOneByOne:
+    class Items:
+        """Shapes and GroupItems both count, and are called with an index."""
+
+        def __init__(self, *members):
+            self.members, self.Count = members, len(members)
+
+        def __call__(self, index):
+            return self.members[index - 1]
+
+    def test_a_members_position_is_not_counted_twice(self):
+        frame = type("F", (), {"HasText": True})()
+        member = type("M", (), {"Type": 17, "Top": 380, "Left": 30, "Width": 9, "Height": 9,
+                                "HasTable": False, "HasTextFrame": True, "TextFrame": frame})()
+        group = type("G", (), {"Type": text_mod.msoGroup, "Top": 380, "Left": 30,
+                               "GroupItems": self.Items(member)})()
+        slide = type("Sl", (), {"Shapes": self.Items(group)})()
+        [info] = text_mod._collect_text_shapes(slide)
+        assert (info["top"], info["left"]) == (380, 30)
 
 
 @windows_only

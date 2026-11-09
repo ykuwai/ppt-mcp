@@ -29,8 +29,9 @@ _FALSE = ("0", "false")
 
 
 def _children(parent):
-    """A shape tree's children, with mc:AlternateContent replaced by its
-    first choice: what PowerPoint itself shows."""
+    """An element's children, with mc:AlternateContent replaced by its first
+    choice: what PowerPoint itself shows. It can wrap a shape, a run, or, for
+    an equation PowerPoint saved, a whole paragraph."""
     for child in parent:
         if child.tag == _MC + "AlternateContent":
             chosen = child.find(_MC + "Choice")
@@ -195,26 +196,28 @@ def _run(element, text, chain, level):
     return {"text": text, **emphasis}
 
 
-def _paragraph_children(paragraph):
-    for child in paragraph:
-        if child.tag == _MC + "AlternateContent":
-            chosen = child.find(_MC + "Choice")
-            if chosen is not None:
-                yield from chosen
-        else:
-            yield child
+def _body_paragraphs(body):
+    return [child for child in _children(body) if child.tag == _A + "p"]
+
+
+def _is_math(element):
+    return element.tag.endswith(("}m", "}oMathPara", "}oMath"))
+
+
+def _math_text(element):
+    return "".join(t.text or "" for t in element.iter(_MATH_TEXT))
 
 
 def _paragraphs(body, chain):
     out = []
-    for paragraph in body.findall("a:p", _NS):
+    for paragraph in _body_paragraphs(body):
         props = paragraph.find("a:pPr", _NS)
         level = int(props.get("lvl", "0")) + 1 if props is not None else 1
         bullet = _bullet_of(props) if props is not None else None
         if bullet is None:
             bullet = _resolved(chain, level, _bullet_of)
         runs = []
-        for child in _paragraph_children(paragraph):
+        for child in _children(paragraph):
             if child.tag in (_A + "r", _A + "fld"):
                 t = child.find("a:t", _NS)
                 text = (t.text or "") if t is not None else ""
@@ -222,8 +225,8 @@ def _paragraphs(body, chain):
                     runs.append(_run(child, text, chain, level))
             elif child.tag == _A + "br":
                 runs.append(_run(child, "\n", chain, level))
-            elif child.tag.endswith("}m") or child.tag.endswith("}oMathPara") or child.tag.endswith("}oMath"):
-                text = "".join(t.text or "" for t in child.iter(_MATH_TEXT))
+            elif _is_math(child):
+                text = _math_text(child)
                 if text:
                     runs.append({"text": text, "bold": False, "italic": False})
         out.append({"runs": runs, "level": level, "bullet": None if bullet == "none" else bullet})
@@ -235,14 +238,16 @@ def _cell_text(cell):
     if body is None:
         return ""
     lines = []
-    for paragraph in body.findall("a:p", _NS):
+    for paragraph in _body_paragraphs(body):
         line = []
-        for child in _paragraph_children(paragraph):
+        for child in _children(paragraph):
             if child.tag in (_A + "r", _A + "fld"):
                 t = child.find("a:t", _NS)
                 line.append((t.text or "") if t is not None else "")
             elif child.tag == _A + "br":
                 line.append(" ")
+            elif _is_math(child):
+                line.append(_math_text(child))
         lines.append("".join(line))
     return " ".join(lines)
 

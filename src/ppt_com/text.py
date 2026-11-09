@@ -969,14 +969,8 @@ def _collect_text_shapes(slide) -> list:
     """
     shapes = []
 
-    def _process_shape(shape, offset_top=0.0, offset_left=0.0):
-        """Process a single shape (may be called recursively for groups).
-
-        Args:
-            shape: COM shape object
-            offset_top: Accumulated Y offset from parent groups
-            offset_left: Accumulated X offset from parent groups
-        """
+    def _process_shape(shape):
+        """Process a single shape (called again for each member of a group)."""
         # Check placeholder skip / classify in a single COM read
         is_title = False
         is_subtitle = False
@@ -990,27 +984,20 @@ def _collect_text_shapes(slide) -> list:
             except Exception:
                 pass
 
-        # Recurse into groups early (no need to build info dict)
-        # Pass group's position as offset since child coordinates are
-        # relative to the group, not the slide.
+        # Recurse into groups early (no need to build info dict). A member's
+        # Top and Left are already on the slide, not relative to its group.
         if shape.Type == msoGroup:
             try:
-                g_top = shape.Top
-                g_left = shape.Left
                 for gi in range(1, shape.GroupItems.Count + 1):
-                    _process_shape(
-                        shape.GroupItems(gi),
-                        offset_top + g_top,
-                        offset_left + g_left,
-                    )
+                    _process_shape(shape.GroupItems(gi))
             except Exception:
                 pass
             return
 
         info = {
             "shape": shape,
-            "top": shape.Top + offset_top,
-            "left": shape.Left + offset_left,
+            "top": shape.Top,
+            "left": shape.Left,
             "width": shape.Width,
             "height": shape.Height,
             "is_title": is_title,
