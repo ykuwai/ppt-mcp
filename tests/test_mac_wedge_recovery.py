@@ -144,23 +144,27 @@ def test_a_slow_call_in_front_is_not_charged_to_the_one_behind(ppt, monkeypatch)
     its turn behind a healthy job must not read that wait as a wedge."""
     from backend import mac_ae
 
+    # A wider budget than the other tests: each job must stay well inside it
+    # even on a loaded runner, where a 0.18 s sleep has taken over 0.3 s.
+    budget = 1.0
+    monkeypatch.setattr(mac_ae, "_CALL_BUDGET", budget)
     monkeypatch.setattr(mac_ae, "_QUEUE_WAIT", 5.0)
     release = threading.Event()
     holding = threading.Event()
 
     first, _ = _in_background(
-        ppt, lambda: (holding.set(), release.wait(BUDGET * 0.6))
+        ppt, lambda: (holding.set(), release.wait(budget * 0.55))
     )
     assert holding.wait(5)
     # Queued now, and served after more than one whole budget from here.
     second, outcome = _in_background(
-        ppt, lambda: (time.sleep(BUDGET * 0.6), "landed")[1]
+        ppt, lambda: (time.sleep(budget * 0.55), "landed")[1]
     )
     first.join(5)
     second.join(5)
 
     assert outcome.get("value") == "landed", outcome
-    assert outcome["took"] > BUDGET
+    assert outcome["took"] > budget
     assert ppt._generation == 0
 
 
