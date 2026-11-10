@@ -141,3 +141,20 @@ def test_a_preview_that_fails_answers_why(raised, said):
                            {"params": {"slide_index": 4}})
     answer = json.loads(server._text_of(server._content_of(result)))
     assert answer["error"] == f"Failed to preview slide 4: {said}"
+
+
+def test_a_failed_preview_reaches_the_client_marked_as_an_error():
+    import server
+    from backend import ppt
+    from test_is_error import call
+
+    if not server._SDK_PASSES_CALL_TOOL_RESULT:
+        pytest.skip("this mcp release cannot send a CallToolResult from call_tool")
+
+    def fail(fn, *args, **kw):
+        raise PermissionError("macOS is asking on screen")
+
+    with patch.object(ppt, "execute", fail):
+        is_error, text, _ = call(server.mcp, "ppt_get_slide_preview", {"params": {"slide_index": 2}})
+    assert is_error
+    assert json.loads(text)["error"] == "Failed to preview slide 2: macOS is asking on screen"
