@@ -306,6 +306,53 @@ class TestReplacing:
         assert not old.deleted
         assert copy.deleted is (how in ("check", "carry"))
 
+    def test_animations_are_handed_over_before_the_old_chart_goes(self, charts, monkeypatch):
+        calls = []
+        carry = charts.animation_carry
+        monkeypatch.setattr(carry, "animated", lambda slide, shape_id: True)
+        monkeypatch.setattr(carry, "timeline", lambda slide, chart_id, leave_out=None: ["same"])
+        monkeypatch.setattr(carry, "copy_animations", lambda slide, old, new: calls.append("copy"))
+        monkeypatch.setattr(carry, "move_links", lambda slide, old, new, c: calls.append("links") or [])
+        old, copy, seen, run = replace(charts, monkeypatch)
+        new, warnings = run()
+        assert calls == ["copy", "links"] and old.deleted and not copy.deleted
+
+    def test_animations_that_did_not_come_over_leave_the_old_chart_as_it_was(
+            self, charts, monkeypatch):
+        """The copy goes, which takes its effects along, and what was pointed
+        at it is pointed back first, while it is still there to point from."""
+        events = []
+        carry = charts.animation_carry
+        timelines = iter([["before"], ["after"]])
+        monkeypatch.setattr(carry, "animated", lambda slide, shape_id: True)
+        monkeypatch.setattr(carry, "timeline", lambda slide, chart_id, leave_out=None: next(timelines))
+        monkeypatch.setattr(carry, "copy_animations", lambda slide, old, new: None)
+        monkeypatch.setattr(carry, "move_links",
+                            lambda slide, old, new, c: [lambda: events.append("pointed back")])
+        old, copy, seen, run = replace(charts, monkeypatch)
+        copy.Delete = lambda: (events.append("copy deleted"), setattr(copy, "deleted", True))
+        with pytest.raises(charts._NotCarried, match="animations did not come over"):
+            run()
+        assert events == ["pointed back", "copy deleted"]
+        assert not old.deleted
+
+    def test_links_that_cannot_be_pointed_back_leave_both_charts_and_say_so(
+            self, charts, monkeypatch):
+        carry = charts.animation_carry
+        timelines = iter([["before"], ["after"]])
+        monkeypatch.setattr(carry, "animated", lambda slide, shape_id: True)
+        monkeypatch.setattr(carry, "timeline", lambda slide, chart_id, leave_out=None: next(timelines))
+        monkeypatch.setattr(carry, "copy_animations", lambda slide, old, new: None)
+
+        def stuck():
+            raise RuntimeError("busy")
+
+        monkeypatch.setattr(carry, "move_links", lambda slide, old, new, c: [stuck])
+        old, copy, seen, run = replace(charts, monkeypatch)
+        with pytest.raises(RuntimeError, match=r"could not all be pointed back \(busy\)"):
+            run()
+        assert not old.deleted and not copy.deleted
+
     def test_data_that_does_not_fit_the_chart_leaves_it_as_it_was(self, charts, monkeypatch):
         """A scatter chart given labels for x, say: Excel then, as before."""
         old, copy, seen, run = replace(charts, monkeypatch, chart_type=-4169)
