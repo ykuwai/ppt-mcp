@@ -837,10 +837,78 @@ class TestChartData:
     workbook, which keeps the chart itself; the swap the Windows code prefers
     would make a new shape, through the Windows clipboard code."""
 
-    def test_bubble_sizes_stay_on_the_apple_event_route(self):
+    def test_bubble_sizes_stay_on_the_apple_event_route(self, monkeypatch):
+        monkeypatch.setattr(routes, "excel_installed", lambda: True)
         route = routes.ROUTES[("ppt_com.charts", "_set_chart_data_impl")]
-        assert route({"series": [{"name": "S", "values": [1, 2]}]})
-        assert not route({"series": [{"name": "S", "values": [1, 2], "sizes": [3, 4]}]})
+        assert route({"series": [{"name": "S", "values": [1, 2]}]}) is True
+        assert route({"series": [{"name": "S", "values": [1, 2], "sizes": [3, 4]}]}) is False
+
+    def test_without_excel_the_apple_event_route_runs_and_says_why(self, monkeypatch):
+        monkeypatch.setattr(routes, "excel_installed", lambda: False)
+        monkeypatch.setattr(vba, "ENABLED", True)
+        monkeypatch.setattr(vba._SESSION, "bridge", lambda app: pytest.fail("the add-in was asked for"))
+
+        def com_impl(slide_index, shape_name_or_index, categories, series):
+            raise AssertionError("the Windows code ran")
+
+        def mac_impl(slide_index, shape_name_or_index, categories, series):
+            return {**RECREATED, "warnings": list(RECREATED["warnings"])}
+
+        impl = vba.routed(com_impl, mac_impl, routes.ROUTES[("ppt_com.charts", "_set_chart_data_impl")])
+        out = impl(1, "Chart 1", ["A"], [{"name": "S", "values": [1]}])
+        assert out["warnings"][-1] == routes.NO_EXCEL_NOTE
+
+    def test_turned_off_without_excel_the_note_is_about_excel(self, monkeypatch):
+        monkeypatch.setattr(routes, "excel_installed", lambda: False)
+        monkeypatch.setattr(vba, "ENABLED", False)
+        impl = vba.routed(
+            lambda slide_index, series: pytest.fail("the Windows code ran"),
+            lambda slide_index, series: {**RECREATED, "warnings": list(RECREATED["warnings"])},
+            routes.ROUTES[("ppt_com.charts", "_set_chart_data_impl")])
+        out = impl(1, [{"name": "S", "values": [1]}])
+        assert out["warnings"][-1] == routes.NO_EXCEL_NOTE
+        assert vba.OFF_RECREATED_NOTE not in out["warnings"]
+
+    def test_without_excel_a_refusal_says_only_that_excel_is_missing(self, monkeypatch):
+        monkeypatch.setattr(routes, "excel_installed", lambda: False)
+        monkeypatch.setattr(vba, "ENABLED", True)
+        impl = vba.routed(
+            lambda slide_index, series: pytest.fail("the Windows code ran"),
+            lambda slide_index, series: dict(REFUSED),
+            routes.ROUTES[("ppt_com.charts", "_set_chart_data_impl")])
+        out = impl(1, [{"name": "S", "values": [1]}])
+        assert out["hint"] == routes.NO_EXCEL_REFUSAL_NOTE
+        assert "written" not in out["hint"]
+
+    def test_excel_is_found_by_spotlight_and_then_remembered(self, monkeypatch):
+        import subprocess
+
+        monkeypatch.setattr(routes, "_excel_found", False)
+        monkeypatch.setattr(routes, "_EXCEL_PLACES", ())
+        runs = []
+
+        def run(cmd, **kw):
+            runs.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout="/Volumes/Apps/Microsoft Excel.app\n")
+
+        monkeypatch.setattr(subprocess, "run", run)
+        assert routes.excel_installed() and routes.excel_installed()
+        assert len(runs) == 1
+
+    def test_no_excel_is_looked_for_again(self, monkeypatch):
+        import subprocess
+
+        monkeypatch.setattr(routes, "_excel_found", False)
+        monkeypatch.setattr(routes, "_EXCEL_PLACES", ())
+        runs = []
+
+        def run(cmd, **kw):
+            runs.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+        monkeypatch.setattr(subprocess, "run", run)
+        assert not routes.excel_installed() and not routes.excel_installed()
+        assert len(runs) == 2
 
     def test_on_the_vba_route_excel_is_chosen(self):
         from ppt_com import charts

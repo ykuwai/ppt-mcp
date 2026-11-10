@@ -51,6 +51,60 @@ def no_bubble_sizes(arguments) -> bool:
     return not any(isinstance(s, dict) and "sizes" in s for s in arguments.get("series") or [])
 
 
+_EXCEL_ID = "com.microsoft.Excel"
+_EXCEL_PLACES = ("/Applications/Microsoft Excel.app", "~/Applications/Microsoft Excel.app")
+_excel_found = False
+
+NO_EXCEL_REFUSAL_NOTE = (
+    "Microsoft Excel is not installed on this Mac, and PowerPoint for Mac's "
+    "VBA writes chart data through it, so this call stayed on the Apple Event "
+    "route."
+)
+NO_EXCEL_NOTE = (
+    "Microsoft Excel is not installed on this Mac, and PowerPoint for Mac's "
+    "VBA writes chart data through it, so the data was written into the "
+    "chart's XML instead. With Excel installed, the chart is edited in place "
+    "and keeps its id and animations."
+)
+
+
+def excel_installed() -> bool:
+    """Whether this Mac has Microsoft Excel, which the VBA route's chart data
+    goes through. Found once, it is not looked for again; not found, it is
+    looked for on each call, so an Excel installed meanwhile is used."""
+    global _excel_found
+    if _excel_found:
+        return True
+    import os
+    import subprocess
+
+    found = any(os.path.isdir(os.path.expanduser(p)) for p in _EXCEL_PLACES)
+    if not found:
+        try:
+            out = subprocess.run(
+                ["/usr/bin/mdfind", f"kMDItemCFBundleIdentifier == '{_EXCEL_ID}'"],
+                capture_output=True, text=True, timeout=5, check=False,
+            ).stdout
+            found = any(line.strip() for line in out.splitlines())
+        except (OSError, subprocess.SubprocessError):
+            # Spotlight could not say; the VBA route then answers for itself.
+            found = True
+    _excel_found = found
+    return found
+
+
+def chart_data_through_excel(arguments):
+    """Chart data takes the route when Excel can write it.
+
+    Answers the notes for a refusal and for a recreated chart, rather than
+    False, when the route would have taken the call and Excel is missing:
+    the Apple Event route runs, and says why.
+    """
+    if not no_bubble_sizes(arguments):
+        return False
+    return True if excel_installed() else (NO_EXCEL_REFUSAL_NOTE, NO_EXCEL_NOTE)
+
+
 def keeps_layout(arguments) -> bool:
     """A SmartArt edit that does not pick a layout.
 
@@ -107,7 +161,7 @@ ROUTES = {
     ("ppt_com.charts", "_set_chart_series_impl"): ALWAYS,
     ("ppt_com.charts", "_change_chart_type_impl"): ALWAYS,
     ("ppt_com.charts", "_get_chart_data_impl"): ALWAYS,
-    ("ppt_com.charts", "_set_chart_data_impl"): no_bubble_sizes,
+    ("ppt_com.charts", "_set_chart_data_impl"): chart_data_through_excel,
     ("ppt_com.freeform", "_get_shape_nodes_impl"): ALWAYS,
     ("ppt_com.freeform", "_set_node_editing_type_impl"): ALWAYS,
     ("ppt_com.freeform", "_set_node_position_impl"): ALWAYS,
