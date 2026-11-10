@@ -58,12 +58,13 @@ class Effect:
         self.EffectType = kind
         self.Exit = exit
         self.Timing = SimpleNamespace(TriggerType=trigger, Duration=duration, TriggerDelayTime=delay,
-                                      TriggerShape=trigger_shape, RepeatCount=1, Rewind=0,
+                                      TriggerShape=trigger_shape, RepeatCount=1, RewindAtEnd=0,
                                       AutoReverse=0, Accelerate=0.0, Decelerate=0.0)
         moves = [SimpleNamespace(Type=carry.msoAnimTypeMotion,
                                  MotionEffect=SimpleNamespace(Path=path))] if path else []
         self.Behaviors = Behaviors(moves)
-        self.EffectInformation = SimpleNamespace(BuildByLevelEffect=0)
+        self.EffectInformation = SimpleNamespace(BuildByLevelEffect=0, AfterEffect=0,
+                                                 Dim=SimpleNamespace(RGB=0))
         self.EffectParameters = Parameters(self, direction)
 
     def copy_for(self, sequence, shape, **changes):
@@ -72,6 +73,9 @@ class Effect:
                         delay=self.Timing.TriggerDelayTime, trigger_shape=self.Timing.TriggerShape,
                         direction=self.EffectParameters.Direction)
         effect.Behaviors = self.Behaviors
+        for key in ("RepeatCount", "RewindAtEnd", "AutoReverse", "Accelerate", "Decelerate"):
+            setattr(effect.Timing, key, getattr(self.Timing, key))
+        effect.EffectInformation = SimpleNamespace(**vars(self.EffectInformation))
         for key, value in changes.items():
             setattr(effect.Timing, key, value)
         return effect
@@ -102,6 +106,12 @@ class Sequence:
 
     def AddTriggerEffect(self, shape, kind, trigger, trigger_shape):
         return self.add(shape, kind, trigger=trigger, trigger_shape=trigger_shape, duration=0.5)
+
+    def ConvertToAfterEffect(self, effect, after, dim=None):
+        effect.EffectInformation.AfterEffect = after
+        if dim is not None:
+            effect.EffectInformation.Dim = SimpleNamespace(RGB=dim)
+        return effect
 
 
 class Slide:
@@ -191,7 +201,7 @@ def test_the_copy_ends_up_where_the_chart_was(deck):
     n = slide.shape(6)
 
     carry.copy_animations(slide, g, n)
-    carry.move_links(slide, g, n, [link])
+    carry.move_links(slide, g, n, [link], [])
     assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
 
     slide.delete(g)
@@ -208,7 +218,7 @@ def test_effects_a_paste_brought_along_are_removed_first(deck):
     n = slide.shape(6)
     slide.main.add(n, WIPE)  # as a paste turns an interactive effect into
     carry.copy_animations(slide, g, n)
-    carry.move_links(slide, g, n, [link])
+    carry.move_links(slide, g, n, [link], [])
     assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
 
 
@@ -224,7 +234,7 @@ def test_a_copy_that_does_not_match_is_seen(deck):
     before = carry.timeline(slide, g.Id)
     n = slide.shape(6)
     carry.copy_animations(slide, g, n)
-    carry.move_links(slide, g, n, [link])
+    carry.move_links(slide, g, n, [link], [])
     assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
     copy = slide.main.effects[2]
     assert copy.Shape is n and copy.EffectType == FADE
@@ -258,9 +268,12 @@ def test_links_that_cannot_all_move_are_put_back(deck):
         raise RuntimeError("cannot connect")
 
     ends.BeginConnect = refuse
-    with pytest.raises(carry.NotCarried, match="cannot connect"):
-        carry.move_links(slide, g, n, [link])
-    assert slide.interactive[1](1).Timing.TriggerShape is g, "the trigger is pointed back"
+    undo = []
+    with pytest.raises(RuntimeError, match="cannot connect"):
+        carry.move_links(slide, g, n, [link], undo)
+    assert slide.interactive[1](1).Timing.TriggerShape is n, "moved before the connector failed"
+    assert carry.put_back(undo) == []
+    assert slide.interactive[1](1).Timing.TriggerShape is g, "and pointed back"
 
 
 def test_put_back_says_what_did_not_go_back():
@@ -288,7 +301,7 @@ def test_a_chart_its_own_click_animates_is_carried():
     n = slide.shape(6)
 
     carry.copy_animations(slide, g, n)
-    carry.move_links(slide, g, n, [])
+    carry.move_links(slide, g, n, [], [])
     assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
     slide.delete(g)
     assert carry.timeline(slide, n.Id) == before
@@ -301,3 +314,26 @@ def test_the_direction_is_set_before_the_duration(deck):
     carry.copy_animations(slide, g, n)
     rebuilt = [e for e in slide.interactive[0].effects if e.Shape is n]
     assert [(e.Timing.Duration, e.EffectParameters.Direction) for e in rebuilt] == [(1.1, 4)]
+
+
+def test_a_rebuilt_click_effect_keeps_its_timing_and_after_effect(deck):
+    slide, g, _, link = deck
+    c1 = slide.interactive[0](1)
+    c1.Timing.Accelerate, c1.Timing.RepeatCount, c1.Timing.RewindAtEnd = 0.5, 2, -1
+    c1.EffectInformation.AfterEffect, c1.EffectInformation.Dim = 1, SimpleNamespace(RGB=0x336699)
+    before = carry.timeline(slide, g.Id)
+    n = slide.shape(6)
+    carry.copy_animations(slide, g, n)
+    carry.move_links(slide, g, n, [link], [])
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
+
+
+def test_an_after_effect_the_copy_lacks_is_seen(deck):
+    slide, g, _, link = deck
+    before = carry.timeline(slide, g.Id)
+    n = slide.shape(6)
+    carry.copy_animations(slide, g, n)
+    carry.move_links(slide, g, n, [link], [])
+    copy = [e for e in slide.interactive[0].effects if e.Shape is n][0]
+    copy.EffectInformation.AfterEffect = 2  # hide
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) != before

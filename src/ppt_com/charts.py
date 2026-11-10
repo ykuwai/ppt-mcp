@@ -883,7 +883,7 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
             raise _NotCarried("could not put it back in its stacking order")
         if animated:
             animation_carry.copy_animations(slide, shape, new)
-        links = animation_carry.move_links(slide, shape, new, connectors)
+        animation_carry.move_links(slide, shape, new, connectors, links)
         if animated and animation_carry.timeline(slide, new.Id, leave_out=old_id) != timeline_before:
             raise _NotCarried("its animations did not come over as they were")
     except Exception as e:
@@ -909,6 +909,13 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
     try:
         shape.Delete()
     except Exception as e:
+        unmoved = animation_carry.put_back(links)
+        if unmoved:
+            raise RuntimeError(
+                f"The old chart could not be removed ({e}), and what was pointed at its "
+                f"copy could not all be pointed back ({'; '.join(unmoved)}). Both charts "
+                f"are on the slide: '{shape.Name}' (id {old_id}) is the old one, id "
+                f"{new.Id} the copy.") from e
         try:
             new.Delete()
         except Exception:  # noqa: BLE001 - named in the error instead

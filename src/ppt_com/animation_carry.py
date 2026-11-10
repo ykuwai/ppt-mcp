@@ -31,6 +31,12 @@ effect made for it along, and leaves the original as it was.
 
 msoAnimTriggerOnShapeClick = 4
 msoAnimTypeMotion = 1
+msoAnimAfterEffectNone = 0
+msoAnimAfterEffectDim = 1
+
+# Timing settings an effect made again takes from the one it copies.
+_TIMING = ("Duration", "TriggerDelayTime", "RepeatCount", "RewindAtEnd", "AutoReverse",
+           "Accelerate", "Decelerate")
 
 
 class NotCarried(Exception):
@@ -75,10 +81,13 @@ def effect_facts(effect) -> tuple:
     return (
         effect.EffectType, effect.Exit, timing.TriggerType,
         round(timing.Duration, 3), round(timing.TriggerDelayTime, 3),
-        _read(lambda: timing.RepeatCount), _read(lambda: timing.Rewind),
+        _read(lambda: timing.RepeatCount), _read(lambda: timing.RewindAtEnd),
         _read(lambda: timing.AutoReverse),
         _read(lambda: round(timing.Accelerate, 3)), _read(lambda: round(timing.Decelerate, 3)),
         _read(lambda: effect.EffectInformation.BuildByLevelEffect),
+        _read(lambda: effect.EffectInformation.AfterEffect),
+        _read(lambda: effect.EffectInformation.Dim.RGB)
+        if _read(lambda: effect.EffectInformation.AfterEffect) == msoAnimAfterEffectDim else None,
         _read(lambda: effect.EffectParameters.Direction),
         tuple(moves),
     )
@@ -185,45 +194,49 @@ def copy_animations(slide, old, new) -> None:
         if direction is not None:
             _read(lambda: setattr(effect.EffectParameters, "Direction", direction))
         effect.Exit = original.Exit
-        effect.Timing.Duration = original.Timing.Duration
-        effect.Timing.TriggerDelayTime = original.Timing.TriggerDelayTime
+        for name in _TIMING:
+            value = _read(lambda name=name: getattr(original.Timing, name))
+            if value is not None:
+                _read(lambda name=name, value=value: setattr(effect.Timing, name, value))
+        after = _read(lambda: original.EffectInformation.AfterEffect, msoAnimAfterEffectNone)
+        if after != msoAnimAfterEffectNone:
+            # Set through the sequence, which answers the effect it made.
+            if after == msoAnimAfterEffectDim:
+                effect = sequence.ConvertToAfterEffect(
+                    effect, after, original.EffectInformation.Dim.RGB)
+            else:
+                effect = sequence.ConvertToAfterEffect(effect, after)
         index = _indexes(sequence, new_id)[-1]
         target = _indexes(sequence, old_id)[made] + 1
         if index != target:
             sequence(index).MoveTo(target)
 
 
-def move_links(slide, old, new, connectors) -> list:
+def move_links(slide, old, new, connectors, undo) -> None:
     """Point what starts on ``old`` and the connectors on it at ``new``.
 
-    Answers how to point them back, for a swap that is given up after this.
+    Each step that is taken adds to ``undo`` how to take it back, so a swap
+    given up afterwards, or halfway through this, can point them back with
+    ``put_back``.
     """
     old_id = old.Id
-    undo = []
-    try:
-        for sequence in _sequences(slide):
-            for effect in _effects(sequence):
-                if _trigger_id(effect) == old_id:
-                    timing = effect.Timing
-                    timing.TriggerShape = new
-                    undo.append(lambda timing=timing: setattr(timing, "TriggerShape", old))
-        for connector in connectors:
-            ends = connector.ConnectorFormat
-            for end in ("Begin", "End"):
-                if (getattr(ends, f"{end}Connected") == -1
-                        and getattr(ends, f"{end}ConnectedShape").Id == old_id):
-                    site = getattr(ends, f"{end}ConnectionSite")
-                    getattr(ends, f"{end}Connect")(new, site)
-                    if getattr(ends, f"{end}ConnectedShape").Id != new.Id:
-                        raise NotCarried("a connector on it could not be moved to the copy")
-                    undo.append(lambda ends=ends, end=end, site=site:
-                                getattr(ends, f"{end}Connect")(old, site))
-    except Exception as e:
-        put_back(undo)
-        if isinstance(e, NotCarried):
-            raise
-        raise NotCarried(f"what points at it could not be moved to the copy ({e})") from e
-    return undo
+    for sequence in _sequences(slide):
+        for effect in _effects(sequence):
+            if _trigger_id(effect) == old_id:
+                timing = effect.Timing
+                timing.TriggerShape = new
+                undo.append(lambda timing=timing: setattr(timing, "TriggerShape", old))
+    for connector in connectors:
+        ends = connector.ConnectorFormat
+        for end in ("Begin", "End"):
+            if (getattr(ends, f"{end}Connected") == -1
+                    and getattr(ends, f"{end}ConnectedShape").Id == old_id):
+                site = getattr(ends, f"{end}ConnectionSite")
+                getattr(ends, f"{end}Connect")(new, site)
+                undo.append(lambda ends=ends, end=end, site=site:
+                            getattr(ends, f"{end}Connect")(old, site))
+                if getattr(ends, f"{end}ConnectedShape").Id != new.Id:
+                    raise NotCarried("a connector on it could not be moved to the copy")
 
 
 def put_back(undo) -> list:
