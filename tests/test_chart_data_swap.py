@@ -119,21 +119,14 @@ class TestWhenExcelIsStillNeeded:
         grouped = chart_shape(Child=-1)
         assert "group" in charts._excel_needed(slide_with([grouped]), grouped)
 
-    def test_an_animation_in_either_sequence(self, charts):
+    def test_animations_and_connectors_no_longer_need_it(self, charts):
+        """They are handed to the copy (#343)."""
         shape = chart_shape()
-        assert "animated" in charts._excel_needed(slide_with([shape], animated=[shape]), shape)
-        assert "animated" in charts._excel_needed(slide_with([shape], interactive=[shape]), shape)
-        other = chart_shape(shape_id=9)
-        assert charts._excel_needed(slide_with([shape, other], animated=[other]), shape) is None
-
-    @pytest.mark.parametrize("end", ["Begin", "End"])
-    def test_an_attached_connector(self, charts, end):
-        shape = chart_shape()
-        ends = SimpleNamespace(BeginConnected=0, EndConnected=0)
-        setattr(ends, f"{end}Connected", -1)
-        setattr(ends, f"{end}ConnectedShape", shape)
+        assert charts._excel_needed(slide_with([shape], animated=[shape]), shape) is None
+        assert charts._excel_needed(slide_with([shape], interactive=[shape]), shape) is None
+        ends = SimpleNamespace(BeginConnected=-1, BeginConnectedShape=shape, EndConnected=0)
         connector = SimpleNamespace(Type=1, Connector=-1, ConnectorFormat=ends)
-        assert "connector" in charts._excel_needed(slide_with([shape, connector]), shape)
+        assert charts._excel_needed(slide_with([shape, connector]), shape) is None
 
     def test_a_check_that_cannot_be_made_means_excel(self, charts):
         class Broken:
@@ -146,35 +139,6 @@ class TestWhenExcelIsStillNeeded:
         shape = Broken()
         reason = charts._excel_needed(slide_with([]), shape)
         assert reason.startswith("it could not be checked") and "busy" in reason
-
-    def test_a_chart_that_triggers_an_animation(self, charts):
-        shape = chart_shape()
-        other = chart_shape(shape_id=9)
-        slide = slide_with([shape, other], interactive=[other])
-        slide.TimeLine.InteractiveSequences(1).effects[0].Timing = SimpleNamespace(TriggerShape=shape)
-        assert "starts an animation" in charts._excel_needed(slide, shape)
-
-    def test_an_effect_without_a_trigger_shape_is_fine(self, charts):
-        shape = chart_shape()
-        other = chart_shape(shape_id=9)
-        slide = slide_with([shape, other], animated=[other])
-
-        class NoTrigger:
-            @property
-            def TriggerShape(self):
-                raise RuntimeError("no trigger shape")
-
-        slide.TimeLine.MainSequence.effects[0].Timing = NoTrigger()
-        assert charts._excel_needed(slide, shape) is None
-
-    def test_a_connector_inside_a_group(self, charts):
-        shape = chart_shape()
-        ends = SimpleNamespace(BeginConnected=-1, BeginConnectedShape=shape, EndConnected=0)
-        connector = SimpleNamespace(Type=1, Connector=-1, ConnectorFormat=ends)
-        items = [SimpleNamespace(Type=1, Connector=0), connector]
-        group = SimpleNamespace(Type=6, Connector=0, GroupItems=type("G", (), {
-            "Count": len(items), "__call__": lambda self, i: items[i - 1]})())
-        assert "connector" in charts._excel_needed(slide_with([shape, group]), shape)
 
     def test_comments_on_the_slide(self, charts):
         shape = chart_shape()

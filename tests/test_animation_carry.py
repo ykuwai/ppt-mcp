@@ -1,0 +1,251 @@
+"""Handing a chart's animations to the copy that replaces it (#343).
+
+The stand-in timeline behaves as PowerPoint 16.0.20527 was measured to on
+Windows: ApplyAnimation appends copies of the main sequence effects, in their
+order, and then each interactive effect as a click effect with no trigger;
+deleting a shape deletes every effect on it.
+"""
+
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from ppt_com import animation_carry as carry  # noqa: E402
+
+FADE, APPEAR, WIPE, SPIN, PATH_DOWN = 10, 1, 22, 61, 127
+ON_CLICK, AFTER_PREVIOUS, ON_SHAPE_CLICK, ON_BOOKMARK = 1, 3, 4, 5
+
+
+class Behaviors:
+    def __init__(self, items):
+        self.items = items
+
+    @property
+    def Count(self):
+        return len(self.items)
+
+    def __call__(self, i):
+        return self.items[i - 1]
+
+
+class Effect:
+    def __init__(self, sequence, shape, kind, *, exit=0, trigger=ON_CLICK, duration=0.5,
+                 delay=0.0, trigger_shape=None, path=None, direction=None):
+        self.sequence = sequence
+        self.Shape = shape
+        self.EffectType = kind
+        self.Exit = exit
+        self.Timing = SimpleNamespace(TriggerType=trigger, Duration=duration, TriggerDelayTime=delay,
+                                      TriggerShape=trigger_shape, RepeatCount=1, Rewind=0,
+                                      AutoReverse=0, Accelerate=0.0, Decelerate=0.0)
+        moves = [SimpleNamespace(Type=carry.msoAnimTypeMotion,
+                                 MotionEffect=SimpleNamespace(Path=path))] if path else []
+        self.Behaviors = Behaviors(moves)
+        self.EffectInformation = SimpleNamespace(BuildByLevelEffect=0)
+        self.EffectParameters = SimpleNamespace(Direction=direction)
+
+    def copy_for(self, sequence, shape, **changes):
+        effect = Effect(sequence, shape, self.EffectType, exit=self.Exit,
+                        trigger=self.Timing.TriggerType, duration=self.Timing.Duration,
+                        delay=self.Timing.TriggerDelayTime, trigger_shape=self.Timing.TriggerShape,
+                        direction=self.EffectParameters.Direction)
+        effect.Behaviors = self.Behaviors
+        for key, value in changes.items():
+            setattr(effect.Timing, key, value)
+        return effect
+
+    def Delete(self):
+        self.sequence.effects.remove(self)
+
+    def MoveTo(self, index):
+        self.sequence.effects.remove(self)
+        self.sequence.effects.insert(index - 1, self)
+
+
+class Sequence:
+    def __init__(self):
+        self.effects = []
+
+    @property
+    def Count(self):
+        return len(self.effects)
+
+    def __call__(self, i):
+        return self.effects[i - 1]
+
+    def add(self, shape, kind, **kw):
+        effect = Effect(self, shape, kind, **kw)
+        self.effects.append(effect)
+        return effect
+
+    def AddTriggerEffect(self, shape, kind, trigger, trigger_shape):
+        return self.add(shape, kind, trigger=trigger, trigger_shape=trigger_shape, duration=0.5)
+
+
+class Slide:
+    def __init__(self):
+        self.main = Sequence()
+        self.interactive = []
+        slide = self
+        self.TimeLine = SimpleNamespace(
+            MainSequence=self.main,
+            InteractiveSequences=type("I", (), {
+                "Count": property(lambda s: len(slide.interactive)),
+                "__call__": lambda s, i: slide.interactive[i - 1],
+                "Add": lambda s: slide.new_interactive()})())
+        self.picked = None
+
+    def new_interactive(self):
+        sequence = Sequence()
+        self.interactive.append(sequence)
+        return sequence
+
+    def shape(self, shape_id):
+        slide = self
+        shape = SimpleNamespace(Id=shape_id)
+        shape.PickupAnimation = lambda: setattr(slide, "picked", shape)
+        shape.ApplyAnimation = lambda: slide.apply(shape)
+        return shape
+
+    def apply(self, target):
+        source = self.picked
+        own = [e for e in self.main.effects if e.Shape is source]
+        own += [e for s in self.interactive for e in s.effects if e.Shape is source]
+        for effect in own:
+            interactive = effect.sequence is not self.main
+            self.main.effects.append(effect.copy_for(
+                self.main, target,
+                **({"TriggerType": ON_CLICK, "TriggerShape": None} if interactive else {})))
+
+    def delete(self, shape):
+        for sequence in [self.main] + self.interactive:
+            sequence.effects = [e for e in sequence.effects if e.Shape is not shape]
+
+
+def connector(begin, begin_site, end, end_site):
+    ends = SimpleNamespace(BeginConnected=-1, BeginConnectedShape=begin, BeginConnectionSite=begin_site,
+                           EndConnected=-1, EndConnectedShape=end, EndConnectionSite=end_site)
+
+    def connect(which):
+        def attach(shape, site):
+            setattr(ends, f"{which}ConnectedShape", shape)
+            setattr(ends, f"{which}ConnectionSite", site)
+        return attach
+
+    ends.BeginConnect = connect("Begin")
+    ends.EndConnect = connect("End")
+    return SimpleNamespace(ConnectorFormat=ends)
+
+
+@pytest.fixture
+def deck():
+    """The slide win-tester built: S, chart G, R, and a connector from G to R."""
+    slide = Slide()
+    g, r, s = slide.shape(2), slide.shape(3), slide.shape(4)
+    main = slide.main
+    main.add(s, FADE)
+    main.add(g, FADE, trigger=AFTER_PREVIOUS, duration=0.7, delay=0.3)
+    main.add(s, APPEAR, duration=0.001)
+    main.add(g, PATH_DOWN, duration=2.0, path="M 0 0 L 0 0.25 E")
+    main.add(g, SPIN, duration=2.0)
+    main.add(g, FADE, exit=-1)
+    slide.new_interactive().add(g, WIPE, trigger=ON_SHAPE_CLICK, trigger_shape=r, duration=1.1,
+                                direction=4)
+    slide.new_interactive().add(r, APPEAR, trigger=ON_SHAPE_CLICK, trigger_shape=g)
+    link = connector(g, 4, r, 2)
+    return slide, g, r, link
+
+
+def test_the_copy_ends_up_where_the_chart_was(deck):
+    slide, g, r, link = deck
+    before = carry.timeline(slide, g.Id)
+    n = slide.shape(6)
+
+    carry.copy_animations(slide, g, n)
+    carry.move_links(slide, g, n, [link])
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
+
+    slide.delete(g)
+    assert carry.timeline(slide, n.Id) == before
+    assert link.ConnectorFormat.BeginConnectedShape is n
+    assert link.ConnectorFormat.BeginConnectionSite == 4
+    assert slide.interactive[0](1).Timing.TriggerShape is r
+    assert slide.interactive[1](1).Timing.TriggerShape is n
+
+
+def test_effects_a_paste_brought_along_are_removed_first(deck):
+    slide, g, _, link = deck
+    before = carry.timeline(slide, g.Id)
+    n = slide.shape(6)
+    slide.main.add(n, WIPE)  # as a paste turns an interactive effect into
+    carry.copy_animations(slide, g, n)
+    carry.move_links(slide, g, n, [link])
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
+
+
+def test_a_chart_with_no_animations_is_left_alone():
+    slide = Slide()
+    g, n = slide.shape(2), slide.shape(6)
+    carry.copy_animations(slide, g, n)
+    assert slide.picked is None
+
+
+def test_a_copy_that_does_not_match_is_seen(deck):
+    slide, g, _, link = deck
+    before = carry.timeline(slide, g.Id)
+    n = slide.shape(6)
+    carry.copy_animations(slide, g, n)
+    carry.move_links(slide, g, n, [link])
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
+    copy = slide.main.effects[2]
+    assert copy.Shape is n and copy.EffectType == FADE
+    copy.Timing.Duration = 0.9
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) != before
+
+
+def test_more_or_fewer_copies_than_expected_are_refused(deck, monkeypatch):
+    slide, g, _, _ = deck
+    n = slide.shape(6)
+    n.ApplyAnimation = lambda: None
+    with pytest.raises(carry.NotCarried, match="made 0 effects, not 5"):
+        carry.copy_animations(slide, g, n)
+
+
+def test_an_effect_started_by_a_bookmark_is_refused_before_anything_changes(deck):
+    slide, g, _, _ = deck
+    slide.interactive[0](1).Timing.TriggerType = ON_BOOKMARK
+    n = slide.shape(6)
+    with pytest.raises(carry.NotCarried, match="something other than a click"):
+        carry.copy_animations(slide, g, n)
+    assert slide.picked is None
+
+
+def test_links_that_cannot_all_move_are_put_back(deck):
+    slide, g, r, link = deck
+    n = slide.shape(6)
+    ends = link.ConnectorFormat
+
+    def refuse(shape, site):
+        raise RuntimeError("cannot connect")
+
+    ends.BeginConnect = refuse
+    with pytest.raises(carry.NotCarried, match="cannot connect"):
+        carry.move_links(slide, g, n, [link])
+    assert slide.interactive[1](1).Timing.TriggerShape is g, "the trigger is pointed back"
+
+
+def test_put_back_says_what_did_not_go_back():
+    def fails():
+        raise RuntimeError("gone")
+
+    assert carry.put_back([lambda: None, fails]) == ["gone"]
+
+
+def test_animated_sees_effects_and_triggers(deck):
+    slide, g, r, _ = deck
+    assert carry.animated(slide, g.Id) and carry.animated(slide, r.Id)
+    assert not carry.animated(slide, 99)
