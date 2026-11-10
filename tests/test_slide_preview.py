@@ -121,3 +121,23 @@ def test_the_slide_size_is_read_beside_the_render(monkeypatch, size, expected):
     said = json.loads(server._content_of(result)[1].text)
     assert said.get("pixels_per_point") == expected
     assert said["image_width_px"] == 64
+
+
+@pytest.mark.parametrize("raised, said", [
+    (PermissionError("macOS is asking on screen"), "macOS is asking on screen"),
+    (TimeoutError(), "TimeoutError"),
+])
+def test_a_preview_that_fails_answers_why(raised, said):
+    """Raised, the reason reached the caller only as far as its client showed
+    the SDK's "Error executing tool" text, and once not at all."""
+    import server
+    from backend import ppt
+
+    def fail(fn, *args, **kw):
+        raise raised
+
+    with patch.object(ppt, "execute", fail):
+        result = anyio.run(server.mcp.call_tool, "ppt_get_slide_preview",
+                           {"params": {"slide_index": 4}})
+    answer = json.loads(server._text_of(server._content_of(result)))
+    assert answer["error"] == f"Failed to preview slide 4: {said}"
