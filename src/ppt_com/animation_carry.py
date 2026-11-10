@@ -68,6 +68,32 @@ def _read(read, default=None):
         return default
 
 
+# What each kind of behavior does, read off it by name (MsoAnimType).
+_BEHAVIOR_FACTS = {
+    msoAnimTypeMotion: ("MotionEffect.Path",),
+    2: ("ColorEffect.By.RGB", "ColorEffect.From.RGB", "ColorEffect.To.RGB"),
+    3: ("ScaleEffect.ByX", "ScaleEffect.ByY", "ScaleEffect.FromX", "ScaleEffect.FromY",
+        "ScaleEffect.ToX", "ScaleEffect.ToY"),
+    4: ("RotationEffect.By", "RotationEffect.From", "RotationEffect.To"),
+    5: ("PropertyEffect.Property", "PropertyEffect.From", "PropertyEffect.To"),
+    7: ("FilterEffect.Type", "FilterEffect.Subtype", "FilterEffect.Reveal"),
+    8: ("SetEffect.Property", "SetEffect.To"),
+}
+# An effect's own parameters, which AddTriggerEffect gives their defaults.
+_PARAMETERS = ("Direction", "Amount", "Size", "Relative", "FontName", "FontBold",
+               "FontItalic", "FontUnderline")
+
+
+def _path(obj, dotted):
+    for name in dotted.split("."):
+        obj = getattr(obj, name)
+    return obj
+
+
+def _rounded(value):
+    return round(value, 3) if isinstance(value, float) else value
+
+
 def effect_facts(effect) -> tuple:
     """What an effect does, as far as COM says, to compare a copy against."""
     timing = effect.Timing
@@ -76,8 +102,10 @@ def effect_facts(effect) -> tuple:
     for i in range(1, behaviors.Count + 1):
         behavior = behaviors(i)
         kind = _read(lambda: behavior.Type)
-        moves.append((kind, _read(lambda: behavior.MotionEffect.Path)
-                      if kind == msoAnimTypeMotion else None))
+        moves.append((kind,) + tuple(
+            _read(lambda name=name: _rounded(_path(behavior, name)))
+            for name in _BEHAVIOR_FACTS.get(kind, ())))
+    parameters = effect.EffectParameters
     return (
         effect.EffectType, effect.Exit, timing.TriggerType,
         round(timing.Duration, 3), round(timing.TriggerDelayTime, 3),
@@ -88,7 +116,8 @@ def effect_facts(effect) -> tuple:
         _read(lambda: effect.EffectInformation.AfterEffect),
         _read(lambda: effect.EffectInformation.Dim.RGB)
         if _read(lambda: effect.EffectInformation.AfterEffect) == msoAnimAfterEffectDim else None,
-        _read(lambda: effect.EffectParameters.Direction),
+        tuple(_read(lambda name=name: _rounded(getattr(parameters, name))) for name in _PARAMETERS),
+        _read(lambda: parameters.Color2.RGB),
         tuple(moves),
     )
 
@@ -201,11 +230,15 @@ def _make_again(sequence, new, original) -> None:
     with its settings. What does not take shows in the timeline comparison."""
     effect = sequence.AddTriggerEffect(new, original.EffectType, msoAnimTriggerOnShapeClick,
                                        original.Timing.TriggerShape)
-    # The direction first: setting it puts the duration back to the effect's
-    # default.
-    direction = _read(lambda: original.EffectParameters.Direction)
-    if direction is not None:
-        _read(lambda: setattr(effect.EffectParameters, "Direction", direction))
+    # The parameters first: setting the direction puts the duration back to
+    # the effect's default.
+    for name in _PARAMETERS:
+        value = _read(lambda name=name: getattr(original.EffectParameters, name))
+        if value is not None and value != _read(lambda name=name: getattr(effect.EffectParameters, name)):
+            _read(lambda name=name, value=value: setattr(effect.EffectParameters, name, value))
+    colour = _read(lambda: original.EffectParameters.Color2.RGB)
+    if colour is not None:
+        _read(lambda: setattr(effect.EffectParameters.Color2, "RGB", colour))
     # Only when it differs: a motion path refuses even the value it has.
     if effect.Exit != original.Exit:
         _read(lambda: setattr(effect, "Exit", original.Exit))

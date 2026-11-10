@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from ppt_com import animation_carry as carry  # noqa: E402
 
-FADE, APPEAR, WIPE, SPIN, PATH_DOWN = 10, 1, 22, 61, 127
+FADE, APPEAR, WIPE, SPIN, GROW, PATH_DOWN = 10, 1, 22, 61, 59, 127
 ON_CLICK, AFTER_PREVIOUS, ON_SHAPE_CLICK, ON_BOOKMARK = 1, 3, 4, 5
 
 
@@ -39,6 +39,8 @@ class Parameters:
     def __init__(self, effect, direction):
         self._effect = effect
         self._direction = direction
+        self.Amount = 360.0 if effect.EffectType == SPIN else None
+        self.Size = 100.0 if effect.EffectType == GROW else None
 
     @property
     def Direction(self):
@@ -76,6 +78,8 @@ class Effect:
         for key in ("RepeatCount", "RewindAtEnd", "AutoReverse", "Accelerate", "Decelerate"):
             setattr(effect.Timing, key, getattr(self.Timing, key))
         effect.EffectInformation = SimpleNamespace(**vars(self.EffectInformation))
+        effect.EffectParameters.Amount = self.EffectParameters.Amount
+        effect.EffectParameters.Size = self.EffectParameters.Size
         for key, value in changes.items():
             setattr(effect.Timing, key, value)
         return effect
@@ -384,3 +388,34 @@ def test_a_click_effect_that_cannot_be_made_says_so(deck):
     slide.interactive[0].AddTriggerEffect = refuse
     with pytest.raises(carry.NotCarried, match="could not be made again .*AddTriggerEffect"):
         carry.copy_animations(slide, g, slide.shape(6))
+
+
+@pytest.mark.parametrize("kind, name, value", [(SPIN, "Amount", 180.0), (GROW, "Size", 150.0)])
+def test_a_rebuilt_click_effect_keeps_its_amount_and_size(deck, kind, name, value):
+    """AddTriggerEffect gives them their defaults, 360 and 100."""
+    slide, g, r, link = deck
+    sequence = slide.interactive[0]
+    sequence.effects = []
+    effect = sequence.add(g, kind, trigger=ON_SHAPE_CLICK, trigger_shape=r, duration=2.0)
+    setattr(effect.EffectParameters, name, value)
+    before = carry.timeline(slide, g.Id)
+    n = slide.shape(6)
+    carry.copy_animations(slide, g, n)
+    carry.move_links(slide, g, n, [link], [])
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
+    made = [e for e in sequence.effects if e.Shape is n][0]
+    assert getattr(made.EffectParameters, name) == value
+
+
+def test_an_amount_that_does_not_take_is_seen(deck):
+    slide, g, r, link = deck
+    sequence = slide.interactive[0]
+    sequence.effects = []
+    sequence.add(g, SPIN, trigger=ON_SHAPE_CLICK, trigger_shape=r).EffectParameters.Amount = 180.0
+    before = carry.timeline(slide, g.Id)
+    n = slide.shape(6)
+    carry.copy_animations(slide, g, n)
+    carry.move_links(slide, g, n, [link], [])
+    made = [e for e in sequence.effects if e.Shape is n][0]
+    made.EffectParameters.Amount = 360.0
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) != before
