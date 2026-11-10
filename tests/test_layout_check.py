@@ -4420,6 +4420,76 @@ class TestFileFactsByShapeId:
         assert slides[0]["shapes"][0]["described"] is False
 
 
+MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+
+
+def sp_xml(shape_id, name, text="Words"):
+    return (f'<p:sp><p:nvSpPr><p:cNvPr id="{shape_id}" name="{name}"/></p:nvSpPr>'
+            f'<p:txBody><a:bodyPr/><a:p><a:r><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>')
+
+
+class TestFileFactsByPlaceOnTheMac:
+    """PowerPoint for Mac gives no shape id (it answers missing value) and,
+    like COM, names a shape in English while the file has the UI's language.
+    It counts shapes in the order the file stacks them, measured 2026-11-10
+    on a Japanese Mac with placeholders, text boxes, a picture, a chart, a
+    group and a connector, restacked."""
+
+    def test_the_file_gives_its_stacking_order(self, tmp_path):
+        from utils.package import package_facts
+        group = ('<p:grpSp><p:nvGrpSpPr><p:cNvPr id="14" name="グループ化 13"/></p:nvGrpSpPr>'
+                 '<p:grpSpPr/>' + sp_xml(11, "正方形/長方形 10") + sp_xml(12, "楕円 11") + '</p:grpSp>')
+        connector = '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="13" name="直線矢印コネクタ 12"/></p:nvCxnSpPr></p:cxnSp>'
+        wrapped = (f'<mc:AlternateContent xmlns:mc="{MC}"><mc:Choice Requires="p14">'
+                   + sp_xml(20, "テキスト ボックス 19") + '</mc:Choice><mc:Fallback>'
+                   + sp_xml(20, "テキスト ボックス 19") + '</mc:Fallback></mc:AlternateContent>')
+        tree = ('<p:nvGrpSpPr><p:cNvPr id="1" name=""/></p:nvGrpSpPr><p:grpSpPr/>'
+                + sp_xml(6, "テキスト ボックス 5") + group + connector + wrapped)
+        path = deck_file(tmp_path, [tree], {})
+        assert package_facts(path, [1])["order"] == {1: [6, 14, 13, 20]}
+
+    def test_a_shape_with_no_id_is_matched_by_its_place(self):
+        slides = [{"slide_index": 1, "shapes": [
+            {"name": "Title 3", "z": 1, "type": 14},
+            {"name": "TextBox 5", "z": 2, "type": 17}]}]
+        facts = {"links": {1: {"テキスト ボックス 5": ["Click here"]}},
+                 "ids": {"links": {1: {6: ["Click here"]}}}, "order": {1: [4, 6]}}
+        layout_check._with_package(slides, facts)
+        assert slides[0]["shapes"][1]["links"] == ["Click here"]
+        assert "links" not in slides[0]["shapes"][0]
+
+    def test_not_when_the_file_holds_another_number_of_shapes(self):
+        # A place counted against a different stack would name another shape.
+        slides = [{"slide_index": 1, "shapes": [{"name": "TextBox 5", "z": 1, "type": 17}]}]
+        facts = {"links": {1: {"TextBox 5": ["more"]}},
+                 "ids": {"links": {1: {6: ["Click here"]}}}, "order": {1: [6, 7]}}
+        layout_check._with_package(slides, facts)
+        assert slides[0]["shapes"][0]["links"] == ["more"]
+
+    def test_a_vague_link_is_found_on_a_japanese_mac(self, tmp_path):
+        from utils.package import package_facts
+        tree = (sp_xml(4, "タイトル 3", "Plans")
+                + '<p:sp><p:nvSpPr><p:cNvPr id="6" name="テキスト ボックス 5">'
+                  '<a:hlinkClick r:id="rId9"/></p:cNvPr></p:nvSpPr>'
+                  '<p:txBody><a:bodyPr/><a:p><a:r><a:t>Click here</a:t></a:r></a:p></p:txBody></p:sp>')
+        read = package_facts(deck_file(tmp_path, [tree], {}), [1])
+        slides = [{"slide_index": 1, "shapes": [
+            {"name": "Title 3", "z": 1, "type": 14}, {"name": "TextBox 5", "z": 2, "type": 17}]}]
+        layout_check._with_package(slides, read)
+        assert layout_check._vague_links(1, slides[0]["shapes"])[0]["shapes"] == ["TextBox 5"]
+
+    def test_a_write_finds_its_picture_in_the_file_by_place(self, monkeypatch):
+        photo = picture("Picture 8", 100, 100, 400, 200, z=2)
+        fake = FakeDeck([slide(card("Title 3", 40, 20, 400, 60), photo)])
+        monkeypatch.setattr(layout_check, "ppt", fake)
+        monkeypatch.setattr(layout_check, "_read_package", lambda indices, charts=False: {
+            "pictures": {1: {"図 8": 4 / 3}}, "pixels": {1: {"図 8": (4000, 3000)}},
+            "ids": {"pictures": {1: {9: 4 / 3}}, "pixels": {1: {9: (4000, 3000)}}},
+            "order": {1: [4, 9]}})
+        result = report_layout({"success": True, "shape_name": "Picture 8"}, 1, ["Picture 8"])
+        assert [f["type"] for f in result["layout_issues"]] == ["stretched_picture"]
+
+
 class TestMissingAltText:
     def test_a_picture_without_it_is_reported_with_the_call_that_sets_it(self, monkeypatch):
         monkeypatch.setattr(layout_check, "IS_MACOS", False)

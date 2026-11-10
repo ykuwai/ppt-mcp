@@ -6306,12 +6306,25 @@ def _with_package(slides, facts):
         aspects, pixels, charts = entries("pictures"), entries("pixels"), entries("charts")
         described, scales, links = entries("described"), entries("text_scale"), entries("links")
         languages = entries("languages")
+        stack = (facts.get("order") or {}).get(index) or []
+        # PowerPoint for Mac gives no id, so a shape's place in the stack
+        # stands in for it: Apple Events count shapes in the file's order.
+        # Only when the file and the slide hold as many shapes, since a
+        # place counted against a different stack would name another shape.
+        by_place = len(stack) == len(slide["shapes"])
         for shape in slide["shapes"]:
-            # By id first: a name read through COM may not be the one saved.
-            def known(found, shape=shape):
+            shape_id = shape.get("id")
+            place = shape.get("z")
+            if (shape_id is None and by_place and isinstance(place, int)
+                    and 1 <= place <= len(stack)):
+                shape_id = stack[place - 1]
+
+            # By id first: a name read through COM, or Apple Events, may not
+            # be the one saved.
+            def known(found, shape=shape, shape_id=shape_id):
                 named, numbered = found
-                if shape.get("id") in numbered:
-                    return numbered[shape["id"]]
+                if shape_id is not None and shape_id in numbered:
+                    return numbered[shape_id]
                 return named.get(shape["name"])
 
             if known(described) is not None:
@@ -6404,9 +6417,15 @@ def _issues_for(slide_index, shapes, aspects=None, pixels=None):
     known, sizes = dict(aspects or {}), dict(pixels or {})
     unknown = {n for n in names if n not in known}
     if _has_pictures(slides, unknown):
+        # The file's own, by id or on the Mac by place as well as by name,
+        # since the name saved may not be the one PowerPoint answers.
         read = _read_package([slide_index])
-        known = {**(read.get("pictures") or {}).get(slide_index, {}), **known}
-        sizes = {**(read.get("pixels") or {}).get(slide_index, {}), **sizes}
+        ids = read.get("ids") or {}
+        _with_package(slides, {
+            "pictures": read.get("pictures") or {}, "pixels": read.get("pixels") or {},
+            "ids": {"pictures": ids.get("pictures") or {}, "pixels": ids.get("pixels") or {}},
+            "order": read.get("order") or {}})
+    # Then what the write itself knows, which wins.
     _with_package(slides, {"pictures": {slide_index: known}, "pixels": {slide_index: sizes}})
     _with_fonts(slides, _read_fonts)
     return slide_findings(slides[0], facts["slide_width"], facts["slide_height"],
