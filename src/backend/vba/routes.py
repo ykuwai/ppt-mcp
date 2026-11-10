@@ -55,6 +55,11 @@ _EXCEL_ID = "com.microsoft.Excel"
 _EXCEL_PLACES = ("/Applications/Microsoft Excel.app", "~/Applications/Microsoft Excel.app")
 _excel_found = False
 
+NO_EXCEL_REFUSAL_NOTE = (
+    "Microsoft Excel is not installed on this Mac, and PowerPoint for Mac's "
+    "VBA writes chart data through it, so this call stayed on the Apple Event "
+    "route."
+)
 NO_EXCEL_NOTE = (
     "Microsoft Excel is not installed on this Mac, and PowerPoint for Mac's "
     "VBA writes chart data through it, so the data was written into the "
@@ -91,12 +96,13 @@ def excel_installed() -> bool:
 def chart_data_through_excel(arguments):
     """Chart data takes the route when Excel can write it.
 
-    Answers a note, rather than False, when the route would have taken the
-    call and Excel is missing: the Apple Event route runs, and says why.
+    Answers the notes for a refusal and for a recreated chart, rather than
+    False, when the route would have taken the call and Excel is missing:
+    the Apple Event route runs, and says why.
     """
     if not no_bubble_sizes(arguments):
         return False
-    return True if excel_installed() else NO_EXCEL_NOTE
+    return True if excel_installed() else (NO_EXCEL_REFUSAL_NOTE, NO_EXCEL_NOTE)
 
 
 def keeps_layout(arguments) -> bool:

@@ -869,6 +869,17 @@ class TestChartData:
         assert out["warnings"][-1] == routes.NO_EXCEL_NOTE
         assert vba.OFF_RECREATED_NOTE not in out["warnings"]
 
+    def test_without_excel_a_refusal_says_only_that_excel_is_missing(self, monkeypatch):
+        monkeypatch.setattr(routes, "excel_installed", lambda: False)
+        monkeypatch.setattr(vba, "ENABLED", True)
+        impl = vba.routed(
+            lambda slide_index, series: pytest.fail("the Windows code ran"),
+            lambda slide_index, series: dict(REFUSED),
+            routes.ROUTES[("ppt_com.charts", "_set_chart_data_impl")])
+        out = impl(1, [{"name": "S", "values": [1]}])
+        assert out["hint"] == routes.NO_EXCEL_REFUSAL_NOTE
+        assert "written" not in out["hint"]
+
     def test_excel_is_found_by_spotlight_and_then_remembered(self, monkeypatch):
         import subprocess
 

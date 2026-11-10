@@ -758,9 +758,10 @@ def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], b
     ``condition`` gets the call's arguments by name and says whether this call
     needs the route; when it does not, when the route is off, or when the
     add-in cannot be loaded, the Apple Event implementation runs instead. A
-    condition can also answer a note, text saying why a call the route would
-    have taken cannot take it on this Mac: the Apple Event implementation
-    runs, and its answer carries the note as ``_noted`` puts it.
+    condition can also answer a pair of notes saying why a call the route
+    would have taken cannot take it on this Mac, one for a refusal and one for
+    a recreated shape: the Apple Event implementation runs, and its answer
+    carries the note that fits, as ``_noted`` puts it.
     """
     signature = inspect.signature(com_impl)
 
@@ -781,12 +782,12 @@ def routed(com_impl: Callable, mac_impl: Callable, condition: Callable[[dict], b
             if noted is result:
                 return result
             need = condition(bound.arguments)
-            if isinstance(need, str):
-                return _noted(result, need, need)
+            if isinstance(need, tuple):
+                return _noted(result, *need)
             return noted if need else result
         need = condition(bound.arguments)
-        if isinstance(need, str):
-            return _noted(mac_impl(*args, **kwargs), need, need)
+        if isinstance(need, tuple):
+            return _noted(mac_impl(*args, **kwargs), *need)
         if not need:
             return mac_impl(*args, **kwargs)
         # Checked before anything is written: a tool makes several calls, and
