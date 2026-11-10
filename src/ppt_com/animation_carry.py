@@ -14,7 +14,11 @@ Measured on Windows (PowerPoint 16.0.20527):
   with its settings (timing, motion path, amount), and put the copies at the
   end of the main sequence, in their order. An interactive effect of the
   original is not copied as one: it comes after them as a click effect with
-  no trigger, so it is deleted and made again with ``AddTriggerEffect``.
+  no trigger, so it is deleted and made again with ``AddTriggerEffect``. One
+  started by clicking the original itself is the exception: it comes over
+  as one started by clicking the copy, in a sequence of its own.
+- Setting an effect's direction puts its duration back to the default, so
+  the direction is set first.
 - ``Effect.MoveTo`` puts a copy back beside the effect it copies.
 - ``Timing.TriggerShape`` and ``ConnectorFormat.BeginConnect``/``EndConnect``
   can be pointed at the copy, and stay pointed at it.
@@ -82,7 +86,8 @@ def effect_facts(effect) -> tuple:
 
 def timeline(slide, chart_id, leave_out=None) -> list:
     """The slide's sequences, an effect each as (whom, trigger, facts), with
-    the shape ``chart_id`` named "chart". Effects on ``leave_out`` are skipped."""
+    the shape ``chart_id`` named "chart". Effects on ``leave_out`` are skipped,
+    and so is a sequence left with none."""
     def who(shape_id):
         return "chart" if shape_id == chart_id else shape_id
 
@@ -95,7 +100,11 @@ def timeline(slide, chart_id, leave_out=None) -> list:
                 continue
             entries.append((who(shape_id), who(_trigger_id(effect)), effect_facts(effect)))
         out.append(entries)
-    return out
+    # The main sequence in its order; the interactive ones, each started by
+    # its own click, in any. A copy's effects started by clicking the copy
+    # come in a sequence of their own, after the original's, which is left
+    # empty here and goes when the original does.
+    return [out[0]] + sorted((entries for entries in out[1:] if entries), key=repr)
 
 
 def animated(slide, shape_id) -> bool:
@@ -125,22 +134,34 @@ def copy_animations(slide, old, new) -> None:
         _remove_effects_of(sequence, new_id)
 
     own_main = len(_indexes(main, old_id))
-    own_interactive = []
+    own_interactive = []  # started by another shape: made again below
+    own_self = 0  # started by clicking the chart itself: copied as they are
     for number, sequence in enumerate(sequences[1:], start=2):
         for index in _indexes(sequence, old_id):
             effect = sequence(index)
-            if effect.Timing.TriggerType != msoAnimTriggerOnShapeClick or _trigger_id(effect) is None:
+            trigger = _trigger_id(effect)
+            if effect.Timing.TriggerType != msoAnimTriggerOnShapeClick or trigger is None:
                 raise NotCarried("one of its animations starts on something other than a click on a shape")
-            own_interactive.append((number, index))
-    if not own_main and not own_interactive:
+            if trigger == old_id:
+                own_self += 1
+            else:
+                own_interactive.append((number, index))
+    if not own_main and not own_interactive and not own_self:
         return
 
     old.PickupAnimation()
     new.ApplyAnimation()
+    # An effect started by clicking the chart itself comes over as one
+    # started by clicking the copy, in a sequence of its own; one started
+    # by another shape comes into the main sequence as a click effect.
     added = _indexes(main, new_id)
     if len(added) != own_main + len(own_interactive):
         raise NotCarried(f"copying its animations made {len(added)} effects, "
                          f"not {own_main + len(own_interactive)}")
+    copied_self = sum(len(_indexes(sequence, new_id)) for sequence in _sequences(slide)[1:])
+    if copied_self != own_self:
+        raise NotCarried(f"copying its animations made {copied_self} effects started by "
+                         f"clicking it, not {own_self}")
     # The interactive ones come last, as click effects with no trigger.
     for index in reversed(added[own_main:]):
         main(index).Delete()
@@ -158,12 +179,14 @@ def copy_animations(slide, old, new) -> None:
         original = sequence(originals[made])
         effect = sequence.AddTriggerEffect(new, original.EffectType, msoAnimTriggerOnShapeClick,
                                            original.Timing.TriggerShape)
-        effect.Exit = original.Exit
-        effect.Timing.Duration = original.Timing.Duration
-        effect.Timing.TriggerDelayTime = original.Timing.TriggerDelayTime
+        # The direction first: setting it puts the duration back to the
+        # effect's default.
         direction = _read(lambda: original.EffectParameters.Direction)
         if direction is not None:
             _read(lambda: setattr(effect.EffectParameters, "Direction", direction))
+        effect.Exit = original.Exit
+        effect.Timing.Duration = original.Timing.Duration
+        effect.Timing.TriggerDelayTime = original.Timing.TriggerDelayTime
         index = _indexes(sequence, new_id)[-1]
         target = _indexes(sequence, old_id)[made] + 1
         if index != target:

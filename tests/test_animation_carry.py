@@ -32,6 +32,24 @@ class Behaviors:
         return self.items[i - 1]
 
 
+class Parameters:
+    """Setting the direction puts the effect's duration back to its default,
+    as PowerPoint does."""
+
+    def __init__(self, effect, direction):
+        self._effect = effect
+        self._direction = direction
+
+    @property
+    def Direction(self):
+        return self._direction
+
+    @Direction.setter
+    def Direction(self, value):
+        self._direction = value
+        self._effect.Timing.Duration = 0.5
+
+
 class Effect:
     def __init__(self, sequence, shape, kind, *, exit=0, trigger=ON_CLICK, duration=0.5,
                  delay=0.0, trigger_shape=None, path=None, direction=None):
@@ -46,7 +64,7 @@ class Effect:
                                  MotionEffect=SimpleNamespace(Path=path))] if path else []
         self.Behaviors = Behaviors(moves)
         self.EffectInformation = SimpleNamespace(BuildByLevelEffect=0)
-        self.EffectParameters = SimpleNamespace(Direction=direction)
+        self.EffectParameters = Parameters(self, direction)
 
     def copy_for(self, sequence, shape, **changes):
         effect = Effect(sequence, shape, self.EffectType, exit=self.Exit,
@@ -117,6 +135,12 @@ class Slide:
         own += [e for s in self.interactive for e in s.effects if e.Shape is source]
         for effect in own:
             interactive = effect.sequence is not self.main
+            if interactive and effect.Timing.TriggerShape is source:
+                # Started by clicking the shape itself: a sequence of its own,
+                # started by clicking the target.
+                sequence = self.new_interactive()
+                sequence.effects.append(effect.copy_for(sequence, target, TriggerShape=target))
+                continue
             self.main.effects.append(effect.copy_for(
                 self.main, target,
                 **({"TriggerType": ON_CLICK, "TriggerShape": None} if interactive else {})))
@@ -124,6 +148,7 @@ class Slide:
     def delete(self, shape):
         for sequence in [self.main] + self.interactive:
             sequence.effects = [e for e in sequence.effects if e.Shape is not shape]
+        self.interactive = [s for s in self.interactive if s.effects]
 
 
 def connector(begin, begin_site, end, end_site):
@@ -249,3 +274,30 @@ def test_animated_sees_effects_and_triggers(deck):
     slide, g, r, _ = deck
     assert carry.animated(slide, g.Id) and carry.animated(slide, r.Id)
     assert not carry.animated(slide, 99)
+
+
+def test_a_chart_its_own_click_animates_is_carried():
+    """Clicking G spins G: the copy comes over in a sequence of its own,
+    started by clicking the copy, and G's goes when G does."""
+    slide = Slide()
+    g, r = slide.shape(2), slide.shape(3)
+    slide.main.add(g, FADE)
+    slide.new_interactive().add(g, SPIN, trigger=ON_SHAPE_CLICK, trigger_shape=g, duration=2.0)
+    slide.new_interactive().add(r, APPEAR, trigger=ON_SHAPE_CLICK, trigger_shape=g)
+    before = carry.timeline(slide, g.Id)
+    n = slide.shape(6)
+
+    carry.copy_animations(slide, g, n)
+    carry.move_links(slide, g, n, [])
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
+    slide.delete(g)
+    assert carry.timeline(slide, n.Id) == before
+
+
+def test_the_direction_is_set_before_the_duration(deck):
+    """Set after, it would put the rebuilt click effect's 1.1 s back to 0.5."""
+    slide, g, _, link = deck
+    n = slide.shape(6)
+    carry.copy_animations(slide, g, n)
+    rebuilt = [e for e in slide.interactive[0].effects if e.Shape is n]
+    assert [(e.Timing.Duration, e.EffectParameters.Direction) for e in rebuilt] == [(1.1, 4)]
