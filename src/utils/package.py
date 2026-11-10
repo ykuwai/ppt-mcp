@@ -224,16 +224,23 @@ def package_facts(path, slide_indices):
     ``ids`` holds the same entries by shape id, as ``{kind: {slide: {id: value}}}``. PowerPoint for
     Windows names a shape in English through COM ("Picture 5") but saves its
     name in the UI's language ("図 5"), so a name alone may not match.
+
+    ``order`` is ``{slide: [id, ...]}``, the id of each shape at the top of the
+    slide in the order the file stacks them, back to front. PowerPoint for Mac
+    gives no shape id, but it counts shapes in this same order, so a shape's
+    place in the stack finds its id there.
     """
     names = ("pictures", "pixels", "charts", "described", "text_scale", "links", "languages")
     kinds = {kind: {} for kind in names}
     ids = {kind: {} for kind in names}
+    order = {}
     # Here because deck_text builds on this module.
     from utils.deck_text import _Package, inherited_language
 
     with zipfile.ZipFile(path) as archive:
         styles = _Package(archive)
         for index, slide, parts in _slides(archive, slide_indices):
+            order[index] = _stacking_order(slide)
             aspects, sizes, data, seen, measured = _Found(), _Found(), _Found(), set(), set()
             alt, scale, named, scaled = _Found(), _Found(), set(), set()
             links, linked, tagged, tongues = _Found(), set(), set(), _Found()
@@ -271,7 +278,31 @@ def package_facts(path, slide_indices):
             for kind, entries in found.items():
                 kinds[kind][index] = dict(entries)
                 ids[kind][index] = entries.ids
-    return {**kinds, "ids": ids}
+    return {**kinds, "ids": ids, "order": order}
+
+
+# What a shape tree holds besides its shapes.
+_NOT_SHAPES = frozenset("{%s}%s" % (_NS["p"], tag) for tag in ("nvGrpSpPr", "grpSpPr", "extLst"))
+_CNVPR = "{%s}cNvPr" % _NS["p"]
+
+
+def _stacking_order(slide):
+    """The id of each shape at the top of the slide, back to front, or None
+    for one whose id cannot be read. A shape wrapped in mc:AlternateContent
+    is one shape, and takes the id its first choice gives it."""
+    tree = slide.find("p:cSld/p:spTree", _NS)
+    if tree is None:
+        return []
+    found = []
+    for child in tree:
+        if child.tag in _NOT_SHAPES:
+            continue
+        props = next(child.iter(_CNVPR), None)
+        try:
+            found.append(int(props.get("id")))
+        except (AttributeError, TypeError, ValueError):
+            found.append(None)
+    return found
 
 
 def _languages(shape, inherited):
