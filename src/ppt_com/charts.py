@@ -41,7 +41,7 @@ from utils.color import hex_to_int, int_to_hex
 from utils.navigation import goto_slide
 from ppt_com.shape_lookup import resolve_shape
 from ppt_com.constants import msoChart, msoGroup, msoPlaceholder
-from ppt_com import chart_defaults
+from ppt_com import animation_carry, chart_defaults
 from gvml import charts as gvml_charts
 from gvml import package as gvml_package
 from gvml.shapes import strip_package_ids
@@ -689,6 +689,13 @@ def _connectors(shapes):
             yield shape
 
 
+def _attached(connector, shape_id) -> bool:
+    """Whether either end of ``connector`` is glued to the shape ``shape_id``."""
+    ends = connector.ConnectorFormat
+    return ((ends.BeginConnected == -1 and ends.BeginConnectedShape.Id == shape_id)
+            or (ends.EndConnected == -1 and ends.EndConnectedShape.Id == shape_id))
+
+
 def _why_excel(slide, shape) -> Optional[str]:
     chart = shape.Chart
     if chart.ChartType not in chart_defaults.CHART_TYPES:
@@ -702,26 +709,8 @@ def _why_excel(slide, shape) -> Optional[str]:
         return "it fills a placeholder"
     if shape.Child == -1:  # msoTrue
         return "it is in a group"
-    shape_id = shape.Id
-    sequences = [slide.TimeLine.MainSequence]
-    interactive = slide.TimeLine.InteractiveSequences
-    sequences += [interactive(i) for i in range(1, interactive.Count + 1)]
-    for sequence in sequences:
-        for i in range(1, sequence.Count + 1):
-            effect = sequence(i)
-            if effect.Shape.Id == shape_id:
-                return "it is animated"
-            try:
-                trigger = effect.Timing.TriggerShape
-            except Exception:  # noqa: BLE001 - an effect with no trigger shape
-                trigger = None
-            if trigger is not None and trigger.Id == shape_id:
-                return "clicking it starts an animation"
-    for connector in _connectors(slide.Shapes):
-        ends = connector.ConnectorFormat
-        if ((ends.BeginConnected == -1 and ends.BeginConnectedShape.Id == shape_id)
-                or (ends.EndConnected == -1 and ends.EndConnectedShape.Id == shape_id)):
-            return "a connector is attached to it"
+    # Its animations, the animations it starts and the connectors on it are
+    # handed to the copy (animation_carry, #343).
     if slide.Comments.Count:
         # Which shape a comment is anchored to cannot be read through COM.
         return "the slide has comments, which may be anchored to it"
@@ -836,7 +825,9 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
     since it would no longer match; PowerPoint makes a new one from the
     chart the first time its data is opened. The copy takes the old chart's
     name, place, size, stacking order, alternative text, tags and click
-    actions before the old chart is deleted, and it has to show the new data
+    actions before the old chart is deleted, and its animations, the
+    animations it starts and the connectors on it (``animation_carry``,
+    #343); and it has to show the new data
     in the same series colours. Anything short of that removes the copy,
     leaves the old chart as it was, and raises ``_NotCarried``. Answers the
     new shape.
@@ -846,10 +837,15 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
         old_z = shape.ZOrderPosition
         colours = _series_colours(shape.Chart)
         chart_type = shape.Chart.ChartType
+        old_id = shape.Id
+        animated = animation_carry.animated(slide, old_id)
+        connectors = [c for c in _connectors(slide.Shapes) if _attached(c, old_id)]
+        timeline_before = animation_carry.timeline(slide, old_id) if animated else None
     except Exception as e:  # noqa: BLE001 - then it is not carried over
         raise _NotCarried(f"could not read what it has to take over ({e})") from e
     series = [dict(entry) for entry in series]
     new = None
+    links = []
     try:
         with kept_clipboard() as lost:
             package = _copied_package(shape)
@@ -885,7 +881,21 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
                 break
         if new.ZOrderPosition != old_z + 1:
             raise _NotCarried("could not put it back in its stacking order")
+        if animated:
+            animation_carry.copy_animations(slide, shape, new)
+        animation_carry.move_links(slide, shape, new, connectors, links)
+        if animated and animation_carry.timeline(slide, new.Id, leave_out=old_id) != timeline_before:
+            raise _NotCarried("its animations did not come over as they were")
     except Exception as e:
+        unmoved = animation_carry.put_back(links)
+        if unmoved:
+            raise RuntimeError(
+                f"The chart's copy could not be finished ({e}), and what was pointed at "
+                f"the copy could not all be pointed back ({'; '.join(unmoved)}). Both "
+                f"charts are on the slide: '{shape.Name}' (id {old_id}) is the old one, "
+                f"id {new.Id} the copy.") from e
+        if isinstance(e, animation_carry.NotCarried):
+            e = _NotCarried(str(e))
         if new is not None:
             try:
                 new.Delete()
@@ -894,11 +904,18 @@ def _replace_chart_data(app, pres, slide, shape, categories, series):
                     f"The chart's copy could not be finished ({e}) and could not be "
                     f"removed either: delete the shape '{new.Name}' (id {new.Id}).") from e
         if isinstance(e, _NotCarried):
-            raise
+            raise e
         raise _NotCarried(str(e)) from e
     try:
         shape.Delete()
     except Exception as e:
+        unmoved = animation_carry.put_back(links)
+        if unmoved:
+            raise RuntimeError(
+                f"The old chart could not be removed ({e}), and what was pointed at its "
+                f"copy could not all be pointed back ({'; '.join(unmoved)}). Both charts "
+                f"are on the slide: '{shape.Name}' (id {old_id}) is the old one, id "
+                f"{new.Id} the copy.") from e
         try:
             new.Delete()
         except Exception:  # noqa: BLE001 - named in the error instead
@@ -1740,11 +1757,12 @@ def register_tools(mcp):
         as text it takes for a date, come back in `warning`.
         On Windows the data is swapped without starting Excel where it can be:
         the chart is replaced by a copy holding the new data, with the old
-        one's formatting, name, place, size and stacking order. The copy has a
-        new shape id, given as `shape_id` (the old one as `previous_shape_id`).
-        A chart that is animated or starts an animation, grouped, in a
-        placeholder, has a connector attached, sits on a slide with comments,
-        combines more than one chart type, or is of a type that still opens
+        one's formatting, name, place, size and stacking order, its animations
+        in their places, the animations clicking it starts, and the connectors
+        on it. The copy has a new shape id, given as `shape_id` (the old one as
+        `previous_shape_id`). A chart that is grouped, in a placeholder, sits
+        on a slide with comments, has animations that cannot be copied as
+        they were, combines more than one chart type, or is of a type that still opens
         Excel (3-D area and bar, cone, stock, surface and the like), is written
         through Excel as before, and so is a scatter chart whose categories
         are not numbers. A bubble chart cannot go through Excel, which would

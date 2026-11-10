@@ -4420,6 +4420,76 @@ class TestFileFactsByShapeId:
         assert slides[0]["shapes"][0]["described"] is False
 
 
+MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+
+
+def sp_xml(shape_id, name, text="Words"):
+    return (f'<p:sp><p:nvSpPr><p:cNvPr id="{shape_id}" name="{name}"/></p:nvSpPr>'
+            f'<p:txBody><a:bodyPr/><a:p><a:r><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>')
+
+
+class TestFileFactsByPlaceOnTheMac:
+    """PowerPoint for Mac gives no shape id (it answers missing value) and,
+    like COM, names a shape in English while the file has the UI's language.
+    It counts shapes in the order the file stacks them, measured 2026-11-10
+    on a Japanese Mac with placeholders, text boxes, a picture, a chart, a
+    group and a connector, restacked."""
+
+    def test_the_file_gives_its_stacking_order(self, tmp_path):
+        from utils.package import package_facts
+        group = ('<p:grpSp><p:nvGrpSpPr><p:cNvPr id="14" name="グループ化 13"/></p:nvGrpSpPr>'
+                 '<p:grpSpPr/>' + sp_xml(11, "正方形/長方形 10") + sp_xml(12, "楕円 11") + '</p:grpSp>')
+        connector = '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="13" name="直線矢印コネクタ 12"/></p:nvCxnSpPr></p:cxnSp>'
+        wrapped = (f'<mc:AlternateContent xmlns:mc="{MC}"><mc:Choice Requires="p14">'
+                   + sp_xml(20, "テキスト ボックス 19") + '</mc:Choice><mc:Fallback>'
+                   + sp_xml(20, "テキスト ボックス 19") + '</mc:Fallback></mc:AlternateContent>')
+        tree = ('<p:nvGrpSpPr><p:cNvPr id="1" name=""/></p:nvGrpSpPr><p:grpSpPr/>'
+                + sp_xml(6, "テキスト ボックス 5") + group + connector + wrapped)
+        path = deck_file(tmp_path, [tree], {})
+        assert package_facts(path, [1])["order"] == {1: [6, 14, 13, 20]}
+
+    def test_a_shape_with_no_id_is_matched_by_its_place(self):
+        slides = [{"slide_index": 1, "shapes": [
+            {"name": "Title 3", "z": 1, "type": 14},
+            {"name": "TextBox 5", "z": 2, "type": 17}]}]
+        facts = {"links": {1: {"テキスト ボックス 5": ["Click here"]}},
+                 "ids": {"links": {1: {6: ["Click here"]}}}, "order": {1: [4, 6]}}
+        layout_check._with_package(slides, facts)
+        assert slides[0]["shapes"][1]["links"] == ["Click here"]
+        assert "links" not in slides[0]["shapes"][0]
+
+    def test_not_when_the_file_holds_another_number_of_shapes(self):
+        # A place counted against a different stack would name another shape.
+        slides = [{"slide_index": 1, "shapes": [{"name": "TextBox 5", "z": 1, "type": 17}]}]
+        facts = {"links": {1: {"TextBox 5": ["more"]}},
+                 "ids": {"links": {1: {6: ["Click here"]}}}, "order": {1: [6, 7]}}
+        layout_check._with_package(slides, facts)
+        assert slides[0]["shapes"][0]["links"] == ["more"]
+
+    def test_a_vague_link_is_found_on_a_japanese_mac(self, tmp_path):
+        from utils.package import package_facts
+        tree = (sp_xml(4, "タイトル 3", "Plans")
+                + '<p:sp><p:nvSpPr><p:cNvPr id="6" name="テキスト ボックス 5">'
+                  '<a:hlinkClick r:id="rId9"/></p:cNvPr></p:nvSpPr>'
+                  '<p:txBody><a:bodyPr/><a:p><a:r><a:t>Click here</a:t></a:r></a:p></p:txBody></p:sp>')
+        read = package_facts(deck_file(tmp_path, [tree], {}), [1])
+        slides = [{"slide_index": 1, "shapes": [
+            {"name": "Title 3", "z": 1, "type": 14}, {"name": "TextBox 5", "z": 2, "type": 17}]}]
+        layout_check._with_package(slides, read)
+        assert layout_check._vague_links(1, slides[0]["shapes"])[0]["shapes"] == ["TextBox 5"]
+
+    def test_a_write_finds_its_picture_in_the_file_by_place(self, monkeypatch):
+        photo = picture("Picture 8", 100, 100, 400, 200, z=2)
+        fake = FakeDeck([slide(card("Title 3", 40, 20, 400, 60), photo)])
+        monkeypatch.setattr(layout_check, "ppt", fake)
+        monkeypatch.setattr(layout_check, "_read_package", lambda indices, charts=False: {
+            "pictures": {1: {"図 8": 4 / 3}}, "pixels": {1: {"図 8": (4000, 3000)}},
+            "ids": {"pictures": {1: {9: 4 / 3}}, "pixels": {1: {9: (4000, 3000)}}},
+            "order": {1: [4, 9]}})
+        result = report_layout({"success": True, "shape_name": "Picture 8"}, 1, ["Picture 8"])
+        assert [f["type"] for f in result["layout_issues"]] == ["stretched_picture"]
+
+
 class TestMissingAltText:
     def test_a_picture_without_it_is_reported_with_the_call_that_sets_it(self, monkeypatch):
         monkeypatch.setattr(layout_check, "IS_MACOS", False)
@@ -4554,3 +4624,257 @@ class TestAShapeThatCannotBeRead:
         assert [s["name"] for s in shapes] == ["Diagram 2"]
         inner = layout_check._inner_facts(shapes, refs)
         assert [s["name"] for s in inner] == ["Diagram 2/Rectangle 1"]
+
+
+# ---------------------------------------------------------------------------
+# Link words, from the saved file
+# ---------------------------------------------------------------------------
+def linked_box(name, paragraphs, whole=False):
+    """A text box whose paragraphs are lists of (words, link id or None)."""
+    link = '<a:hlinkClick r:id="rId9"/>' if whole else ""
+    body = "".join(
+        "<a:p>" + "".join(
+            f'<a:r><a:rPr>{f"<a:hlinkClick r:id=\"{rid}\"/>" if rid else ""}</a:rPr><a:t>{words}</a:t></a:r>'
+            for words, rid in runs) + "</a:p>"
+        for runs in paragraphs)
+    return (f'<p:sp><p:nvSpPr><p:cNvPr id="6" name="{name}">{link}</p:cNvPr></p:nvSpPr>'
+            f'<p:txBody><a:bodyPr/>{body}</p:txBody></p:sp>')
+
+
+class TestLinkWordsFromTheFile:
+    def links(self, tmp_path, *boxes):
+        from utils.package import package_facts
+        return package_facts(deck_file(tmp_path, list(boxes), {}), [1])["links"][1]
+
+    def test_the_words_each_link_covers(self, tmp_path):
+        box = linked_box("Body", [[("For details ", None), ("click ", "rId2"), ("here", "rId2"), (".", None)],
+                                  [("The 2026 annual report", "rId3")]])
+        assert self.links(tmp_path, box) == {"Body": ["click here", "The 2026 annual report"]}
+
+    def test_two_links_side_by_side_stay_apart(self, tmp_path):
+        box = linked_box("Body", [[("here", "rId2"), ("there", "rId3")]])
+        assert self.links(tmp_path, box) == {"Body": ["here", "there"]}
+
+    def test_a_shape_that_is_itself_a_link_shows_all_its_words(self, tmp_path):
+        box = linked_box("Button", [[("Read more", None)]], whole=True)
+        assert self.links(tmp_path, box) == {"Button": ["Read more"]}
+
+    def test_a_shape_with_no_link_has_no_entry(self, tmp_path):
+        assert self.links(tmp_path, linked_box("Body", [[("Plain text", None)]])) == {}
+
+    def test_a_soft_break_parts_the_words_of_a_shape_that_is_a_link(self, tmp_path):
+        box = linked_box("Button", [[("Read", None), ("more", None)]], whole=True)
+        assert self.links(tmp_path, box.replace("</a:r><a:r>", "</a:r><a:br/><a:r>")) == {"Button": ["Read more"]}
+
+    def test_a_soft_break_inside_a_linked_run_keeps_the_link_whole(self, tmp_path):
+        box = linked_box("Body", [[("Read", "rId2"), ("more", "rId2")]])
+        assert self.links(tmp_path, box.replace("</a:r><a:r>", "</a:r><a:br/><a:r>")) == {"Body": ["Read more"]}
+
+    def test_a_soft_break_after_a_link_is_not_part_of_it(self, tmp_path):
+        box = linked_box("Body", [[("here", "rId2"), ("next line", None)]])
+        assert self.links(tmp_path, box.replace("</a:r><a:r>", "</a:r><a:br/><a:r>")) == {"Body": ["here"]}
+
+
+class TestVagueLinks:
+    @pytest.mark.parametrize("words", ["click here", "Click here.", "here", "Read more »", "LEARN MORE", "this link"])
+    def test_words_that_say_nothing_are_reported(self, words):
+        box = textbox("t", 100, 100, 400, 40)
+        box["links"] = ["The 2026 annual report", words]
+        [finding] = check(box)
+        assert (finding["type"], finding["sample"], finding["severity"]) == ("vague_link", words, "info")
+        assert "ppt_find_replace_text" in finding["fix"]
+
+    @pytest.mark.parametrize("words", ["The 2026 annual report", "here is the plan", "Click here to download the "
+                                       "Q3 figures", "More about pricing", "www.example.com"])
+    def test_words_that_name_the_destination_are_not(self, words):
+        box = textbox("t", 100, 100, 400, 40)
+        box["links"] = [words]
+        assert check(box) == []
+
+    def test_a_write_tool_does_not_look_for_it(self):
+        assert "vague_link" not in layout_check.SHAPE_FINDINGS
+
+    def test_the_file_s_links_reach_the_shape(self):
+        shape = textbox("Body", 100, 100, 400, 40)
+        slides = [{"slide_index": 1, "shapes": [shape]}]
+        layout_check._with_package(slides, {"links": {1: {"Body": ["here"]}}})
+        assert shape["links"] == ["here"]
+
+
+# ---------------------------------------------------------------------------
+# Text no spelling dictionary covers
+# ---------------------------------------------------------------------------
+def tagged_box(name, *runs):
+    """A text box whose runs are (words, language tag or None)."""
+    body = "".join(f'<a:r><a:rPr{f" lang=\"{lang}\"" if lang else ""}/><a:t>{words}</a:t></a:r>'
+                   for words, lang in runs)
+    return (f'<p:sp><p:nvSpPr><p:cNvPr id="7" name="{name}"/></p:nvSpPr>'
+            f'<p:txBody><a:bodyPr/><a:p>{body}</a:p></p:txBody></p:sp>')
+
+
+class TestTextLanguagesFromTheFile:
+    def languages(self, tmp_path, monkeypatch, default, *boxes):
+        import test_layout_check as here
+        from utils.package import package_facts
+        if default:
+            monkeypatch.setattr(here, "PRESENTATION", PRESENTATION.replace(
+                "</p:presentation>",
+                '<p:defaultTextStyle xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                f'<a:lvl1pPr><a:defRPr lang="{default}"/></a:lvl1pPr></p:defaultTextStyle></p:presentation>'))
+        return package_facts(deck_file(tmp_path, list(boxes), {}), [1])["languages"][1]
+
+    def test_each_run_s_own_tag(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello ", "en-IL"), ("world", "en-US"), ("  ", "fr-FR"))
+        assert self.languages(tmp_path, monkeypatch, None, box) == {"Body": ["en-IL", "en-US"]}
+
+    def test_a_run_without_one_takes_the_deck_s_default(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello", None), ("world", "en-US"))
+        assert self.languages(tmp_path, monkeypatch, "en-IL", box) == {"Body": ["en-IL", "en-US"]}
+
+    def test_no_tag_and_no_default_is_unknown(self, tmp_path, monkeypatch):
+        assert self.languages(tmp_path, monkeypatch, None, tagged_box("Body", ("Hello", None))) == {}
+
+    def test_a_paragraph_s_tag_comes_before_the_deck_s_default(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello", None)).replace(
+            "<a:p>", '<a:p><a:pPr><a:defRPr lang="en-US"/></a:pPr>')
+        assert self.languages(tmp_path, monkeypatch, "en-IL", box) == {"Body": ["en-US"]}
+
+    def test_a_shape_s_list_style_comes_before_the_deck_s_default(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello", None)).replace(
+            "<a:bodyPr/>", '<a:bodyPr/><a:lstStyle><a:lvl1pPr><a:defRPr lang="en-US"/></a:lvl1pPr></a:lstStyle>')
+        assert self.languages(tmp_path, monkeypatch, "en-IL", box) == {"Body": ["en-US"]}
+
+    def test_a_list_style_counts_at_the_paragraph_s_own_level(self, tmp_path, monkeypatch):
+        box = tagged_box("Body", ("Hello", None)).replace(
+            "<a:bodyPr/>", '<a:bodyPr/><a:lstStyle><a:lvl2pPr><a:defRPr lang="en-US"/></a:lvl2pPr></a:lstStyle>'
+        ).replace("<a:p>", '<a:p><a:pPr lvl="1"/>')
+        assert self.languages(tmp_path, monkeypatch, "en-IL", box) == {"Body": ["en-US"]}
+
+    def test_the_deck_s_default_paragraph_style_counts_for_a_text_box(self, tmp_path, monkeypatch):
+        import test_layout_check as here
+        from utils.package import package_facts
+        monkeypatch.setattr(here, "PRESENTATION", PRESENTATION.replace(
+            "</p:presentation>",
+            '<p:defaultTextStyle xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+            '<a:defPPr><a:defRPr lang="en-IL"/></a:defPPr></p:defaultTextStyle></p:presentation>'))
+        path = deck_file(tmp_path, [tagged_box("Body", ("Hello", None))], {})
+        assert package_facts(path, [1])["languages"][1] == {"Body": ["en-IL"]}
+
+
+def placeholder_deck(tmp_path, layout_style="", master_style="", default="en-IL", kind='type="body" idx="1"'):
+    """A deck with one placeholder whose run names no language."""
+    ns = ('xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+          'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+          'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"')
+
+    def placeholder(style, words=""):
+        return (f'<p:sp><p:nvSpPr><p:cNvPr id="2" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph {kind}/></p:nvPr></p:nvSpPr>'
+                f'<p:txBody><a:bodyPr/>{style}<a:p>{words}</a:p></p:txBody></p:sp>')
+
+    def lang(value):
+        return f'<a:lvl1pPr><a:defRPr lang="{value}"/></a:lvl1pPr>' if value else "<a:lvl1pPr/>"
+
+    def rel(rid, target):
+        return f'<Relationship Id="{rid}" Target="{target}" Type="x"/>'
+
+    deck = PRESENTATION.replace(
+        "</p:presentation>",
+        '<p:defaultTextStyle xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        f'{lang(default)}</p:defaultTextStyle></p:presentation>')
+    layout_list = f"<a:lstStyle>{lang(layout_style)}</a:lstStyle>"
+    path = tmp_path / "deck.pptx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("ppt/presentation.xml", deck)
+        archive.writestr("ppt/_rels/presentation.xml.rels", RELS.format(rel("rId2", "slides/slide1.xml")))
+        archive.writestr("ppt/slides/slide1.xml", f'<p:sld {ns}><p:cSld><p:spTree>'
+                         f'{placeholder("", "<a:r><a:t>Hello</a:t></a:r>")}</p:spTree></p:cSld></p:sld>')
+        archive.writestr("ppt/slides/_rels/slide1.xml.rels", RELS.format(
+            rel("rId1", "../slideLayouts/slideLayout1.xml")))
+        archive.writestr("ppt/slideLayouts/slideLayout1.xml", f'<p:sldLayout {ns}><p:cSld><p:spTree>'
+                         f'{placeholder(layout_list)}</p:spTree></p:cSld></p:sldLayout>')
+        archive.writestr("ppt/slideLayouts/_rels/slideLayout1.xml.rels", RELS.format(
+            rel("rId1", "../slideMasters/slideMaster1.xml")))
+        archive.writestr("ppt/slideMasters/slideMaster1.xml", f'<p:sldMaster {ns}><p:cSld><p:spTree/></p:cSld>'
+                         f'<p:txStyles><p:titleStyle>{lang("de-DE")}</p:titleStyle>'
+                         f'<p:bodyStyle>{lang(master_style)}</p:bodyStyle></p:txStyles></p:sldMaster>')
+    return path
+
+
+class TestAPlaceholderSLanguage:
+    def languages(self, path):
+        from utils.package import package_facts
+        return package_facts(path, [1])["languages"][1]
+
+    def test_from_its_layout(self, tmp_path):
+        assert self.languages(placeholder_deck(tmp_path, layout_style="fr-FR")) == {"Body": ["fr-FR"]}
+
+    def test_from_the_master_s_text_style(self, tmp_path):
+        assert self.languages(placeholder_deck(tmp_path, master_style="fr-FR")) == {"Body": ["fr-FR"]}
+
+    def test_the_layout_comes_before_the_master(self, tmp_path):
+        path = placeholder_deck(tmp_path, layout_style="fr-FR", master_style="es-ES")
+        assert self.languages(path) == {"Body": ["fr-FR"]}
+
+    def test_a_title_reads_the_master_s_title_style(self, tmp_path):
+        path = placeholder_deck(tmp_path, kind='type="title"')
+        assert self.languages(path) == {"Body": ["de-DE"]}
+
+    def test_the_deck_s_default_does_not_reach_it(self, tmp_path):
+        assert self.languages(placeholder_deck(tmp_path, default="en-IL")) == {}
+
+
+class TestUncheckedLanguages:
+    @pytest.mark.parametrize("tag, flagged", [
+        ("en-IL", True), ("en-il", True), ("en-DE", True), ("en-US", False), ("en-GB", False),
+        ("he-IL", False), ("fr-FR", False), ("sr-Latn-RS", False), ("x-none", False), ("zz-ZZ", False),
+        ("en-JM", False), ("es-UY", False), ("en-SG", False), ("en-IN", False), ("fr-MA", False),
+        ("km-KH", False), ("hsb-DE", False),
+    ])
+    def test_a_region_office_has_no_id_for(self, tag, flagged):
+        assert layout_check.has_no_dictionary(tag) is flagged
+
+    def deck(self):
+        def box(name, *tags):
+            shape = textbox(name, 100, 100, 400, 40)
+            shape["languages"] = list(tags)
+            return shape
+        return [{"slide_index": 1, "shapes": [box("Title 1", "en-IL"), box("Body", "en-US")]},
+                {"slide_index": 2, "shapes": [box("Notes", "en-IL", "en-US")]},
+                {"slide_index": 3, "shapes": [box("Plain", "en-US")]}]
+
+    def test_one_finding_for_the_deck_naming_its_shapes_and_slides(self):
+        [finding] = layout_check.unchecked_languages(self.deck())
+        assert (finding["type"], finding["language"], finding["slides"], finding["shapes"]) == (
+            "unchecked_language", "en-IL", [1, 2], ["Title 1", "Notes"])
+        assert finding["slide_index"] is None and finding["severity"] == "info"
+        assert "ever spell-checked" in finding["message"] and "en-US" in finding["fix"]
+
+    def test_one_slide_is_named_as_that_slide(self):
+        [finding] = layout_check.unchecked_languages(self.deck()[:1])
+        assert finding["slide_index"] == 1
+
+    def test_text_office_checks_says_nothing(self):
+        assert layout_check.unchecked_languages(self.deck()[2:]) == []
+
+    @pytest.mark.parametrize("tag, offered, not_offered", [
+        ("en-IL", "en-US or en-GB", None),
+        ("fr-IL", "such as fr-FR", "fr-US"),
+        ("de-IL", "such as de-DE", "de-US"),
+        ("ja-US", None, "ja-JA"),
+    ])
+    def test_the_fix_offers_only_a_variety_with_a_language_id(self, tag, offered, not_offered):
+        shape = textbox("Body", 100, 100, 400, 40)
+        shape["languages"] = [tag]
+        [finding] = layout_check.unchecked_languages([{"slide_index": 1, "shapes": [shape]}])
+        if offered:
+            assert offered in finding["fix"]
+        else:
+            assert "such as" not in finding["fix"]
+        if not_offered:
+            assert not_offered not in finding["fix"]
+
+    def test_the_file_s_languages_reach_the_shape(self):
+        shape = textbox("Body", 100, 100, 400, 40)
+        layout_check._with_package([{"slide_index": 1, "shapes": [shape]}],
+                                   {"languages": {1: {"Body": ["en-IL"]}}})
+        assert shape["languages"] == ["en-IL"]

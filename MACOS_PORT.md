@@ -717,7 +717,10 @@ What it took to make it dependable:
   `SetSourceData` is called plainly, without pywin32's workaround. Excel's
   type library for the workbook, its sheets and ranges comes from the copy
   PowerPoint for Mac ships (`--excel-tlb`). Tried with Excel already running;
-  with Excel not running, `ChartData.Activate` starts it.
+  with Excel not running, `ChartData.Activate` starts it. On a Mac without
+  Excel (looked for in Applications, then through Spotlight) the call stays
+  on the Apple Event route, which rewrites the chart's XML and recreates it,
+  and its answer says Excel was missing.
 - **Excel comes to the front, and stays running.** `ChartData.Activate` brings
   Excel to the front on every call, and an Excel it started is not quit when
   the workbook closes. So after each chart call through the add-in that

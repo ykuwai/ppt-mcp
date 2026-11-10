@@ -119,21 +119,14 @@ class TestWhenExcelIsStillNeeded:
         grouped = chart_shape(Child=-1)
         assert "group" in charts._excel_needed(slide_with([grouped]), grouped)
 
-    def test_an_animation_in_either_sequence(self, charts):
+    def test_animations_and_connectors_no_longer_need_it(self, charts):
+        """They are handed to the copy (#343)."""
         shape = chart_shape()
-        assert "animated" in charts._excel_needed(slide_with([shape], animated=[shape]), shape)
-        assert "animated" in charts._excel_needed(slide_with([shape], interactive=[shape]), shape)
-        other = chart_shape(shape_id=9)
-        assert charts._excel_needed(slide_with([shape, other], animated=[other]), shape) is None
-
-    @pytest.mark.parametrize("end", ["Begin", "End"])
-    def test_an_attached_connector(self, charts, end):
-        shape = chart_shape()
-        ends = SimpleNamespace(BeginConnected=0, EndConnected=0)
-        setattr(ends, f"{end}Connected", -1)
-        setattr(ends, f"{end}ConnectedShape", shape)
+        assert charts._excel_needed(slide_with([shape], animated=[shape]), shape) is None
+        assert charts._excel_needed(slide_with([shape], interactive=[shape]), shape) is None
+        ends = SimpleNamespace(BeginConnected=-1, BeginConnectedShape=shape, EndConnected=0)
         connector = SimpleNamespace(Type=1, Connector=-1, ConnectorFormat=ends)
-        assert "connector" in charts._excel_needed(slide_with([shape, connector]), shape)
+        assert charts._excel_needed(slide_with([shape, connector]), shape) is None
 
     def test_a_check_that_cannot_be_made_means_excel(self, charts):
         class Broken:
@@ -146,35 +139,6 @@ class TestWhenExcelIsStillNeeded:
         shape = Broken()
         reason = charts._excel_needed(slide_with([]), shape)
         assert reason.startswith("it could not be checked") and "busy" in reason
-
-    def test_a_chart_that_triggers_an_animation(self, charts):
-        shape = chart_shape()
-        other = chart_shape(shape_id=9)
-        slide = slide_with([shape, other], interactive=[other])
-        slide.TimeLine.InteractiveSequences(1).effects[0].Timing = SimpleNamespace(TriggerShape=shape)
-        assert "starts an animation" in charts._excel_needed(slide, shape)
-
-    def test_an_effect_without_a_trigger_shape_is_fine(self, charts):
-        shape = chart_shape()
-        other = chart_shape(shape_id=9)
-        slide = slide_with([shape, other], animated=[other])
-
-        class NoTrigger:
-            @property
-            def TriggerShape(self):
-                raise RuntimeError("no trigger shape")
-
-        slide.TimeLine.MainSequence.effects[0].Timing = NoTrigger()
-        assert charts._excel_needed(slide, shape) is None
-
-    def test_a_connector_inside_a_group(self, charts):
-        shape = chart_shape()
-        ends = SimpleNamespace(BeginConnected=-1, BeginConnectedShape=shape, EndConnected=0)
-        connector = SimpleNamespace(Type=1, Connector=-1, ConnectorFormat=ends)
-        items = [SimpleNamespace(Type=1, Connector=0), connector]
-        group = SimpleNamespace(Type=6, Connector=0, GroupItems=type("G", (), {
-            "Count": len(items), "__call__": lambda self, i: items[i - 1]})())
-        assert "connector" in charts._excel_needed(slide_with([shape, group]), shape)
 
     def test_comments_on_the_slide(self, charts):
         shape = chart_shape()
@@ -341,6 +305,85 @@ class TestReplacing:
             run()
         assert not old.deleted
         assert copy.deleted is (how in ("check", "carry"))
+
+    def test_animations_are_handed_over_before_the_old_chart_goes(self, charts, monkeypatch):
+        calls = []
+        carry = charts.animation_carry
+        monkeypatch.setattr(carry, "animated", lambda slide, shape_id: True)
+        monkeypatch.setattr(carry, "timeline", lambda slide, chart_id, leave_out=None: ["same"])
+        monkeypatch.setattr(carry, "copy_animations", lambda slide, old, new: calls.append("copy"))
+        monkeypatch.setattr(carry, "move_links", lambda slide, old, new, c, undo: calls.append("links"))
+        old, copy, seen, run = replace(charts, monkeypatch)
+        new, warnings = run()
+        assert calls == ["copy", "links"] and old.deleted and not copy.deleted
+
+    def test_animations_that_did_not_come_over_leave_the_old_chart_as_it_was(
+            self, charts, monkeypatch):
+        """The copy goes, which takes its effects along, and what was pointed
+        at it is pointed back first, while it is still there to point from."""
+        events = []
+        carry = charts.animation_carry
+        timelines = iter([["before"], ["after"]])
+        monkeypatch.setattr(carry, "animated", lambda slide, shape_id: True)
+        monkeypatch.setattr(carry, "timeline", lambda slide, chart_id, leave_out=None: next(timelines))
+        monkeypatch.setattr(carry, "copy_animations", lambda slide, old, new: None)
+        monkeypatch.setattr(carry, "move_links",
+                            lambda slide, old, new, c, undo: undo.append(lambda: events.append("pointed back")))
+        old, copy, seen, run = replace(charts, monkeypatch)
+        copy.Delete = lambda: (events.append("copy deleted"), setattr(copy, "deleted", True))
+        with pytest.raises(charts._NotCarried, match="animations did not come over"):
+            run()
+        assert events == ["pointed back", "copy deleted"]
+        assert not old.deleted
+
+    def test_links_that_cannot_be_pointed_back_leave_both_charts_and_say_so(
+            self, charts, monkeypatch):
+        carry = charts.animation_carry
+        timelines = iter([["before"], ["after"]])
+        monkeypatch.setattr(carry, "animated", lambda slide, shape_id: True)
+        monkeypatch.setattr(carry, "timeline", lambda slide, chart_id, leave_out=None: next(timelines))
+        monkeypatch.setattr(carry, "copy_animations", lambda slide, old, new: None)
+
+        def stuck():
+            raise RuntimeError("busy")
+
+        monkeypatch.setattr(carry, "move_links", lambda slide, old, new, c, undo: undo.append(stuck))
+        old, copy, seen, run = replace(charts, monkeypatch)
+        with pytest.raises(RuntimeError, match=r"could not all be pointed back \(busy\)"):
+            run()
+        assert not old.deleted and not copy.deleted
+
+    def test_links_that_fail_halfway_are_pointed_back(self, charts, monkeypatch):
+        events = []
+        carry = charts.animation_carry
+        monkeypatch.setattr(carry, "animated", lambda slide, shape_id: False)
+
+        def halfway(slide, old, new, c, undo):
+            undo.append(lambda: events.append("pointed back"))
+            raise RuntimeError("the second connector would not move")
+
+        monkeypatch.setattr(carry, "move_links", halfway)
+        old, copy, seen, run = replace(charts, monkeypatch)
+        with pytest.raises(charts._NotCarried, match="second connector"):
+            run()
+        assert events == ["pointed back"] and copy.deleted and not old.deleted
+
+    def test_an_old_chart_that_will_not_go_gets_its_links_back(self, charts, monkeypatch):
+        events = []
+        carry = charts.animation_carry
+        monkeypatch.setattr(carry, "animated", lambda slide, shape_id: False)
+        monkeypatch.setattr(carry, "move_links",
+                            lambda slide, old, new, c, undo: undo.append(lambda: events.append("pointed back")))
+        old, copy, seen, run = replace(charts, monkeypatch)
+
+        def refuse():
+            raise RuntimeError("locked")
+
+        old.Delete = refuse
+        copy.Delete = lambda: (events.append("copy deleted"), setattr(copy, "deleted", True))
+        with pytest.raises(charts._NotCarried, match="could not be removed"):
+            run()
+        assert events == ["pointed back", "copy deleted"]
 
     def test_data_that_does_not_fit_the_chart_leaves_it_as_it_was(self, charts, monkeypatch):
         """A scatter chart given labels for x, say: Excel then, as before."""

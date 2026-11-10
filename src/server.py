@@ -919,8 +919,14 @@ async def tool_ppt_get_slide_preview(params: GetSlidePreviewInput):
             if os.path.exists(temp_file):
                 os.remove(temp_file)
 
-    image_data, slide_size = await run_offloaded(
-        ppt.execute, _export_slide_impl, params.slide_index)
+    try:
+        image_data, slide_size = await run_offloaded(
+            ppt.execute, _export_slide_impl, params.slide_index)
+    except Exception as e:  # noqa: BLE001 - answered, as every tool does
+        # Raised, the reason reached the caller only as far as the client
+        # shows the SDK's "Error executing tool" text, and once not at all.
+        return json.dumps({"error": f"Failed to preview slide {params.slide_index}: "
+                                    f"{str(e) or type(e).__name__}"})
     return [Image(data=image_data, format="png"),
             json.dumps(preview_scale(params.slide_index, image_data, slide_size))]
 

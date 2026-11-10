@@ -12,9 +12,9 @@ ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/catego
 | **Placeholders** | 6 | List, get, set placeholder content |
 | **Formatting** | 3 | Fill, line, shadow (on the shape or on its text) |
 | **Tables** | 13 | Add tables, get/set cells, batch set data, merge/split cells, add/delete rows/columns, styles, layout, borders |
-| **Export** | 4 | PDF, images, slide preview, clipboard copy |
+| **Export** | 4 | PDF, images, slide preview (a preview that fails answers `error` with the reason, as every tool does), clipboard copy |
 | **Slideshow** | 6 | Start, stop, next, previous, go to slide, status |
-| **Charts** | 7 | Add charts (on Windows, all but a few rarer types such as 3-D area, cone and stock without starting Excel), set/get data (on Windows, setting it swaps in a copy of the chart under a new shape id without starting Excel where it can, then reads the chart back, and data that did not land is an error while a label Excel read differently is a warning; a scatter or bubble chart takes its x values from the categories, and every bubble series needs its `sizes`; a bubble chart that would have to go through Excel, which drops them, is refused), format, format axis, series, change type |
+| **Charts** | 7 | Add charts (on Windows, all but a few rarer types such as 3-D area, cone and stock without starting Excel), set/get data (on Windows, setting it swaps in a copy of the chart under a new shape id without starting Excel where it can, its animations, the animations it starts and the connectors on it handed over, then reads the chart back, and data that did not land is an error while a label Excel read differently is a warning; a scatter or bubble chart takes its x values from the categories, and every bubble series needs its `sizes`; a bubble chart that would have to go through Excel, which drops them, is refused; on macOS the data goes through Excel, and on a Mac without Excel it is written into the chart's XML instead, which recreates the chart under a new id without its animations, and the answer says so), format, format axis, series, change type |
 | **Animation** | 6 | Transitions, add/list/update/remove/clear animations (entrance, exit, emphasis, motion path, interactive sequences) |
 | **Themes** | 4 | Apply themes, get/set theme colors, headers/footers |
 | **Groups** | 3 | Group, ungroup, get group items |
@@ -25,7 +25,7 @@ ppt-mcp has <!--tools-->157<!--/tools--> tools in <!--categories-->26<!--/catego
 | **Media** | 3 | Video, audio, media settings (on macOS, trimming with `start_point` and `end_point` goes through the VBA add-in, and is refused without it) |
 | **SmartArt** | 3 | Add, modify, list layouts |
 | **Edit Operations** | 6 | Undo and redo (on the target presentation), copy shapes/formatting between slides |
-| **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check (including slips of typing: a word twice, two spaces, a space before a comma or full stop) |
+| **Layout** | 8 | Align, distribute, slide size, background, flip, merge shapes, layout check (including slips of typing: a word twice, two spaces, a space before a comma or full stop; a link whose words say nothing on their own; text in a language Office has no spelling dictionary for) |
 | **Effects** | 3 | Glow and reflection (on the shape or on its text), soft edge |
 | **Comments** | 3 | Add (the answer gives who PowerPoint signed it as, the signed-in Office user, and where it placed it; on macOS, through the VBA add-in, it belongs to the slide rather than a point on it), list (each comment's date is local time, with no zone), delete |
 | **Advanced** | 19 | Tags, fonts (list the deck's or this computer's, set defaults, bulk replace), crop, picture format, shape export, visibility, selection, view, animation copy, picture from URL, SVG icons, icon search, aspect ratio lock, batch apply, default shape style |
