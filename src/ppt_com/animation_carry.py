@@ -186,30 +186,47 @@ def copy_animations(slide, old, new) -> None:
         originals = _indexes(sequence, old_id)
         made = len(_indexes(sequence, new_id))
         original = sequence(originals[made])
-        effect = sequence.AddTriggerEffect(new, original.EffectType, msoAnimTriggerOnShapeClick,
-                                           original.Timing.TriggerShape)
-        # The direction first: setting it puts the duration back to the
-        # effect's default.
-        direction = _read(lambda: original.EffectParameters.Direction)
-        if direction is not None:
-            _read(lambda: setattr(effect.EffectParameters, "Direction", direction))
-        effect.Exit = original.Exit
-        for name in _TIMING:
-            value = _read(lambda name=name: getattr(original.Timing, name))
-            if value is not None:
-                _read(lambda name=name, value=value: setattr(effect.Timing, name, value))
-        after = _read(lambda: original.EffectInformation.AfterEffect, msoAnimAfterEffectNone)
-        if after != msoAnimAfterEffectNone:
-            # Set through the sequence, which answers the effect it made.
-            if after == msoAnimAfterEffectDim:
-                effect = sequence.ConvertToAfterEffect(
-                    effect, after, original.EffectInformation.Dim.RGB)
-            else:
-                effect = sequence.ConvertToAfterEffect(effect, after)
+        try:
+            _make_again(sequence, new, original)
+        except Exception as e:
+            raise NotCarried(f"one of its click animations could not be made again ({e})") from e
         index = _indexes(sequence, new_id)[-1]
         target = _indexes(sequence, old_id)[made] + 1
         if index != target:
             sequence(index).MoveTo(target)
+
+
+def _make_again(sequence, new, original) -> None:
+    """Add to ``sequence`` an effect on ``new`` started as ``original`` is,
+    with its settings. What does not take shows in the timeline comparison."""
+    effect = sequence.AddTriggerEffect(new, original.EffectType, msoAnimTriggerOnShapeClick,
+                                       original.Timing.TriggerShape)
+    # The direction first: setting it puts the duration back to the effect's
+    # default.
+    direction = _read(lambda: original.EffectParameters.Direction)
+    if direction is not None:
+        _read(lambda: setattr(effect.EffectParameters, "Direction", direction))
+    # Only when it differs: a motion path refuses even the value it has.
+    if effect.Exit != original.Exit:
+        _read(lambda: setattr(effect, "Exit", original.Exit))
+    for name in _TIMING:
+        value = _read(lambda name=name: getattr(original.Timing, name))
+        if value is not None:
+            _read(lambda name=name, value=value: setattr(effect.Timing, name, value))
+    # A motion path is made with the effect's default path.
+    behaviors, made = original.Behaviors, effect.Behaviors
+    for i in range(1, min(behaviors.Count, made.Count) + 1):
+        if _read(lambda i=i: behaviors(i).Type) == msoAnimTypeMotion:
+            path = _read(lambda i=i: behaviors(i).MotionEffect.Path)
+            if path is not None:
+                _read(lambda i=i, path=path: setattr(made(i).MotionEffect, "Path", path))
+    after = _read(lambda: original.EffectInformation.AfterEffect, msoAnimAfterEffectNone)
+    if after != msoAnimAfterEffectNone:
+        # Set through the sequence, which answers the effect it made.
+        if after == msoAnimAfterEffectDim:
+            sequence.ConvertToAfterEffect(effect, after, original.EffectInformation.Dim.RGB)
+        else:
+            sequence.ConvertToAfterEffect(effect, after)
 
 
 def move_links(slide, old, new, connectors, undo) -> None:

@@ -337,3 +337,50 @@ def test_an_after_effect_the_copy_lacks_is_seen(deck):
     copy = [e for e in slide.interactive[0].effects if e.Shape is n][0]
     copy.EffectInformation.AfterEffect = 2  # hide
     assert carry.timeline(slide, n.Id, leave_out=g.Id) != before
+
+
+class PathEffect(Effect):
+    """A motion path effect made by AddTriggerEffect: its default path, and an
+    Exit that refuses any setting, as PowerPoint's does."""
+
+    @property
+    def Exit(self):
+        return 0
+
+    @Exit.setter
+    def Exit(self, value):
+        if hasattr(self, "_made"):
+            raise RuntimeError("Effect.Exit : failed")
+        self._made = True
+
+
+def test_a_click_effect_on_a_path_is_made_again_with_its_path(deck):
+    slide, g, r, link = deck
+    sequence = slide.interactive[0]
+    sequence.effects = []
+    sequence.add(g, PATH_DOWN, trigger=ON_SHAPE_CLICK, trigger_shape=r, duration=2.0,
+                 path="M 0 0 L 0.2 0.1 L 0 0.25 E")
+
+    def add_path(shape, kind, trigger, trigger_shape):
+        effect = PathEffect(sequence, shape, kind, trigger=trigger, trigger_shape=trigger_shape,
+                            path="M 0 0 L 0 0.25 E")
+        sequence.effects.append(effect)
+        return effect
+
+    sequence.AddTriggerEffect = add_path
+    before = carry.timeline(slide, g.Id)
+    n = slide.shape(6)
+    carry.copy_animations(slide, g, n)
+    carry.move_links(slide, g, n, [link], [])
+    assert carry.timeline(slide, n.Id, leave_out=g.Id) == before
+
+
+def test_a_click_effect_that_cannot_be_made_says_so(deck):
+    slide, g, _, _ = deck
+
+    def refuse(*args):
+        raise RuntimeError("Sequence.AddTriggerEffect : failed")
+
+    slide.interactive[0].AddTriggerEffect = refuse
+    with pytest.raises(carry.NotCarried, match="could not be made again .*AddTriggerEffect"):
+        carry.copy_animations(slide, g, slide.shape(6))
