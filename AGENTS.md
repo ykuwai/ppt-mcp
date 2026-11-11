@@ -54,7 +54,7 @@ Most of what goes wrong shows on one of them only.
   default is cp932, and a bare `open()` or `read_text()` fails there only.
 - A change to what a tool does or takes goes into `TOOLS.md`, which is in
   English only. A change to how the server is set up or used goes into
-  `README.md` and each translation, `i18n/README.<language>.md` (ja, zh-CN, es,
+  `README.md` and each translation, `docs/README.<language>.md` (ja, zh-CN, es,
   pt-BR, he). Do not type a tool count by hand:
   `uv run python scripts/sync_readmes.py` writes them all, and
   `tests/test_readmes.py` fails when one is stale.

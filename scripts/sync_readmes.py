@@ -29,11 +29,11 @@ ROOT = Path(__file__).resolve().parent.parent
 # Every README, English first. The others are translations of it.
 READMES = {
     "en": "README.md",
-    "ja": "i18n/README.ja.md",
-    "zh-CN": "i18n/README.zh-CN.md",
-    "es": "i18n/README.es.md",
-    "pt-BR": "i18n/README.pt-BR.md",
-    "he": "i18n/README.he.md",
+    "ja": "docs/README.ja.md",
+    "zh-CN": "docs/README.zh-CN.md",
+    "es": "docs/README.es.md",
+    "pt-BR": "docs/README.pt-BR.md",
+    "he": "docs/README.he.md",
 }
 TOOL_LIST = "TOOLS.md"
 

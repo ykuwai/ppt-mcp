@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>English (en)</strong> · <a href="i18n/README.ja.md">日本語 (ja)</a> · <a href="i18n/README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="i18n/README.es.md">Español (es)</a> · <a href="i18n/README.pt-BR.md">Português (pt-BR)</a> · <a href="i18n/README.he.md">עברית (he)</a>
+  <strong>English (en)</strong> · <a href="docs/README.ja.md">日本語 (ja)</a> · <a href="docs/README.zh-CN.md">简体中文 (zh-CN)</a> · <a href="docs/README.es.md">Español (es)</a> · <a href="docs/README.pt-BR.md">Português (pt-BR)</a> · <a href="docs/README.he.md">עברית (he)</a>
 </p>
 
 <p align="center">
