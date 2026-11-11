@@ -804,9 +804,14 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
 
 def plot_count(chart_xml_bytes: bytes) -> int:
     """How many plot groups the chart has: more than one in a combo chart."""
+    return len(plot_kinds(chart_xml_bytes))
+
+
+def plot_kinds(chart_xml_bytes: bytes) -> List[str]:
+    """The kind of each plot group, ``barChart`` say, in the order held."""
     root = _parse(chart_xml_bytes)
     plot_area = root.find(f"{_C}chart/{_C}plotArea")
-    return 0 if plot_area is None else len(_plots(plot_area))
+    return [] if plot_area is None else [_local(p.tag) for p in _plots(plot_area)]
 
 
 def external_data_id(chart_xml_bytes: bytes) -> Optional[str]:

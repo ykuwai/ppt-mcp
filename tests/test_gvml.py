@@ -638,6 +638,24 @@ class TestChartTypeIsSwappedUnderTheData:
             charts.set_type(chart_bytes(), -4100)
 
 
+class TestPlotKinds:
+    def test_each_plot_group_by_its_kind(self):
+        xml = charts.chart_xml(51).replace(
+            "</c:barChart>", "</c:barChart><c:lineChart><c:grouping val=\"standard\"/>"
+            "<c:varyColors val=\"0\"/><c:axId val=\"10\"/><c:axId val=\"20\"/></c:lineChart>")
+        assert charts.plot_kinds(xml.encode()) == ["barChart", "lineChart"]
+        assert charts.plot_count(xml.encode()) == 2
+
+    def test_a_kind_gvml_cannot_add_takes_new_data(self):
+        """3-D area has no template here, and its series are rewritten all the same."""
+        xml = charts.chart_xml(1).replace("c:areaChart>", "c:area3DChart>").encode()
+        out = charts.set_data(xml, ["x", "y"], [{"name": "S", "values": [5, 6]}])
+        assert charts.plot_kinds(out) == ["area3DChart"]
+        got = charts.read_chart(out)
+        assert got["categories"] == ["x", "y"]
+        assert [(s["name"], s["values"]) for s in got["series"]] == [("S", [5.0, 6.0])]
+
+
 class TestAComboChartKeepsEveryGroupsSeries:
     """Two plot groups, the second over a secondary axis. The new kind has
     one plot, so every group's series goes into it; the secondary axis is

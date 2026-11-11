@@ -36,6 +36,18 @@ SMOOTH_TYPES = frozenset({72, 73})
 BUBBLE_TYPES = frozenset({15, 87})                # bubble, with a 3-D effect
 # Every type pasted rather than added with AddChart2: those gvml writes.
 CHART_TYPES = frozenset(_gvml.supported_types())
+# Every type whose data is swapped without Excel. Swapping rewrites the
+# series of the chart's own XML, so it needs no template, only series that
+# are categories and values. Stock charts stay on Excel: the place of each of
+# their series says what it is (high, low, close).
+SWAPPED_TYPES = CHART_TYPES | frozenset({
+    -4100, 55, 56,          # 3-D column, 3-D stacked and 100% stacked column
+    60, 61, 62,             # 3-D bar, stacked, 100% stacked
+    -4098, 78, 79,          # 3-D area, stacked, 100% stacked
+    70, 68, 71,             # exploded 3-D pie, pie of pie, bar of pie
+    *range(92, 113),        # cylinder, cone and pyramid columns and bars
+    83, 84, 85, 86,         # surface, wireframe, top view, top view wireframe
+})
 
 # AddChart2 gives these five dates and two series, not four categories and
 # three; a radar chart also puts its legend at the top.

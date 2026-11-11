@@ -102,9 +102,13 @@ class TestWhenExcelIsStillNeeded:
     @pytest.mark.parametrize("chart_type, needed", [
         (51, False), (5, False), (-4120, False), (4, False), (1, False), (-4151, False),
         (-4169, False), (74, False), (15, False), (87, False), (54, False), (-4102, False),
-        (70, True), (99, True), (83, True), (88, True),
+        (-4100, False), (60, False), (-4098, False), (70, False), (68, False),
+        (99, False), (92, False), (112, False), (83, False),
+        (88, True), (89, True), (90, True), (91, True), (118, True),
     ])
-    def test_types_gvml_cannot_write_do(self, charts, chart_type, needed):
+    def test_only_stock_and_unknown_types_do(self, charts, chart_type, needed):
+        """Swapping rewrites the chart's own series, so a type gvml has no
+        template for, such as 3-D area, cone or surface, needs no Excel."""
         shape = chart_shape(chart_type=chart_type)
         assert (charts._excel_needed(slide_with([shape]), shape) is not None) is needed
 
@@ -409,6 +413,32 @@ class TestReplacing:
         assert "<c:v>2.5</c:v>" in xml and "<c:v>4</c:v>" in xml
         assert old.deleted
         assert gvml_charts.read_chart(seen["put"][0][1].chart())["categories"] == ["1.0", "2.5"]
+
+    def test_a_3d_area_chart_is_swapped_in_its_own_kind(self, charts, monkeypatch):
+        """A kind gvml cannot add is still rewritten in place (#343)."""
+        from gvml import charts as gvml_charts
+        from gvml import package
+
+        xml = gvml_charts.chart_xml(1).replace("c:areaChart>", "c:area3DChart>")
+        assert xml.count("c:area3DChart>") == 2
+        raw = package.read(gvml_charts.chart_package("Chart 1", 0, 0, 100, 100, xml))
+        old, copy, seen, run = replace(charts, monkeypatch, chart_type=-4098, package=raw)
+        run()
+        new = seen["put"][0][1].chart()
+        assert gvml_charts.plot_kinds(new) == ["area3DChart"]
+        assert gvml_charts.read_chart(new)["categories"] == CATS
+        assert old.deleted
+
+    def test_a_stock_chart_goes_through_excel(self, charts, monkeypatch):
+        from gvml import charts as gvml_charts
+        from gvml import package
+
+        xml = gvml_charts.chart_xml(4).replace("c:lineChart>", "c:stockChart>")
+        raw = package.read(gvml_charts.chart_package("Chart 1", 0, 0, 100, 100, xml))
+        old, copy, seen, run = replace(charts, monkeypatch, package=raw)
+        with pytest.raises(charts._NotCarried, match="stock chart"):
+            run()
+        assert not old.deleted and not seen["pasted"]
 
     def test_a_combo_chart_goes_through_excel(self, charts, monkeypatch):
         old, copy, seen, run = replace(charts, monkeypatch, package=copied(plots=2))
