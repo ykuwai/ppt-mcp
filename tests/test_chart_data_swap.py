@@ -9,6 +9,7 @@ stand-ins for PowerPoint. The live checks are in the PR.
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -119,6 +120,20 @@ class TestWhenExcelIsStillNeeded:
         shape = chart_shape(chart_type=chart_type)
         assert "stock chart" in charts._excel_needed(slide_with([shape]), shape)
 
+    @pytest.mark.parametrize("own_type, series_types, needed", [
+        (-4111, (51, 51, 4), False),     # columns and a line
+        (51, (51, 65), False),
+        (-4111, (51, 88), True),         # a stock series in it
+        (-4111, (51, 51), True),         # one type only, and that unknown
+    ])
+    def test_a_combo_chart_by_the_types_of_its_series(self, charts, own_type, series_types, needed):
+        """What a combo chart answers for its own type says nothing of what it holds."""
+        shape = chart_shape(chart_type=own_type)
+        each = [SimpleNamespace(ChartType=t) for t in series_types]
+        shape.Chart.SeriesCollection = lambda i=None: (
+            SimpleNamespace(Count=len(each)) if i is None else each[i - 1])
+        assert (charts._excel_needed(slide_with([shape]), shape) is not None) is needed
+
     def test_linked_data(self, charts):
         shape = chart_shape()
         shape.Chart.ChartData.IsLinked = True
@@ -207,6 +222,27 @@ def copied(chart_type=51, workbook=True, plots=1):
             'relationships/package" Target="../embeddings/Microsoft_Excel_Worksheet.xlsx"/>'
             "</Relationships>").encode()
     return raw
+
+
+def combo_xml():
+    """A column series and a line series, one plot group each."""
+    from gvml import charts as gvml_charts
+
+    xml = gvml_charts.chart_xml(51)
+    root = gvml_charts.load(xml.encode())
+    c = "{%s}" % gvml_charts.NS_C
+    area = root.find(f"{c}chart/{c}plotArea")
+    bar = area.find(f"{c}barChart")
+    sers = bar.findall(f"{c}ser")
+    bar.remove(sers[2])
+    moved = sers[1]
+    bar.remove(moved)
+    line = ET.fromstring(
+        f'<c:lineChart xmlns:c="{gvml_charts.NS_C}"><c:grouping val="standard"/>'
+        '<c:varyColors val="0"/><c:axId val="10"/><c:axId val="20"/></c:lineChart>')
+    line.insert(2, moved)
+    area.insert(list(area).index(bar) + 1, line)
+    return gvml_charts.dump(root).decode("utf-8")
 
 
 def replace(charts, monkeypatch, *, check=None, carry=None, fail_at=None, copy_z=4,
@@ -447,9 +483,43 @@ class TestReplacing:
             run()
         assert not old.deleted and not seen["pasted"]
 
-    def test_a_combo_chart_goes_through_excel(self, charts, monkeypatch):
+    def test_a_combo_chart_with_no_series_in_a_group_goes_through_excel(self, charts, monkeypatch):
         old, copy, seen, run = replace(charts, monkeypatch, package=copied(plots=2))
-        with pytest.raises(charts._NotCarried, match="2 plot groups"):
+        with pytest.raises(charts._NotCarried, match="holds no series"):
+            run()
+        assert not old.deleted and not seen["pasted"]
+
+    def test_a_combo_chart_takes_its_series_group_by_group(self, charts, monkeypatch):
+        from gvml import charts as gvml_charts
+        from gvml import package
+
+        raw = package.read(gvml_charts.chart_package("Chart 1", 0, 0, 100, 100, combo_xml()))
+        series = [{"name": n, "values": [i, i + 1]} for i, n in enumerate("XY")]
+        old, copy, seen, run = replace(charts, monkeypatch, package=raw, series=series)
+        run()
+        new = seen["put"][0][1].chart()
+        assert gvml_charts.plot_kinds(new) == ["barChart", "lineChart"]
+        assert [s["name"] for s in gvml_charts.read_chart(new)["series"]] == ["X", "Y"]
+        assert old.deleted
+
+    def test_a_combo_chart_given_another_count_goes_through_excel(self, charts, monkeypatch):
+        from gvml import charts as gvml_charts
+        from gvml import package
+
+        raw = package.read(gvml_charts.chart_package("Chart 1", 0, 0, 100, 100, combo_xml()))
+        old, copy, seen, run = replace(charts, monkeypatch, package=raw)
+        with pytest.raises(charts._NotCarried, match="takes 2 series"):
+            run()
+        assert not old.deleted and not seen["pasted"]
+
+    def test_a_combo_with_a_scatter_group_goes_through_excel(self, charts, monkeypatch):
+        from gvml import charts as gvml_charts
+        from gvml import package
+
+        xml = combo_xml().replace("c:lineChart>", "c:scatterChart>")
+        raw = package.read(gvml_charts.chart_package("Chart 1", 0, 0, 100, 100, xml))
+        old, copy, seen, run = replace(charts, monkeypatch, package=raw)
+        with pytest.raises(charts._NotCarried, match="scatter or bubble"):
             run()
         assert not old.deleted and not seen["pasted"]
 
