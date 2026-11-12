@@ -698,6 +698,8 @@ def _attached(connector, shape_id) -> bool:
 
 def _why_excel(slide, shape) -> Optional[str]:
     chart = shape.Chart
+    if chart.ChartType in chart_defaults.STOCK_TYPES:
+        return "it is a stock chart, whose series mean their place"
     if chart.ChartType not in chart_defaults.SWAPPED_TYPES:
         return f"its type ({CHART_TYPE_NAMES.get(chart.ChartType, chart.ChartType)}) is not swapped without Excel"
     try:
@@ -1129,9 +1131,15 @@ def _read_chart_data(chart):
     """The categories and series a chart shows, read from the chart itself.
 
     Read from SeriesCollection rather than the workbook, so Excel is not opened.
+    A pie of pie or bar of pie gives one point more than its data, the
+    "Other" slice, which is left out.
     """
     categories = []
     series_list = []
+    try:
+        extra = 1 if chart.ChartType in chart_defaults.OF_PIE_TYPES else 0
+    except Exception:  # noqa: BLE001 - read as any other chart
+        extra = 0
     sc_count = chart.SeriesCollection().Count
     for s in range(1, sc_count + 1):
         ser = chart.SeriesCollection(s)
@@ -1140,12 +1148,16 @@ def _read_chart_data(chart):
             values = list(ser.Values)
         except Exception:
             values = []
+        if extra and values:
+            values = values[:-extra]
         series_list.append({"name": name, "values": values})
         if not categories:
             try:
                 categories = [str(x) for x in ser.XValues]
             except Exception:
                 pass
+            if extra and categories:
+                categories = categories[:-extra]
     return categories, series_list
 
 
@@ -1765,7 +1777,8 @@ def register_tools(mcp):
         on it. The copy has a new shape id, given as `shape_id` (the old one as
         `previous_shape_id`). A chart that is grouped, in a placeholder, sits
         on a slide with comments, has animations that cannot be copied as
-        they were, combines more than one chart type, or is a stock chart, is
+        they were, combines more than one chart type, or is a stock chart or
+        a filled surface chart, is
         written through Excel as before, and so is a scatter chart whose categories
         are not numbers. A bubble chart cannot go through Excel, which would
         drop its sizes, so such a call, or one with a series that has no

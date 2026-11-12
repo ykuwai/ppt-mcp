@@ -39,20 +39,26 @@ CHART_TYPES = frozenset(_gvml.supported_types())
 # Every type whose data is swapped without Excel. Swapping rewrites the
 # series of the chart's own XML, so it needs no template, only series that
 # are categories and values. Stock charts stay on Excel: the place of each of
-# their series says what it is (high, low, close).
+# their series says what it is (high, low, close). Filled surface charts
+# (contour and 3-D surface) stay too: PowerPoint colours their bands anew from
+# the values, so the copy never shows the old colours.
+STOCK_TYPES = frozenset({88, 89, 90, 91})
 SWAPPED_TYPES = CHART_TYPES | frozenset({
     -4100, 55, 56,          # 3-D column, 3-D stacked and 100% stacked column
     60, 61, 62,             # 3-D bar, stacked, 100% stacked
     -4098, 78, 79,          # 3-D area, stacked, 100% stacked
     70, 68, 71,             # exploded 3-D pie, pie of pie, bar of pie
     *range(92, 113),        # cylinder, cone and pyramid columns and bars
-    83, 84, 85, 86,         # surface, wireframe, top view, top view wireframe
+    84, 86,                 # wireframe surface, wireframe contour
 })
 
 # AddChart2 gives these five dates and two series, not four categories and
 # three; a radar chart also puts its legend at the top.
 AREA_TYPES = frozenset({1, 76, 77})
 RADAR_TYPES = frozenset({-4151, 81, 82})
+# Pie of pie and bar of pie: COM gives each series one point more than its
+# data, the "Other" slice that sums the points moved to the second plot.
+OF_PIE_TYPES = frozenset({68, 71})
 
 # The chart style AddChart2 gives each type, its first in the gallery, as
 # PowerPoint 16 reports it.
