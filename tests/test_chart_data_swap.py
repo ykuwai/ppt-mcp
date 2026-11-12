@@ -102,11 +102,22 @@ class TestWhenExcelIsStillNeeded:
     @pytest.mark.parametrize("chart_type, needed", [
         (51, False), (5, False), (-4120, False), (4, False), (1, False), (-4151, False),
         (-4169, False), (74, False), (15, False), (87, False), (54, False), (-4102, False),
-        (70, True), (99, True), (83, True), (88, True),
+        (-4100, False), (60, False), (-4098, False), (70, False), (68, False),
+        (99, False), (92, False), (112, False), (84, False), (86, False),
+        (83, True), (85, True),
+        (88, True), (89, True), (90, True), (91, True), (118, True),
     ])
-    def test_types_gvml_cannot_write_do(self, charts, chart_type, needed):
+    def test_only_stock_filled_surface_and_unknown_types_do(self, charts, chart_type, needed):
+        """Swapping rewrites the chart's own series, so a type gvml has no
+        template for, such as 3-D area, cone or wireframe, needs no Excel. A
+        filled surface chart comes back in other colours, so it stays on Excel."""
         shape = chart_shape(chart_type=chart_type)
         assert (charts._excel_needed(slide_with([shape]), shape) is not None) is needed
+
+    @pytest.mark.parametrize("chart_type", [88, 89, 90, 91])
+    def test_a_stock_chart_is_named_as_one(self, charts, chart_type):
+        shape = chart_shape(chart_type=chart_type)
+        assert "stock chart" in charts._excel_needed(slide_with([shape]), shape)
 
     def test_linked_data(self, charts):
         shape = chart_shape()
@@ -410,6 +421,32 @@ class TestReplacing:
         assert old.deleted
         assert gvml_charts.read_chart(seen["put"][0][1].chart())["categories"] == ["1.0", "2.5"]
 
+    def test_a_3d_area_chart_is_swapped_in_its_own_kind(self, charts, monkeypatch):
+        """A kind gvml cannot add is still rewritten in place (#343)."""
+        from gvml import charts as gvml_charts
+        from gvml import package
+
+        xml = gvml_charts.chart_xml(1).replace("c:areaChart>", "c:area3DChart>")
+        assert xml.count("c:area3DChart>") == 2
+        raw = package.read(gvml_charts.chart_package("Chart 1", 0, 0, 100, 100, xml))
+        old, copy, seen, run = replace(charts, monkeypatch, chart_type=-4098, package=raw)
+        run()
+        new = seen["put"][0][1].chart()
+        assert gvml_charts.plot_kinds(new) == ["area3DChart"]
+        assert gvml_charts.read_chart(new)["categories"] == CATS
+        assert old.deleted
+
+    def test_a_stock_chart_goes_through_excel(self, charts, monkeypatch):
+        from gvml import charts as gvml_charts
+        from gvml import package
+
+        xml = gvml_charts.chart_xml(4).replace("c:lineChart>", "c:stockChart>")
+        raw = package.read(gvml_charts.chart_package("Chart 1", 0, 0, 100, 100, xml))
+        old, copy, seen, run = replace(charts, monkeypatch, package=raw)
+        with pytest.raises(charts._NotCarried, match="stock chart"):
+            run()
+        assert not old.deleted and not seen["pasted"]
+
     def test_a_combo_chart_goes_through_excel(self, charts, monkeypatch):
         old, copy, seen, run = replace(charts, monkeypatch, package=copied(plots=2))
         with pytest.raises(charts._NotCarried, match="2 plot groups"):
@@ -534,3 +571,33 @@ class TestTheResultSaysWhatWasDone:
         with pytest.raises(ValueError, match="Nothing was changed"):
             charts._set_chart_data_impl(1, "Chart 1", ["1", "2"], [{"name": "S", "values": [1, 2]}])
         assert written == [], "the Excel way would drop the sizes"
+
+
+class Series:
+    def __init__(self, name, values, labels):
+        self.Name, self.Values, self.XValues = name, tuple(values), tuple(labels)
+
+
+def chart_of(chart_type, *series):
+    collection = type("Collection", (), {
+        "Count": len(series), "__call__": lambda self, i: series[i - 1]})()
+    return SimpleNamespace(
+        ChartType=chart_type, SeriesCollection=lambda *i: collection(*i) if i else collection)
+
+
+class TestReadingTheChartBack:
+    @pytest.mark.parametrize("chart_type", [68, 71])
+    def test_the_other_slice_of_a_pie_of_pie_is_left_out(self, charts, chart_type):
+        """COM adds the "Other" slice as a last point with no label (seen on
+        PowerPoint 16), which is not part of the data written."""
+        chart = chart_of(chart_type, Series("S", [3, 5, 2, 4], ["X", "Y", "Z", ""]))
+        categories, series = charts._read_chart_data(chart)
+        assert categories == ["X", "Y", "Z"]
+        assert series == [{"name": "S", "values": [3, 5, 2]}]
+        assert charts._compare_chart_data(
+            ["X", "Y", "Z"], [{"name": "S", "values": [3, 5, 2]}], categories, series) == (None, None)
+
+    def test_a_plain_pie_keeps_every_point(self, charts):
+        chart = chart_of(5, Series("S", [3, 5, 2], ["X", "Y", "Z"]))
+        assert charts._read_chart_data(chart) == (
+            ["X", "Y", "Z"], [{"name": "S", "values": [3, 5, 2]}])

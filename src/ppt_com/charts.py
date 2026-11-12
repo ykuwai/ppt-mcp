@@ -698,7 +698,9 @@ def _attached(connector, shape_id) -> bool:
 
 def _why_excel(slide, shape) -> Optional[str]:
     chart = shape.Chart
-    if chart.ChartType not in chart_defaults.CHART_TYPES:
+    if chart.ChartType in chart_defaults.STOCK_TYPES:
+        return "it is a stock chart, whose series mean their place"
+    if chart.ChartType not in chart_defaults.SWAPPED_TYPES:
         return f"its type ({CHART_TYPE_NAMES.get(chart.ChartType, chart.ChartType)}) is not swapped without Excel"
     try:
         if chart.ChartData.IsLinked:
@@ -803,7 +805,10 @@ def _new_chart_bytes(chart_bytes, chart_type, categories, series) -> bytes:
     plots would keep their old data, and ValueError for data a scatter or
     bubble chart cannot take.
     """
-    groups = gvml_charts.plot_count(chart_bytes)
+    kinds = gvml_charts.plot_kinds(chart_bytes)
+    if "stockChart" in kinds:
+        raise _NotCarried("it is a stock chart, whose series mean their place")
+    groups = len(kinds)
     if groups != 1:
         raise _NotCarried(f"it has {groups} plot groups, and only the first would get the data")
     if chart_type in chart_defaults.XY_TYPES or chart_type in chart_defaults.BUBBLE_TYPES:
@@ -1126,9 +1131,15 @@ def _read_chart_data(chart):
     """The categories and series a chart shows, read from the chart itself.
 
     Read from SeriesCollection rather than the workbook, so Excel is not opened.
+    A pie of pie or bar of pie gives one point more than its data, the
+    "Other" slice, which is left out.
     """
     categories = []
     series_list = []
+    try:
+        extra = 1 if chart.ChartType in chart_defaults.OF_PIE_TYPES else 0
+    except Exception:  # noqa: BLE001 - read as any other chart
+        extra = 0
     sc_count = chart.SeriesCollection().Count
     for s in range(1, sc_count + 1):
         ser = chart.SeriesCollection(s)
@@ -1137,12 +1148,16 @@ def _read_chart_data(chart):
             values = list(ser.Values)
         except Exception:
             values = []
+        if extra and values:
+            values = values[:-extra]
         series_list.append({"name": name, "values": values})
         if not categories:
             try:
                 categories = [str(x) for x in ser.XValues]
             except Exception:
                 pass
+            if extra and categories:
+                categories = categories[:-extra]
     return categories, series_list
 
 
@@ -1762,9 +1777,9 @@ def register_tools(mcp):
         on it. The copy has a new shape id, given as `shape_id` (the old one as
         `previous_shape_id`). A chart that is grouped, in a placeholder, sits
         on a slide with comments, has animations that cannot be copied as
-        they were, combines more than one chart type, or is of a type that still opens
-        Excel (3-D area and bar, cone, stock, surface and the like), is written
-        through Excel as before, and so is a scatter chart whose categories
+        they were, combines more than one chart type, or is a stock chart or
+        a filled surface chart, is
+        written through Excel as before, and so is a scatter chart whose categories
         are not numbers. A bubble chart cannot go through Excel, which would
         drop its sizes, so such a call, or one with a series that has no
         'sizes', is refused. `method` says which was used, and `reason` why
