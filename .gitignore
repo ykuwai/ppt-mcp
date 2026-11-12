@@ -47,7 +47,8 @@ CLAUDE.md
 # Test output
 test_slides/
 
-# Internal docs (outdated)
-docs/
+# Internal notes. The README translations live here too, and are tracked.
+docs/*
+!docs/README.*.md
 assets/examples/**/*.pptx~*
 assets/examples/**/~$*
