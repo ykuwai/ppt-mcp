@@ -33,6 +33,10 @@ class ChartTypeError(ValueError):
     """An ``XlChartType`` this writer has no template for."""
 
 
+class SeriesCountError(ValueError):
+    """Series for a combo chart that do not match the series it has."""
+
+
 @dataclass(frozen=True)
 class _Spec:
     kind: str                 # element name without "Chart": bar, line, pie...
@@ -728,7 +732,7 @@ def _next_colour(ser: ET.Element, index: int) -> ET.Element:
 
 
 def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict]) -> bytes:
-    """Rewrite the series of the first plot, and nothing else.
+    """Rewrite the chart's series, and nothing else.
 
     Each new series takes over the ``c:ser`` at its position (so a colour or a
     label setting on series 2 stays with series 2); series past the old count
@@ -736,6 +740,13 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
     way a new series does (``_next_colour``). The
     ``c:externalData`` pointer is dropped, because the workbook it points at
     would no longer say what the chart says; the caller drops the part.
+
+    A combo chart holds more than one plot group, columns and a line, say.
+    Its series are taken in the order the plot area holds them, the order
+    ``read_chart`` reports, and each new series goes into the group of the
+    old one at its place. Which group a series past the old count would
+    join, or which group would lose one, nothing says, so then there have to
+    be as many series as before, or ``SeriesCountError`` is raised.
     """
     if not series:
         raise ValueError("a chart needs at least one series")
@@ -756,17 +767,48 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
     plots = _plots(plot_area)
     if not plots:
         raise PackageError("chart1.xml has no plot to put series into")
-    plot = plots[0]
-    old = plot.findall(f"{_C}ser")
-    if not old:
+    held = [plot.findall(f"{_C}ser") for plot in plots]
+    if not held[0]:
         raise PackageError("the chart's first plot holds no series to take as a template")
+    if len(plots) > 1:
+        if not all(held):
+            raise SeriesCountError("a plot group of this combo chart holds no series")
+        total = sum(len(old) for old in held)
+        if len(series) != total:
+            raise SeriesCountError(
+                f"this chart combines {len(plots)} chart types over {total} series, "
+                f"so it takes {total} series, one for each, not {len(series)}")
+        shares, at = [], 0
+        for old in held:
+            shares.append(list(series[at:at + len(old)]))
+            at += len(old)
+    else:
+        shares = [list(series)]
+    for plot, entries in zip(plots, shares):
+        if _local(plot.tag) == "bubbleChart":
+            for s in entries:
+                if "sizes" not in s:
+                    raise ValueError(f"series '{s.get('name', '')}' has no sizes for its bubbles")
+
+    first = 0
+    for plot, old, entries in zip(plots, held, shares):
+        _write_series(plot, old, entries, first, categories)
+        first += len(entries)
+
+    _remove(root, "externalData")
+    return dump(root)
+
+
+def _write_series(plot: ET.Element, old: List[ET.Element], entries: Sequence[dict],
+                  first: int, categories: Sequence) -> None:
+    """Put ``entries`` into ``plot`` in place of ``old``, its series.
+
+    ``first`` is the number of the first entry across the whole chart: a
+    series' ``c:idx`` and its column in the sheet count across plot groups.
+    """
+    n = len(categories)
     kind = _local(plot.tag)
     xy = kind in ("scatterChart", "bubbleChart")
-    if kind == "bubbleChart":
-        for s in series:
-            if "sizes" not in s:
-                raise ValueError(f"series '{s.get('name', '')}' has no sizes for its bubbles")
-
     insert_at = list(plot).index(old[0])
     for ser in old:
         plot.remove(ser)
@@ -774,8 +816,9 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
     for name in ("dPt", "dLbls", "trendline", "errBars"):
         _remove(template, name)
 
-    for i, s in enumerate(series):
-        ser = _copy.deepcopy(old[i]) if i < len(old) else _next_colour(_copy.deepcopy(template), i)
+    for place, s in enumerate(entries):
+        i = first + place
+        ser = _copy.deepcopy(old[place]) if place < len(old) else _next_colour(_copy.deepcopy(template), i)
         col = _bubble_columns(i)[0] if kind == "bubbleChart" else _column(i + 1)
         _insert_ordered(ser, _val("idx", i), _SER_ORDER)
         _insert_ordered(ser, _val("order", i), _SER_ORDER)
@@ -796,10 +839,7 @@ def set_data(chart_xml_bytes: bytes, categories: Sequence, series: Sequence[dict
             _remove(ser, "bubbleSize")
             _set_ref(ser, "cat", False, f"Sheet1!$A$2:$A${n + 1}", categories)
             _set_ref(ser, "val", True, f"Sheet1!${col}$2:${col}${n + 1}", s["values"])
-        plot.insert(insert_at + i, ser)
-
-    _remove(root, "externalData")
-    return dump(root)
+        plot.insert(insert_at + place, ser)
 
 
 def plot_count(chart_xml_bytes: bytes) -> int:

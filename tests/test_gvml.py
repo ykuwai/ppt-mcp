@@ -638,6 +638,64 @@ class TestChartTypeIsSwappedUnderTheData:
             charts.set_type(chart_bytes(), -4100)
 
 
+def bar_line_bytes():
+    """Columns for the first two series and a line for the third, the way
+    PowerPoint holds a combo chart: one plot group per type."""
+    root = charts.load(charts.chart_xml(51).encode())
+    c = "{%s}" % charts.NS_C
+    bar = root.find(f"{c}chart/{c}plotArea/{c}barChart")
+    third = bar.findall(f"{c}ser")[2]
+    bar.remove(third)
+    line = ET.fromstring(
+        f'<c:lineChart xmlns:c="{charts.NS_C}"><c:grouping val="standard"/>'
+        '<c:varyColors val="0"/><c:marker val="1"/><c:axId val="10"/><c:axId val="20"/></c:lineChart>')
+    line.insert(2, third)
+    area = root.find(f"{c}chart/{c}plotArea")
+    area.insert(list(area).index(bar) + 1, line)
+    return charts.dump(root)
+
+
+class TestComboChartData:
+    """Each new series goes into the plot group of the old one at its place."""
+
+    def test_the_fixture_is_a_combo_chart(self):
+        assert charts.plot_kinds(bar_line_bytes()) == ["barChart", "lineChart"]
+
+    def test_every_group_takes_its_share(self):
+        out = charts.set_data(bar_line_bytes(), ["Q1", "Q2"], [
+            {"name": "A", "values": [1, 2]},
+            {"name": "B", "values": [3, 4]},
+            {"name": "C", "values": [5, 6]},
+        ])
+        assert charts.read_chart(out)["series"] == [
+            {"name": "A", "values": [1.0, 2.0]},
+            {"name": "B", "values": [3.0, 4.0]},
+            {"name": "C", "values": [5.0, 6.0]},
+        ]
+        root = charts.load(out)
+        c = "{%s}" % charts.NS_C
+        area = root.find(f"{c}chart/{c}plotArea")
+        bar, line = area.find(f"{c}barChart"), area.find(f"{c}lineChart")
+        assert [s.find(f"{c}tx").find(f".//{c}v").text for s in bar.findall(f"{c}ser")] == ["A", "B"]
+        line_ser = line.find(f"{c}ser")
+        assert line_ser.find(f"{c}idx").get("val") == "2"
+        assert line_ser.find(f"{c}val/{c}numRef/{c}f").text == "Sheet1!$D$2:$D$3"
+        assert line_ser.find(f"{c}cat/{c}strRef/{c}strCache/{c}pt/{c}v").text == "Q1"
+
+    @pytest.mark.parametrize("count", [2, 4])
+    def test_more_or_fewer_series_are_refused(self, count):
+        series = [{"name": f"S{i}", "values": [i]} for i in range(count)]
+        with pytest.raises(charts.SeriesCountError, match=f"takes 3 series.*not {count}"):
+            charts.set_data(bar_line_bytes(), ["Q1"], series)
+
+    def test_a_group_with_no_series_is_refused(self):
+        xml = charts.chart_xml(51).replace(
+            "</c:barChart>", "</c:barChart><c:lineChart><c:grouping val=\"standard\"/>"
+            "<c:varyColors val=\"0\"/><c:axId val=\"10\"/><c:axId val=\"20\"/></c:lineChart>")
+        with pytest.raises(charts.SeriesCountError, match="holds no series"):
+            charts.set_data(xml.encode(), ["Q1"], [{"name": "S", "values": [1]}] * 3)
+
+
 class TestPlotKinds:
     def test_each_plot_group_by_its_kind(self):
         xml = charts.chart_xml(51).replace(

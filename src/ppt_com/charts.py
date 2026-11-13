@@ -700,7 +700,7 @@ def _why_excel(slide, shape) -> Optional[str]:
     chart = shape.Chart
     if chart.ChartType in chart_defaults.STOCK_TYPES:
         return "it is a stock chart, whose series mean their place"
-    if chart.ChartType not in chart_defaults.SWAPPED_TYPES:
+    if chart.ChartType not in chart_defaults.SWAPPED_TYPES and not _combo_of_swapped_types(chart):
         return f"its type ({CHART_TYPE_NAMES.get(chart.ChartType, chart.ChartType)}) is not swapped without Excel"
     try:
         if chart.ChartData.IsLinked:
@@ -717,6 +717,20 @@ def _why_excel(slide, shape) -> Optional[str]:
         # Which shape a comment is anchored to cannot be read through COM.
         return "the slide has comments, which may be anchored to it"
     return None
+
+
+def _combo_of_swapped_types(chart) -> bool:
+    """Whether ``chart`` combines chart types, each swapped without Excel.
+
+    What a combo chart answers for its own type says nothing of the kinds it
+    holds, so they are read off its series.
+    """
+    try:
+        collection = chart.SeriesCollection()
+        kinds = {chart.SeriesCollection(i).ChartType for i in range(1, collection.Count + 1)}
+    except Exception:  # noqa: BLE001 - not known to be one, so Excel
+        return False
+    return len(kinds) > 1 and kinds <= chart_defaults.SWAPPED_TYPES
 
 
 # What a chart's replacement takes over from it, read and set by name.
@@ -801,16 +815,19 @@ def _number(label, what: str) -> float:
 def _new_chart_bytes(chart_bytes, chart_type, categories, series) -> bytes:
     """``chart1.xml`` with the new data, the chart's formatting kept.
 
-    Raises ``_NotCarried`` for a chart with more than one plot, whose other
-    plots would keep their old data, and ValueError for data a scatter or
-    bubble chart cannot take.
+    Raises ``_NotCarried`` for a stock chart, for a combo chart with a
+    scatter or bubble group in it, and for a combo chart given more or fewer
+    series than it has; and ValueError for data a scatter or bubble chart
+    cannot take.
     """
     kinds = gvml_charts.plot_kinds(chart_bytes)
     if "stockChart" in kinds:
         raise _NotCarried("it is a stock chart, whose series mean their place")
-    groups = len(kinds)
-    if groups != 1:
-        raise _NotCarried(f"it has {groups} plot groups, and only the first would get the data")
+    xy = {"scatterChart", "bubbleChart"}
+    if len(kinds) > 1 and xy & set(kinds):
+        # One set of categories cannot be x values for one group and labels
+        # for another.
+        raise _NotCarried("it combines a scatter or bubble chart with another type")
     if chart_type in chart_defaults.XY_TYPES or chart_type in chart_defaults.BUBBLE_TYPES:
         categories = [_number(label, "the x value") for label in categories]
     if chart_type in chart_defaults.BUBBLE_TYPES:
@@ -818,7 +835,10 @@ def _new_chart_bytes(chart_bytes, chart_type, categories, series) -> bytes:
             if "sizes" not in entry:
                 raise ValueError(f"series {entry['name']!r} has no sizes for its bubbles")
             entry["sizes"] = [_number(size, "the bubble size") for size in entry["sizes"]]
-    return gvml_charts.set_data(chart_bytes, categories, series)
+    try:
+        return gvml_charts.set_data(chart_bytes, categories, series)
+    except gvml_charts.SeriesCountError as e:
+        raise _NotCarried(str(e)) from e
 
 
 def _replace_chart_data(app, pres, slide, shape, categories, series):
@@ -1777,10 +1797,12 @@ def register_tools(mcp):
         on it. The copy has a new shape id, given as `shape_id` (the old one as
         `previous_shape_id`). A chart that is grouped, in a placeholder, sits
         on a slide with comments, has animations that cannot be copied as
-        they were, combines more than one chart type, or is a stock chart or
-        a filled surface chart, is
-        written through Excel as before, and so is a scatter chart whose categories
-        are not numbers. A bubble chart cannot go through Excel, which would
+        they were, or is a stock chart or a filled surface chart, is written
+        through Excel as before.
+        So is a chart combining chart types, columns and a line say, when the
+        call gives it more or fewer series than it has (with as many, each
+        series keeps the type of the one at its place), and a scatter chart
+        whose categories are not numbers. A bubble chart cannot go through Excel, which would
         drop its sizes, so such a call, or one with a series that has no
         'sizes', is refused. `method` says which was used, and `reason` why
         Excel was.
